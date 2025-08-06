@@ -1,0 +1,142 @@
+import React, { useState } from "react";
+import "./FileUploadModal.css";
+
+function FileUploadModal({ isOpen, onClose, onUpload }) {
+  const [uploadedFiles, setUploadedFiles] = useState([
+    {
+      id: 1,
+      name: "Tech design requirements.pdf",
+      size: "200 KB",
+      progress: 100,
+      isCompleted: true
+    },
+    {
+      id: 2,
+      name: "Dashboard prototype recording.mp4",
+      size: "16 MB",
+      progress: 40,
+      isCompleted: false
+    }
+  ]);
+
+  if (!isOpen) return null;
+
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  const handleFileUpload = () => {
+    // Handle file upload logic here
+    if (onUpload) {
+      onUpload(uploadedFiles);
+    }
+    onClose();
+  };
+
+  const handleRemoveFile = (fileId) => {
+    setUploadedFiles(uploadedFiles.filter(file => file.id !== fileId));
+  };
+
+  const handleUploadClick = () => {
+    // Trigger file input click
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.multiple = true;
+    fileInput.accept = '*/*';
+    fileInput.onchange = (e) => {
+      // Handle file selection
+      console.log('Files selected:', e.target.files);
+    };
+    fileInput.click();
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={handleBackdropClick}>
+      <div className="file-upload-modal">
+        <div className="file-upload-content">
+          <div className="file-upload-header">
+            <div className="header-title">Upload and attach files</div>
+            <div className="header-description">
+              Upload and attach files to this project.
+            </div>
+          </div>
+          
+          <div className="file-upload-section">
+            <div className="file-drop-zone" onClick={handleUploadClick}>
+              <div className="drop-zone-content">
+                <img
+                  src="https://api.builder.io/api/v1/image/assets/TEMP/1ffc50d2359d937e2646492f4d65a2450c04b3a7?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+                  alt="Upload icon"
+                  className="upload-icon"
+                />
+                <div className="upload-actions">
+                  <div className="upload-text-row">
+                    <div className="upload-button-text">Click to upload</div>
+                    <div className="upload-drag-text">or drag and drop</div>
+                  </div>
+                  <div className="upload-supporting-text">
+                    Upload supports all documents and media (max. 50mb)
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="file-queue">
+              {uploadedFiles.map((file) => (
+                <div 
+                  key={file.id} 
+                  className={`file-upload-item ${file.isCompleted ? 'completed' : 'uploading'}`}
+                >
+                  <div className="file-content">
+                    <div className="file-info">
+                      <div className="file-name">{file.name}</div>
+                      <div className="file-size">{file.size}</div>
+                    </div>
+                    <div className="file-progress">
+                      <div className="progress-bar">
+                        <div className="progress-background">
+                          <div 
+                            className="progress-fill" 
+                            style={{ width: `${file.progress}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="progress-percentage">{file.progress}%</div>
+                    </div>
+                  </div>
+                  <button 
+                    className="remove-file-button"
+                    onClick={() => handleRemoveFile(file.id)}
+                  >
+                    <img
+                      src="https://api.builder.io/api/v1/image/assets/TEMP/413c327f1d3d810ffbf510e6af5904a0e6d2f867?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+                      alt="Remove file"
+                      className="remove-icon"
+                    />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        <div className="file-upload-actions">
+          <button className="file-cancel-button" onClick={onClose}>
+            <div className="file-cancel-button-content">
+              Cancel
+            </div>
+          </button>
+          <button className="file-attach-button" onClick={handleFileUpload}>
+            <div className="file-attach-button-content">
+              Attach files
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default FileUploadModal;

@@ -1,0 +1,38 @@
+{
+  "files": {
+    "main.css": "/static/css/main.f6866403.css",
+    "main.js": "/static/js/main.93dbdac6.js",
+    "static/js/453.a3c1d153.chunk.js": "/static/js/453.a3c1d153.chunk.js",
+    "static/media/admin-demo.jpg": "/static/media/admin-demo.6d4b562b0387bccf8a50.jpg",
+    "static/media/auxin_logo.png": "/static/media/auxin_logo.96fe9eb8e115dd917f57.png",
+    "static/media/off-button.png": "/static/media/off-button.9bf895f0705e192e4789.png",
+    "static/media/settings.svg": "/static/media/settings.130f7762de49f6efee5a72724d6f8e8e.svg",
+    "static/media/scan-eye.svg": "/static/media/scan-eye.4f811d90eb63d8b64c5a69520c093499.svg",
+    "static/media/layout-dashboard.svg": "/static/media/layout-dashboard.d6ce497f0485cbabe5f9cf60758348ce.svg",
+    "static/media/package.svg": "/static/media/package.9db77ff1cbb604c3c380039ab084f501.svg",
+    "static/media/maersk_symbol.svg": "/static/media/maersk_symbol.819a90e0292c9755ca39cc085cf49954.svg",
+    "index.html": "/index.html",
+    "static/media/cloud.svg": "/static/media/cloud.1db83328ce651a22f4ef04c753d06f51.svg",
+    "static/media/user-plus.svg": "/static/media/user-plus.84bf1876c4ec2c90223291e252dae6ca.svg",
+    "static/media/bell-dot.svg": "/static/media/bell-dot.aec4a6f27c2a162fa05496c45ca27576.svg",
+    "static/media/settings-2.svg": "/static/media/settings-2.95b1a6c7a87604bcd8beef464d2df6f6.svg",
+    "static/media/file-chart-column.svg": "/static/media/file-chart-column.9570bb46011145c8557a2e8b4c31bcc1.svg",
+    "static/media/circle-help.svg": "/static/media/circle-help.bf599581a825baa6962b46cf5791b38c.svg",
+    "static/media/arrow-down-up.svg": "/static/media/arrow-down-up.5779ec28ca2d5fec552d060b8c1973da.svg",
+    "static/media/log-out.svg": "/static/media/log-out.5e7625f6d2d9195f23ec3d8c4f11294f.svg",
+    "static/media/calendar.svg": "/static/media/calendar.df83f0a9f190c316083d3e7d54c9a86a.svg",
+    "static/media/Icons.svg": "/static/media/Icons.f9fbf6b5551f829bf21f37da248ac664.svg",
+    "static/media/arrow-up-right.svg": "/static/media/arrow-up-right.34261496197b340dbcdd7c947edf3ca6.svg",
+    "static/media/plus.svg": "/static/media/plus.66accc9732fa062b3a58bbd4fa72195c.svg",
+    "static/media/arrow-left.svg": "/static/media/arrow-left.7832718d6dec8e91844bc1c035ae9694.svg",
+    "static/media/chevron-right.svg": "/static/media/chevron-right.c1da677bb205881ca590fd815bc5cc35.svg",
+    "static/media/chevron-down.svg": "/static/media/chevron-down.04b95c1456183ed1cdd0760e4551abcf.svg",
+    "main.f6866403.css.map": "/static/css/main.f6866403.css.map",
+    "main.93dbdac6.js.map": "/static/js/main.93dbdac6.js.map",
+    "453.a3c1d153.chunk.js.map": "/static/js/453.a3c1d153.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.f6866403.css",
+    "static/js/main.93dbdac6.js"
+  ]
+}

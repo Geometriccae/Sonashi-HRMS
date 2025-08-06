@@ -1,0 +1,11 @@
+
+
+.documents-table-section {
+  /* padding: 32px; */
+  flex: 1;
+  background-color: RGB(255 255 255);
+  position: relative;
+  left: -39px;
+  top: -40px;
+}
+

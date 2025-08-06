@@ -1,0 +1,467 @@
+.calendar-container {
+  width: 100%;
+  max-width: 1540px;
+  margin: 0 auto;
+  /* padding: 32px; */
+  box-sizing: border-box;
+  position: relative;
+  top: -30px;
+
+
+}
+
+
+.calendar-header {
+  display: flex;
+  width: 100%;
+  max-width: 1476px;
+  padding: 1px;
+  justify-content: space-between;
+  align-items: center;
+  margin: 15px auto 50px auto;
+  height: 42px;
+}
+
+.calendar-navigation {
+  width: 249px;
+  height: 40px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.nav-button {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  padding: 6px;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: 100px;
+  border: 2px solid #F5F6F7;
+  box-shadow: 0px 2px 5px 0px rgba(38, 51, 77, 0.03);
+  position: absolute;
+  top: 0px;
+  background-color: #FFF;
+  cursor: pointer;
+}
+
+.nav-button:first-child {
+  left: 0px;
+}
+
+.nav-button:last-child {
+  left: 209px;
+}
+
+.nav-button:hover {
+  background-color: #f8f9fa;
+}
+
+.current-period {
+  color: #6B7A99;
+  text-align: center;
+  position: absolute;
+  left: 86px;
+  top: 10px;
+  width: 76px;
+  height: 20px;
+  font: 400 14px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+}
+
+/* View Toggle */
+.view-toggle {
+  display: flex;
+  padding: 2px;
+  align-items: center;
+  gap: 2px;
+  border-radius: 99px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.60);
+}
+
+.toggle-button {
+  display: flex;
+  padding: 4px 12px;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-radius: 99px;
+  border: none;
+  background: transparent;
+  color: #000;
+  font: 550 13px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  cursor: pointer;
+  position: relative;
+}
+
+.toggle-button.active {
+  background-color: #007AFF;
+  color: #FFF;
+
+  backdrop-filter: blur(10px);
+}
+
+.toggle-button:not(.active) {
+
+  backdrop-filter: blur(10px);
+}
+
+
+
+/* Meeting Modal */
+.meeting-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* Day view specific meeting modal positioning */
+.day-view-container .meeting-modal {
+  background-color: transparent;
+  position: absolute;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 219px 32px 0 0;
+  pointer-events: none;
+}
+
+.day-view-container .meeting-modal-content {
+  position: relative;
+  pointer-events: all;
+  width: 275px;
+  height: 140px;
+}
+
+.meeting-modal-content {
+  display: inline-flex;
+  padding: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.05), 0 4px 4px 0 rgba(0, 0, 0, 0.10), 0 10px 10px 0 rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  width: 275px;
+  background-color: #FFF;
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.meeting-chip {
+  display: flex;
+  padding: 6px 8px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 18.432px;
+  background-color: #EBF9EE;
+}
+
+.meeting-chip span {
+  color: #258D3F;
+  text-align: center;
+  font: 500 12px/12px 'Inter Tight', -apple-system, Roboto, Helvetica, sans-serif;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.modal-actions svg {
+  cursor: pointer;
+}
+
+.modal-body {
+  display: flex;
+  width: 243px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.meeting-title {
+  color: #181D27;
+  font: 500 14px/20px 'Inter', -apple-system, Roboto, Helvetica, sans-serif;
+}
+
+.meeting-notes {
+  color: #B3B9C4;
+  font: 400 14px/20px 'Inter', -apple-system, Roboto, Helvetica, sans-serif;
+}
+
+.color-selector {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.color-option {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.color-option.active {
+  border: 1px solid currentColor;
+}
+
+
+
+
+  
+/* React Big Calendar Customizations */
+/* React Big Calendar Customizations */
+.rbc-calendar {
+  height: 100%;
+  background: white;
+  border-radius: 8px;
+}
+
+.rbc-label{
+color: #ADB8CC;
+text-align: right;
+font-feature-settings: 'liga' off, 'clig' off;
+font-family: Inter;
+font-size: 0.75rem;
+font-style: normal;
+font-weight: 700;
+line-height: 1.25rem; /* 166.667% */
+}
+.rbc-header span{
+color: var(--Foundation-Neutral-N100, #7A8699);
+text-align: center;
+font-feature-settings: 'liga' off, 'clig' off;
+font-family: Inter;
+font-size: 0.75rem;
+font-style: normal;
+font-weight: 600;
+line-height: 1.25rem; /* 166.667% */
+}
+.rbc-header {
+  padding: 12px 0;
+  font-weight: 500;
+  color: #6B7A99;
+  border-bottom: 1px solid #E9ECF2;
+}
+
+
+
+.rbc-month-row {
+  min-height: 120px;
+}
+
+.rbc-date-cell {
+  text-align: left;
+  padding: 8px;
+  font-weight: 500;
+  color: #6B7A99;
+  display: flex;
+  justify-content: center;
+ 
+}
+
+.rbc-off-range-bg {
+  background: #F7F8FC;
+}
+
+.rbc-today {
+  background-color: #F7F8FC;
+}
+
+.rbc-event {
+  padding: 4px 8px;
+  margin: 2px 4px;
+}
+
+.rbc-custom-event {
+  padding-left: 4px;
+}
+
+.rbc-custom-event .event-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: white;
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+
+
+.rbc-custom-event .event-title {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rbc-event-container{
+color: white;
+}
+.rbc-custom-event .event-link {
+  font-size: 10px;
+  color: white;
+  opacity: 0.8;
+}
+
+/* Time grid views */
+.rbc-time-view {
+  border: none;
+}
+
+.rbc-time-header {
+  border-top: 1px solid #E9ECF2;
+}
+
+.rbc-time-content {
+  border-top: none;
+}
+
+.rbc-time-gutter {
+  color: #6B7A99;
+  font-weight: 500;
+  padding-right: 8px;
+}
+
+.rbc-time-header-content {
+  border-left: 1px solid #E9ECF2;
+}
+
+.rbc-time-content > * + * > * {
+  border-left: 1px solid #E9ECF2;
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid #E9ECF2;
+  /* min-height: 45px; */
+  min-height: 60px;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  color: #6B7A99;
+  font-weight: 500;
+}
+
+.rbc-current-time-indicator {
+  background-color: #007AFF;
+  height: 2px;
+}
+
+
+.rbc-current-time-indicator::after {
+    content: ''; /* Required for pseudo-element */
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #007AFF;
+  position: absolute;
+  right: -5px; /* Half of width to center */
+  top: 50%;
+  transform: translateY(-50%); /* Vertical center */
+}
+
+.rbc-current-time-indicator::before {
+  content: attr(data-time); /* Use a custom attribute to show time */
+  position: absolute;
+  left: -50px; /* Adjust based on your layout */
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #007AFF;
+  font-weight: bold;
+}
+
+.meetingcontent{
+  display: inline-flex;
+align-items: center;
+gap: 0.5rem;
+
+}
+
+ .meetingcontent  span{
+  display: flex;
+width: 0.4rem;
+height: 0.4rem;
+/* padding: 0.20rem 0.4rem; */
+align-items: flex-start;
+gap: 0.625rem;
+border-radius: 0.125rem;
+background: var(--Foundation-Green-green-500, #34C759);
+}
+
+.event-title{
+  display: -webkit-box;
+width: 8rem;
+-webkit-box-orient: vertical;
+-webkit-line-clamp: 1;
+overflow: hidden;
+
+text-overflow: ellipsis;
+
+/* Small/Medium */
+font-family: Inter;
+font-size: 0.75rem;
+font-style: normal;
+font-weight: 500;
+line-height: 1.125rem; /* 150% */
+}
+
+.rbc-event{
+padding: 0px;
+margin: 0px;
+}
+
+.rbc-month-view{
+ border: 1px groove #F5F6F7;
+}
+
+.rbc-day-slot, .rbc-row-content{
+  /* background-color: white !important; */
+}
+
+.rbc-time-view .rbc-row {
+  /* display: none; */
+}
+
+.rbc-timeslot-group{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+}
+
+.rbc-day-view .rbc-timeslot-group,
+.rbc-week-view .rbc-timeslot-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+}
+
+.rbc-time-header{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.rbc-time-gutter{
+  padding-right: 0px;
+}

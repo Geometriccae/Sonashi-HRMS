@@ -1,0 +1,101 @@
+.profile-upload-container {
+  display: flex;
+  width: 892px;
+  padding: 24px;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 12px;
+  background-color: #f5f6f7;
+}
+
+@media (max-width: 991px) {
+  .profile-upload-container {
+    width: 100%;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-upload-container {
+    padding: 16px;
+  }
+}
+
+.profile-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar-container {
+  width: 72px;
+  height: 72px;
+  border-radius: 100px;
+  position: relative;
+  background-color: #b3b9c4;
+}
+
+.avatar-bg {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  fill: #b3b9c4;
+  position: absolute;
+  left: 0px;
+  top: 0px;
+}
+
+.user-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  position: absolute;
+  left: 20px;
+  top: 20px;
+}
+
+.profile-text {
+  color: #212121;
+  text-align: center;
+  letter-spacing: -0.36px;
+  font:
+    500 18px/150% Inter,
+    sans-serif;
+}
+
+.profile-upload-button {
+  display: flex;
+  padding: var(--Button-vertical-padding, 0.25rem) var(--Button-horizontal-padding, 0.75rem);
+  align-items: center;
+  gap: 12px;
+  border-radius: var(--Button-corner-radius, 0.5rem);
+  border: 1px solid var(--Button-normal, #007AFF);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  background: transparent;
+  backdrop-filter: blur(10px);
+  font-size: 0.8125rem;
+}
+
+.profile-upload-button:hover {
+  background-color: rgba(0, 122, 255, 0.05);
+}
+
+.profile-upload-text {
+  color: #007aff;
+  font:
+    500 13px/154% Inter,
+    sans-serif;
+}
+
+.profile-upload-icon {
+  width: 1rem;
+  height: 1rem;
+  
+}
+
+.profile-upload-icon svg{
+  vertical-align: top;
+}
