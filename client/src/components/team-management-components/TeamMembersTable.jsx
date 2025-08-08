@@ -1,10 +1,9 @@
-
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import "./TeamMembersTable.css";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddEmployeeModal from "./AddEmployeeModal";
-import FilterModal from "../FilterModal";
+import FilterDropdown from "../FilterDropdown";
 // SVG Components (reusing from ClientsTable)
 const UserPlusIcon = () => (
   <svg
@@ -185,7 +184,9 @@ function TeamMembersTable() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState(null);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const filterButtonRef = useRef(null);
   const handleEdit = (id) => {
     console.log("Edit team member with id:", id);
   };
@@ -212,11 +213,18 @@ function TeamMembersTable() {
   const handleAddEmployeeSubmit = (formData) => {
     console.log("New employee data:", formData);
   };
-  const handleFilterClick = () => {
-    setIsFilterModalOpen(true);
+  const handleFilterClick = (event) => {
+    if (filterButtonRef.current) {
+      const rect = filterButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.left - 200 // Adjust to align dropdown properly
+      });
+    }
+    setIsFilterDropdownOpen(!isFilterDropdownOpen);
   };
-  const handleFilterModalClose = () => {
-    setIsFilterModalOpen(false);
+  const handleFilterDropdownClose = () => {
+    setIsFilterDropdownOpen(false);
   };
   const handleFilterSelect = (option) => {
     console.log("Filter selected:", option);
@@ -277,7 +285,11 @@ function TeamMembersTable() {
               />
               <SearchIcon />
             </div>
-            <button className="filter-button" onClick={handleFilterClick}>
+            <button
+              ref={filterButtonRef}
+              className="filter-button"
+              onClick={handleFilterClick}
+            >
               <FilterIcon />
             </button>
           </div>
@@ -297,7 +309,7 @@ function TeamMembersTable() {
                 </div>
               </div>
               {filteredData.map((member) => (
-                
+
                 <Link  key={member.id} to="/teammanagement_salesleads" className="table-cell company-cell no-link-style">
                   <div className="avatar"></div>
                   <div className="companyinfo">
@@ -305,7 +317,7 @@ function TeamMembersTable() {
                     <div className="company-email">{member.role}</div>
                   </div>
                 </Link>
-                  
+
               ))}
             </div>
             {/* Attendance Column */}
@@ -438,10 +450,11 @@ function TeamMembersTable() {
         onClose={handleAddEmployeeClose}
         onSubmit={handleAddEmployeeSubmit}
       />
-      <FilterModal
-        isOpen={isFilterModalOpen}
-        onClose={handleFilterModalClose}
+      <FilterDropdown
+        isOpen={isFilterDropdownOpen}
+        onClose={handleFilterDropdownClose}
         onFilterSelect={handleFilterSelect}
+        position={dropdownPosition}
       />
     </div>
   );

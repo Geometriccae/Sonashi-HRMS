@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import "./ClientsTable.css";
 import DeleteModal from "./delete-modal/DeleteModal";
 import AddClientModal from "./AddClientModal";
-import FilterModal from "./FilterModal";
+import FilterDropdown from "./FilterDropdown";
 import { Link } from "react-router-dom";
 
 // SVG Components
@@ -201,7 +201,9 @@ function ClientsTable() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const filterButtonRef = useRef(null);
 
   const handleEdit = (id) => {
     console.log("Edit client with id:", id);
@@ -239,12 +241,19 @@ function ClientsTable() {
     // You would typically send this data to your backend API
   };
 
-  const handleFilterClick = () => {
-    setIsFilterModalOpen(true);
+  const handleFilterClick = (event) => {
+    if (filterButtonRef.current) {
+      const rect = filterButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.left - 200 // Adjust to align dropdown properly
+      });
+    }
+    setIsFilterDropdownOpen(!isFilterDropdownOpen);
   };
 
-  const handleFilterModalClose = () => {
-    setIsFilterModalOpen(false);
+  const handleFilterDropdownClose = () => {
+    setIsFilterDropdownOpen(false);
   };
 
   const handleFilterSelect = (option) => {
@@ -316,7 +325,11 @@ function ClientsTable() {
               />
               <SearchIcon />
             </div>
-            <button className="filter-button" onClick={handleFilterClick}>
+            <button
+              ref={filterButtonRef}
+              className="filter-button"
+              onClick={handleFilterClick}
+            >
               <FilterIcon />
             </button>
           </div>
@@ -486,10 +499,11 @@ function ClientsTable() {
         onSubmit={handleAddClientSubmit}
       />
 
-      <FilterModal
-        isOpen={isFilterModalOpen}
-        onClose={handleFilterModalClose}
+      <FilterDropdown
+        isOpen={isFilterDropdownOpen}
+        onClose={handleFilterDropdownClose}
         onFilterSelect={handleFilterSelect}
+        position={dropdownPosition}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import DeleteModal from "../components/delete-modal/DeleteModal";
 import CreateEventModal from "../components/CreateEventModal";
 import FileUploadModal from "../components/FileUploadModal";
 import DropDownList from "../components/DropDownList";
+import TaskBoard from "../components/TaskBoard";
 
 
 import belldot from "../assets/dashboard/bell-dot.svg";
@@ -23,6 +24,7 @@ function SalesAndLeads() {
   const basicInfoRef = useRef(null);
   const meetingsRef = useRef(null);
   const documentsRef = useRef(null);
+  const tasksRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteType, setDeleteType] = useState(''); // 'entry' or 'data'
@@ -44,6 +46,9 @@ function SalesAndLeads() {
           break;
         case 'documents':
           activeElement = documentsRef.current;
+          break;
+        case 'tasks':
+          activeElement = tasksRef.current;
           break;
         default:
           activeElement = basicInfoRef.current;
@@ -215,6 +220,23 @@ function SalesAndLeads() {
             <button className={styles.button_row_view3} onClick={handleDeleteData}>
               <span className={styles.text5}>Delete Data</span>
               <img src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/ghab1uy5_expires_30_days.png"} className={styles.image3} />
+            </button>
+          </div>
+        );
+      case 'tasks':
+        return (
+          <div className={styles.row_view5}>
+            <button className={styles.button_row_view} onClick={() => alert("New Task Pressed!")}>
+              <span className={styles.text3}>New Task</span>
+              <img src="https://api.builder.io/api/v1/image/assets/TEMP/b1a5443c4c270e01b0d3b27bba8a7a21e49403cd?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9" className={styles.image3} />
+            </button>
+            <button
+              ref={exportButtonRef}
+              className={styles.button_row_view2}
+              onClick={handleExportClick}
+            >
+              <span className={styles.text4}>Export</span>
+              <img src="https://api.builder.io/api/v1/image/assets/TEMP/62b07f5543b20d982f6c427ca284b71c4beda176?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9" className={styles.image3} />
             </button>
           </div>
         );
@@ -431,6 +453,15 @@ function SalesAndLeads() {
                     </span>
                   </div>
                   <div
+                    ref={tasksRef}
+                    className={`${styles.view2} ${activeTab === 'tasks' ? styles.active : ''}`}
+                    onClick={() => setActiveTab('tasks')}
+                  >
+                    <span className={styles.text8}>
+                      {"Tasks"}
+                    </span>
+                  </div>
+                  <div
                     className={styles.box}
                     style={{
                       width: `${indicatorStyle.width}px`,
@@ -637,6 +668,12 @@ function SalesAndLeads() {
                   <section className="documents-table-section">
                 <DataTable data={documentsData} />
                </section>
+                </div>
+              )}
+
+              {activeTab === 'tasks' && (
+                <div className={styles.tasksContent}>
+                  <TaskBoard />
                 </div>
               )}
             </div>
