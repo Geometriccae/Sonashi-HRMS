@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import styles from "./TeamManagement.module.css";
 import Side from "../sidebar/Sidebar";
 
@@ -10,6 +10,12 @@ import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import TeamMembersTable from "../../components/team-management-components/TeamMembersTable";
 
 function TeamManagement() {
+  const [username, setUsername] = useState("");
+
+  useEffect(() => {
+    setUsername(localStorage.getItem("username") || "");
+  }, []);
+
   return (
     <div className={styles["dashboard-layout"]}>
       <Side />
@@ -32,7 +38,8 @@ function TeamManagement() {
                     className={styles["profile-picture"]}
                   />
                   <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>Preety Sinha</div>
+                    <div className={styles["profile-name"]}>{username?.toUpperCase()}
+                    </div>
                     <div className={styles["profile-type"]}>Administrator</div>
                   </div>
                 </div>

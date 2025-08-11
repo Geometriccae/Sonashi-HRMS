@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const authMiddleware = require('./middleware/authMiddleware');
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +12,10 @@ app.use(cors({
   origin: 'http://localhost:3000',
   credentials: true
 }));
+
+app.get('/api/protected-data', authMiddleware, (req, res) => {
+  res.json({ message: "This is protected data", user: req.user });
+});
 
 //  Parse JSON
 app.use(express.json());

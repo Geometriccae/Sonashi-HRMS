@@ -9,7 +9,7 @@ import {
   FaQuestionCircle,
   FaSignOutAlt,
 } from "react-icons/fa";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate} from "react-router-dom";
 import styles from "./Sidebar.module.css";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
 import useDateRange from "../../hooks/useDateRange";
@@ -34,10 +34,20 @@ import userplus from "../../assets/dashboard/user-plus.svg";
 import logout from "../../assets/dashboard/log-out.svg";
 import offbutton from "../../assets/dashboard/off-button.png";
 
-function Side() {
+function Sidebar() {
   const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
+  const navigate = useNavigate();
+   
+
+  const handleLogout = () => {
+    // Clear authentication data
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    // Redirect to login page
+    navigate("/", { replace: true });
+  };
 
   // Use the custom date range hook for backend functionality
   const {
@@ -135,7 +145,7 @@ function Side() {
               <li>
                 <img src={circlehelp} alt="Help & Support" className={styles.icon}/> Help & Support
               </li>
-              <li className={styles["logout"]}>
+              <li className={styles["logout"]} onClick={handleLogout}>
                 <img src={logout} alt="Log Out" className={styles.icon}/> Log Out
               </li>
             </ul>
@@ -170,4 +180,4 @@ function Side() {
   );
 }
 
-export default Side;
+export default Sidebar;

@@ -19,9 +19,12 @@ function Login() {
         password
       });
 
-      console.log(res.data);
-      // Navigate to dashboard or home page
-      navigate('/dashboard');
+     // Store the token in localStorage
+  localStorage.setItem("token", res.data.token);
+ localStorage.setItem('username', res.data.username);
+ console.log(res.data.username); 
+  // Navigate to dashboard
+  navigate('/dashboard');
     } catch (err) {
       console.error(err);
       setError('Invalid username or password');

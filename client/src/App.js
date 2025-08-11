@@ -11,10 +11,7 @@ import ClientReview from "./pages/ClientDataReview";
 import TeamManagement from "./pages/team-management/TeamManagement";
 import TeamManagementSalesAndLeads from "./pages/team-management/TeamManagementSalesLeads";
 import Venkat from "./pages/Venkat";
-
-
-
-
+import ProtectedRoute from "./components/ProtectedRoute";
 
 
 
@@ -22,19 +19,27 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/salesandleads" element={<SalesAndLeads />} />
-        <Route path="/documents" element={<Documents />} />
+        <Route path="/" element={
+          <Login /> }/>
         
-        <Route path="/venkat" element={<Venkat />} />
-        
-        <Route path="/example" element={<Example />} />
-        <Route path="/addclient" element={<AddClient />} />
-        <Route path="/clientreview" element={<ClientReview />} />
+        <Route path="/dashboard" element={
+          <ProtectedRoute><Dashboard /></ProtectedRoute>
 
-        <Route path="/teammanagement" element={<TeamManagement />} />
-        <Route path="/teammanagement_salesleads" element={<TeamManagementSalesAndLeads />} />
+        } />
+        <Route path="/salesandleads" element={
+          <ProtectedRoute><SalesAndLeads /></ProtectedRoute>
+        } />
+
+        <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
+        <Route path="/addclient" element={<ProtectedRoute><AddClient /></ProtectedRoute>} />
+        <Route path="/clientreview" element={<ProtectedRoute><ClientReview /></ProtectedRoute>} />
+
+        <Route path="/teammanagement" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
+        <Route path="/teammanagement_salesleads" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />
+
+        <Route path="/venkat" element={<ProtectedRoute><Venkat/></ProtectedRoute>} />
+        <Route path="/example" element={<Example />} />
+
       </Routes>
     </Router>
   );

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import styles from "./Dashboard.module.css"; // 
 import Side from "./sidebar/Sidebar";
 import ClientsTable from "../components/sales-and-leads/ClientsTable";
@@ -11,6 +11,14 @@ import arrowupright from "../assets/dashboard/arrow-up-right.svg";
 import arrowdownup from "../assets/dashboard/arrow-down-up.svg";
 
 function Dash() {
+
+    const [username, setUsername] = useState("");
+  
+    useEffect(() => {
+      setUsername(localStorage.getItem("username") || "");
+    }, []);
+  
+
   return (
     <div className={styles["dashboard-layout"]}>
       <Side />
@@ -33,7 +41,7 @@ function Dash() {
                     className={styles["profile-picture"]}
                   />
                   <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>Preety Sinha</div>
+                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
                     <div className={styles["profile-type"]}>Administrator</div>
                   </div>
                 </div>
