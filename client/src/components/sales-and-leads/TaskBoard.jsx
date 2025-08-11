@@ -1,6 +1,13 @@
 import React from 'react';
 import styles from './TaskBoard.module.css';
 
+import plus from '../../assets/dashboard/plus.svg';
+import add_circle_outline from '../../assets/dashboard/add_circle_outline.svg';
+import trashred from '../../assets/dashboard/trash-red.svg';
+import more_horiz from '../../assets/dashboard/more_horiz.svg';
+import pencilline from '../../assets/dashboard/pencil-line.svg';
+
+
 const TaskBoard = () => {
   const taskColumns = [
     {
@@ -158,7 +165,7 @@ const TaskBoard = () => {
             />
             <div className={styles.addButton}>
               <img 
-                src="https://api.builder.io/api/v1/image/assets/TEMP/a7abb24ae0a759be58657920b81076632b2671fc?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+                src={add_circle_outline}
                 alt="Add"
                 className={styles.addIcon}
               />
@@ -166,13 +173,13 @@ const TaskBoard = () => {
           </div>
           <div className={styles.actionIcons}>
             <img 
-              src="https://api.builder.io/api/v1/image/assets/TEMP/45efb6fbe47be4a0d2d0a44ec070000fd38aa203?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
-              alt="Action 1"
+              src={pencilline}
+              alt="edit"
               className={styles.actionIcon}
             />
             <img 
-              src="https://api.builder.io/api/v1/image/assets/TEMP/49a0554bb3655ef38eccd883425f773f54cd743d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
-              alt="Action 2"
+              src={trashred}
+              alt="delete"
               className={styles.actionIcon}
             />
           </div>
@@ -192,7 +199,7 @@ const TaskBoard = () => {
             </div>
           </div>
           <img 
-            src="https://api.builder.io/api/v1/image/assets/TEMP/264e8fcf91d26099b65ebe7c8b4d2b60502272c6?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+            src={more_horiz}
             alt="More options"
             className={styles.moreIcon}
           />
@@ -209,7 +216,7 @@ const TaskBoard = () => {
         {(column.id === 'todo' || column.id === 'inprogress') && (
           <div className={styles.addColumnButton}>
             <img 
-              src="https://api.builder.io/api/v1/image/assets/TEMP/f964c8148338abb81481ff9a67628d4f2aeee55a?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+              src={add_circle_outline}
               alt="Add"
               className={styles.addColumnIcon}
             />

@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import styles from "./SalesAndLeads.module.css";
 import Side from "./sidebar/Sidebar";
 
-import DataTable from "../components/DataTable";
-import Calendar from "../components/CalendarComponent";
+import Documents from "../components/sales-and-leads/Documents";
+import Calendar from "../components/sales-and-leads/CalendarComponent";
 import DeleteModal from "../components/delete-modal/DeleteModal";
-import CreateEventModal from "../components/CreateEventModal";
+import CreateEventModal from "../components/sales-and-leads/CreateEventModal";
 import FileUploadModal from "../components/FileUploadModal";
 import DropDownList from "../components/DropDownList";
-import TaskBoard from "../components/TaskBoard";
+import TaskBoard from "../components/sales-and-leads/TaskBoard";
 
 
 import belldot from "../assets/dashboard/bell-dot.svg";
@@ -18,6 +19,10 @@ import chevrondright from "../assets/dashboard/chevron-right.svg";
 import plus from "../assets/dashboard/plus.svg";
 import arrowleft from "../assets/dashboard/arrow-left.svg";
 import maersksymbol from "../assets/dashboard/maersk_symbol.svg";
+import pencillineblue from "../assets/dashboard/pencil-line-blue.svg";
+import upload from "../assets/dashboard/upload.svg";
+import deletewhite from "../assets/dashboard/delete-white.svg";
+
 
 function SalesAndLeads() {
   const [activeTab, setActiveTab] = useState('basicInfo');
@@ -33,6 +38,7 @@ function SalesAndLeads() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const exportButtonRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const updateIndicatorPosition = () => {
@@ -169,7 +175,7 @@ function SalesAndLeads() {
           <div className={styles.row_view5}>
             <button className={`${styles.button_row_view} ${styles.editbutton}`} onClick={() => alert("Edit Data Pressed!")}>
               <span className={`${styles.text3} ${styles.editbuttontext}`}>Edit Data</span>
-              <img src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/5rqzbf3s_expires_30_days.png"} className={styles.image3} />
+              <img src={pencillineblue} className={styles.image3} alt="edit" />
             </button>
             <button
               ref={exportButtonRef}
@@ -177,11 +183,11 @@ function SalesAndLeads() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/xz7ev9ao_expires_30_days.png"} className={styles.image3} />
+              <img src={upload} className={styles.image3} alt="export"/>
             </button>
             <button className={styles.button_row_view3} onClick={handleDeleteEntry}>
               <span className={styles.text5}>Delete Entry</span>
-              <img src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/ghab1uy5_expires_30_days.png"} className={styles.image3} />
+              <img src={deletewhite} className={styles.image3} alt="delete" />
             </button>
           </div>
         );
@@ -190,7 +196,7 @@ function SalesAndLeads() {
           <div className={styles.row_view5}>
             <button className={styles.button_row_view} onClick={handleNewEvent}>
               <span className={styles.text3}>New Event</span>
-              <img src={plus} className={styles.image3} />
+              <img src={plus} className={styles.image3} alt="plus"/>
             </button>
             <button
               ref={exportButtonRef}
@@ -198,7 +204,7 @@ function SalesAndLeads() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/xz7ev9ao_expires_30_days.png"} className={styles.image3} />
+              <img src={upload} className={styles.image3} />
             </button>
           </div>
         );
@@ -207,7 +213,7 @@ function SalesAndLeads() {
           <div className={styles.row_view5}>
             <button className={styles.button_row_view} onClick={handleFileUpload}>
               <span className={styles.text3}>Upload</span>
-              <img src={plus} className={styles.image3} />
+              <img src={plus} className={styles.image3} alt=""/>
             </button>
             <button
               ref={exportButtonRef}
@@ -215,11 +221,11 @@ function SalesAndLeads() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/xz7ev9ao_expires_30_days.png"} className={styles.image3} />
+              <img src={upload} className={styles.image3} alt=""/>
             </button>
             <button className={styles.button_row_view3} onClick={handleDeleteData}>
-              <span className={styles.text5}>Delete Data</span>
-              <img src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/ghab1uy5_expires_30_days.png"} className={styles.image3} />
+              <span className={styles.text5}>Delete All</span>
+              <img src={deletewhite} className={styles.image3} />
             </button>
           </div>
         );
@@ -228,7 +234,7 @@ function SalesAndLeads() {
           <div className={styles.row_view5}>
             <button className={styles.button_row_view} onClick={() => alert("New Task Pressed!")}>
               <span className={styles.text3}>New Task</span>
-              <img src="https://api.builder.io/api/v1/image/assets/TEMP/b1a5443c4c270e01b0d3b27bba8a7a21e49403cd?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9" className={styles.image3} />
+              <img src={plus} className={styles.image3} />
             </button>
             <button
               ref={exportButtonRef}
@@ -236,7 +242,7 @@ function SalesAndLeads() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src="https://api.builder.io/api/v1/image/assets/TEMP/62b07f5543b20d982f6c427ca284b71c4beda176?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9" className={styles.image3} />
+              <img src={upload} className={styles.image3} alt=""/>
             </button>
           </div>
         );
@@ -355,7 +361,7 @@ function SalesAndLeads() {
           <div className={styles["breadcrumb"]}>
             <div className={styles["breadcrumb-notactive"]}>Home</div>
             <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-notactive"]}>Sales and Leads</div>
+            <div className={styles["breadcrumb-notactive"]} onClick={()=> navigate("/dashboard")}>Sales and Leads</div>
             <img src={chevrondright} alt="" />
             <div className={styles["breadcrumb-active"]}>Maersk</div>
           </div>
@@ -367,7 +373,7 @@ function SalesAndLeads() {
               <div className={styles.row_view}>
                 <div className={styles.row_view2}>
                   <img
-                    src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/4z4kfmha_expires_30_days.png"}
+                    src={arrowleft}
                     className={styles.image}
                     alt=""
                   />
@@ -390,39 +396,6 @@ function SalesAndLeads() {
                     </button>
                   </div>
                 </div>
-
-                {/* <div className={styles.row_view5}>
-                  <button className={styles.button_row_view}
-                    onClick={()=>alert("Pressed!")}>
-                    <span className={styles.text3}>
-                      {"Edit Data"}
-                    </span>
-                    <img
-                      src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/5rqzbf3s_expires_30_days.png"}
-                      className={styles.image3}
-                    />
-                  </button>
-                  <button className={styles.button_row_view2}
-                    onClick={()=>alert("Pressed!")}>
-                    <span className={styles.text4}>
-                      {"Export"}
-                    </span>
-                    <img
-                      src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/xz7ev9ao_expires_30_days.png"}
-                      className={styles.image3}
-                    />
-                  </button>
-                  <button className={styles.button_row_view3}
-                    onClick={()=>alert("Pressed!")}>
-                    <span className={styles.text5}>
-                      {"Delete Entry"}
-                    </span>
-                    <img
-                      src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/ghab1uy5_expires_30_days.png"}
-                      className={styles.image3}
-                    />
-                  </button>
-                </div> */}
                    {renderButtons()}
               </div>
 
@@ -666,7 +639,7 @@ function SalesAndLeads() {
                   {/* <p>Documents content will be displayed here</p> */}
                   {/* Add your documents content here when ready */}
                   <section className="documents-table-section">
-                <DataTable data={documentsData} />
+                <Documents  />
                </section>
                 </div>
               )}

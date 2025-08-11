@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import CalendarComponent from './CalendarComponent';
+import CalendarComponent from './sales-and-leads/CalendarComponent';
 import DateRangePickerModal from './DateRangePickerModal';
 import useDateRange from '../hooks/useDateRange';
 import styles from './CalendarWithDateRange.module.css';

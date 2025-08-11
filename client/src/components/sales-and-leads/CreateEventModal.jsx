@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import "./CreateEventModal.css";
-import InputField from "../components/InputField";
-import DatePickerModal from "./DatePickerModal";
-import calendarIcon from "../assets/dashboard/calendar.svg";
+import InputField from "../../components/InputField";
+import DatePickerModal from "../DatePickerModal";
+import calendarIcon from "../../assets/dashboard/calendar.svg";
 
 function CreateEventModal({ isOpen, onClose }) {
   

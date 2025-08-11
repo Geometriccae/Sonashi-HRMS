@@ -10,6 +10,7 @@ import isSameWeek from 'date-fns/isSameWeek';
 import isSameMonth from 'date-fns/isSameMonth';
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./CalendarComponent.css";
+import DateRangePickerModal from "../DateRangePickerModal";
 
 const locales = {
   'en-US': require('date-fns/locale/en-US'),
@@ -27,6 +28,8 @@ const CalendarComponent = () => {
   const [view, setView] = useState(Views.MONTH);
   const [date, setDate] = useState(new Date());
   const [selectedMeeting, setSelectedMeeting] = useState(null);
+  const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
+  const [dateRange, setDateRange] = useState({ start: new Date(), end: new Date() });
 
 
   // Check if current view shows today's date
@@ -166,6 +169,21 @@ const CalendarComponent = () => {
     setSelectedMeeting(null);
   };
 
+  const handlePeriodClick = () => {
+    setIsDateRangeModalOpen(true);
+  };
+
+  const handleDateRangeModalClose = () => {
+    setIsDateRangeModalOpen(false);
+  };
+
+  const handleApplyDateRange = (startDate, endDate) => {
+    setDateRange({ start: startDate, end: endDate });
+    setDate(startDate); // Update the calendar view to the start date
+    // You can add additional logic here to filter events based on the date range
+    console.log('Applied date range:', startDate, 'to', endDate);
+  };
+
   const eventStyleGetter = (event, start, end, isSelected) => {
     if (view === Views.MONTH) {
       return {
@@ -228,7 +246,7 @@ const CalendarComponent = () => {
       }
       return props.children;
     },
-   
+
     toolbar: (props) => (
     <div className="calendar-header">
       <div className="calendar-navigation">
@@ -238,13 +256,13 @@ const CalendarComponent = () => {
             <path fillRule="evenodd" clipRule="evenodd" d="M17.0732 8.67289C16.8988 8.49812 16.6621 8.3999 16.4152 8.3999C16.1683 8.3999 15.9316 8.49812 15.7572 8.67289L11.4732 12.9569C11.1092 13.3209 11.1092 13.9089 11.4732 14.2729L15.7572 18.5569C16.1212 18.9209 16.7092 18.9209 17.0732 18.5569C17.4372 18.1929 17.4372 17.6049 17.0732 17.2409L13.4519 13.6102L17.0732 9.98889C17.4372 9.62489 17.4279 9.02756 17.0732 8.67289Z" fill="#C3CAD9"/>
           </svg>
         </button>
-        <div className="current-period">
+        <div className="current-period" onClick={handlePeriodClick}>
          {view === Views.MONTH && (
               isCurrentPeriod ? 'This Month' : format(date, 'MMMM yyyy')
             )}
             {view === Views.WEEK && (
-              isCurrentPeriod 
-                ? 'This Week' 
+              isCurrentPeriod
+                ? 'This Week'
                 : `${format(startOfWeek(date), 'MMMM d')} - ${format(endOfWeek(date), 'MMMM d, yyyy')}`
             )}
             {view === Views.DAY && (
@@ -315,8 +333,8 @@ const CalendarComponent = () => {
         view={view}
         onView={handleView}
         date={date}
-        // min={new Date(0, 0, 0, 9, 0, 0)} // Set minimum time to 9:00 AM
-        // max={new Date(0, 0, 0, 24, 0, 0)} // Set maximum time to 8:00 PM
+         min={new Date(0, 0, 0, 9, 0, 0)} // Set minimum time to 9:00 AM
+         max={new Date(0, 0, 0, 23, 0, 0)} // Set maximum time to 8:00 PM
         onNavigate={handleNavigate}
         onSelectEvent={handleSelectEvent}
         eventPropGetter={eventStyleGetter}
@@ -359,6 +377,14 @@ const CalendarComponent = () => {
           </div>
         </div>
       )}
+
+      <DateRangePickerModal
+        isOpen={isDateRangeModalOpen}
+        onClose={handleDateRangeModalClose}
+        onApplyDateRange={handleApplyDateRange}
+        initialStartDate={dateRange.start}
+        initialEndDate={dateRange.end}
+      />
     </div>
   );
 };

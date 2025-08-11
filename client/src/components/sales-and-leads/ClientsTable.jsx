@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
 import "./ClientsTable.css";
-import DeleteModal from "./delete-modal/DeleteModal";
+import DeleteModal from "../delete-modal/DeleteModal";
 import AddClientModal from "./AddClientModal";
-import FilterDropdown from "./FilterDropdown";
+import FilterDropdown from "../FilterDropdown";
 import { Link } from "react-router-dom";
 
 // SVG Components

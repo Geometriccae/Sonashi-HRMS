@@ -1,14 +1,14 @@
 import React from "react";
-import "./Documents.css";
-import Sidebar from "./sidebar/Sidebar";
-import DataTable from "../components/DataTable";
+import styles from "./TeamManagementDocuments.module.css";
+import Sidebar from "../../pages/sidebar/Sidebar";
+import DataTable from "../DataTable";
 
-import belldot from "../assets/dashboard/bell-dot.svg";
-import chevrondown from "../assets/dashboard/chevron-down.svg";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
-import admindemo from "../assets/dashboard/admin-demo.jpg";
+import belldot from "../../assets/dashboard/bell-dot.svg";
+import chevrondown from "../../assets/dashboard/chevron-down.svg";
+import chevrondright from "../../assets/dashboard/chevron-right.svg";
+import admindemo from "../../assets/dashboard/admin-demo.jpg";
 
-function Documents() {
+function TeamManagementDocuments() {
   const documentsData = [
     {
       id: 1,
@@ -93,7 +93,7 @@ function Documents() {
     <div className="">
       
 
-        <section className="documents-table-section">
+        <section className={styles["documents-table-section"]}>
           <DataTable data={documentsData} />
         </section>
       
@@ -101,4 +101,4 @@ function Documents() {
   );
 }
 
-export default Documents;
+export default TeamManagementDocuments;

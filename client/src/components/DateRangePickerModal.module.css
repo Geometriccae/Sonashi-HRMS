@@ -11,6 +11,7 @@
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  font-family: Inter;
 }
 
 .datePickerMenu {
@@ -226,9 +227,14 @@
 }
 
 .calendarCell.selected {
-  background-color: var(--Foundation-Blue-blue-500, #007AFF);
-  color: #FFF;
+  background-color: var(--Foundation-Blue-blue-500, #007AFF) !important;
+  color: #FFF !important;
   font-weight: 500;
+}
+
+.calendarCell.selected:hover {
+  background-color: var(--Foundation-Blue-blue-500, #007AFF) !important;
+  color: #FFF !important;
 }
 
 .calendarCell.today {
@@ -236,9 +242,19 @@
   font-weight: 500;
 }
 
+.calendarCell.today.selected {
+  background-color: var(--Foundation-Blue-blue-500, #007AFF) !important;
+  color: #FFF !important;
+}
+
 .calendarCell.inRange {
   background-color: var(--Brand-50, #F9F5FF);
-  color: var(--Brand-700, #6941C6);
+  color: var(--Brand-700, #007AFF);
+}
+
+.calendarCell.inRange.selected {
+  background-color: var(--Foundation-Blue-blue-500, #007AFF) !important;
+  color: #FFF !important;
 }
 
 .calendarCell.previousMonth,
@@ -425,45 +441,45 @@ line-height: 1.25rem; /* 142.857% */
   .datePickerMenu {
     max-width: 95vw;
   }
-  
+
   .leadingContent,
   .datePickerListItem {
     white-space: initial;
   }
-  
+
   .datePickers {
     max-width: 100%;
   }
-  
+
   .content {
     padding: 0 20px;
   }
-  
+
   .calendarDates {
     white-space: initial;
   }
-  
+
   .dayHeaders {
     white-space: initial;
   }
-  
+
   .calendarCell {
     white-space: initial;
   }
-  
+
   .bottomPanel {
     max-width: 100%;
     padding: 0 20px;
   }
-  
+
   .actions {
     white-space: initial;
   }
-  
+
   .cancelButtonBase {
     white-space: initial;
   }
-  
+
   .applyButton {
     white-space: initial;
   }

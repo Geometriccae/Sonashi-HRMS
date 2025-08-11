@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import "./AddClientModal.css";
-import ProgressSteps from "./ProgressSteps";
-import InputField from "./InputField";
-import ProfilePhotoUpload from "./ProfilePhotoUpload";
+import ProgressSteps from "../ProgressSteps";
+import InputField from "../InputField";
+import ProfilePhotoUpload from "../ProfilePhotoUpload";
 
 function AddClientModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);

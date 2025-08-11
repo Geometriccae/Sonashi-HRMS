@@ -1,7 +1,7 @@
 import React from "react";
-import styles from "./Dashboard.module.css"; // ✅ Correct CSS module import
+import styles from "./Dashboard.module.css"; // 
 import Side from "./sidebar/Sidebar";
-import ClientsTable from "../components/ClientsTable";
+import ClientsTable from "../components/sales-and-leads/ClientsTable";
 
 import belldot from "../assets/dashboard/bell-dot.svg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";

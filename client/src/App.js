@@ -4,7 +4,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import SalesAndLeads from "./pages/SalesAndLeads";
-import Documents from "./pages/Documents";
+import Documents from "./components/sales-and-leads/Documents";
 import Example from "./pages/Example";
 import AddClient from "./pages/AddClient";
 import ClientReview from "./pages/ClientDataReview";

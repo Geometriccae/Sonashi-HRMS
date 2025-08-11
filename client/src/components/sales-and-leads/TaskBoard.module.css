@@ -4,6 +4,7 @@
   width: 100%;
   overflow-x: auto;
   box-shadow: 0 -43px 51.5px -27px rgba(0, 0, 0, 0.15) inset;
+  margin-right: 50px;
 }
 
 @media (max-width: 991px) {
