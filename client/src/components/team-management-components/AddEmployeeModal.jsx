@@ -276,13 +276,13 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const getStepTitle = () => {
     switch (currentStep) {
       case 1:
-        return "Add new Client";
+        return "Add new Employee";
       case 2:
-        return "Add new Client";
+        return "Add new Employee";
       case 3:
-        return "Add new Client";
+        return "Add new Employee";
       default:
-        return "Add new Client";
+        return "Add new Employee";
     }
   };
 

@@ -326,21 +326,61 @@
   margin: auto 0;
 }
 
+/* Drag and drop styles */
+.taskCard[draggable="true"],
+.cardMinimal[draggable="true"] {
+  cursor: move;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.taskCard[draggable="true"]:hover,
+.cardMinimal[draggable="true"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.taskCard[draggable="true"]:active,
+.cardMinimal[draggable="true"]:active {
+  opacity: 0.7;
+  transform: rotate(5deg);
+}
+
+.column {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 1);
+  min-width: 240px;
+  width: 304px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.column:hover {
+  background-color: rgba(248, 250, 252, 1);
+}
+
+.column.dragOver {
+  background-color: rgba(59, 130, 246, 0.05);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border: 2px dashed rgba(59, 130, 246, 0.3);
+}
+
 /* Responsive adjustments */
 @media (max-width: 991px) {
   .boardContainer {
     gap: 20px;
   }
-  
+
   .column {
     min-width: 280px;
     width: 280px;
   }
-  
+
   .columnContent {
     width: 240px;
   }
-  
+
   .taskCard {
     max-width: 240px;
   }

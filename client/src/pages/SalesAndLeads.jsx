@@ -380,7 +380,7 @@ function SalesAndLeads() {
                   <div className={styles.row_view3}>
                     <div className={styles.row_view4}>
                       <img
-                        src={"https://storage.googleapis.com/tagjs-prod.appspot.com/v1/20xzpgquYu/emvz7kw9_expires_30_days.png"}
+                        src={maersksymbol}
                         className={styles.image2}
                         alt="Maersk logo"
                       />

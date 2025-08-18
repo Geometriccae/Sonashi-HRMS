@@ -324,6 +324,11 @@ background-color: white;
   padding-right: 3px;
   gap: 16px;
 }
+.row_view4 img{
+ border-radius: 3.75rem;
+background: #42B0D5;
+
+}
 .row_view5 {
   flex-shrink: 0;
   display: flex;

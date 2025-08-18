@@ -303,7 +303,8 @@
   display: flex;
   width: 100%;
   max-width: 570px;
-  margin: 0 auto 36px;
+  margin: 80px auto 36px;
+ 
   align-items: center;
   gap: 100px;
   overflow: hidden;
@@ -311,6 +312,10 @@
   justify-content: space-between;
   flex-wrap: wrap;
   padding: 24px;
+
+  
+    
+
 }
 
 @media (max-width: 991px) {

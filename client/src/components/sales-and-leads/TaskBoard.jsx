@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import styles from './TaskBoard.module.css';
 
 import plus from '../../assets/dashboard/plus.svg';
@@ -9,7 +9,7 @@ import pencilline from '../../assets/dashboard/pencil-line.svg';
 
 
 const TaskBoard = () => {
-  const taskColumns = [
+  const [taskColumns, setTaskColumns] = useState([
     {
       id: 'backlog',
       title: 'Backlog Tasks',
@@ -133,12 +133,88 @@ const TaskBoard = () => {
         }
       ]
     }
-  ];
+  ]);
 
-  const TaskCard = ({ task, isMinimal = false }) => {
+  const [dragOverColumn, setDragOverColumn] = useState(null);
+
+  const handleDragStart = (e, taskId, sourceColumnId) => {
+    if (!taskId || !sourceColumnId) {
+      e.preventDefault();
+      return;
+    }
+
+    try {
+      e.dataTransfer.setData('text/plain', JSON.stringify({ taskId, sourceColumnId }));
+      e.dataTransfer.effectAllowed = 'move';
+    } catch (error) {
+      console.error('Error during drag start:', error);
+      e.preventDefault();
+    }
+  };
+
+  const handleDragOver = (e, columnId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColumn(columnId);
+  };
+
+  const handleDragLeave = (e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverColumn(null);
+    }
+  };
+
+  const handleDrop = (e, targetColumnId) => {
+    e.preventDefault();
+    setDragOverColumn(null);
+
+    try {
+      const dragData = e.dataTransfer.getData('text/plain');
+      if (!dragData) return;
+
+      const data = JSON.parse(dragData);
+      const { taskId, sourceColumnId } = data;
+
+      if (!taskId || !sourceColumnId || sourceColumnId === targetColumnId) {
+        return;
+      }
+
+      setTaskColumns(prevColumns => {
+        const newColumns = [...prevColumns];
+        const sourceColumnIndex = newColumns.findIndex(col => col.id === sourceColumnId);
+        const targetColumnIndex = newColumns.findIndex(col => col.id === targetColumnId);
+
+        if (sourceColumnIndex === -1 || targetColumnIndex === -1) {
+          return prevColumns;
+        }
+
+        const taskToMove = newColumns[sourceColumnIndex].tasks.find(task => task.id === parseInt(taskId));
+
+        if (!taskToMove) {
+          return prevColumns;
+        }
+
+        newColumns[sourceColumnIndex].tasks = newColumns[sourceColumnIndex].tasks.filter(task => task.id !== parseInt(taskId));
+        newColumns[targetColumnIndex].tasks.push(taskToMove);
+
+        newColumns[sourceColumnIndex].count = newColumns[sourceColumnIndex].tasks.length;
+        newColumns[targetColumnIndex].count = newColumns[targetColumnIndex].tasks.length;
+
+        return newColumns;
+      });
+    } catch (error) {
+      console.error('Error during drag and drop:', error);
+    }
+  };
+
+  const TaskCard = ({ task, isMinimal = false, columnId }) => {
     if (isMinimal) {
       return (
-        <div className={styles.cardMinimal}>
+        <div
+          className={styles.cardMinimal}
+          draggable
+          onDragStart={(e) => handleDragStart(e, task.id, columnId)}
+        >
           <div className={styles.taskDate}>{task.date}</div>
           <div className={styles.taskTitle}>{task.title}</div>
         </div>
@@ -146,7 +222,11 @@ const TaskBoard = () => {
     }
 
     return (
-      <div className={styles.taskCard}>
+      <div
+        className={styles.taskCard}
+        draggable
+        onDragStart={(e) => handleDragStart(e, task.id, columnId)}
+      >
         <div className={styles.taskDate}>{task.date}</div>
         <div className={styles.taskHeader}>
           <div className={styles.taskTitle}>{task.title}</div>
@@ -189,8 +269,15 @@ const TaskBoard = () => {
   };
 
   const Column = ({ column }) => {
+    const isDragOver = dragOverColumn === column.id;
+
     return (
-      <div className={styles.column}>
+      <div
+        className={`${styles.column} ${isDragOver ? styles.dragOver : ''}`}
+        onDragOver={(e) => handleDragOver(e, column.id)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, column.id)}
+      >
         <div className={styles.columnHeader}>
           <div className={styles.columnLeft}>
             <div className={styles.columnTitle}>{column.title}</div>
@@ -206,9 +293,10 @@ const TaskBoard = () => {
         </div>
         <div className={styles.columnContent}>
           {column.tasks.map((task, index) => (
-            <TaskCard 
-              key={task.id} 
-              task={task} 
+            <TaskCard
+              key={task.id}
+              task={task}
+              columnId={column.id}
               isMinimal={index === column.tasks.length - 1 && column.tasks.length > 3}
             />
           ))}

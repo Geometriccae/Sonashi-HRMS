@@ -20,6 +20,7 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
+    
     console.log("Found user:", user);
     console.log("User username:", user.username);
     res.status(200).json({
