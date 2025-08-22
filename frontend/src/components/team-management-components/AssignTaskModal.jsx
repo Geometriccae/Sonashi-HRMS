@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import styles from "./AssignTaskModal.module.css";
-import InputField from "../../components/InputField";
+import InputField from "../InputField";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import user from "../../assets/dashboard/user.svg";

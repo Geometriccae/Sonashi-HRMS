@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import SalesClientAndLeads from "./pages/SalesClientAndLeads";
 import SalesAndLeads from "./pages/SalesAndLeads";
 import Documents from "./components/sales-and-leads/Documents";
 import Example from "./pages/Example";
@@ -25,6 +26,10 @@ function App() {
         <Route path="/dashboard" element={
           <ProtectedRoute><Dashboard /></ProtectedRoute>
 
+        } />
+
+         <Route path="/salesclientandleads" element={
+          <ProtectedRoute><SalesClientAndLeads /></ProtectedRoute>
         } />
         <Route path="/salesandleads" element={
           <ProtectedRoute><SalesAndLeads /></ProtectedRoute>

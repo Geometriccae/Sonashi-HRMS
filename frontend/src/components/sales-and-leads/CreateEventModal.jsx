@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import "./CreateEventModal.css";
-import InputField from "../../components/InputField";
+import InputField from "../InputField";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 

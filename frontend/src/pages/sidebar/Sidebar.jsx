@@ -9,7 +9,7 @@ import {
   FaQuestionCircle,
   FaSignOutAlt,
 } from "react-icons/fa";
-import { Link, useLocation, useNavigate} from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from "./Sidebar.module.css";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
 import useDateRange from "../../hooks/useDateRange";
@@ -37,9 +37,9 @@ import offbutton from "../../assets/dashboard/off-button.png";
 function Sidebar() {
   const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
   const location = useLocation();
-  const isActive = (path) => location.pathname === path;
+  // const isActive = (path) => location.pathname === path;
+  const isActive = (path) => location.pathname.startsWith(path);
   const navigate = useNavigate();
-   
 
   const handleLogout = () => {
     // Clear authentication data
@@ -104,30 +104,44 @@ function Sidebar() {
                 </Link>
               </li>
 
-               <li className={isActive("/teammanagement") ? styles.active : ""}>
+              <li className={isActive("/teammanagement") ? styles.active : ""}>
                 <Link to="/teammanagement" className={styles["sidebar-link"]}>
-                  <img src={users} alt="teamManagement" className={styles.icon}/> Team
-                  Management
+                  <img
+                    src={users}
+                    alt="teamManagement"
+                    className={styles.icon}
+                  />{" "}
+                  Team Management
                 </Link>
               </li>
 
-              <li>
+              {/* <li>
                 <img src={packageicon} alt="Sales" className={styles.icon} /> Sales &
                 Leads
-              </li> 
+              </li>  */}
 
-             
+              <li className={isActive("/salesclientandleads") ? styles.active : ""}>
+                <Link to="/salesclientandleads" className={styles["sidebar-link"]}>
+                  <img
+                    src={packageicon}
+                    alt="salesclientandleads"
+                    className={styles.icon}
+                  />
+                  Sales & Leads
+                </Link>
+              </li>
 
-              <li
-                className={isActive("/") ? styles.active : ""}
-                onClick={handleDateRangeClick}
-                style={{ cursor: "pointer" }}
-              >
-                <img src={calendar} alt="Calendar" className={styles.icon} /> Calendar
+              <li style={{ cursor: "pointer" }}>
+                <img src={calendar} alt="Calendar" className={styles.icon} />{" "}
+                Calendar
               </li>
 
               <li>
-                <img src={filechartcolumn} alt="Reports" className={styles.icon} />{" "}
+                <img
+                  src={filechartcolumn}
+                  alt="Reports"
+                  className={styles.icon}
+                />{" "}
                 Reports
               </li>
             </ul>
@@ -137,16 +151,24 @@ function Sidebar() {
             <p className={styles["section-title"]}>ADDITIONAL</p>
             <ul>
               <li>
-                <img src={settings} alt="Settings" className={styles.icon}/> Settings
+                <img src={settings} alt="Settings" className={styles.icon} />{" "}
+                Settings
               </li>
               <li>
-                <img src={cloud} alt="My Files" className={styles.icon}/> My Files
+                <img src={cloud} alt="My Files" className={styles.icon} /> My
+                Files
               </li>
               <li>
-                <img src={circlehelp} alt="Help & Support" className={styles.icon}/> Help & Support
+                <img
+                  src={circlehelp}
+                  alt="Help & Support"
+                  className={styles.icon}
+                />{" "}
+                Help & Support
               </li>
               <li className={styles["logout"]} onClick={handleLogout}>
-                <img src={logout} alt="Log Out" className={styles.icon}/> Log Out
+                <img src={logout} alt="Log Out" className={styles.icon} /> Log
+                Out
               </li>
             </ul>
           </div>
@@ -154,13 +176,13 @@ function Sidebar() {
       </div>
 
       <div className={styles["sidebar-footer-content"]}>
-        <div className={styles["view-as-executive"]}>
+        {/* <div className={styles["view-as-executive"]}>
           <div className={styles["view-as-executive-row"]}>
             <img src={scaneye} alt="View as Executive" />
             <div className={styles["label"]}>View as Executive</div>
           </div>
           <img src={offbutton} alt="View as Executive" height={28} />
-        </div>
+        </div> */}
 
         <div className={styles["line"]}></div>
         <div className={styles["sidebar-footer-text"]}>

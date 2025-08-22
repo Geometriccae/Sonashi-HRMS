@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import styles from "./Dashboard.module.css"; // 
+import styles from "./SalesClientAndLeads.module.css"; // 
 import Side from "./sidebar/Sidebar";
 import ClientsTable from "../components/sales-and-leads/ClientsTable";
 
@@ -10,7 +10,7 @@ import admindemo from "../assets/dashboard/admin-demo.jpg";
 import arrowupright from "../assets/dashboard/arrow-up-right.svg";
 import arrowdownup from "../assets/dashboard/arrow-down-up.svg";
 
-function Dash() {
+function SalesClientAndLeads() {
 
     const [username, setUsername] = useState("");
   
@@ -184,4 +184,4 @@ function Dash() {
   );
 }
 
-export default Dash;
+export default SalesClientAndLeads;

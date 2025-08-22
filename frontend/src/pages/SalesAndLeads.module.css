@@ -261,9 +261,11 @@ background-color: white;
   align-items: flex-start;
   /* margin-bottom: 152px; */
   margin-left: 40px;
-  margin-right: 40px;
+  /* margin-right: 40px; */
   gap: 64px;
 }
+
+
 .column4 {
   flex-shrink: 0;
   display: flex;
