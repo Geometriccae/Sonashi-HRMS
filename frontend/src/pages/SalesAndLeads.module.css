@@ -444,7 +444,7 @@ background: #42B0D5;
 .meetingsContent {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: visible;
   padding: 20px 0;
 }
 
@@ -452,6 +452,9 @@ background: #42B0D5;
 .tasksContent {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: visible;
   margin: -40px -40px 0 -40px;
 }
+
+
+
