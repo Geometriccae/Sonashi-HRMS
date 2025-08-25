@@ -8,10 +8,15 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 //  Allow frontend to connect
+// app.use(cors({
+//   origin: 'http://localhost:3000',
+//   credentials: true
+// }));
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: process.env.CLIENT_URL || "http://localhost:3000",
   credentials: true
 }));
+
 
 app.get('/api/protected-data', authMiddleware, (req, res) => {
   res.json({ message: "This is protected data", user: req.user });
