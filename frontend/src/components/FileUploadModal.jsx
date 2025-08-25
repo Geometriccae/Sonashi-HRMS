@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import "./FileUploadModal.css";
+import uploadIcon from "../assets/dashboard/upload-cloud.svg";
+import removeIcon from "../assets/dashboard/trash-2.svg";
 
 function FileUploadModal({ isOpen, onClose, onUpload }) {
   const [uploadedFiles, setUploadedFiles] = useState([
@@ -67,7 +69,7 @@ function FileUploadModal({ isOpen, onClose, onUpload }) {
             <div className="file-drop-zone" onClick={handleUploadClick}>
               <div className="drop-zone-content">
                 <img
-                  src="https://api.builder.io/api/v1/image/assets/TEMP/1ffc50d2359d937e2646492f4d65a2450c04b3a7?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+                  src={uploadIcon}
                   alt="Upload icon"
                   className="upload-icon"
                 />
@@ -111,7 +113,7 @@ function FileUploadModal({ isOpen, onClose, onUpload }) {
                     onClick={() => handleRemoveFile(file.id)}
                   >
                     <img
-                      src="https://api.builder.io/api/v1/image/assets/TEMP/413c327f1d3d810ffbf510e6af5904a0e6d2f867?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+                      src={removeIcon}
                       alt="Remove file"
                       className="remove-icon"
                     />

@@ -1,5 +1,7 @@
 import React from "react";
 import "./DeleteModal.css";
+import warning from "../../assets/dashboard/alert-circle.svg";
+
 
 function DeleteModal({ isOpen, onClose, onConfirm, title = "Delete this Client?", description = "Are you sure you want to delete this Client? This action cannot be undone." }) {
   if (!isOpen) return null;
@@ -15,7 +17,7 @@ function DeleteModal({ isOpen, onClose, onConfirm, title = "Delete this Client?"
       <div className="delete-modal">
         <div className="modal-content">
           <img
-            src="https://api.builder.io/api/v1/image/assets/TEMP/9a329a673cfbf60e81a16be347d4cb4b13ebc7d1?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+            src={warning}
             alt="Warning icon"
             className="modal-icon"
           />

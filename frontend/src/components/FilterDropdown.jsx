@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import "./FilterDropdown.css";
+import checkIcon from "../assets/dashboard/check_24px.svg";
 
 const FilterDropdown = ({ isOpen, onClose, onFilterSelect, position }) => {
   const dropdownRef = useRef(null);
@@ -107,7 +108,7 @@ const FilterDropdown = ({ isOpen, onClose, onFilterSelect, position }) => {
                 <div className="filter-item-icon">
                   {option.hasIcon ? (
                     <img
-                      src="https://api.builder.io/api/v1/image/assets/TEMP/d129c03eda82821d7df2d66d73714b3e8b9ad428?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+                      src={checkIcon}
                       alt=""
                       className="filter-option-icon"
                     />

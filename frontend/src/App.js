@@ -7,8 +7,7 @@ import SalesClientAndLeads from "./pages/SalesClientAndLeads";
 import SalesAndLeads from "./pages/SalesAndLeads";
 import Documents from "./components/sales-and-leads/Documents";
 import Example from "./pages/Example";
-import AddClient from "./pages/AddClient";
-import ClientReview from "./pages/ClientDataReview";
+// import AddClient from "./pages/AddClient";
 import TeamManagement from "./pages/team-management/TeamManagement";
 import TeamManagementSalesAndLeads from "./pages/team-management/TeamManagementSalesLeads";
 import Venkat from "./pages/Venkat";
@@ -36,8 +35,7 @@ function App() {
         } />
 
         <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
-        <Route path="/addclient" element={<ProtectedRoute><AddClient /></ProtectedRoute>} />
-        <Route path="/clientreview" element={<ProtectedRoute><ClientReview /></ProtectedRoute>} />
+        {/* <Route path="/addclient" element={<ProtectedRoute><AddClient /></ProtectedRoute>} /> */}
 
         <Route path="/teammanagement" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
         <Route path="/teammanagement_salesleads" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />

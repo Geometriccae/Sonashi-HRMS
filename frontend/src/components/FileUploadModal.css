@@ -15,10 +15,11 @@
 /* File Upload Modal Container */
 .file-upload-modal {
   border-radius: 12px;
-  box-shadow: 0 20px 24px -4px rgba(10, 13, 18, 0.08), 0 8px 8px -4px rgba(10, 13, 18, 0.03);
+  box-shadow: 0 20px 24px -4px rgba(10, 13, 18, 0.08),
+    0 8px 8px -4px rgba(10, 13, 18, 0.03);
   width: 30rem;
   overflow: hidden;
-  background-color: var(--White, #FFF);
+  background-color: var(--White, #fff);
   padding: 24px;
   font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
 }
@@ -33,7 +34,7 @@
 }
 
 .header-title {
-  color: var(--Gray-900, #181D27);
+  color: var(--Gray-900, #181d27);
   font-size: 18px;
   font-weight: 600;
   line-height: 2;
@@ -57,19 +58,19 @@
 .file-drop-zone {
   align-items: stretch;
   border-radius: 8px;
-  border: 1px solid var(--Gray-200, #E9EAEB);
+  border: 1px solid var(--Gray-200, #e9eaeb);
   display: flex;
   width: 100%;
   flex-direction: column;
   justify-content: center;
-  background-color: var(--White, #FFF);
+  background-color: var(--White, #fff);
   padding: 16px 24px;
   cursor: pointer;
   transition: border-color 0.2s ease;
 }
 
 .file-drop-zone:hover {
-  border-color: var(--Foundation-Blue-blue-500, #007AFF);
+  border-color: var(--Foundation-Blue-blue-500, #007aff);
 }
 
 .drop-zone-content {
@@ -87,6 +88,9 @@
   width: 2.5rem;
   height: 2.5rem;
   align-self: center;
+  border-radius: 1.75rem;
+  border: 6px solid var(--Gray-50, #fafafa);
+  background: var(--Gray-100, #f5f5f5);
 }
 
 .upload-actions {
@@ -107,7 +111,7 @@
 .upload-button-text {
   display: flex;
   align-items: flex-start;
-  color: var(--Foundation-Blue-blue-500, #007AFF);
+  color: var(--Foundation-Blue-blue-500, #007aff);
   font-weight: 600;
   justify-content: flex-start;
 }
@@ -134,12 +138,12 @@
 .file-upload-item {
   align-items: flex-start;
   border-radius: 8px;
-  border: 1px solid var(--Gray-200, #E9EAEB);
+  border: 1px solid var(--Gray-200, #e9eaeb);
   display: flex;
   width: 100%;
   gap: 4px;
   justify-content: flex-start;
-  background-color: var(--White, #FFF);
+  background-color: var(--White, #fff);
   padding: 16px;
   margin-bottom: 12px;
 }
@@ -149,7 +153,7 @@
 }
 
 .file-upload-item.completed {
-  border-color: var(--Foundation-Blue-blue-500, #007AFF);
+  border-color: var(--Foundation-Blue-blue-500, #007aff);
 }
 
 .file-content {
@@ -205,7 +209,7 @@
 
 .progress-background {
   border-radius: 4px;
-  background-color: var(--Gray-100, #F5F5F5);
+  background-color: var(--Gray-100, #f5f5f5);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -215,7 +219,7 @@
   border-radius: 4px;
   display: flex;
   height: 8px;
-  background-color: var(--Foundation-Blue-blue-500, #007AFF);
+  background-color: var(--Foundation-Blue-blue-500, #007aff);
   transition: width 0.3s ease;
 }
 
@@ -242,7 +246,7 @@
   aspect-ratio: 1;
   object-fit: contain;
   object-position: center;
-  width: 20px;
+  
   flex-shrink: 0;
 }
 
@@ -265,28 +269,28 @@
 /* Cancel Button */
 .file-cancel-button {
   display: flex;
-padding: 0.625rem 1.125rem;
-justify-content: center;
-align-items: center;
-gap: 0.5rem;
-flex: 1 0 0;
-border-radius: 0.5rem;
-border: 1px solid var(--Gray-300, #D5D7DA);
-background: var(--White, #FFF);
+  padding: 0.625rem 1.125rem;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 0 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--Gray-300, #d5d7da);
+  background: var(--White, #fff);
 
-/* Shadow/xs */
-box-shadow: 0 1px 2px 0 rgba(10, 13, 18, 0.05);
+  /* Shadow/xs */
+  box-shadow: 0 1px 2px 0 rgba(10, 13, 18, 0.05);
 }
 
 .file-cancel-button-content {
-color: var(--Gray-700, #414651);
+  color: var(--Gray-700, #414651);
 
-/* Text md/Semibold */
-font-family: Inter;
-font-size: 1rem;
-font-style: normal;
-font-weight: 600;
-line-height: 1.5rem; /* 150% */
+  /* Text md/Semibold */
+  font-family: Inter;
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.5rem; /* 150% */
 }
 
 .cancel-text {
@@ -302,30 +306,30 @@ line-height: 1.5rem; /* 150% */
 /* Attach Button */
 .file-attach-button {
   display: flex;
-padding: 0.625rem 1.125rem;
-justify-content: center;
-align-items: center;
-gap: 0.5rem;
-flex: 1 0 0;
-border-radius: 0.5rem;
-border: 1px solid var(--Foundation-Blue-blue-500, #007AFF);
-background: var(--Foundation-Blue-blue-500, #007AFF);
-/* Shadow/xs */
-box-shadow: 0 1px 2px 0 rgba(10, 13, 18, 0.05);
+  padding: 0.625rem 1.125rem;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 0 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--Foundation-Blue-blue-500, #007aff);
+  background: var(--Foundation-Blue-blue-500, #007aff);
+  /* Shadow/xs */
+  box-shadow: 0 1px 2px 0 rgba(10, 13, 18, 0.05);
 }
 
 .file-attach-button-content {
-color: var(--White, #FFF);
-/* Text md/Semibold */
-font-family: Inter;
-font-size: 1rem;
-font-style: normal;
-font-weight: 600;
-line-height: 1.5rem; /* 150% */
+  color: var(--White, #fff);
+  /* Text md/Semibold */
+  font-family: Inter;
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.5rem; /* 150% */
 }
 
 .attach-text {
-  color: var(--White, #FFF);
+  color: var(--White, #fff);
   align-self: stretch;
   margin: auto 0;
 }
@@ -347,21 +351,21 @@ line-height: 1.5rem; /* 150% */
     width: calc(100% - 32px);
     max-width: none;
   }
-  
+
   .file-upload-actions {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .file-cancel-button,
   .file-file-attach-button {
     width: 100%;
   }
-  
+
   .file-content {
     min-width: auto;
   }
-  
+
   .progress-bar {
     min-width: auto;
   }

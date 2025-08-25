@@ -3,7 +3,7 @@ import styles from "./AssignTaskModal.module.css";
 import InputField from "../InputField";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
-import user from "../../assets/dashboard/user.svg";
+
 
 function AssignTaskModal({ isOpen, onClose }) {
   const [formData, setFormData] = useState({

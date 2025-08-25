@@ -3,10 +3,7 @@ import styles from "./TeamManagementDocuments.module.css";
 import Sidebar from "../../pages/sidebar/Sidebar";
 import DataTable from "../DataTable";
 
-import belldot from "../../assets/dashboard/bell-dot.svg";
-import chevrondown from "../../assets/dashboard/chevron-down.svg";
-import chevrondright from "../../assets/dashboard/chevron-right.svg";
-import admindemo from "../../assets/dashboard/admin-demo.jpg";
+
 
 function TeamManagementDocuments() {
   const documentsData = [

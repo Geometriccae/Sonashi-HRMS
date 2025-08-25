@@ -3,6 +3,7 @@ import "./AddClientModal.css";
 import ProgressSteps from "../ProgressSteps";
 import InputField from "../InputField";
 import ProfilePhotoUpload from "../ProfilePhotoUpload";
+import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 
 function AddClientModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -246,7 +247,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
               <button className="edit-photo-button" onClick={handleEditPhoto}>
                 <span className="edit-photo-text">Edit Photo</span>
                 <img
-                  src="https://api.builder.io/api/v1/image/assets/TEMP/8dcd0639b791b1b115321ae13fb57120a1f0c09b?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9"
+                  src={editIcon}
                   alt="Edit icon"
                   className="edit-photo-icon"
                 />

@@ -204,7 +204,7 @@ function SalesAndLeads() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={upload} className={styles.image3} />
+              <img src={upload} alt="export" className={styles.image3} />
             </button>
           </div>
         );
@@ -225,7 +225,7 @@ function SalesAndLeads() {
             </button>
             <button className={styles.button_row_view3} onClick={handleDeleteData}>
               <span className={styles.text5}>Delete All</span>
-              <img src={deletewhite} className={styles.image3} />
+              <img src={deletewhite} alt="delete" className={styles.image3} />
             </button>
           </div>
         );
@@ -234,7 +234,7 @@ function SalesAndLeads() {
           <div className={styles.row_view5}>
             <button className={styles.button_row_view} onClick={() => alert("New Task Pressed!")}>
               <span className={styles.text3}>New Task</span>
-              <img src={plus} className={styles.image3} />
+              <img src={plus}  alt="newtask" className={styles.image3} />
             </button>
             <button
               ref={exportButtonRef}

@@ -40,6 +40,9 @@
   object-position: center;
   width: 48px;
   align-self: center;
+  border-radius: 1.75rem;
+border: 8px solid var(--Error-50, #FEF3F2);
+background: var(--Error-100, #FEE4E2);
 }
 
 .modal-text-section {
