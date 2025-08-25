@@ -18,6 +18,8 @@ function Login() {
         username,
         password
       });
+    // try {
+    //   const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/login`, { username, password }, { withCredentials: true });
 
      // Store the token in localStorage
   localStorage.setItem("token", res.data.token);

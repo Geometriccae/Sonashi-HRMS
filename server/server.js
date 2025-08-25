@@ -12,8 +12,25 @@ const PORT = process.env.PORT || 5000;
 //   origin: 'http://localhost:3000',
 //   credentials: true
 // }));
+
+// app.use(cors({
+//   origin: process.env.CLIENT_URL,
+//   credentials: true
+// }));
+
+const allowedOrigins = [
+  "http://localhost:3000", // local frontend
+  "https://auxin-mern-app-front.onrender.com" // live frontend
+];
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:3000",
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // allow curl/postman
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error("Not allowed by CORS"));
+  },
   credentials: true
 }));
 
