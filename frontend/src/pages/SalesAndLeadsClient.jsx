@@ -361,7 +361,7 @@ function SalesAndLeadsClient() {
           <div className={styles["breadcrumb"]}>
             <div className={styles["breadcrumb-notactive"]}>Home</div>
             <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-notactive"]} onClick={()=> navigate("/dashboard")}>Sales and Leads</div>
+            <div className={styles["breadcrumb-notactive"]} onClick={()=> navigate("/salesandleads")}>Sales and Leads</div>
             <img src={chevrondright} alt="" />
             <div className={styles["breadcrumb-active"]}>Maersk</div>
           </div>
@@ -375,7 +375,9 @@ function SalesAndLeadsClient() {
                   <img
                     src={arrowleft}
                     className={styles.image}
-                    alt=""
+                    alt="Go Back"
+                   style={{ cursor: "pointer" }}
+                    onClick={() => navigate(-1)} 
                   />
                   <div className={styles.row_view3}>
                     <div className={styles.row_view4}>

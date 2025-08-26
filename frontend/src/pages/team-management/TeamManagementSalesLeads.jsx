@@ -356,7 +356,9 @@ function TeamManagementSalesLeads() {
                   <img
                     src={arrowleft}
                     className={styles.image}
-                    alt=""
+                    alt="Go Back"
+                   style={{ cursor: "pointer" }}
+                    onClick={() => navigate(-1)} 
                   />
                   <div className={styles.row_view3}>
                     <div className={styles.row_view4}>
