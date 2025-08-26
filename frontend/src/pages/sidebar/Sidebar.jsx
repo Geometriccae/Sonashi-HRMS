@@ -37,7 +37,6 @@ import offbutton from "../../assets/dashboard/off-button.png";
 function Sidebar() {
   const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
   const location = useLocation();
-  // const isActive = (path) => location.pathname === path;
   const isActive = (path) => location.pathname.startsWith(path);
   const navigate = useNavigate();
 
@@ -120,11 +119,11 @@ function Sidebar() {
                 Leads
               </li>  */}
 
-              <li className={isActive("/salesclientandleads") ? styles.active : ""}>
-                <Link to="/salesclientandleads" className={styles["sidebar-link"]}>
+              <li className={isActive("/salesandleads") ? styles.active : ""}>
+                <Link to="/salesandleads" className={styles["sidebar-link"]}>
                   <img
                     src={packageicon}
-                    alt="salesclientandleads"
+                    alt="salesandleads"
                     className={styles.icon}
                   />
                   Sales & Leads

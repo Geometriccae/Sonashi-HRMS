@@ -350,7 +350,7 @@ function ClientsTable() {
                 </div>
               </div>
               {filteredData.map((client) => (
-                <Link key={client.id} to= '/salesandleads' className="table-cell company-cell no-link-style">
+                <Link key={client.id} to= '/salesandleadsclient' className="table-cell company-cell no-link-style">
                   <div className="avatar"></div>
                   <div className="companyinfo">
                     <div className="company-name">{client.companyName}</div>
