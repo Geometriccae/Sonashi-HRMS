@@ -1,9 +1,12 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import "./ClientsTable.css";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddClientModal from "./AddClientModal";
+import EditClientModal from "./EditClientModal";
 import FilterDropdown from "../FilterDropdown";
 import { Link } from "react-router-dom";
+import clientService from "../../services/ClientService";
+import config from "../../config/config";
 
 // SVG Components
 const UserPlusIcon = () => (
@@ -201,25 +204,64 @@ function ClientsTable() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
+  const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
+  const [clientToEdit, setClientToEdit] = useState(null);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [clientsData, setClientsData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const filterButtonRef = useRef(null);
 
+  // Fetch clients data from backend
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        setIsLoading(true);
+        const clients = await clientService.getClients();
+        setClientsData(clients);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching clients:", err);
+        setError(err.message || "Failed to fetch clients");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchClients();
+  }, []);
+
   const handleEdit = (id) => {
-    console.log("Edit client with id:", id);
+    const client = clientsData.find((c) => c._id === id);
+    if (client) {
+      setClientToEdit(client);
+      setIsEditClientModalOpen(true);
+    }
   };
 
   const handleDelete = (id) => {
-    const client = clientsData.find(c => c.id === id);
+    const client = clientsData.find((c) => c._id === id);
     setClientToDelete(client);
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
-    console.log("Delete client with id:", clientToDelete?.id);
-    // Implement actual delete logic here
-    setIsDeleteModalOpen(false);
-    setClientToDelete(null);
+  const handleDeleteConfirm = async () => {
+    try {
+      // Call your API to delete the client
+      await clientService.deleteClient(clientToDelete._id);
+
+      // Remove the client from local state
+      setClientsData((prevClients) =>
+        prevClients.filter((client) => client._id !== clientToDelete._id)
+      );
+
+      setIsDeleteModalOpen(false);
+      setClientToDelete(null);
+    } catch (err) {
+      console.error("Error deleting client:", err);
+      setError(err.message || "Failed to delete client");
+    }
   };
 
   const handleDeleteCancel = () => {
@@ -235,10 +277,41 @@ function ClientsTable() {
     setIsAddClientModalOpen(false);
   };
 
-  const handleAddClientSubmit = (formData) => {
-    console.log("New client data:", formData);
-    // Implement actual add client logic here
-    // You would typically send this data to your backend API
+  const handleAddClientSubmit = async (formData) => {
+    try {
+      // Send the new client data to your backend
+      const newClient = await clientService.createClient(formData);
+
+      // Add the new client to your local state
+      setClientsData((prevClients) => [...prevClients, newClient]);
+
+      setIsAddClientModalOpen(false);
+    } catch (err) {
+      console.error("Error creating client:", err);
+      setError(err.message || "Failed to create client");
+    }
+  };
+
+  const handleEditClientClose = () => {
+    setIsEditClientModalOpen(false);
+    setClientToEdit(null);
+  };
+
+  const handleEditClientSubmit = async (updatedClient) => {
+    try {
+      // Update the client in local state
+      setClientsData((prevClients) =>
+        prevClients.map((client) =>
+          client._id === updatedClient._id ? updatedClient : client
+        )
+      );
+
+      setIsEditClientModalOpen(false);
+      setClientToEdit(null);
+    } catch (err) {
+      console.error("Error updating client:", err);
+      setError(err.message || "Failed to update client");
+    }
   };
 
   const handleFilterClick = (event) => {
@@ -246,7 +319,7 @@ function ClientsTable() {
       const rect = filterButtonRef.current.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom + 8,
-        left: rect.left - 200 // Adjust to align dropdown properly
+        left: rect.left - 200, // Adjust to align dropdown properly
       });
     }
     setIsFilterDropdownOpen(!isFilterDropdownOpen);
@@ -265,15 +338,40 @@ function ClientsTable() {
   const filteredData = clientsData.filter((client) => {
     let matchesFilter = true;
     if (activeFilter === "Clients") {
-      matchesFilter = client.type === "Client";
+      matchesFilter =
+        client.type === "Client" || client.relationshipStatus === "Active";
     } else if (activeFilter === "Leads") {
-      matchesFilter = client.type === "Lead";
+      matchesFilter =
+        client.type === "Lead" || client.relationshipStatus === "Prospect";
     }
+
     const matchesSearch =
-      client.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase());
+      client.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.email?.toLowerCase().includes(searchTerm.toLowerCase());
+
     return matchesFilter && matchesSearch;
   });
+
+  // Add loading state
+  if (isLoading) {
+    return (
+      <div className="clients-table-container">
+        <div className="loading-state">Loading clients...</div>
+      </div>
+    );
+  }
+
+  // Add error state
+  if (error) {
+    return (
+      <div className="clients-table-container">
+        <div className="error-state">
+          <p>Error: {error}</p>
+          <button onClick={() => window.location.reload()}>Try Again</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="clients-table-container">
@@ -295,19 +393,25 @@ function ClientsTable() {
         <div className="controls-section">
           <div className="segmented-control">
             <button
-              className={`toggle-button ${activeFilter === "All" ? "active-all" : ""}`}
+              className={`toggle-button ${
+                activeFilter === "All" ? "active-all" : ""
+              }`}
               onClick={() => setActiveFilter("All")}
             >
               All
             </button>
             <button
-              className={`toggle-button ${activeFilter === "Clients" ? "active" : ""}`}
+              className={`toggle-button ${
+                activeFilter === "Clients" ? "active" : ""
+              }`}
               onClick={() => setActiveFilter("Clients")}
             >
               Clients
             </button>
             <button
-              className={`toggle-button ${activeFilter === "Leads" ? "active" : ""}`}
+              className={`toggle-button ${
+                activeFilter === "Leads" ? "active" : ""
+              }`}
               onClick={() => setActiveFilter("Leads")}
             >
               Leads
@@ -350,8 +454,24 @@ function ClientsTable() {
                 </div>
               </div>
               {filteredData.map((client) => (
-                <Link key={client.id} to= '/salesandleadsclient' className="table-cell company-cell no-link-style">
-                  <div className="avatar"></div>
+                <Link
+                  key={client._id}
+                  to={`/salesandleadsclient/${client._id}`}
+                  className="table-cell company-cell no-link-style"
+                >
+                  <div className="avatar">
+                    {client.profilePicture ? (
+                      <img
+                        src={`${config.API_BASE_URL.replace('/api', '')}${client.profilePicture}`}
+                        alt={`${client.companyName} profile`}
+                        className="client-profile-image"
+                      />
+                    ) : (
+                      <div className="default-avatar">
+                        {client.companyName?.charAt(0)?.toUpperCase() || 'C'}
+                      </div>
+                    )}
+                  </div>
                   <div className="companyinfo">
                     <div className="company-name">{client.companyName}</div>
                     <div className="company-email">{client.email}</div>
@@ -371,9 +491,19 @@ function ClientsTable() {
                 </div>
               </div>
               {filteredData.map((client) => (
-                <div key={client.id} className="table-cell type-cell">
-                  <div className={`type-chip ${client.type.toLowerCase().replace(' ', '')}`}>
-                  <span className="chip-text">{client.type}</span>
+                <div key={client._id} className="table-cell type-cell">
+                  <div
+                    className={`type-chip ${(
+                      client.type ||
+                      client.relationshipStatus ||
+                      ""
+                    )
+                      .toLowerCase()
+                      .replace(" ", "")}`}
+                  >
+                    <span className="chip-text">
+                      {client.type || client.relationshipStatus}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -428,9 +558,11 @@ function ClientsTable() {
                 </div>
               </div>
               {filteredData.map((client) => (
-                <div key={client.id} className="table-cell phone-cell">
+                <div key={client._id} className="table-cell phone-cell">
                   <div className="phone-info">
-                    <div className="phone-text">{client.phoneNumber}</div>
+                    <div className="phone-text">
+                      {client.mobile || client.phone || "Not provided"}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -442,10 +574,10 @@ function ClientsTable() {
                 <div className="table-header-cell"></div>
               </div>
               {filteredData.map((client) => (
-                <div key={client.id} className="table-cell edit-actions-cell">
+                <div key={client._id} className="table-cell edit-actions-cell">
                   <button
                     className="action-button edit-button"
-                    onClick={() => handleEdit(client.id)}
+                    onClick={() => handleEdit(client._id)}
                     aria-label="Edit client"
                   >
                     <EditIcon />
@@ -460,10 +592,13 @@ function ClientsTable() {
                 <div className="table-header-cell"></div>
               </div>
               {filteredData.map((client) => (
-                <div key={client.id} className="table-cell delete-actions-cell">
+                <div
+                  key={client._id}
+                  className="table-cell delete-actions-cell"
+                >
                   <button
                     className="action-button delete-button"
-                    onClick={() => handleDelete(client.id)}
+                    onClick={() => handleDelete(client._id)}
                     aria-label="Delete client"
                   >
                     <DeleteIcon />
@@ -497,6 +632,13 @@ function ClientsTable() {
         isOpen={isAddClientModalOpen}
         onClose={handleAddClientClose}
         onSubmit={handleAddClientSubmit}
+      />
+
+      <EditClientModal
+        isOpen={isEditClientModalOpen}
+        onClose={handleEditClientClose}
+        onSubmit={handleEditClientSubmit}
+        clientData={clientToEdit}
       />
 
       <FilterDropdown

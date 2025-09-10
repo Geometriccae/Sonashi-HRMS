@@ -3,6 +3,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const authMiddleware = require('./middleware/authMiddleware');
 require('dotenv').config();
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -41,6 +42,13 @@ app.get('/api/protected-data', authMiddleware, (req, res) => {
 
 //  Parse JSON
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/clients', require('./routes/clients'));
+
+//  Test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Backend server is running!', timestamp: new Date() });
+});
 
 //  Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -49,8 +57,13 @@ mongoose.connect(process.env.MONGO_URI)
 
 //  Setup routes
 const authRoutes = require('./routes/auth');
+const clientRoutes = require('./routes/clients');
+
 app.use('/api/auth', authRoutes);
+app.use('/api/clients', clientRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+

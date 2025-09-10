@@ -342,7 +342,7 @@ function TeamManagementSalesLeads() {
           <div className={styles["breadcrumb"]}>
             <div className={styles["breadcrumb-notactive"]}>Home</div>
             <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-notactive"]} onClick={() => navigate("/teammanagement")}>Team Management</div>
+            <div className={styles["breadcrumb-notactive"]} onClick={() => navigate("/teammanagement")}style={{ cursor: "pointer" }}>Team Management</div>
             <img src={chevrondright} alt="" />
             <div className={styles["breadcrumb-active"]}>RamMohan</div>
           </div>

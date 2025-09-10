@@ -130,18 +130,25 @@ function Sidebar() {
                 </Link>
               </li>
 
-              <li style={{ cursor: "pointer" }}>
-                <img src={calendar} alt="Calendar" className={styles.icon} />{" "}
-                Calendar
+              <li
+                style={{ cursor: "pointer" }}
+                className={isActive("/yourcalendar") ? styles.active : ""}
+              >
+                <Link to="/yourcalendar" className={styles["sidebar-link"]}>
+                  <img src={calendar} alt="Calendar" className={styles.icon} />{" "}
+                  Calendar
+                </Link>
               </li>
 
-              <li>
-                <img
-                  src={filechartcolumn}
-                  alt="Reports"
-                  className={styles.icon}
-                />{" "}
-                Reports
+              <li className={isActive("/reports") ? styles.active : ""}>
+                <Link to="/reports" className={styles["sidebar-link"]}>
+                  <img
+                    src={filechartcolumn}
+                    alt="Reports"
+                    className={styles.icon}
+                  />
+                  Reports
+                </Link>
               </li>
             </ul>
           </div>
@@ -149,9 +156,11 @@ function Sidebar() {
           <div className={styles["menu-section-two"]}>
             <p className={styles["section-title"]}>ADDITIONAL</p>
             <ul>
-              <li>
-                <img src={settings} alt="Settings" className={styles.icon} />{" "}
-                Settings
+              <li className={isActive("/profile") ? styles.active : ""}>
+                <Link to="/profile" className={styles["sidebar-link"]}>
+                  <img src={settings} alt="Profile" className={styles.icon} />{" "}
+                  Settings
+                </Link>
               </li>
               <li>
                 <img src={cloud} alt="My Files" className={styles.icon} /> My

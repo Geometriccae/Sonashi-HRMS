@@ -4,6 +4,9 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import SalesAndLeads from "./pages/SalesAndLeads";
+import Reports from "./pages/Reports";
+import Profile from "./pages/Profile";
+import YourCalendar from "./pages/sidebar/YourCalendar";
 import SalesAndLeadsClient from "./pages/SalesAndLeadsClient";
 import Documents from "./components/sales-and-leads/Documents";
 import Example from "./pages/Example";
@@ -27,14 +30,24 @@ function App() {
 
         } />
 
-        <Route path="/salesandleadsclient" element={
+        <Route path="/salesandleadsclient/:id" element={
           <ProtectedRoute><SalesAndLeadsClient /></ProtectedRoute>
         } />
         <Route path="/salesandleads" element={
           <ProtectedRoute><SalesAndLeads /></ProtectedRoute>
         } />
 
-       
+        <Route path="/reports" element={
+          <ProtectedRoute><Reports /></ProtectedRoute>
+        } />
+
+        <Route path="/profile" element={
+          <ProtectedRoute><Profile /></ProtectedRoute>
+        } />
+
+       <Route path="/yourcalendar" element={
+          <ProtectedRoute><YourCalendar /></ProtectedRoute>
+        } />
 
         <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
         {/* <Route path="/addclient" element={<ProtectedRoute><AddClient /></ProtectedRoute>} /> */}

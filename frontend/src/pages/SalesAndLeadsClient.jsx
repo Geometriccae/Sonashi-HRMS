@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import styles from "./SalesAndLeadsClient.module.css";
 import Side from "./sidebar/Sidebar";
 
@@ -7,10 +7,12 @@ import Documents from "../components/sales-and-leads/Documents";
 import Calendar from "../components/sales-and-leads/CalendarComponent";
 import DeleteModal from "../components/delete-modal/DeleteModal";
 import CreateEventModal from "../components/sales-and-leads/CreateEventModal";
+import EditClientModal from "../components/sales-and-leads/EditClientModal";
 import FileUploadModal from "../components/FileUploadModal";
 import DropDownList from "../components/DropDownList";
 import TaskBoard from "../components/sales-and-leads/TaskBoard";
-
+import clientService from "../services/ClientService"; // Import your client service
+import config from "../config/config";
 
 import belldot from "../assets/dashboard/bell-dot.svg";
 import admindemo from "../assets/dashboard/admin-demo.jpg";
@@ -23,37 +25,66 @@ import pencillineblue from "../assets/dashboard/pencil-line-blue.svg";
 import upload from "../assets/dashboard/upload.svg";
 import deletewhite from "../assets/dashboard/delete-white.svg";
 
-
-function SalesAndLeadsClient() {
-  const [activeTab, setActiveTab] = useState('basicInfo');
+function SalesAndLeadsClient(clientId ) {
+  const [activeTab, setActiveTab] = useState("basicInfo");
   const basicInfoRef = useRef(null);
   const meetingsRef = useRef(null);
   const documentsRef = useRef(null);
   const tasksRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deleteType, setDeleteType] = useState(''); // 'entry' or 'data'
+  const [deleteType, setDeleteType] = useState(""); // 'entry' or 'data'
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [clientData, setClientData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
+  const { id } = useParams(); // Get the client ID from URL params
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [calendarKey, setCalendarKey] = useState(0); // Force calendar refresh
 
+  // Fetch client data when component mounts
+  useEffect(() => {
+    const fetchClientData = async () => {
+      if (!id) return;
+
+      try {
+        setIsLoading(true);
+        const client = await clientService.getClient(id);
+        setClientData(client);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching client:", err);
+        setError(err.message || "Failed to fetch client data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchClientData();
+  }, [id]);
+
+  // Main useEffect for tab indicator positioning
   useEffect(() => {
     const updateIndicatorPosition = () => {
       let activeElement;
       switch (activeTab) {
-        case 'basicInfo':
+        case "basicInfo":
           activeElement = basicInfoRef.current;
           break;
-        case 'meetings':
+        case "meetings":
           activeElement = meetingsRef.current;
           break;
-        case 'documents':
+        case "documents":
           activeElement = documentsRef.current;
           break;
-        case 'tasks':
+        case "tasks":
           activeElement = tasksRef.current;
           break;
         default:
@@ -62,47 +93,104 @@ function SalesAndLeadsClient() {
 
       if (activeElement) {
         const rect = activeElement.getBoundingClientRect();
-        const containerRect = activeElement.parentElement.getBoundingClientRect();
+        const containerRect =
+          activeElement.parentElement.getBoundingClientRect();
         setIndicatorStyle({
           width: rect.width,
-          left: rect.left - containerRect.left
+          left: rect.left - containerRect.left,
         });
       }
     };
 
     updateIndicatorPosition();
-    window.addEventListener('resize', updateIndicatorPosition);
+    window.addEventListener("resize", updateIndicatorPosition);
 
     return () => {
-      window.removeEventListener('resize', updateIndicatorPosition);
+      window.removeEventListener("resize", updateIndicatorPosition);
     };
   }, [activeTab]);
 
+  // Additional useEffect to handle initial tab indicator positioning after data loads
+  useEffect(() => {
+    if (clientData && activeTab === "basicInfo") {
+      const updateInitialPosition = () => {
+        if (basicInfoRef.current) {
+          const rect = basicInfoRef.current.getBoundingClientRect();
+          const containerRect =
+            basicInfoRef.current.parentElement.getBoundingClientRect();
+          setIndicatorStyle({
+            width: rect.width,
+            left: rect.left - containerRect.left,
+          });
+        }
+      };
+
+      // Small delay to ensure DOM is fully rendered
+      setTimeout(updateInitialPosition, 200);
+    }
+  }, [clientData, activeTab]);
+
+  // Add loading and error states
+  if (isLoading) {
+    return (
+      <div className={styles["dashboard-layout"]}>
+        <Side />
+        <main>
+          <div className={styles.loadingState}>Loading client data...</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles["dashboard-layout"]}>
+        <Side />
+        <main>
+          <div className={styles.errorState}>
+            <p>Error: {error}</p>
+            <button onClick={() => window.location.reload()}>Try Again</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+  if (!clientData) {
+    return (
+      <div className={styles["dashboard-layout"]}>
+        <Side />
+        <main>
+          <div className={styles.errorState}>Client not found</div>
+        </main>
+      </div>
+    );
+  }
+
   const handleDeleteEntry = () => {
-    setDeleteType('entry');
+    setDeleteType("entry");
     setIsDeleteModalOpen(true);
   };
 
   const handleDeleteData = () => {
-    setDeleteType('data');
+    setDeleteType("data");
     setIsDeleteModalOpen(true);
   };
 
   const handleDeleteConfirm = () => {
-    if (deleteType === 'entry') {
+    if (deleteType === "entry") {
       console.log("Delete Entry confirmed");
       // Implement delete entry logic here
-    } else if (deleteType === 'data') {
+    } else if (deleteType === "data") {
       console.log("Delete Data confirmed");
       // Implement delete data logic here
     }
     setIsDeleteModalOpen(false);
-    setDeleteType('');
+    setDeleteType("");
   };
 
   const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
-    setDeleteType('');
+    setDeleteType("");
   };
 
   const handleNewEvent = () => {
@@ -111,6 +199,29 @@ function SalesAndLeadsClient() {
 
   const handleCreateEventClose = () => {
     setIsCreateEventModalOpen(false);
+  };
+
+  const handleEventCreated = (newEvent) => {
+    console.log("Event created successfully:", newEvent);
+    // Force calendar component to refresh by updating its key
+    setCalendarKey(prev => prev + 1);
+    // You can also update local events state if needed
+    setEvents(prev => [...prev, newEvent]);
+  };
+
+  const handleEditClientClose = () => {
+    setIsEditClientModalOpen(false);
+  };
+
+  const handleEditClientSubmit = async (updatedClient) => {
+    try {
+      // Update the client data in local state
+      setClientData(updatedClient);
+      setIsEditClientModalOpen(false);
+    } catch (err) {
+      console.error("Error updating client:", err);
+      setError(err.message || "Failed to update client");
+    }
   };
 
   const handleFileUpload = () => {
@@ -132,7 +243,7 @@ function SalesAndLeadsClient() {
       const rect = exportButtonRef.current.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom + 8,
-        left: rect.left
+        left: rect.left,
       });
     }
     setIsDropdownOpen(!isDropdownOpen);
@@ -145,19 +256,19 @@ function SalesAndLeadsClient() {
   const handleExportOptionSelect = (option) => {
     console.log(`Export as ${option} selected`);
     switch (option) {
-      case 'pdf':
+      case "pdf":
         alert("Exporting as PDF...");
         // Implement PDF export logic here
         break;
-      case 'csv':
+      case "csv":
         alert("Exporting as CSV...");
         // Implement CSV export logic here
         break;
-      case 'txt':
+      case "txt":
         alert("Exporting as TXT...");
         // Implement TXT export logic here
         break;
-      case 'print':
+      case "print":
         alert("Printing document...");
         // Implement print logic here
         window.print();
@@ -167,14 +278,19 @@ function SalesAndLeadsClient() {
     }
   };
 
- // Render different buttons based on active tab
+  // Render different buttons based on active tab
   const renderButtons = () => {
     switch (activeTab) {
-      case 'basicInfo':
+      case "basicInfo":
         return (
           <div className={styles.row_view5}>
-            <button className={`${styles.button_row_view} ${styles.editbutton}`} onClick={() => alert("Edit Data Pressed!")}>
-              <span className={`${styles.text3} ${styles.editbuttontext}`}>Edit Data</span>
+            <button
+              className={`${styles.button_row_view} ${styles.editbutton}`}
+              onClick={() => setIsEditClientModalOpen(true)}
+            >
+              <span className={`${styles.text3} ${styles.editbuttontext}`}>
+                Edit Data
+              </span>
               <img src={pencillineblue} className={styles.image3} alt="edit" />
             </button>
             <button
@@ -183,20 +299,23 @@ function SalesAndLeadsClient() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={upload} className={styles.image3} alt="export"/>
+              <img src={upload} className={styles.image3} alt="export" />
             </button>
-            <button className={styles.button_row_view3} onClick={handleDeleteEntry}>
+            <button
+              className={styles.button_row_view3}
+              onClick={handleDeleteEntry}
+            >
               <span className={styles.text5}>Delete Entry</span>
               <img src={deletewhite} className={styles.image3} alt="delete" />
             </button>
           </div>
         );
-      case 'meetings':
+      case "meetings":
         return (
           <div className={styles.row_view5}>
             <button className={styles.button_row_view} onClick={handleNewEvent}>
               <span className={styles.text3}>New Event</span>
-              <img src={plus} className={styles.image3} alt="plus"/>
+              <img src={plus} className={styles.image3} alt="plus" />
             </button>
             <button
               ref={exportButtonRef}
@@ -208,12 +327,15 @@ function SalesAndLeadsClient() {
             </button>
           </div>
         );
-      case 'documents':
+      case "documents":
         return (
           <div className={styles.row_view5}>
-            <button className={styles.button_row_view} onClick={handleFileUpload}>
+            <button
+              className={styles.button_row_view}
+              onClick={handleFileUpload}
+            >
               <span className={styles.text3}>Upload</span>
-              <img src={plus} className={styles.image3} alt=""/>
+              <img src={plus} className={styles.image3} alt="" />
             </button>
             <button
               ref={exportButtonRef}
@@ -221,20 +343,26 @@ function SalesAndLeadsClient() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={upload} className={styles.image3} alt=""/>
+              <img src={upload} className={styles.image3} alt="" />
             </button>
-            <button className={styles.button_row_view3} onClick={handleDeleteData}>
+            <button
+              className={styles.button_row_view3}
+              onClick={handleDeleteData}
+            >
               <span className={styles.text5}>Delete All</span>
               <img src={deletewhite} alt="delete" className={styles.image3} />
             </button>
           </div>
         );
-      case 'tasks':
+      case "tasks":
         return (
           <div className={styles.row_view5}>
-            <button className={styles.button_row_view} onClick={() => alert("New Task Pressed!")}>
+            <button
+              className={styles.button_row_view}
+              onClick={() => alert("New Task Pressed!")}
+            >
               <span className={styles.text3}>New Task</span>
-              <img src={plus}  alt="newtask" className={styles.image3} />
+              <img src={plus} alt="newtask" className={styles.image3} />
             </button>
             <button
               ref={exportButtonRef}
@@ -242,7 +370,7 @@ function SalesAndLeadsClient() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={upload} className={styles.image3} alt=""/>
+              <img src={upload} className={styles.image3} alt="" />
             </button>
           </div>
         );
@@ -252,85 +380,6 @@ function SalesAndLeadsClient() {
   };
 
 
-  const documentsData = [
-    {
-      id: 1,
-      fileName: "Cargo Load",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Ramesh Mohan",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "8/21/15",
-    },
-    {
-      id: 2,
-      fileName: "Info Document",
-      fileSize: "56KB",
-      fileType: "document",
-      type: "Extra",
-      uploadedBy: "Gurpreet Singh",
-      userRole: "Sales Executive",
-      filetype: "Document",
-      uploadedDate: "6/19/14",
-    },
-    {
-      id: 3,
-      fileName: "Shipping demo",
-      fileSize: "56KB",
-      fileType: "video",
-      type: "Important",
-      uploadedBy: "Nayantara S",
-      userRole: "Sales Executive",
-      filetype: "Video",
-      uploadedDate: "2/11/12",
-    },
-    {
-      id: 4,
-      fileName: "Cargo Images",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Albin Antony",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "8/16/13",
-    },
-    {
-      id: 5,
-      fileName: "Audio Recording",
-      fileSize: "56KB",
-      fileType: "audio",
-      type: "Extra",
-      uploadedBy: "Priya Warrier",
-      userRole: "Sales Executive",
-      filetype: "Audio",
-      uploadedDate: "4/21/12",
-    },
-    {
-      id: 6,
-      fileName: "Shipment Manifest",
-      fileSize: "56KB",
-      fileType: "document",
-      type: "Important",
-      uploadedBy: "Ganesh R",
-      userRole: "Sales Executive",
-      filetype: "Document",
-      uploadedDate: "3/4/16",
-    },
-    {
-      id: 7,
-      fileName: "Image 031",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Nayantara S",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "2/11/12",
-    },
-  ];
 
   return (
     <div className={styles["dashboard-layout"]}>
@@ -341,10 +390,18 @@ function SalesAndLeadsClient() {
             <div className={styles["dashboard-title"]}>Sales & Leads</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img src={belldot} alt="belldot" className={styles["belldot-icon"]} />
+              <img
+                src={belldot}
+                alt="belldot"
+                className={styles["belldot-icon"]}
+              />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                  <img src={admindemo} alt="" className={styles["profile-picture"]} />
+                  <img
+                    src={admindemo}
+                    alt=""
+                    className={styles["profile-picture"]}
+                  />
                   <div className={styles["profile-column"]}>
                     <div className={styles["profile-name"]}>Preety Sinha</div>
                     <div className={styles["profile-type"]}>Administrator</div>
@@ -361,7 +418,13 @@ function SalesAndLeadsClient() {
           <div className={styles["breadcrumb"]}>
             <div className={styles["breadcrumb-notactive"]}>Home</div>
             <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-notactive"]} onClick={()=> navigate("/salesandleads")}>Sales and Leads</div>
+            <div
+              className={styles["breadcrumb-notactive"]}
+              onClick={() => navigate("/salesandleads")}
+              style={{ cursor: "pointer" }}
+            >
+              Sales and Leads
+            </div>
             <img src={chevrondright} alt="" />
             <div className={styles["breadcrumb-active"]}>Maersk</div>
           </div>
@@ -376,29 +439,35 @@ function SalesAndLeadsClient() {
                     src={arrowleft}
                     className={styles.image}
                     alt="Go Back"
-                   style={{ cursor: "pointer" }}
-                    onClick={() => navigate(-1)} 
+                    style={{ cursor: "pointer" }}
+                    onClick={() => navigate(-1)}
                   />
                   <div className={styles.row_view3}>
                     <div className={styles.row_view4}>
-                      <img
-                        src={maersksymbol}
-                        className={styles.image2}
-                        alt="Maersk logo"
-                      />
+                      {clientData.profilePicture ? (
+                        <img
+                          src={`${config.API_BASE_URL.replace('/api', '')}${clientData.profilePicture}`}
+                          className={styles.image2}
+                          alt={`${clientData.companyName} logo`}
+                        />
+                      ) : (
+                        <div className={styles.defaultCompanyLogo}>
+                          {clientData.companyName?.charAt(0)?.toUpperCase() || 'C'}
+                        </div>
+                      )}
                       <span className={styles.text}>
-                        {"Maersk"}
+                        {clientData.companyName || "Client Name"}
                       </span>
                     </div>
-                    <button className={styles.button}
-                      onClick={()=>alert("Pressed!")}>
-                      <span className={styles.text2}>
-                        {"Lead"}
-                      </span>
+                    <button
+                      className={styles.button}
+                      onClick={() => alert("Pressed!")}
+                    >
+                      <span className={styles.text2}>{"Lead"}</span>
                     </button>
                   </div>
                 </div>
-                   {renderButtons()}
+                {renderButtons()}
               </div>
 
               {/* Tab Navigation */}
@@ -406,41 +475,45 @@ function SalesAndLeadsClient() {
                 <div className={styles.column2}>
                   <span
                     ref={basicInfoRef}
-                    className={`${styles.text6} ${activeTab === 'basicInfo' ? styles.active : ''}`}
-                    onClick={() => setActiveTab('basicInfo')}
+                    className={`${styles.text6} ${
+                      activeTab === "basicInfo" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("basicInfo")}
                   >
                     {"Basic Info"}
                   </span>
                   <span
                     ref={meetingsRef}
-                    className={`${styles.text7} ${activeTab === 'meetings' ? styles.active : ''}`}
-                    onClick={() => setActiveTab('meetings')}
+                    className={`${styles.text7} ${
+                      activeTab === "meetings" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("meetings")}
                   >
                     {"Meetings"}
                   </span>
                   <div
                     ref={documentsRef}
-                    className={`${styles.view2} ${activeTab === 'documents' ? styles.active : ''}`}
-                    onClick={() => setActiveTab('documents')}
+                    className={`${styles.view2} ${
+                      activeTab === "documents" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("documents")}
                   >
-                    <span className={styles.text8}>
-                      {"Documents"}
-                    </span>
+                    <span className={styles.text8}>{"Documents"}</span>
                   </div>
                   <div
                     ref={tasksRef}
-                    className={`${styles.view2} ${activeTab === 'tasks' ? styles.active : ''}`}
-                    onClick={() => setActiveTab('tasks')}
+                    className={`${styles.view2} ${
+                      activeTab === "tasks" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("tasks")}
                   >
-                    <span className={styles.text8}>
-                      {"Tasks"}
-                    </span>
+                    <span className={styles.text8}>{"Tasks"}</span>
                   </div>
                   <div
                     className={styles.box}
                     style={{
                       width: `${indicatorStyle.width}px`,
-                      left: `${indicatorStyle.left}px`
+                      left: `${indicatorStyle.left}px`,
                     }}
                   />
                 </div>
@@ -449,180 +522,154 @@ function SalesAndLeadsClient() {
 
             {/* Tab Content */}
             <div className={styles.column3}>
-              {activeTab === 'basicInfo' && (
+              {activeTab === "basicInfo" && (
                 <>
-                {/* first row */}
+                  {/* Company Details */}
                   <div className={styles.row_view6}>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Company Name</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.companyName || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Client Type</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.type || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Email</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.email || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Phone</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.phone || "Not provided"}
                       </span>
                     </div>
                   </div>
-                  {/* second row */}
+
+                  {/* Contact Details */}
                   <div className={styles.row_view6}>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Primary Contact</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.primaryContactName || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Designation</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.designation || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Mobile</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.mobile || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Website</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.website ? (
+                          <a
+                            href={clientData.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {clientData.website}
+                          </a>
+                        ) : (
+                          "Not provided"
+                        )}
                       </span>
                     </div>
                   </div>
-                  {/* third row */}
+
+                  {/* Address Details */}
                   <div className={styles.row_view6}>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Address</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.address || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Country</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.country || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Tax ID</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.taxId || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Relationship Status</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.relationshipStatus || "Not provided"}
                       </span>
                     </div>
                   </div>
-                  {/* fourth row */}
+
+                  {/* Business Details */}
                   <div className={styles.row_view6}>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Industry Type</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.industryType || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Cargo Type</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.cargoType || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Account Manager</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.accountManager || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Decision Maker</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.decisionMaker || "Not provided"}
                       </span>
                     </div>
                   </div>
-                  {/* fifth row */}
+
+                  {/* Additional Business Details */}
                   <div className={styles.row_view6}>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Contract Type</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.contractType || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Incoterms</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.incoterms || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Lead Source</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.leadSource || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
+                      <span className={styles.text9}>Current Status</span>
                       <span className={styles.text10}>
-                        {"Ryan"}
+                        {clientData.currentStatus || "Not provided"}
                       </span>
                     </div>
                   </div>
@@ -630,23 +677,23 @@ function SalesAndLeadsClient() {
                 </>
               )}
 
-              {activeTab === 'meetings' && (
+              {activeTab === "meetings" && (
                 <div className={styles.meetingsContent}>
-                  <Calendar />
+                  <Calendar key={calendarKey} clientId={id} />
                 </div>
               )}
 
-              {activeTab === 'documents' && (
-                <div >
+              {activeTab === "documents" && (
+                <div>
                   {/* <p>Documents content will be displayed here</p> */}
                   {/* Add your documents content here when ready */}
                   <section className="documents-table-section">
-                <Documents  />
-               </section>
+                    <Documents />
+                  </section>
                 </div>
               )}
 
-              {activeTab === 'tasks' && (
+              {activeTab === "tasks" && (
                 <div className={styles.tasksContent}>
                   <TaskBoard />
                 </div>
@@ -660,17 +707,29 @@ function SalesAndLeadsClient() {
         isOpen={isDeleteModalOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
-        title={deleteType === 'entry' ? 'Delete this Entry?' : 'Delete this Data?'}
+        title={
+          deleteType === "entry" ? "Delete this Entry?" : "Delete this Data?"
+        }
         description={
-          deleteType === 'entry'
-            ? 'Are you sure you want to delete this entry? This action cannot be undone.'
-            : 'Are you sure you want to delete this data? This action cannot be undone.'
+          deleteType === "entry"
+            ? "Are you sure you want to delete this entry? This action cannot be undone."
+            : "Are you sure you want to delete this data? This action cannot be undone."
         }
       />
 
       <CreateEventModal
         isOpen={isCreateEventModalOpen}
         onClose={handleCreateEventClose}
+        clientId={id}
+        onEventCreated={handleEventCreated}
+      />
+       
+
+      <EditClientModal
+        isOpen={isEditClientModalOpen}
+        onClose={handleEditClientClose}
+        onSubmit={handleEditClientSubmit}
+        clientData={clientData}
       />
 
       <FileUploadModal

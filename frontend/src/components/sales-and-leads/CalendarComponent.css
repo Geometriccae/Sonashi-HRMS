@@ -473,3 +473,90 @@ margin: 0px;
 .rbc-time-gutter{
   padding-right: 0px;
 }
+
+/* Enhanced Day and Week View Event Styling */
+.rbc-day-view .rbc-event,
+.rbc-week-view .rbc-event {
+  border-radius: 4px;
+  border: none;
+  color: white;
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  margin: 1px 2px;
+  opacity: 0.95;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.rbc-day-view .rbc-custom-event .event-content,
+.rbc-week-view .rbc-custom-event .event-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.rbc-day-view .rbc-custom-event .event-title,
+.rbc-week-view .rbc-custom-event .event-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.rbc-day-view .rbc-custom-event .event-link,
+.rbc-week-view .rbc-custom-event .event-link {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Additional modal styling for better UX */
+.meeting-link {
+  margin-top: 4px;
+}
+
+.meeting-link a {
+  color: #007AFF;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.meeting-link a:hover {
+  text-decoration: underline;
+}
+
+.meeting-member {
+  color: #6B7A99;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Ensure proper event positioning in day/week views */
+.rbc-day-view .rbc-event-container,
+.rbc-week-view .rbc-event-container {
+  position: relative;
+}
+
+/* Better responsive behavior for smaller screens */
+@media (max-width: 768px) {
+  .rbc-day-view .rbc-custom-event .event-title,
+  .rbc-week-view .rbc-custom-event .event-title {
+    font-size: 10px;
+  }
+
+  .rbc-day-view .rbc-custom-event .event-link,
+  .rbc-week-view .rbc-custom-event .event-link {
+    font-size: 8px;
+  }
+}

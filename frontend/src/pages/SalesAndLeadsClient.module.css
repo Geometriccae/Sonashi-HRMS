@@ -111,7 +111,7 @@ main {
 .breadcrumb-section {
   display: flex;
   width: 99.25rem;
-  padding: 0.625rem 80.375rem 0.625rem 1.5rem;
+  padding: 0.625rem 8.375rem 0.625rem 1.5rem;
   align-items: center;
   border-bottom: 1px solid #e4e4e4;
   background: #fff;
@@ -263,16 +263,18 @@ background-color: white;
   margin-left: 40px;
   /* margin-right: 40px; */
   gap: 64px;
+  justify-content: ;
 }
 
 
-.column4 {
+/* .column4 {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   margin-right: 298px;
   gap: 12px;
+  flex: 1;
 }
 .column5 {
   flex-shrink: 0;
@@ -280,6 +282,26 @@ background-color: white;
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
+  flex: 1;
+} */
+
+.row_view6 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between; /* distributes evenly */
+  flex-wrap: wrap; /* if screen small, wrap to next line */
+  width: 100%;
+}
+
+.column4,
+.column5 {
+  flex: 1; /* each takes equal width */
+  min-width: 220px; /* prevents shrinking too small */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px; /* reduce spacing for neatness */
+  margin-right: 0; /* remove fixed margin */
 }
 
 .image {
@@ -290,7 +312,22 @@ background-color: white;
 .image2 {
   width: 48px;
   height: 48px;
-  object-fit: fill;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.defaultCompanyLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: #007AFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 .image3 {
   border-radius: 8px;
@@ -337,10 +374,10 @@ background: #42B0D5;
   gap: 16px;
   position: relative;
 }
-.row_view6 {
+/* .row_view6 {
   display: flex;
   align-items: flex-start;
-}
+} */
 .scroll_view {
   height: 1008px;
   align-self: stretch;
@@ -456,5 +493,38 @@ background: #42B0D5;
   margin: -40px -40px 0 -40px;
 }
 
+.loadingState,
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  min-height: 400px;
+}
 
+.loadingState {
+  color: #6c757d;
+  font-size: 18px;
+}
 
+.errorState {
+  color: #dc3545;
+  font-size: 16px;
+}
+
+.errorState button {
+  background: #007AFF;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 20px;
+}
+
+.errorState button:hover {
+  background: #0056b3;
+}

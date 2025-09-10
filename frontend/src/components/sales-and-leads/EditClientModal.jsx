@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./AddClientModal.css";
 import ProgressSteps from "../ProgressSteps";
 import InputField from "../InputField";
@@ -7,10 +7,9 @@ import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 import clientService from "../../services/ClientService";
 import config from "../../config/config";
 
-function AddClientModal({ isOpen, onClose, onSubmit }) {
+function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
-  
   const [formData, setFormData] = useState({
     // 1. Company & Contact Details
     companyName: "",
@@ -68,6 +67,62 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Effect to populate form data when clientData is provided
+  useEffect(() => {
+    if (clientData && isOpen) {
+      // Helper function to format date for input
+      const formatDateForInput = (dateString) => {
+        if (!dateString) return "";
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return "";
+        return date.toISOString().split('T')[0];
+      };
+
+      setFormData({
+        companyName: clientData.companyName || "",
+        type: clientData.type || "",
+        address: clientData.address || "",
+        country: clientData.country || "",
+        taxId: clientData.taxId || "",
+        website: clientData.website || "",
+        primaryContactName: clientData.primaryContactName || "",
+        designation: clientData.designation || "",
+        phone: clientData.phone || "",
+        mobile: clientData.mobile || "",
+        email: clientData.email || "",
+        socialLinks: clientData.socialLinks || "",
+        industryType: clientData.industryType || "",
+        cargoType: clientData.cargoType || "",
+        decisionMaker: clientData.decisionMaker || "",
+        relationshipStatus: clientData.relationshipStatus || "",
+        accountManager: clientData.accountManager || "",
+        typicalCargoes: clientData.typicalCargoes || "",
+        averageShipmentSize: clientData.averageShipmentSize || "",
+        shipmentFrequency: clientData.shipmentFrequency || "",
+        tradingRoutes: clientData.tradingRoutes || "",
+        contractType: clientData.contractType || "",
+        historicalVolume: clientData.historicalVolume || "",
+        competitors: clientData.competitors || "",
+        projectName: clientData.projectName || "",
+        projectTimelineStart: formatDateForInput(clientData.projectTimelineStart),
+        projectTimelineEnd: formatDateForInput(clientData.projectTimelineEnd),
+        epcContractor: clientData.epcContractor || "",
+        specialRequirements: clientData.specialRequirements || "",
+        riskNotes: clientData.riskNotes || "",
+        leadSource: clientData.leadSource || "",
+        currentStatus: clientData.currentStatus || "",
+        opportunityValue: clientData.opportunityValue || "",
+        followUpDate: formatDateForInput(clientData.followUpDate),
+        notes: clientData.notes || "",
+        preferredLoadPorts: clientData.preferredLoadPorts || "",
+        preferredDischargePorts: clientData.preferredDischargePorts || "",
+        demurrageTerms: clientData.demurrageTerms || "",
+        preferredAgents: clientData.preferredAgents || "",
+        incoterms: clientData.incoterms || "",
+      });
+    }
+  }, [clientData, isOpen]);
+
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
@@ -105,111 +160,197 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
     }
   };
 
+  // const handleFinish = async () => {
+  //   // Validate required fields
+  //   if (!formData.companyName || !formData.email) {
+  //     setError("Company Name and Email are required fields");
+  //     return;
+  //   }
+
+  //   if (!clientData || !clientData._id) {
+  //     setError("Client ID is required for updating");
+  //     return;
+  //   }
+
+  //   setIsSubmitting(true);
+  //   setError("");
+
+  //   try {
+  //     // Filter out empty fields and convert date strings to Date objects
+  //     const filteredData = Object.fromEntries(
+  //       Object.entries(formData).filter(([_, value]) => value !== "")
+  //     );
+
+  //     // Convert date strings to Date objects for MongoDB
+  //     if (filteredData.projectTimelineStart) {
+  //       filteredData.projectTimelineStart = new Date(
+  //         filteredData.projectTimelineStart
+  //       );
+  //     }
+  //     if (filteredData.projectTimelineEnd) {
+  //       filteredData.projectTimelineEnd = new Date(
+  //         filteredData.projectTimelineEnd
+  //       );
+  //     }
+  //     if (filteredData.followUpDate) {
+  //       filteredData.followUpDate = new Date(filteredData.followUpDate);
+  //     }
+
+  //     // Convert opportunityValue to number if it exists
+  //     if (filteredData.opportunityValue) {
+  //       filteredData.opportunityValue = Number(filteredData.opportunityValue);
+  //     }
+
+  //     // Use updateClientWithFile if we have a profile image, otherwise use regular updateClient
+  //     const updatedClient = profileImage
+  //       ? await clientService.updateClientWithFile(clientData._id, filteredData, profileImage)
+  //       : await clientService.updateClient(clientData._id, filteredData);
+
+  //     // Call the onSubmit callback with the updated client data
+  //     if (onSubmit) {
+  //       onSubmit(updatedClient);
+  //     }
+
+  //     onClose();
+  //     setCurrentStep(1);
+
+  //   } catch (err) {
+  //     console.error("Error updating client:", err);
+  //     setError(err.message || "Failed to update client. Please try again.");
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
+
   const handleFinish = async () => {
-    
+  // Validate required fields
+  if (!formData.companyName || !formData.email) {
+    setError("Company Name and Email are required fields");
+    return;
+  }
 
-    // Validate required fields
-    if (!formData.companyName || !formData.email) {
-      setError("Company Name and Email are required fields");
-      return;
+  if (!clientData || !clientData._id) {
+    setError("Client ID is required for updating");
+    return;
+  }
+
+  setIsSubmitting(true);
+  setError("");
+
+  // Debug logging
+  console.log("Starting client update process...");
+  console.log("Client ID:", clientData._id);
+  console.log("Has profile image:", !!profileImage);
+  console.log("Form data:", formData);
+
+  try {
+    // Check if user is authenticated
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error("Authentication token not found. Please log in again.");
     }
+    console.log("Token found:", token ? "✓" : "✗");
 
-    setIsSubmitting(true);
-    setError("");
+    // Filter out empty fields and convert date strings to Date objects
+    const filteredData = Object.fromEntries(
+      Object.entries(formData).filter(([_, value]) => value !== "")
+    );
 
-    try {
-      // Filter out empty fields and convert date strings to Date objects
-      const filteredData = Object.fromEntries(
-        Object.entries(formData).filter(([_, value]) => value !== "")
+    // Convert date strings to Date objects for MongoDB
+    if (filteredData.projectTimelineStart) {
+      filteredData.projectTimelineStart = new Date(
+        filteredData.projectTimelineStart
       );
-
-      // Convert date strings to Date objects for MongoDB
-      if (filteredData.projectTimelineStart) {
-        filteredData.projectTimelineStart = new Date(
-          filteredData.projectTimelineStart
-        );
-      }
-      if (filteredData.projectTimelineEnd) {
-        filteredData.projectTimelineEnd = new Date(
-          filteredData.projectTimelineEnd
-        );
-      }
-      if (filteredData.followUpDate) {
-        filteredData.followUpDate = new Date(filteredData.followUpDate);
-      }
-
-      // Convert opportunityValue to number if it exists
-      if (filteredData.opportunityValue) {
-        filteredData.opportunityValue = Number(filteredData.opportunityValue);
-      }
-
-      // const savedClient = await clientService.createClient(filteredData);
-      const savedClient = await clientService.createClientWithFile(filteredData, profileImage);
-
-      // Call the onSubmit callback with the saved client data
-      if (onSubmit) {
-        onSubmit(savedClient);
-      }
-
-      onClose();
-      setCurrentStep(1);
-
-      // Reset form data
-      setFormData({
-        companyName: "",
-        type: "",
-        address: "",
-        country: "",
-        taxId: "",
-        website: "",
-        primaryContactName: "",
-        designation: "",
-        phone: "",
-        mobile: "",
-        email: "",
-        socialLinks: "",
-        industryType: "",
-        cargoType: "",
-        decisionMaker: "",
-        relationshipStatus: "",
-        accountManager: "",
-        typicalCargoes: "",
-        averageShipmentSize: "",
-        shipmentFrequency: "",
-        tradingRoutes: "",
-        contractType: "",
-        historicalVolume: "",
-        competitors: "",
-        projectName: "",
-        projectTimelineStart: "",
-        projectTimelineEnd: "",
-        epcContractor: "",
-        specialRequirements: "",
-        riskNotes: "",
-        leadSource: "",
-        currentStatus: "",
-        opportunityValue: "",
-        followUpDate: "",
-        notes: "",
-        preferredLoadPorts: "",
-        preferredDischargePorts: "",
-        demurrageTerms: "",
-        preferredAgents: "",
-        incoterms: "",
-      });
-    } catch (err) {
-      console.error("Error creating client1:", err);
-      setError(err.message || "Failed to create client. Please try again.");
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+    if (filteredData.projectTimelineEnd) {
+      filteredData.projectTimelineEnd = new Date(
+        filteredData.projectTimelineEnd
+      );
+    }
+    if (filteredData.followUpDate) {
+      filteredData.followUpDate = new Date(filteredData.followUpDate);
+    }
+
+    // Convert opportunityValue to number if it exists
+    if (filteredData.opportunityValue) {
+      filteredData.opportunityValue = Number(filteredData.opportunityValue);
+    }
+
+    console.log("Filtered data for update:", filteredData);
+
+    // Use updateClientWithFile if we have a profile image, otherwise use regular updateClient
+    let updatedClient;
+
+    if (profileImage) {
+      console.log("Updating client with file...");
+      console.log("Profile image details:", {
+        name: profileImage.name,
+        size: profileImage.size,
+        type: profileImage.type
+      });
+      updatedClient = await clientService.updateClientWithFile(clientData._id, filteredData, profileImage);
+    } else {
+      console.log("Updating client without file...");
+      updatedClient = await clientService.updateClient(clientData._id, filteredData);
+    }
+
+    console.log("Client updated successfully:", updatedClient);
+
+    // Call the onSubmit callback with the updated client data
+    if (onSubmit) {
+      onSubmit(updatedClient);
+    }
+
+    onClose();
+    setCurrentStep(1);
+
+    // Reset profile image state after successful update
+    setProfileImage(null);
+
+    // Success feedback
+    console.log("✅ Client update completed successfully");
+
+  } catch (err) {
+    console.error("❌ Error updating client:", err);
+
+    // Enhanced error handling with specific error messages
+    let errorMessage = "Failed to update client. Please try again.";
+
+    if (err.message.includes("401") || err.message.includes("Unauthorized")) {
+      errorMessage = "Authentication failed. Please log in again.";
+    } else if (err.message.includes("403") || err.message.includes("Forbidden")) {
+      errorMessage = "You don't have permission to update this client.";
+    } else if (err.message.includes("404") || err.message.includes("Not Found")) {
+      errorMessage = "Client not found. It may have been deleted.";
+    } else if (err.message.includes("400") || err.message.includes("Bad Request")) {
+      errorMessage = "Invalid data provided. Please check your inputs.";
+    } else if (err.message.includes("500") || err.message.includes("Internal Server Error")) {
+      errorMessage = "Server error. Please try again later.";
+    } else if (err.message.includes("Network Error") || err.message.includes("fetch")) {
+      errorMessage = "Network error. Please check your internet connection.";
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
+
+    setError(errorMessage);
+
+    // Additional debug information
+    console.log("Error details:", {
+      message: err.message,
+      stack: err.stack,
+      response: err.response?.data,
+      status: err.response?.status
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
  const handlePhotoUpload = (file) => {
   setProfileImage(file);
 };
 
-  const handleEditPhoto = () => {
+  const handleEditPhoto = (file) => {
     console.log("Edit photo");
   };
 
@@ -265,7 +406,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
       case 1:
         return (
           <div className="add-client-content">
-            <ProfilePhotoUpload onUpload={handlePhotoUpload} />
+            <ProfilePhotoUpload onUpload={handlePhotoUpload} clientData={clientData} />
             <div className="form-fields-grid">
               
               <InputField
@@ -620,7 +761,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
         );
 
       case 3:
-        const clientData = [
+        const reviewData = [
           [
             {
               label: "Company Name",
@@ -732,7 +873,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
             </div>
 
             <div className="client-data-section">
-              {clientData.map((row, rowIndex) => (
+              {reviewData.map((row, rowIndex) => (
                 <div key={rowIndex} className="data-row">
                   {row.map((field, fieldIndex) => (
                     <div key={fieldIndex} className="data-field">
@@ -780,7 +921,20 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
           steps={["Corporate Details", "Billing Details", "Review"]}
         />
 
-        {error && <div className="error-message">{error}</div>}
+        {error && (
+          <div className="error-message" style={{
+            color: '#E8362C',
+            backgroundColor: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: '8px',
+            padding: '12px',
+            margin: '16px 0',
+            fontSize: '14px',
+            fontWeight: '500'
+          }}>
+            {error}
+          </div>
+        )}
 
         {renderStepContent()}
 
@@ -809,4 +963,4 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
   );
 }
 
-export default AddClientModal;
+export default EditClientModal;
