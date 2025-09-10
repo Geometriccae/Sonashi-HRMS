@@ -44,6 +44,7 @@ app.get('/api/protected-data', authMiddleware, (req, res) => {
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/clients', require('./routes/clients'));
+app.use('/api/documents', require('./routes/documentRoutes'));
 
 //  Test endpoint
 app.get('/api/test', (req, res) => {
@@ -58,9 +59,11 @@ mongoose.connect(process.env.MONGO_URI)
 //  Setup routes
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
+const documentRoutes = require('./routes/documentRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/documents', documentRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -302,11 +302,17 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
 
     setIsLoading(true);
     try {
-      
+      // Parse yyyy-mm-dd as local date to avoid timezone shifting
+      let eventDate = null;
+      if (formData.date) {
+        const [y, m, d] = formData.date.split('-').map((v) => parseInt(v, 10));
+        eventDate = new Date(y, (m || 1) - 1, d || 1);
+      }
+
       const eventData = {
         ...formData,
         clientId,
-        date: new Date(formData.date), 
+        date: eventDate,
         time: formData.time,
       };
 
@@ -335,19 +341,21 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
   };
 
   const handleDateSelect = (selectedDate) => {
-    const formattedDate = selectedDate.toISOString().split("T")[0];
-    handleInputChange("date", formattedDate);
+    // Format as local yyyy-mm-dd (no timezone shift)
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    const formattedLocal = `${y}-${m}-${d}`;
+    handleInputChange("date", formattedLocal);
     setIsDatePickerOpen(false);
   };
 
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric",
-    });
+    // Expect yyyy-mm-dd, render dd/mm/yyyy
+    const [y, m, d] = dateString.split('-');
+    if (!y || !m || !d) return dateString;
+    return `${d}/${m}/${y}`;
   };
 
   const handleColorSelect = (color) => {
@@ -425,7 +433,7 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
                   type="text"
                   className="form-input has-icon"
                   value={formatDateForDisplay(formData.date)}
-                  placeholder="MM/DD/YYYY"
+                  placeholder="DD/MM/YYYY"
                   readOnly
                 />
                 <div className="input-icon" onClick={handleDateIconClick}>

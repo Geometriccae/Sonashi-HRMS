@@ -323,7 +323,7 @@ function EditEventModal({ isOpen, onClose, clientId, eventData, onEventUpdated }
           name="eventColor"
           value={color}
           style={{ display: "none" }}
-          checked={formData.color === color}   // ✅ pre-selects saved color
+          checked={formData.color === color}   // pre-selects saved color
           onChange={() => handleColorSelect(color)}
         />
         <div

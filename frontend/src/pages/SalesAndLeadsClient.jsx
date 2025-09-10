@@ -4,6 +4,7 @@ import styles from "./SalesAndLeadsClient.module.css";
 import Side from "./sidebar/Sidebar";
 
 import Documents from "../components/sales-and-leads/Documents";
+import DocumentsService from "../services/DocumentsService";
 import Calendar from "../components/sales-and-leads/CalendarComponent";
 import DeleteModal from "../components/delete-modal/DeleteModal";
 import CreateEventModal from "../components/sales-and-leads/CreateEventModal";
@@ -24,6 +25,7 @@ import maersksymbol from "../assets/dashboard/maersk_symbol.svg";
 import pencillineblue from "../assets/dashboard/pencil-line-blue.svg";
 import upload from "../assets/dashboard/upload.svg";
 import deletewhite from "../assets/dashboard/delete-white.svg";
+import ProfileAvatar from "../components/ProfileAvatar";
 
 function SalesAndLeadsClient(clientId ) {
   const [activeTab, setActiveTab] = useState("basicInfo");
@@ -48,6 +50,14 @@ function SalesAndLeadsClient(clientId ) {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [events, setEvents] = useState([]);
   const [calendarKey, setCalendarKey] = useState(0); // Force calendar refresh
+  const [documentsKey, setDocumentsKey] = useState(0); // Force documents refresh
+
+   const [username, setUsername] = useState("");
+    
+      useEffect(() => {
+        setUsername(localStorage.getItem("username") || "");
+      }, []);
+    
 
   // Fetch client data when component mounts
   useEffect(() => {
@@ -176,16 +186,24 @@ function SalesAndLeadsClient(clientId ) {
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deleteType === "entry") {
-      console.log("Delete Entry confirmed");
-      // Implement delete entry logic here
-    } else if (deleteType === "data") {
-      console.log("Delete Data confirmed");
-      // Implement delete data logic here
+  const handleDeleteConfirm = async () => {
+    try {
+      if (deleteType === "entry") {
+        await clientService.deleteClient(id);
+        navigate("/salesandleads");
+        return; // no further cleanup needed, leaving page
+      } else if (deleteType === "data") {
+        // Optional: implement bulk document delete for this client in backend later
+        // For now, simply refresh documents list key
+        setDocumentsKey(prev => prev + 1);
+      }
+    } catch (e) {
+      console.error("Delete failed", e);
+      alert(e.message || "Delete failed");
+    } finally {
+      setIsDeleteModalOpen(false);
+      setDeleteType("");
     }
-    setIsDeleteModalOpen(false);
-    setDeleteType("");
   };
 
   const handleDeleteCancel = () => {
@@ -232,10 +250,24 @@ function SalesAndLeadsClient(clientId ) {
     setIsFileUploadModalOpen(false);
   };
 
-  const handleFileUploadComplete = (files) => {
-    console.log("Files uploaded:", files);
-    // Handle uploaded files here
-    setIsFileUploadModalOpen(false);
+  const handleFileUploadComplete = async (files) => {
+    try {
+      if (!id || !files || files.length === 0) return;
+      // Upload each file sequentially (could be parallel if desired)
+      for (const file of files) {
+        await DocumentsService.uploadForClient(id, file, {
+          uploadedBy: "Current User",
+          userRole: "Sales Executive",
+        });
+      }
+      // Refresh documents tab
+      setDocumentsKey(prev => prev + 1);
+    } catch (e) {
+      console.error("Upload failed", e);
+      alert(e.message || "Upload failed");
+    } finally {
+      setIsFileUploadModalOpen(false);
+    }
   };
 
   const handleExportClick = (event) => {
@@ -397,13 +429,9 @@ function SalesAndLeadsClient(clientId ) {
               />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                  <img
-                    src={admindemo}
-                    alt=""
-                    className={styles["profile-picture"]}
-                  />
+                    <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>Preety Sinha</div>
+                   <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
                     <div className={styles["profile-type"]}>Administrator</div>
                   </div>
                 </div>
@@ -688,7 +716,7 @@ function SalesAndLeadsClient(clientId ) {
                   {/* <p>Documents content will be displayed here</p> */}
                   {/* Add your documents content here when ready */}
                   <section className="documents-table-section">
-                    <Documents />
+                    <Documents clientId={id} refreshKey={documentsKey} />
                   </section>
                 </div>
               )}

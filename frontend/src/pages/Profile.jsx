@@ -6,6 +6,9 @@ import belldot from "../assets/dashboard/bell-dot.svg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
 import admindemo from "../assets/dashboard/admin-demo.jpg";
+import UserService from "../services/UserService";
+import config from "../config/config";
+import ProfileAvatar from "../components/ProfileAvatar";
 
 function Profile() {
   const [username, setUsername] = useState("");
@@ -20,6 +23,20 @@ function Profile() {
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
+    (async () => {
+      try {
+        const me = await UserService.getMe();
+        setUsername(me.username || "");
+        setFormData(prev => ({
+          ...prev,
+          username: me.username || prev.username,
+          phoneNumber: me.phoneNumber || "",
+          profilePicture: me.profilePicture ? `${config.API_BASE_URL.replace('/api','')}${me.profilePicture}` : null,
+        }));
+      } catch (e) {
+        // ignore
+      }
+    })();
   }, []);
 
   const handleInputChange = (field, value) => {
@@ -41,22 +58,44 @@ function Profile() {
     });
   };
 
-  const handleSaveChanges = () => {
-    console.log("Saving profile changes:", formData);
-    // Add save logic here
-    alert("Profile updated successfully!");
+  const handleSaveChanges = async () => {
+    try {
+      const updated = await UserService.updateMe({
+        username: formData.username,
+        phoneNumber: formData.phoneNumber,
+        newPassword: formData.newPassword || undefined,
+      });
+      setUsername(updated.username || "");
+      alert("Profile updated successfully!");
+    } catch (e) {
+      alert(e.message || "Failed to update profile");
+    }
   };
 
-  const handleEditProfilePicture = () => {
-    // Add file picker logic here
-    console.log("Edit profile picture clicked");
+  const handleEditProfilePicture = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const updated = await UserService.uploadProfilePicture(file);
+        setFormData(prev => ({
+          ...prev,
+          profilePicture: updated.profilePicture ? `${config.API_BASE_URL.replace('/api','')}${updated.profilePicture}` : prev.profilePicture
+        }));
+      } catch (err) {
+        alert('Failed to upload profile picture');
+      }
+    };
+    input.click();
   };
 
   const handleRemoveProfilePicture = () => {
-    setFormData((prev) => ({
-      ...prev,
-      profilePicture: null,
-    }));
+    setFormData((prev) => ({ ...prev, profilePicture: null }));
+    // Persist removal
+    UserService.updateMe({ profilePicture: null }).catch(() => {});
   };
 
   return (
@@ -75,11 +114,7 @@ function Profile() {
               />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                  <img
-                    src={admindemo}
-                    alt=""
-                    className={styles["profile-picture"]}
-                  />
+                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
                     <div className={styles["profile-name"]}>
                       {username?.toUpperCase()}
@@ -100,29 +135,26 @@ function Profile() {
             <div className={styles["breadcrumb-two"]}>Profile</div>
           </div>
         </section>
+        
+        <div className={styles["header-content"]}>
+          <div className={styles["profile-container"]}>
+          <div className={styles["profile-title"]}>Your Profile</div>
+
+          <div className={styles["header-actions"]}>
+            <button className={styles["cancel-button"]} onClick={handleCancel}>
+              Cancel
+            </button>
+            <button
+              className={styles["save-button"]}
+              onClick={handleSaveChanges}
+            >
+              Save Changes
+            </button>
+          </div>
+          </div>
+        </div>
 
         <section className={styles["profile-content"]}>
-
-           
-          {/* <div className={styles["header-content"]}>
-            <div className={styles["profile-title"]}>Your Profile</div>
-            
-             <div className={styles["header-actions"]}>
-              <button 
-                className={styles["cancel-button"]}
-                onClick={handleCancel}
-              >
-                Cancel
-              </button>
-              <button 
-                className={styles["save-button"]}
-                onClick={handleSaveChanges}
-              >
-                Save Changes
-              </button>
-            </div> 
-          </div> */}
-        
           <div className={styles["profile-form"]}>
             <div className={styles["form-row"]}>
               <div className={styles["form-label"]}>Username</div>
@@ -194,7 +226,7 @@ function Profile() {
                     className={styles["edit-button"]}
                     onClick={handleEditProfilePicture}
                   >
-                    <span>Edit</span>
+                    <span style={{color:"#34C759"}}>Edit</span>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                       <path
                         d="M8.00031 13.3332H14.0003M10.0003 3.33316L12.0003 5.33316M10.9176 2.41449C11.183 2.1491 11.543 2 11.9183 2C12.2936 2 12.6536 2.1491 12.919 2.41449C13.1844 2.67988 13.3335 3.03983 13.3335 3.41516C13.3335 3.79048 13.1844 4.15043 12.919 4.41582L4.91231 12.4232C4.75371 12.5818 4.55766 12.6978 4.34231 12.7605L2.42764 13.3192C2.37028 13.3359 2.30947 13.3369 2.25158 13.3221C2.1937 13.3072 2.14086 13.2771 2.09861 13.2349C2.05635 13.1926 2.02624 13.1398 2.01141 13.0819C1.99658 13.024 1.99758 12.9632 2.01431 12.9058L2.57298 10.9912C2.63579 10.776 2.75181 10.5802 2.91031 10.4218L10.9176 2.41449Z"

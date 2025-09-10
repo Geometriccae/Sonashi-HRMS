@@ -1,39 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./FileUploadModal.css";
 import uploadIcon from "../assets/dashboard/upload-cloud.svg";
 import removeIcon from "../assets/dashboard/trash-2.svg";
 
 function FileUploadModal({ isOpen, onClose, onUpload }) {
-  const [uploadedFiles, setUploadedFiles] = useState([
-    {
-      id: 1,
-      name: "Tech design requirements.pdf",
-      size: "200 KB",
-      progress: 100,
-      isCompleted: true
-    },
-    {
-      id: 2,
-      name: "Dashboard prototype recording.mp4",
-      size: "16 MB",
-      progress: 40,
-      isCompleted: false
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+
+  // Clear previously selected files whenever the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setUploadedFiles([]);
     }
-  ]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
+      setUploadedFiles([]);
       onClose();
     }
   };
 
   const handleFileUpload = () => {
-    // Handle file upload logic here
     if (onUpload) {
-      onUpload(uploadedFiles);
+      const filesToSend = uploadedFiles.map(f => f.rawFile).filter(Boolean);
+      onUpload(filesToSend);
     }
+    setUploadedFiles([]);
     onClose();
   };
 
@@ -48,8 +42,19 @@ function FileUploadModal({ isOpen, onClose, onUpload }) {
     fileInput.multiple = true;
     fileInput.accept = '*/*';
     fileInput.onchange = (e) => {
-      // Handle file selection
-      console.log('Files selected:', e.target.files);
+      const files = Array.from(e.target.files || []);
+      const next = files.map((file, idx) => {
+        const sizeKB = Math.max(1, Math.round(file.size / 1024));
+        return {
+          id: Date.now() + idx,
+          name: file.name,
+          size: `${sizeKB} KB`,
+          progress: 100,
+          isCompleted: true,
+          rawFile: file
+        };
+      });
+      setUploadedFiles(prev => [...prev, ...next]);
     };
     fileInput.click();
   };

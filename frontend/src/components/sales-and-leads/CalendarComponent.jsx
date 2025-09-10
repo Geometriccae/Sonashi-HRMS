@@ -508,7 +508,7 @@ const CalendarComponent = ({ clientId, key: calendarKey }) => {
               <div className="meeting-chip">
                 <span>Meeting</span>
               </div>
-              <div className="modal-actions">
+              <div className="modal-actions-event">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" onClick={handleEditEvent} style={{cursor: 'pointer'}}>
                   <path d="M8.00031 13.3332H14.0003M10.0003 3.33316L12.0003 5.33316M10.9176 2.41449C11.183 2.1491 11.543 2 11.9183 2C12.2936 2 12.6536 2.1491 12.919 2.41449C13.1844 2.67988 13.3335 3.03983 13.3335 3.41516C13.3335 3.79048 13.1844 4.15043 12.919 4.41582L4.91231 12.4232C4.75371 12.5818 4.55766 12.6978 4.34231 12.7605L2.42764 13.3192C2.37028 13.3359 2.30947 13.3369 2.25158 13.3221C2.1937 13.3072 2.14086 13.2771 2.09861 13.2349C2.05635 13.1926 2.02624 13.1398 2.01141 13.0819C1.99658 13.024 1.99758 12.9632 2.01431 12.9058L2.57298 10.9912C2.63579 10.776 2.75181 10.5802 2.91031 10.4218L10.9176 2.41449Z" stroke="#FF9500" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -523,13 +523,13 @@ const CalendarComponent = ({ clientId, key: calendarKey }) => {
             <div className="modal-body">
               <div className="meeting-title">{selectedMeeting.title}</div>
               <div className="meeting-notes">{selectedMeeting.notes || 'No Notes Added'}</div>
-              {selectedMeeting.link && (
+              {/* {selectedMeeting.link && (
                 <div className="meeting-link">
                   <a href={selectedMeeting.link} target="_blank" rel="noopener noreferrer">
                     {selectedMeeting.link}
                   </a>
                 </div>
-              )}
+              )} */}
               {selectedMeeting.assignedTeamMember && (
                 <div className="meeting-member">Assigned to: {selectedMeeting.assignedTeamMember}</div>
               )}

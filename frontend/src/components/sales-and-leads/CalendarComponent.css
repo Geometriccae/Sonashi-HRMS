@@ -185,13 +185,13 @@
   font: 500 12px/12px 'Inter Tight', -apple-system, Roboto, Helvetica, sans-serif;
 }
 
-.modal-actions {
+.modal-actions-event {
   display: flex;
   align-items: flex-start;
   gap: 15px;
 }
 
-.modal-actions svg {
+.modal-actions-event svg {
   cursor: pointer;
 }
 

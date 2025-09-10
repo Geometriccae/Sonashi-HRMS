@@ -75,7 +75,9 @@ export const deleteEvent = async (clientId, eventId) => {
 
 export const getAllEvents = async () => {
   try {
-    const response = await axios.get(`${API_URL}/events`);
+    const response = await axios.get(`${API_URL}/api/clients/events`, {
+      headers: getAuthHeaders(),
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching all events:', error);

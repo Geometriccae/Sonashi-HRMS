@@ -23,6 +23,7 @@ import plus from "../../assets/dashboard/plus.svg";
 import pencillineblue from "../../assets/dashboard/pencil-line-blue.svg";
 import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
+import ProfileAvatar from "../../components/ProfileAvatar";
 
 
 
@@ -40,6 +41,14 @@ function TeamManagementSalesLeads() {
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
+
+
+   const [username, setUsername] = useState("");
+    
+      useEffect(() => {
+        setUsername(localStorage.getItem("username") || "");
+      }, []);
+    
 
   useEffect(() => {
     const updateIndicatorPosition = () => {
@@ -325,9 +334,10 @@ function TeamManagementSalesLeads() {
               <img src={belldot} alt="belldot" className={styles["belldot-icon"]} />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                  <img src={admindemo} alt="" className={styles["profile-picture"]} />
+                 
+                 <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>Preety Sinha</div>
+                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
                     <div className={styles["profile-type"]}>Administrator</div>
                   </div>
                 </div>

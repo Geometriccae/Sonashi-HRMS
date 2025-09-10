@@ -261,6 +261,29 @@ router.delete('/:id/events/:eventId', authMiddleware, async (req, res) => {
 });
 
 
+// Get all events across all clients
+router.get('/events', authMiddleware, async (req, res) => {
+  try {
+    const clients = await Client.find({}, { companyName: 1, events: 1 }).lean();
+    const all = [];
+    for (const c of clients) {
+      if (Array.isArray(c.events)) {
+        for (const e of c.events) {
+          all.push({
+            clientId: c._id,
+            clientName: c.companyName,
+            ...e,
+          });
+        }
+      }
+    }
+    res.json(all);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching all events', error: error.message });
+  }
+});
+
+
 module.exports = router;
 
 

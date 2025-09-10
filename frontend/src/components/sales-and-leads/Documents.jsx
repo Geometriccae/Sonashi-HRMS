@@ -1,99 +1,59 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import "./Documents.css";
 import DataTable from "../DataTable";
+import DocumentsService from "../../services/DocumentsService";
 
 
 
 
-function Documents() {
-  const documentsData = [
-    {
-      id: 1,
-      fileName: "kargo Load",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Ramesh Mohan",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "8/21/15",
-    },
-    {
-      id: 2,
-      fileName: "Info Document",
-      fileSize: "56KB",
-      fileType: "document",
-      type: "Extra",
-      uploadedBy: "Gurpreet Singh",
-      userRole: "Sales Executive",
-      filetype: "Document",
-      uploadedDate: "6/19/14",
-    },
-    {
-      id: 3,
-      fileName: "Shipping demo",
-      fileSize: "56KB",
-      fileType: "video",
-      type: "Important",
-      uploadedBy: "Nayantara S",
-      userRole: "Sales Executive",
-      filetype: "Video",
-      uploadedDate: "2/11/12",
-    },
-    {
-      id: 4,
-      fileName: "Cargo Images",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Albin Antony",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "8/16/13",
-    },
-    {
-      id: 5,
-      fileName: "Audio Recording",
-      fileSize: "56KB",
-      fileType: "audio",
-      type: "Extra",
-      uploadedBy: "Priya Warrier",
-      userRole: "Sales Executive",
-      filetype: "Audio",
-      uploadedDate: "4/21/12",
-    },
-    {
-      id: 6,
-      fileName: "Shipment Manifest",
-      fileSize: "56KB",
-      fileType: "document",
-      type: "Important",
-      uploadedBy: "Ganesh R",
-      userRole: "Sales Executive",
-      filetype: "Document",
-      uploadedDate: "3/4/16",
-    },
-    {
-      id: 7,
-      fileName: "Image 031",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Nayantara S",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "2/11/12",
-    },
-  ];
+function Documents({ clientId, refreshKey }) {
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!clientId) return;
+    const fetchDocs = async () => {
+      try {
+        setLoading(true);
+        const docs = await DocumentsService.listByClient(clientId);
+        const mapped = docs.map(d => ({
+          id: d._id,
+          fileName: d.fileName,
+          fileSize: `${Math.max(1, Math.round((d.fileSize || 0) / 1024))} KB`,
+          fileType: (d.fileType || '').includes('image') ? 'image' : (d.fileType || '').includes('video') ? 'video' : 'document',
+          type: d.type || 'Extra',
+          uploadedBy: d.uploadedBy || 'Unknown',
+          userRole: d.userRole || '',
+          filetype: d.fileType || '',
+          uploadedDate: d.uploadedDate ? new Date(d.uploadedDate).toLocaleDateString() : '',
+        }));
+        setDocuments(mapped);
+        setError(null);
+      } catch (e) {
+        setError(e.message || 'Failed to load documents');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDocs();
+  }, [clientId, refreshKey]);
+
+  if (loading) return <div className="documents-loading">Loading documents...</div>;
+  if (error) return <div className="documents-error">{error}</div>;
 
   return (
     <div className="">
-      
-
-        <section className="documents-table-section">
-          <DataTable data={documentsData} />
-        </section>
-      
+      <section className="documents-table-section">
+        <DataTable 
+          data={documents}
+          onDelete={async (docId) => {
+            await DocumentsService.remove(docId);
+            // refresh list locally
+            setDocuments(prev => prev.filter(d => d.id !== docId));
+          }}
+        />
+      </section>
     </div>
   );
 }

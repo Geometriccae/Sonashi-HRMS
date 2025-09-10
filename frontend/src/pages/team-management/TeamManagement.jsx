@@ -8,6 +8,7 @@ import chevrondright from "../../assets/dashboard/chevron-right.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
 import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import TeamMembersTable from "../../components/team-management-components/TeamMembersTable";
+import ProfileAvatar from "../../components/ProfileAvatar";
 
 function TeamManagement() {
   const [username, setUsername] = useState("");
@@ -32,11 +33,8 @@ function TeamManagement() {
               />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                  <img
-                    src={admindemo}
-                    alt=""
-                    className={styles["profile-picture"]}
-                  />
+                  
+                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
                     <div className={styles["profile-name"]}>{username?.toUpperCase()}
                     </div>

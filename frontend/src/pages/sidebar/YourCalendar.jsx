@@ -5,7 +5,7 @@ import Side from "../sidebar/Sidebar";
 
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
 // import Calendar from "../../components/CalendarComponent";
-import Meetingstable from "../../components/team-management-components/MeetingsTable";
+import Meetingstable from "./YourCalendarMeetings";
 
 import DeleteModal from "../../components/delete-modal/DeleteModal";
 import CreateEventModal from "../../components/sales-and-leads/CreateEventModal";
@@ -22,6 +22,7 @@ import plus from "../../assets/dashboard/plus.svg";
 import pencillineblue from "../../assets/dashboard/pencil-line-blue.svg";
 import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
+import ProfileAvatar from "../../components/ProfileAvatar";
 
 function YourCalendar() {
   const [activeTab, setActiveTab] = useState("meetings");
@@ -37,6 +38,12 @@ function YourCalendar() {
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+    
+
+      useEffect(() => {
+        setUsername(localStorage.getItem("username") || "");
+      }, []);
 
   useEffect(() => {
     const updateIndicatorPosition = () => {
@@ -204,13 +211,9 @@ function YourCalendar() {
               />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                  <img
-                    src={admindemo}
-                    alt=""
-                    className={styles["profile-picture"]}
-                  />
+                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>Preety Sinha</div>
+                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
                     <div className={styles["profile-type"]}>Administrator</div>
                   </div>
                 </div>

@@ -6,7 +6,7 @@ import SortIcon from "./SortIcon";
 import TrashIcon from "./TrashIcon";
 import DeleteModal from "./delete-modal/DeleteModal";
 
-function DataTable({ data }) {
+function DataTable({ data, onDelete }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
@@ -16,11 +16,15 @@ function DataTable({ data }) {
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
-    console.log("Delete item with id:", itemToDelete?.id);
-    // Implement actual delete logic here
-    setIsDeleteModalOpen(false);
-    setItemToDelete(null);
+  const handleDeleteConfirm = async () => {
+    try {
+      if (onDelete && itemToDelete?.id) {
+        await onDelete(itemToDelete.id);
+      }
+    } finally {
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
+    }
   };
 
   const handleDeleteCancel = () => {

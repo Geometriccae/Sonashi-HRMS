@@ -6,7 +6,7 @@ import ClientsTable from "../components/sales-and-leads/ClientsTable";
 import belldot from "../assets/dashboard/bell-dot.svg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
-import admindemo from "../assets/dashboard/admin-demo.jpg";
+import ProfileAvatar from "../components/ProfileAvatar";
 import arrowupright from "../assets/dashboard/arrow-up-right.svg";
 import arrowdownup from "../assets/dashboard/arrow-down-up.svg";
 
@@ -33,11 +33,7 @@ function SalesAndLeads() {
               />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                  <img
-                    src={admindemo}
-                    alt=""
-                    className={styles["profile-picture"]}
-                  />
+                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
                     <div className={styles["profile-name"]}>
                       {username?.toUpperCase()}
