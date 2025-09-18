@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import SalesAndLeads from "./pages/SalesAndLeads";
 import Reports from "./pages/Reports";
@@ -22,8 +23,10 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={
+        <Route path="/login" element={
           <Login />} />
+
+        <Route path="/forgotpassword" element={<ForgotPassword />} />
 
         <Route path="/dashboard" element={
           <ProtectedRoute><Dashboard /></ProtectedRoute>
@@ -45,7 +48,7 @@ function App() {
           <ProtectedRoute><Profile /></ProtectedRoute>
         } />
 
-       <Route path="/yourcalendar" element={
+        <Route path="/yourcalendar" element={
           <ProtectedRoute><YourCalendar /></ProtectedRoute>
         } />
 

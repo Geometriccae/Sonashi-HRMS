@@ -14,14 +14,14 @@ const getMe = async () => {
   return response.json();
 };
 
-const updateMe = async ({ username, phoneNumber, newPassword }) => {
+const updateMe = async ({ username, phoneNumber, newPassword, emailId }) => {
   const response = await fetch(`${baseUrl}/me`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${getAuthToken()}`
     },
-    body: JSON.stringify({ username, phoneNumber, newPassword })
+    body: JSON.stringify({ username, phoneNumber, newPassword, emailId })
   });
   if (!response.ok) throw new Error('Failed to update user');
   return response.json();

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styles from "./DashboardOverview.module.css";
 import { formatDate } from "../utils/dateUtils";
+import ConversionDataChart from "./ConversionDataChart";
 
 // Import available icons
 import arrowupright from "../assets/dashboard/arrow-up-right.svg";
@@ -9,6 +10,9 @@ import calendar from "../assets/dashboard/calendar.svg";
 import plus from "../assets/dashboard/plus.svg";
 import weather from "../assets/dashboard/weather.png";
 import threedot from "../assets/dashboard/3dot.svg";
+import smile_emoji from "../assets/dashboard/bxs_smile.svg";
+import quote_solid from "../assets/dashboard/quote-solid.svg";
+import Ellipse_dot from "../assets/dashboard/Ellipse27.svg";
 
 function DashboardOverview() {
   const [username, setUsername] = useState("");
@@ -54,7 +58,6 @@ function DashboardOverview() {
             </div>
           </div>
         </div>
-        
 
         <div className={styles.metricsRow}>
           {/* Total Payables Card */}
@@ -177,73 +180,15 @@ function DashboardOverview() {
           </div>
         </div>
 
-        {/* Chart Placeholder */}
-       
-        {/* Conversion Data Card */}
-        <div className={styles.conversionCard}>
-          <div className={styles.conver}>
-            <div className={styles.conversionCardHeader}>
-              <h2 className={styles.cardTitle}>Conversion data</h2>
-              <p className={styles.cardSubtitle}>
-                Conversion rate has improved from last month!
-                <br />
-                Keep up the good work!
-              </p>
-            </div>
-            <button className={styles.actionButton}>
-              <img src={arrowupright} alt="settings" />
-            </button>
-          </div>
- 
-          <div className={styles.conversionGraph}>
-            <div className={styles.percentageLabels}>
-              <span className={styles.percentageLabel}>100%</span>
-              <span className={styles.percentageLabel}>50%</span>
-              <span className={styles.percentageLabel}>0%</span>
-            </div>
-
-            <div className={styles.graphContainer}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="824" height="85" viewBox="0 0 824 85" fill="none">
-  <path d="M1.50879 16.0371C1.50879 16.0371 59.8744 60.9387 104.131 65.5374C144.926 69.7763 165.849 40.2058 206.754 43.2019C249.715 46.3485 266.387 86.3944 309.376 83.6472C356.139 80.6588 368.026 37.662 411.999 21.4701C450.267 7.37845 474.002 -1.47011 514.621 2.15289C557.614 5.98763 574.472 37.3967 617.244 43.2019C657.132 48.6156 679.973 38.9226 719.866 33.5433C760.197 28.1049 782.732 24.1281 822.489 15.4334" stroke="#334AFA" stroke-width="2.41465" stroke-linecap="round"/>
-</svg>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="822"
-                height="153"
-                viewBox="0 0 822 153"
-                fill="none"
-              >
-                <path
-                  d="M103.131 64.5374C58.8744 59.9387 0.508789 15.0371 0.508789 15.0371V152.487H821.489V14.4334C821.489 14.4334 759.197 27.1049 718.866 32.5433C678.973 37.9226 656.132 47.6156 616.244 42.2019C573.472 36.3967 556.614 4.98763 513.621 1.15289C473.237 -2.44914 449.542 6.27641 411.662 20.2258L410.999 20.4701C367.026 36.662 355.139 79.6588 308.376 82.6472C265.387 85.3944 248.715 45.3485 205.754 42.2019C164.849 39.2058 143.926 68.7763 103.131 64.5374Z"
-                  fill="url(#paint0_linear_2656_7281)"
-                />
-                <defs>
-                  <linearGradient
-                    id="paint0_linear_2656_7281"
-                    x1="410.999"
-                    y1="1.15289"
-                    x2="410.999"
-                    y2="152.487"
-                    gradientUnits="userSpaceOnUse"
-                  >
-                    <stop stop-color="#CFD5FF" />
-                    <stop offset="1" stop-color="#CFD5FF" stop-opacity="0" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className={styles.conversionRate}>58%</div>
-            </div>
-          </div>
-
-          {/* <div className={styles.dateLabel}>Monday, 31st Sep 2025</div> */}
-        </div>
+        {/* Conversion Data Chart */}
+        <ConversionDataChart />
       </div>
 
       {/* Bottom Row */}
       <div className={styles.bottomRow}>
         {/* Calendar Section */}
         <div className={styles.calendarCard}>
-          <div className={styles.cardHeader}>
+          <div className={styles.cardHeaderCalendar}>
             <h3>Your Calendar</h3>
             <button className={styles.actionButton}>
               <img src={arrowupright} alt="calendar" />
@@ -330,7 +275,9 @@ function DashboardOverview() {
                 <h4>Complete shipment for Aurum Central</h4>
                 <p>Aurum Central</p>
               </div>
-              <div className={styles.taskAvatar}>AC</div>
+              <div className={styles.taskAvatar}>
+                <img src={quote_solid} alt="" />
+              </div>
             </div>
             <div className={styles.taskDivider}></div>
             <div className={styles.taskMeta}>
@@ -353,6 +300,9 @@ function DashboardOverview() {
                 <h4>Legal Review for new clients</h4>
                 <p>Internal Affairs</p>
               </div>
+              <div className={styles.taskAvatar1}>
+                <img src={quote_solid} alt="" />
+              </div>
             </div>
             <div className={styles.taskDivider}></div>
             <div className={styles.taskMeta}>
@@ -367,6 +317,9 @@ function DashboardOverview() {
               <div className={styles.taskInfo}>
                 <h4>Legal Review for new clients</h4>
                 <p>Internal Affairs</p>
+              </div>
+              <div className={styles.taskAvatar1}>
+                <img src={quote_solid} alt="" />
               </div>
             </div>
           </div>

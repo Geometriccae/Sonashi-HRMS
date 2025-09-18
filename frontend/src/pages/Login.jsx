@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import auxin_logo from "../assets/auxin_logo.png";
-import "./Login.css";
+import styles from "./Login.module.css";
 
 function Login() {
- const [username, setUsername] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -13,33 +13,27 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // try {
-    //   const res = await axios.post('http://localhost:5000/api/auth/login', {
-    //     username,
-    //     password
-    //   });
     try {
       const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/login`, { username, password }, { withCredentials: true });
 
-     // Store the token in localStorage
-  localStorage.setItem("token", res.data.token);
- localStorage.setItem('username', res.data.username);
- console.log(res.data.username); 
-  // Navigate to dashboard
-  navigate('/dashboard');
+      // Store the token in localStorage
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem('username', res.data.username);
+      console.log(res.data.username); 
+      // Navigate to dashboard
+      navigate('/dashboard');
     } catch (err) {
       console.error(err);
-      setError('Invalid username or password');
+      setError('Your Username/Password is incorrect!');
     }
   };
 
-
   return (
-    <div className="login-container ">
-      <div className="left-panel">
-        <div className="circle"></div>
-        <div className="circle circle-extra"></div>
-        <div className="welcome-box">
+    <div className={styles.loginContainer}>
+      <div className={styles.leftPanel}>
+        <div className={styles.circle}></div>
+        <div className={`${styles.circle} ${styles.circleExtra}`}></div>
+        <div className={styles.welcomeBox}>
           <h1>
             Welcome back
             <br />
@@ -52,48 +46,74 @@ function Login() {
           </p>
         </div>
       </div>
-      <div className="right-panel">
-        <div className="login-box">
-          <img src={auxin_logo} alt="Auxin Logo" className="logo" />
-          <h3 className="text-start text-body mb-4 fs-5 fw-bold">
-            Login to CRM
-          </h3>
-          {/* <form>
-            <label htmlFor="username">Username</label>
-            <input id="username" type="text" placeholder="Ex. John Doe" />
-            
-
-            <label htmlFor="password">Password</label>
-            <input id="password" type="password" placeholder="************" />
-            <span>Your Username/Password is incorrect!</span>
-            <button type="submit">Login</button>
-          </form> */}
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="username">Username</label>
-            <input
-              id="username"
-              type="text"
-              placeholder="Ex. John Doe"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              placeholder="************"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            {error && <span style={{ color: 'red' }}>{error}</span>}
-            <button type="submit">Login</button>
-          </form>
-          <p className="forgot-password">
-            Forgot Password? <a href="#">Click Here</a>
-          </p>
+      <div className={styles.rightPanel}>
+        <div className={styles.loginBox}>
+          <img src={auxin_logo} alt="Auxin Logo" className={styles.logo} />
+          <div className={styles.formContainer}>
+            <div className={styles.loginTitle}>
+              Login to CRM
+            </div>
+            <div className={styles.formContent}>
+              <div className={styles.inputContainer}>
+                <div className={styles.inputField}>
+                  <div className={styles.inputFieldBase}>
+                    <div className={styles.inputWithLabel}>
+                      <div className={styles.label}>
+                        Username
+                      </div>
+                      <input
+                        className={styles.input}
+                        id="username"
+                        type="text"
+                        placeholder="EX. John Doe"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className={styles.inputField}>
+                  <div className={styles.inputFieldBase}>
+                    <div className={styles.inputWithLabel}>
+                      <div className={styles.label}>
+                        Password
+                      </div>
+                      <input
+                        className={styles.input}
+                        id="password"
+                        type="password"
+                        placeholder="**********"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    {error && (
+                      <div className={styles.errorText}>
+                        {error}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button 
+                type="submit" 
+                className={styles.loginButton}
+                onClick={handleSubmit}
+              >
+                Login
+              </button>
+              <div className={styles.forgotPasswordContainer}>
+                <div className={styles.forgotPasswordText}>
+                  Forgot Password?
+                </div>
+                <a href="/forgotpassword" className={styles.forgotPasswordLink}>
+                  Click Here
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -101,5 +121,3 @@ function Login() {
 }
 
 export default Login;
-
-

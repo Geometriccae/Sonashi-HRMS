@@ -16,6 +16,7 @@ function Profile() {
     username: "p.sinha",
     phoneNumber: "+91 738 683 7626",
     newPassword: "",
+    emailId: "",
     profilePicture: admindemo,
     browserNotifications: false,
     appNotifications: true,
@@ -31,6 +32,7 @@ function Profile() {
           ...prev,
           username: me.username || prev.username,
           phoneNumber: me.phoneNumber || "",
+          emailId: me.emailId || "",
           profilePicture: me.profilePicture ? `${config.API_BASE_URL.replace('/api','')}${me.profilePicture}` : null,
         }));
       } catch (e) {
@@ -52,6 +54,7 @@ function Profile() {
       username: "p.sinha",
       phoneNumber: "+91 738 683 7626",
       newPassword: "",
+      emailId: "",
       profilePicture: admindemo,
       browserNotifications: false,
       appNotifications: true,
@@ -63,6 +66,7 @@ function Profile() {
       const updated = await UserService.updateMe({
         username: formData.username,
         phoneNumber: formData.phoneNumber,
+        emailId: formData.emailId,
         newPassword: formData.newPassword || undefined,
       });
       setUsername(updated.username || "");
@@ -141,9 +145,9 @@ function Profile() {
           <div className={styles["profile-title"]}>Your Profile</div>
 
           <div className={styles["header-actions"]}>
-            <button className={styles["cancel-button"]} onClick={handleCancel}>
+            {/* <button className={styles["cancel-button"]} onClick={handleCancel}>
               Cancel
-            </button>
+            </button> */}
             <button
               className={styles["save-button"]}
               onClick={handleSaveChanges}
@@ -181,6 +185,23 @@ function Profile() {
                   value={formData.phoneNumber}
                   onChange={(e) =>
                     handleInputChange("phoneNumber", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+        <div className={styles["divider"]}></div>
+
+            <div className={styles["form-row"]}>
+              <div className={styles["form-label"]}>Email Id</div>
+              <div className={styles["form-field"]}>
+                <input
+                  type="email"
+                  className={styles["form-input"]}
+                  placeholder="Enter Your Email"
+                  value={formData.emailId}
+                  onChange={(e) =>
+                    handleInputChange("emailId", e.target.value)
                   }
                 />
               </div>

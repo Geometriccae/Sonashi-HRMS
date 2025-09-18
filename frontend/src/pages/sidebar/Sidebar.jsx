@@ -45,7 +45,7 @@ function Sidebar() {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
     // Redirect to login page
-    navigate("/", { replace: true });
+    navigate("/login", { replace: true });
   };
 
   // Use the custom date range hook for backend functionality
