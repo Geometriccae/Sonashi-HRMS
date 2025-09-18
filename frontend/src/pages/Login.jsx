@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link  } from "react-router-dom";
 import auxin_logo from "../assets/auxin_logo.png";
 import styles from "./Login.module.css";
 
@@ -108,9 +108,12 @@ function Login() {
                 <div className={styles.forgotPasswordText}>
                   Forgot Password?
                 </div>
-                <a href="/forgotpassword" className={styles.forgotPasswordLink}>
+                {/* <a href="/forgotpassword" className={styles.forgotPasswordLink}>
                   Click Here
-                </a>
+                </a> */}
+                 <Link to="/forgotpassword" className={styles.forgotPasswordLink}>
+                  Click Here
+                </Link>
               </div>
             </div>
           </div>
