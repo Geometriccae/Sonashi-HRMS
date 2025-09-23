@@ -18,7 +18,6 @@ class ClientService {
 
   }
 
-
   // Get auth token from localStorage
   getAuthToken() {
     return localStorage.getItem('token');

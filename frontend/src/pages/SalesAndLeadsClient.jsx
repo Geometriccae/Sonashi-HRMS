@@ -429,7 +429,7 @@ function SalesAndLeadsClient(clientId ) {
               />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                    <ProfileAvatar size={40} className={styles["profile-picture"]} />
+                <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
                     <div className={styles["profile-type"]}>Administrator</div>

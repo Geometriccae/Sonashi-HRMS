@@ -57,7 +57,7 @@ function App() {
         {/* <Route path="/addclient" element={<ProtectedRoute><AddClient /></ProtectedRoute>} /> */}
 
         <Route path="/teammanagement" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
-        <Route path="/teammanagement_salesleads" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />
+        <Route path="/teammanagement_salesleads/:id" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />
 
         <Route path="/venkat" element={<ProtectedRoute><Venkat /></ProtectedRoute>} />
         <Route path="/example" element={<Example />} />

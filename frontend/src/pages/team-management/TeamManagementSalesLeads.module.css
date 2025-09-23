@@ -261,10 +261,10 @@ background-color: white;
   align-items: flex-start;
   /* margin-bottom: 152px; */
   margin-left: 40px;
-  margin-right: 40px;
+  /* margin-right: 40px; */
   gap: 64px;
 }
-.column4 {
+/* .column4 {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -278,6 +278,17 @@ background-color: white;
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
+} */
+
+.column4,
+.column5 {
+  flex: 1; /* each takes equal width */
+  min-width: 220px; /* prevents shrinking too small */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px; /* reduce spacing for neatness */
+  margin-right: 0; /* remove fixed margin */
 }
 
 .image {
@@ -297,6 +308,21 @@ background-color: white;
   object-fit: fill;
 
 }
+
+.defaultCompanyLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: #606060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
 .row_view {
   align-self: stretch;
   display: flex;
@@ -337,8 +363,13 @@ background: #42B0D5;
   position: relative;
 }
 .row_view6 {
-  display: flex;
+  /* display: flex;
+  align-items: flex-start; */
+   display: flex;
   align-items: flex-start;
+  justify-content: space-between; /* distributes evenly */
+  flex-wrap: wrap; /* if screen small, wrap to next line */
+  width: 100%;
 }
 .scroll_view {
   height: 1008px;

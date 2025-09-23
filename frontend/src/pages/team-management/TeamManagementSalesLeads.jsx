@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import styles from "./TeamManagementSalesLeads.module.css";
 import Side from "../sidebar/Sidebar";
-
+import employeeService from "../../services/EmployeeService";
+import EditEmployeeModal from "../../components/team-management-components/EditEmployeeModal";
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
 // import Calendar from "../../components/CalendarComponent";
 import Meetingstable from "../../components/team-management-components/MeetingsTable";
-
+import config from "../../config/config";
 import DeleteModal from "../../components/delete-modal/DeleteModal";
 import AssignTaskModal from "../../components/team-management-components/AssignTaskModal";
 import FileUploadModal from "../../components/FileUploadModal";
@@ -41,14 +42,76 @@ function TeamManagementSalesLeads() {
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
+  // const { employeeId } = useParams();
+  const { id: employeeId } = useParams();
+
+   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
 
 
-   const [username, setUsername] = useState("");
-    
-      useEffect(() => {
-        setUsername(localStorage.getItem("username") || "");
-      }, []);
-    
+  const [username, setUsername] = useState("");
+  const [employee, setEmployee] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setUsername(localStorage.getItem("username") || "");
+  }, []);
+
+  // Fetch employee data when component mounts or employeeId changes
+  useEffect(() => {
+    if (employeeId) {
+      fetchEmployeeData();
+    }
+  }, [employeeId]);
+
+  // const fetchEmployeeData = async () => {
+  //   try {
+  //     setLoading(true);
+  //     setError(null);
+  //     const employeeData = await employeeService.getEmployee(employeeId);
+  //     console.log("Fetched employee data:", employeeData);
+  //     setEmployee(employeeData);
+  //   } catch (err) {
+  //     console.error("Error fetching employee:", err);
+  //     setError("Failed to load employee data. Please try again.");
+  //     setEmployee(null);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  const fetchEmployeeData = async () => {
+  if (!employeeId) {
+    setError("Employee ID is missing in URL");
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError(null);
+
+    console.log("Fetching employee with ID:", employeeId);
+
+    const employeeData = await employeeService.getEmployee(employeeId);
+
+    console.log("Fetched employee data:", employeeData);
+
+    if (!employeeData) {
+      setError("No employee data returned from API");
+      setEmployee(null);
+    } else {
+      setEmployee(employeeData);
+    }
+  } catch (err) {
+    console.error("Error fetching employee:", err);
+    setError("Failed to load employee data. Please try again.");
+    setEmployee(null);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     const updateIndicatorPosition = () => {
@@ -120,6 +183,21 @@ function TeamManagementSalesLeads() {
     setIsCreateEventModalOpen(false);
   };
 
+   const handleEditEmployeeClose = () => {
+    setIsEditEmployeeModalOpen(false);
+  };
+
+  const handleEditEmployeeSubmit = async (updatedEmployee) => {
+    try {
+      // Update the client data in local state
+      setEmployee(updatedEmployee);
+      setIsEditEmployeeModalOpen(false);
+    } catch (err) {
+      console.error("Error updating employee:", err);
+      setError(err.message || "Failed to update employee");
+    }
+  };
+
   const handleFileUpload = () => {
     setIsFileUploadModalOpen(true);
   };
@@ -180,10 +258,19 @@ function TeamManagementSalesLeads() {
       case 'basicInfo':
         return (
           <div className={styles.row_view5}>
-            <button className={`${styles.button_row_view} ${styles.editbutton}`} onClick={() => alert("Edit Data Pressed!")}>
+            {/* <button className={`${styles.button_row_view} ${styles.editbutton}`} onClick={() => alert("Edit Data Pressed!")}>
               <span className={`${styles.text3} ${styles.editbuttontext}`}>Edit Data</span>
               <img src={pencillineblue} className={styles.image3} alt="edit"/>
-            </button>
+            </button> */}
+              <button
+                          className={`${styles.button_row_view} ${styles.editbutton}`}
+                          onClick={() => setIsEditEmployeeModalOpen(true)}
+                        >
+                          <span className={`${styles.text3} ${styles.editbuttontext}`}>
+                            Edit Data
+                          </span>
+                          <img src={pencillineblue} className={styles.image3} alt="edit" />
+                        </button>
             <button
               ref={exportButtonRef}
               className={styles.button_row_view2}
@@ -354,7 +441,9 @@ function TeamManagementSalesLeads() {
             <img src={chevrondright} alt="" />
             <div className={styles["breadcrumb-notactive"]} onClick={() => navigate("/teammanagement")}style={{ cursor: "pointer" }}>Team Management</div>
             <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-active"]}>RamMohan</div>
+            <div className={styles["breadcrumb-active"]}>
+              {loading ? "Loading..." : employee?.employeeName || "Employee"}
+            </div>
           </div>
         </section>
 
@@ -372,19 +461,53 @@ function TeamManagementSalesLeads() {
                   />
                   <div className={styles.row_view3}>
                     <div className={styles.row_view4}>
-                      <img
+                      {/* <img
                         src={employee}
                         className={styles.image2}
-                        alt="Maersk logo"
-                      />
+                        alt="Employee avatar"
+                      /> */}
+                      {/* <img
+                          src={`${config.API_BASE_URL.replace('/api', '')}${employee.profilePhoto}`}
+                          className={styles.image2}
+                          alt={`${employee.employeeName} logo`}
+                        /> */}
+
+                      {/* {employee.profilePhoto ? (
+                        <img
+                          src={`${config.API_BASE_URL.replace('/api', '')}${employee.profilePhoto}`}
+                          className={styles.image2}
+                          alt={`${employee.employeeName} logo`}
+                        />
+                      ) : (
+                        <div className={styles.defaultCompanyLogo}>
+                          {employee.employeeName?.charAt(0)?.toUpperCase() || 'C'}
+                        </div>
+                      )} */}
+
+                      {employee ? (
+  employee.profilePhoto ? (
+    <img
+      src={`${config.API_BASE_URL.replace('/api', '')}${employee.profilePhoto}`}
+      className={styles.image2}
+      alt={`${employee.employeeName} logo`}
+    />
+  ) : (
+    <div className={styles.defaultCompanyLogo}>
+      {employee.employeeName?.charAt(0)?.toUpperCase() || 'C'}
+    </div>
+  )
+) : (
+  <div className={styles.defaultCompanyLogo}>C</div> // fallback while loading
+)}
+
                       <span className={styles.text}>
-                        {"RameshMohan"}
+                        {loading ? "Loading..." : employee?.employeeName || "Employee Name"}
                       </span>
                     </div>
                     <button className={styles.button}
                       onClick={()=>alert("Pressed!")}>
                       <span className={styles.text2}>
-                        {"On Site"}
+                        {loading ? "..." : employee?.attendance || "On Site"}
                       </span>
                     </button>
                   </div>
@@ -466,182 +589,98 @@ function TeamManagementSalesLeads() {
             <div className={styles.column3}>
               {activeTab === 'basicInfo' && (
                 <>
-                {/* first row */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
+                  {loading ? (
+                    <div style={{ padding: "40px", textAlign: "center" }}>
+                      <p>Loading employee information...</p>
                     </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
+                  ) : error ? (
+                    <div style={{ padding: "40px", textAlign: "center" }}>
+                      <p style={{ color: "#ED5E56" }}>{error}</p>
+                      <button
+                        onClick={fetchEmployeeData}
+                        className="primary-button"
+                        style={{ marginTop: "16px" }}
+                      >
+                        Try Again
+                      </button>
                     </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
+                  ) : employee ? (
+                    <>
+                      {/* first row */}
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Employee ID</span>
+                          <span className={styles.text10}>{employee.employeeId || "Not provided"}</span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Employee Name</span>
+                          <span className={styles.text10}>{employee.employeeName || "Not provided"}</span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Email ID</span>
+                          <span className={styles.text10}>{employee.emailId || "Not provided"}</span>
+                        </div>
+                        <div className={styles.column5}>
+                          <span className={styles.text9}>Mobile Number</span>
+                          <span className={styles.text10}>{employee.mobile || "Not provided"}</span>
+                        </div>
+                      </div>
+                      {/* second row */}
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Role</span>
+                          <span className={styles.text10}>{employee.role || "Not provided"}</span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Designation</span>
+                          <span className={styles.text10}>{employee.designation || "Not provided"}</span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Department</span>
+                          <span className={styles.text10}>{employee.department || "Not provided"}</span>
+                        </div>
+                        <div className={styles.column5}>
+                          <span className={styles.text9}>Attendance Status</span>
+                          <span className={styles.text10}>{employee.attendance || "Not provided"}</span>
+                        </div>
+                      </div>
+                      {/* third row - Projects */}
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Assigned Projects</span>
+                          <span className={styles.text10}>
+                            {employee.assignedProjects && Array.isArray(employee.assignedProjects)
+                              ? employee.assignedProjects.join(", ")
+                              : employee.assignedProjects || "No projects assigned"}
+                          </span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Profile Created</span>
+                          <span className={styles.text10}>
+                            {employee.createdAt
+                              ? new Date(employee.createdAt).toLocaleDateString()
+                              : "Not available"}
+                          </span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Last Updated</span>
+                          <span className={styles.text10}>
+                            {employee.updatedAt
+                              ? new Date(employee.updatedAt).toLocaleDateString()
+                              : "Not available"}
+                          </span>
+                        </div>
+                        <div className={styles.column5}>
+                          <span className={styles.text9}>Status</span>
+                          <span className={styles.text10}>Active</span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ padding: "40px", textAlign: "center" }}>
+                      <p>Employee not found.</p>
                     </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                  </div>
-                  {/* second row */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                  </div>
-                  {/* third row */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                  </div>
-                  {/* fourth row */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                  </div>
-                  {/* fifth row */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>
-                        {"First Name"}
-                      </span>
-                      <span className={styles.text10}>
-                        {"Ryan"}
-                      </span>
-                    </div>
-                  </div>
-                  {/* Add more basic info content as needed */}
+                  )}
                 </>
               )}
 
@@ -688,6 +727,13 @@ function TeamManagementSalesLeads() {
         onUpload={handleFileUploadComplete}
       />
 
+        <EditEmployeeModal
+        isOpen={isEditEmployeeModalOpen}
+        onClose={handleEditEmployeeClose}
+        onSubmit={handleEditEmployeeSubmit}
+        employee={employee}
+      />
+
       <DropDownList
         isOpen={isDropdownOpen}
         onClose={handleDropdownClose}
@@ -696,6 +742,6 @@ function TeamManagementSalesLeads() {
       />
     </div>
   );
-}
+} 
 
 export default TeamManagementSalesLeads;

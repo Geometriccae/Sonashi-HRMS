@@ -1,0 +1,326 @@
+import config from '../config/config';
+
+class EmployeeService {
+  constructor() {
+    let baseURL = config.API_BASE_URL || 'http://localhost:5000/api';
+
+    // Ensure baseURL ends with /api
+    if (!baseURL.endsWith('/api')) {
+      if (baseURL.endsWith('/')) {
+        baseURL += 'api';
+      } else {
+        baseURL += '/api';
+      }
+    }
+
+    this.baseURL = `${baseURL}/employees`;
+    console.log('EmployeeService initialized with baseURL:', this.baseURL);
+  }
+
+  // Get auth token from localStorage
+  getAuthToken() {
+    return localStorage.getItem('token');
+  }
+
+  // Get auth headers
+  getAuthHeaders() {
+    const token = this.getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  }
+
+  // Get all employees
+  async getEmployees() {
+    try {
+      console.log('Fetching employees from:', this.baseURL);
+      const response = await fetch(this.baseURL, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      throw error;
+    }
+  }
+
+  // Get single employee by ID
+  async getEmployee(id) {
+    try {
+       console.log('get one employee', this.baseURL);
+      const response = await fetch(`${this.baseURL}/${id}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching employee:', error);
+      throw error;
+    }
+  }
+
+  // Create new employee
+  async createEmployee(employeeData) {
+    try {
+      console.log('Creating employee at:', this.baseURL);
+      console.log('Employee data:', employeeData);
+
+      const response = await fetch(this.baseURL, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(employeeData),
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating employee:', error);
+      throw error;
+    }
+  }
+
+  // Update employee
+  async updateEmployee(id, employeeData) {
+    try {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(employeeData));
+
+      console.log('Updating employee at:', this.baseURL);
+      console.log('Employee data:', employeeData);
+
+      if (employeeData.profilePhotoFile) {
+        formData.append('profilePhoto', employeeData.profilePhotoFile);
+      }
+
+      const response = await fetch(`${this.baseURL}/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating employee:', error);
+      throw error;
+    }
+  }
+
+  // Delete employee
+  async deleteEmployee(id) {
+    try {
+      const response = await fetch(`${this.baseURL}/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      throw error;
+    }
+  }
+
+  // Create employee with profile photo
+  async createEmployeeWithFile(employeeData, profileImage) {
+    try {
+      console.log('Creating employee with file at:', this.baseURL);
+      console.log('Profile image:', profileImage);
+
+      const token = localStorage.getItem("token");
+      const formDataToSend = new FormData();
+
+      // Append employee data as JSON string
+      formDataToSend.append("data", JSON.stringify(employeeData));
+
+      // Append profile image if provided
+      if (profileImage) {
+        console.log('Appending profile image:', profileImage.name, profileImage.type, profileImage.size);
+        formDataToSend.append("profilePhoto", profileImage);
+      }
+
+      const response = await fetch(this.baseURL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formDataToSend,
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = "Failed to create employee with file";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = `${errorMessage}: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error in createEmployeeWithFile:', error);
+      throw error;
+    }
+  }
+
+  // Update employee with profile photo
+  async updateEmployeeWithFile(id, employeeData, profileImage) {
+    try {
+      console.log('Updating employee with file at:', `${this.baseURL}/${id}`);
+      console.log('Profile image for update:', profileImage);
+
+      const token = localStorage.getItem("token");
+      const formDataToSend = new FormData();
+
+      // Append employee data as JSON string
+      formDataToSend.append("data", JSON.stringify(employeeData));
+
+      // Append profile image if provided
+      if (profileImage) {
+        console.log('Appending profile image for update:', profileImage.name, profileImage.type, profileImage.size);
+        formDataToSend.append("profilePhoto", profileImage);
+      }
+
+      const response = await fetch(`${this.baseURL}/${id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formDataToSend,
+      });
+
+      console.log('Update response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = "Failed to update employee with file";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = `${errorMessage}: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error in updateEmployeeWithFile:', error);
+      throw error;
+    }
+  }
+
+  // Additional employee-specific methods
+  async getEmployeesByDepartment(department) {
+    try {
+      const response = await fetch(`${this.baseURL}/department/${department}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching employees by department:', error);
+      throw error;
+    }
+  }
+
+  async updateEmployeeAttendance(id, attendanceStatus) {
+    try {
+      const response = await fetch(`${this.baseURL}/${id}/attendance`, {
+        method: 'PATCH',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ attendance: attendanceStatus }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating employee attendance:', error);
+      throw error;
+    }
+  }
+
+  async assignProjectToEmployee(id, projectName) {
+    try {
+      const response = await fetch(`${this.baseURL}/${id}/projects`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ project: projectName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error assigning project to employee:', error);
+      throw error;
+    }
+  }
+
+  async removeProjectFromEmployee(id, projectName) {
+    try {
+      const response = await fetch(`${this.baseURL}/${id}/projects`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ project: projectName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error removing project from employee:', error);
+      throw error;
+    }
+  }
+}
+
+export default new EmployeeService();

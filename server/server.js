@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const authMiddleware = require('./middleware/authMiddleware');
 require('dotenv').config();
 const path = require('path');
-
+const employeeRoutes = require('./routes/employeeRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -45,7 +45,7 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/documents', require('./routes/documentRoutes'));
-
+app.use('/api/employees', employeeRoutes);
 //  Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend server is running!', timestamp: new Date() });

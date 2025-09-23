@@ -1,15 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./AddEmployeeModal.css"; // Using the same CSS file
 import ProgressSteps from "../ProgressSteps";
 import InputField from "../InputField";
 import ProfilePhotoUpload from "../ProfilePhotoUpload";
 import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 import employeeService from "../../services/EmployeeService";
-import config from "../../config/config";
 
-function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
+function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
+  const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState(null);
   
   const [formData, setFormData] = useState({
     // 1. Basic Information
@@ -30,6 +30,56 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Populate form data when employee prop changes
+  useEffect(() => {
+    if (employee && isOpen) {
+      setFormData({
+        employeeId: employee.employeeId || "",
+        employeeName: employee.employeeName || "",
+        mobile: employee.mobile || "",
+        emailId: employee.emailId || "",
+        role: employee.role || "",
+        designation: employee.designation || "",
+        department: employee.department || "",
+        attendance: employee.attendance || "Onsite",
+        assignedProjects: Array.isArray(employee.assignedProjects) 
+          ? employee.assignedProjects.join(", ") 
+          : employee.assignedProjects || "",
+      });
+      
+      // Set current profile image URL if exists
+      if (employee.profilePhotoUrl) {
+        setCurrentProfileImageUrl(employee.profilePhotoUrl);
+      }
+      
+      // Reset form state
+      setCurrentStep(1);
+      setProfileImage(null);
+      setError("");
+    }
+  }, [employee, isOpen]);
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setCurrentStep(1);
+      setProfileImage(null);
+      setCurrentProfileImageUrl(null);
+      setError("");
+      setFormData({
+        employeeId: "",
+        employeeName: "",
+        mobile: "",
+        emailId: "",
+        role: "",
+        designation: "",
+        department: "",
+        attendance: "Onsite",
+        assignedProjects: "",
+      });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -93,33 +143,21 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           .filter(project => project !== "");
       }
 
-      const savedEmployee = await employeeService.createEmployeeWithFile(filteredData, profileImage);
+      const updatedEmployee = await employeeService.updateEmployeeWithFile(
+        employee._id || employee.id, 
+        filteredData, 
+        profileImage
+      );
 
-      // Call the onSubmit callback with the saved employee data
+      // Call the onSubmit callback with the updated employee data
       if (onSubmit) {
-        onSubmit(savedEmployee);
+        onSubmit(updatedEmployee);
       }
 
       onClose();
-      setCurrentStep(1);
-
-      // Reset form data
-      setFormData({
-        employeeId: "",
-        employeeName: "",
-        mobile: "",
-        emailId: "",
-        role: "",
-        designation: "",
-        department: "",
-        attendance: "Onsite",
-        assignedProjects: "",
-      });
-      
-      setProfileImage(null);
     } catch (err) {
-      console.error("Error creating employee:", err);
-      setError(err.message || "Failed to create employee. Please try again.");
+      console.error("Error updating employee:", err);
+      setError(err.message || "Failed to update employee. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -127,10 +165,21 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
   const handlePhotoUpload = (file) => {
     setProfileImage(file);
+    setCurrentProfileImageUrl(null); // Clear current URL when new file is uploaded
   };
 
   const handleEditPhoto = () => {
-    console.log("Edit photo");
+    // Trigger file input for photo upload
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        handlePhotoUpload(file);
+      }
+    };
+    fileInput.click();
   };
 
   // Options for dropdowns
@@ -166,7 +215,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       case 1:
         return (
           <div className="add-client-content">
-            <ProfilePhotoUpload onUpload={handlePhotoUpload} />
+            <ProfilePhotoUpload 
+              onUpload={handlePhotoUpload}
+              currentImageUrl={currentProfileImageUrl}
+              defaultText="Update Profile Photo"
+            />
             <div className="form-fields-grid">
               <InputField
                 label="Employee ID *"
@@ -290,6 +343,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                     alt="Employee"
                     className="company-logo"
                   />
+                ) : currentProfileImageUrl ? (
+                  <img
+                    src={currentProfileImageUrl}
+                    alt="Employee"
+                    className="company-logo"
+                  />
                 ) : (
                   <div className="default-company-logo">
                     {formData.employeeName?.charAt(0)?.toUpperCase() || 'E'}
@@ -335,13 +394,13 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const getStepTitle = () => {
     switch (currentStep) {
       case 1:
-        return "Basic Information";
+        return "Edit Basic Information";
       case 2:
-        return "Employment Details";
+        return "Edit Employment Details";
       case 3:
-        return "Review Employee Information";
+        return "Review Updated Information";
       default:
-        return "Add New Employee";
+        return "Edit Employee";
     }
   };
 
@@ -381,7 +440,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               onClick={handleFinish}
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Adding Employee..." : "Finish"}
+              {isSubmitting ? "Updating Employee..." : "Update"}
             </button>
           )}
         </div>
@@ -390,4 +449,4 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   );
 }
 
-export default AddEmployeeModal;
+export default EditEmployeeModal;

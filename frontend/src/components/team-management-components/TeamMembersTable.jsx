@@ -1,9 +1,13 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import "./TeamMembersTable.css";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddEmployeeModal from "./AddEmployeeModal";
+import EditEmployeeModal from "./EditEmployeeModal";
 import FilterDropdown from "../FilterDropdown";
+import employeeService from "../../services/EmployeeService";
+import config from "../../config/config";
+
 // SVG Components (reusing from ClientsTable)
 const UserPlusIcon = () => (
   <svg
@@ -115,132 +119,183 @@ const DeleteIcon = () => (
     />
   </svg>
 );
-// Team members data
-const teamData = [
-  {
-    id: 1,
-    employeeName: "Ramesh Mohan",
-    email: "felicia.reid@example.com",
-    attendance: "On Site",
-    role: "Sales Executive",
-    assignedProject: "Maersk",
-    projectDescription: "Shipment of Heavy Metal",
-    phoneNumber: "+91 984 483 3947",
-  },
-  {
-    id: 2,
-    employeeName: "Ramesh Mohan",
-    email: "michael.mitc@example.com",
-    attendance: "Leave",
-    role: "Sales Executive",
-    assignedProject: "AS Traders",
-    projectDescription: "Proposal for a new route reg..",
-    phoneNumber: "+91 984 483 3947",
-  },
-  {
-    id: 3,
-    employeeName: "Ramesh Mohan",
-    email: "tim.jennings@example.com",
-    attendance: "On Site",
-    role: "Sales Manager",
-    assignedProject: "Temu Intl",
-    projectDescription: "GST Processing for Temu In..",
-    phoneNumber: "+91 984 483 3947",
-  },
-  {
-    id: 4,
-    employeeName: "Ramesh Mohan",
-    email: "nathan.roberts@example.com",
-    attendance: "On Site",
-    role: "Sales Executive",
-    assignedProject: "Maersk",
-    projectDescription: "Shipment of Heavy Metal",
-    phoneNumber: "+91 984 483 3947",
-  },
-  {
-    id: 5,
-    employeeName: "Ramesh Mohan",
-    email: "deanna.curtis@example.com",
-    attendance: "Leave",
-    role: "Sales Manager",
-    assignedProject: "AS Traders",
-    projectDescription: "Proposal for a new route reg..",
-    phoneNumber: "+91 984 483 3947",
-  },
-  {
-    id: 6,
-    employeeName: "Ramesh Mohan",
-    email: "sara.cruz@example.com",
-    attendance: "On Site",
-    role: "Sales Executive",
-    assignedProject: "Maersk",
-    projectDescription: "Shipment of Heavy Metal",
-    phoneNumber: "+91 984 483 3947",
-  },
-];
+
 function TeamMembersTable() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState(null);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
+  const [employeeToEdit, setEmployeeToEdit] = useState(null);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const filterButtonRef = useRef(null);
-  const handleEdit = (id) => {
-    console.log("Edit team member with id:", id);
+
+  // Fetch employees from API
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const employeesData = await employeeService.getEmployees();
+      console.log("Fetched employees:", employeesData);
+      setEmployees(employeesData || []);
+    } catch (err) {
+      console.error("Error fetching employees:", err);
+      setError("Failed to load employees. Please try again.");
+      setEmployees([]);
+    } finally {
+      setLoading(false);
+    }
   };
-  const handleDelete = (id) => {
-    const member = teamData.find(m => m.id === id);
-    setMemberToDelete(member);
+
+  const handleEdit = (employee) => {
+    setEmployeeToEdit(employee);
+    setIsEditEmployeeModalOpen(true);
+  };
+
+  const handleDelete = (employee) => {
+    setMemberToDelete(employee);
     setIsDeleteModalOpen(true);
   };
-  const handleDeleteConfirm = () => {
-    console.log("Delete team member with id:", memberToDelete?.id);
-    setIsDeleteModalOpen(false);
-    setMemberToDelete(null);
+
+  const handleDeleteConfirm = async () => {
+    try {
+      if (memberToDelete) {
+        await employeeService.deleteEmployee(memberToDelete._id || memberToDelete.id);
+        // Refresh the employees list
+        await fetchEmployees();
+      }
+    } catch (err) {
+      console.error("Error deleting employee:", err);
+      setError("Failed to delete employee. Please try again.");
+    } finally {
+      setIsDeleteModalOpen(false);
+      setMemberToDelete(null);
+    }
   };
+
   const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
     setMemberToDelete(null);
   };
+
   const handleAddEmployee = () => {
     setIsAddEmployeeModalOpen(true);
   };
+
   const handleAddEmployeeClose = () => {
     setIsAddEmployeeModalOpen(false);
   };
-  const handleAddEmployeeSubmit = (formData) => {
-    console.log("New employee data:", formData);
+
+  const handleEditEmployeeClose = () => {
+    setIsEditEmployeeModalOpen(false);
+    setEmployeeToEdit(null);
   };
+
+  const handleAddEmployeeSubmit = async (formData) => {
+    try {
+      // Refresh the employees list after adding
+      await fetchEmployees();
+    } catch (err) {
+      console.error("Error refreshing employees after add:", err);
+    }
+  };
+
+  const handleEditEmployeeSubmit = async (formData) => {
+    try {
+      // Refresh the employees list after editing
+      await fetchEmployees();
+    } catch (err) {
+      console.error("Error refreshing employees after edit:", err);
+    }
+  };
+
   const handleFilterClick = (event) => {
     if (filterButtonRef.current) {
       const rect = filterButtonRef.current.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom + 8,
-        left: rect.left - 200 // Adjust to align dropdown properly
+        left: rect.left - 200
       });
     }
     setIsFilterDropdownOpen(!isFilterDropdownOpen);
   };
+
   const handleFilterDropdownClose = () => {
     setIsFilterDropdownOpen(false);
   };
+
   const handleFilterSelect = (option) => {
     console.log("Filter selected:", option);
   };
-  const filteredData = teamData.filter((member) => {
+
+  const filteredData = employees.filter((member) => {
     let matchesFilter = true;
     if (activeFilter === "Active") {
       matchesFilter = member.attendance !== "Leave";
     } else if (activeFilter === "Inactive") {
       matchesFilter = member.attendance === "Leave";
     }
+    
     const matchesSearch =
-      member.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchTerm.toLowerCase());
+      (member.employeeName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (member.emailId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (member.role || "").toLowerCase().includes(searchTerm.toLowerCase());
+    
     return matchesFilter && matchesSearch;
   });
+
+  const getProjectsDisplay = (assignedProjects) => {
+    if (!assignedProjects || assignedProjects.length === 0) {
+      return { main: "No Projects", description: "Not assigned" };
+    }
+    
+    if (Array.isArray(assignedProjects)) {
+      const main = assignedProjects[0];
+      const description = assignedProjects.length > 1 
+        ? `+${assignedProjects.length - 1} more projects` 
+        : "Single project assigned";
+      return { main, description };
+    }
+    
+    return { main: assignedProjects, description: "Project assigned" };
+  };
+
+  if (loading) {
+    return (
+      <div className="clients-table-container">
+        <div style={{ padding: "40px", textAlign: "center" }}>
+          <p>Loading employees...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="clients-table-container">
+        <div style={{ padding: "40px", textAlign: "center" }}>
+          <p style={{ color: "#ED5E56" }}>{error}</p>
+          <button 
+            onClick={fetchEmployees}
+            className="primary-button"
+            style={{ marginTop: "16px" }}
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="clients-table-container">
       <div className="table-header-section">
@@ -278,7 +333,7 @@ function TeamMembersTable() {
             <div className="search-container">
               <input
                 type="text"
-                placeholder="Search"
+                placeholder="Search employees..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="search-input"
@@ -295,149 +350,190 @@ function TeamMembersTable() {
           </div>
         </div>
       </div>
-      <div className="table-section">
-        <div className="table-wrapper">
-          <div className="table-columns">
-            {/* Employee Name Column */}
-            <div className="table-column company-column">
-              <div className="table-header">
-                <div className="table-header-cell">
-                  <div className="header-content">
-                    <span className="header-text">Employee Name</span>
-                    <SortIcon />
+      
+      {filteredData.length === 0 ? (
+        <div style={{ padding: "40px", textAlign: "center" }}>
+          <p>No employees found.</p>
+          {searchTerm && (
+            <p style={{ color: "#8C8E90", fontSize: "14px" }}>
+              Try adjusting your search criteria.
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="table-section">
+            <div className="table-wrapper">
+              <div className="table-columns">
+                {/* Employee Name Column */}
+                <div className="table-column company-column">
+                  <div className="table-header">
+                    <div className="table-header-cell">
+                      <div className="header-content">
+                        <span className="header-text">Employee Name</span>
+                        <SortIcon />
+                      </div>
+                    </div>
                   </div>
+                  {filteredData.map((member) => (
+                    <Link  
+                      key={member._id || member.id} 
+                      to={`/teammanagement_salesleads/${member._id || member.id}`} 
+                      className="table-cell company-cell no-link-style"
+                    >
+                      <div className="avatar">
+                    {member.profilePhoto ? (
+                      <img
+                        src={`${config.API_BASE_URL.replace('/api', '')}${member.profilePhoto}`}
+                        alt={`${member.companyName} profile`}
+                        className="client-profile-image"
+                      />
+                    ) : (
+                      <div className="avatar">
+                        {member.employeeName ? member.employeeName.charAt(0).toUpperCase() : 'E'}
+                      </div>
+                          )}
+                       </div>
+                      <div className="companyinfo">
+                        <div className="company-name">{member.employeeName || 'Unknown'}</div>
+                        <div className="company-email">{member.role || 'No Role'}</div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                
+                {/* Attendance Column */}
+                <div className="table-column type-column">
+                  <div className="table-header">
+                    <div className="table-header-cell">
+                      <div className="header-content">
+                        <span className="header-text">Attendance</span>
+                        <SortIcon />
+                      </div>
+                    </div>
+                  </div>
+                  {filteredData.map((member) => (
+                    <div key={member._id || member.id} className="table-cell type-cell">
+                      <div className={`type-chip ${(member.attendance || 'onsite').toLowerCase().replace(' ', '')}`}>
+                        <span className="chip-text">{member.attendance || 'Onsite'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Email Column */}
+                <div className="table-column assigned-column">
+                  <div className="table-header">
+                    <div className="table-header-cell">
+                      <div className="header-content">
+                        <span className="header-text">Email ID</span>
+                        <SortIcon />
+                      </div>
+                    </div>
+                  </div>
+                  {filteredData.map((member) => (
+                    <div key={member._id || member.id} className="table-cell assigned-cell">
+                      <div className="assigned-info">
+                        <div className="assigned-name">{member.emailId || 'No Email'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Phone Number Column */}
+                <div className="table-column categories-column">
+                  <div className="table-header">
+                    <div className="table-header-cell">
+                      <div className="header-content">
+                        <span className="header-text">Phone Number</span>
+                      </div>
+                    </div>
+                  </div>
+                  {filteredData.map((member) => (
+                    <div key={member._id || member.id} className="table-cell categories-cell">
+                      <div className="category-info">
+                        <div className="category-text">{member.mobile || 'No Phone'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Assigned Project Column */}
+                <div className="table-column phone-column">
+                  <div className="table-header">
+                    <div className="table-header-cell">
+                      <div className="header-content">
+                        <span className="header-text">Assigned Project</span>
+                        <SortIcon />
+                      </div>
+                    </div>
+                  </div>
+                  {filteredData.map((member) => {
+                    const projectDisplay = getProjectsDisplay(member.assignedProjects);
+                    return (
+                      <div key={member._id || member.id} className="table-cell phone-cell">
+                        <div className="phone-info">
+                          <div className="phone-text">{projectDisplay.main}</div>
+                          <div className="company-email">{projectDisplay.description}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Edit Actions Column */}
+                <div className="table-column edit-actions-column">
+                  <div className="table-header">
+                    <div className="table-header-cell"></div>
+                  </div>
+                  {filteredData.map((member) => (
+                    <div key={member._id || member.id} className="table-cell edit-actions-cell">
+                      <button
+                        className="action-button edit-button"
+                        onClick={() => handleEdit(member)}
+                        aria-label="Edit team member"
+                      >
+                        <EditIcon />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Delete Actions Column */}
+                <div className="table-column delete-actions-column">
+                  <div className="table-header">
+                    <div className="table-header-cell"></div>
+                  </div>
+                  {filteredData.map((member) => (
+                    <div key={member._id || member.id} className="table-cell delete-actions-cell">
+                      <button
+                        className="action-button delete-button"
+                        onClick={() => handleDelete(member)}
+                        aria-label="Delete team member"
+                      >
+                        <DeleteIcon />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
-              {filteredData.map((member) => (
-
-                <Link  key={member.id} to="/teammanagement_salesleads" className="table-cell company-cell no-link-style">
-                  <div className="avatar"></div>
-                  <div className="companyinfo">
-                    <div className="company-name">{member.employeeName}</div>
-                    <div className="company-email">{member.role}</div>
-                  </div>
-                </Link>
-
-              ))}
-            </div>
-            {/* Attendance Column */}
-            <div className="table-column type-column">
-              <div className="table-header">
-                <div className="table-header-cell">
-                  <div className="header-content">
-                    <span className="header-text">Attendance</span>
-                    <SortIcon />
-                  </div>
-                </div>
-              </div>
-              {filteredData.map((member) => (
-                <div key={member.id} className="table-cell type-cell">
-                  <div className={`type-chip ${member.attendance.toLowerCase().replace(' ', '')}`}>
-                    <span className="chip-text">{member.attendance}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Email Column */}
-            <div className="table-column assigned-column">
-              <div className="table-header">
-                <div className="table-header-cell">
-                  <div className="header-content">
-                    <span className="header-text">Email ID</span>
-                    <SortIcon />
-                  </div>
-                </div>
-              </div>
-              {filteredData.map((member) => (
-                <div key={member.id} className="table-cell assigned-cell">
-                  <div className="assigned-info">
-                    <div className="assigned-name">{member.email}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Phone Number Column */}
-            <div className="table-column categories-column">
-              <div className="table-header">
-                <div className="table-header-cell">
-                  <div className="header-content">
-                    <span className="header-text">Phone Number</span>
-                  </div>
-                </div>
-              </div>
-              {filteredData.map((member) => (
-                <div key={member.id} className="table-cell categories-cell">
-                  <div className="category-info">
-                    <div className="category-text">{member.phoneNumber}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Assigned Project Column */}
-            <div className="table-column phone-column">
-              <div className="table-header">
-                <div className="table-header-cell">
-                  <div className="header-content">
-                    <span className="header-text">Assigned Project</span>
-                    <SortIcon />
-                  </div>
-                </div>
-              </div>
-              {filteredData.map((member) => (
-                <div key={member.id} className="table-cell phone-cell">
-                  <div className="phone-info">
-                    <div className="phone-text">{member.assignedProject}</div>
-                    <div className="company-email">{member.projectDescription}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Edit Actions Column */}
-            <div className="table-column edit-actions-column">
-              <div className="table-header">
-                <div className="table-header-cell"></div>
-              </div>
-              {filteredData.map((member) => (
-                <div key={member.id} className="table-cell edit-actions-cell">
-                  <button
-                    className="action-button edit-button"
-                    onClick={() => handleEdit(member.id)}
-                    aria-label="Edit team member"
-                  >
-                    <EditIcon />
-                  </button>
-                </div>
-              ))}
-            </div>
-            {/* Delete Actions Column */}
-            <div className="table-column delete-actions-column">
-              <div className="table-header">
-                <div className="table-header-cell"></div>
-              </div>
-              {filteredData.map((member) => (
-                <div key={member.id} className="table-cell delete-actions-cell">
-                  <button
-                    className="action-button delete-button"
-                    onClick={() => handleDelete(member.id)}
-                    aria-label="Delete team member"
-                  >
-                    <DeleteIcon />
-                  </button>
-                </div>
-              ))}
             </div>
           </div>
-        </div>
-      </div>
-      <div className="pagination-section">
-        <button className="pagination-button">
-          <span>Previous</span>
-        </button>
-        <span className="page-info">Page 1 of 10</span>
-        <button className="pagination-button">
-          <span>Next</span>
-        </button>
-      </div>
+          
+          <div className="pagination-section">
+            <button className="pagination-button">
+              <span>Previous</span>
+            </button>
+            <span className="page-info">
+              Page 1 of {Math.ceil(filteredData.length / 10) || 1}
+            </span>
+            <button className="pagination-button">
+              <span>Next</span>
+            </button>
+          </div>
+        </>
+      )}
+      
       <DeleteModal
         isOpen={isDeleteModalOpen}
         onClose={handleDeleteCancel}
@@ -445,11 +541,20 @@ function TeamMembersTable() {
         title={`Delete ${memberToDelete?.employeeName}?`}
         description={`Are you sure you want to delete ${memberToDelete?.employeeName}? This action cannot be undone.`}
       />
+      
       <AddEmployeeModal
         isOpen={isAddEmployeeModalOpen}
         onClose={handleAddEmployeeClose}
         onSubmit={handleAddEmployeeSubmit}
       />
+
+      <EditEmployeeModal
+        isOpen={isEditEmployeeModalOpen}
+        onClose={handleEditEmployeeClose}
+        onSubmit={handleEditEmployeeSubmit}
+        employee={employeeToEdit}
+      />
+
       <FilterDropdown
         isOpen={isFilterDropdownOpen}
         onClose={handleFilterDropdownClose}
@@ -459,4 +564,5 @@ function TeamMembersTable() {
     </div>
   );
 }
+
 export default TeamMembersTable;
