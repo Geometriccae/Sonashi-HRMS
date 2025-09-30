@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const assignEventSchema = require('./AssignEvent');
 
 const employeeSchema = new mongoose.Schema({
   employeeId: { type: String, required: true, unique: true }, // unique employee code/ID
@@ -24,6 +25,8 @@ const employeeSchema = new mongoose.Schema({
   },
 
   assignedProjects: [{ type: String }], // multiple projects can be assigned
+
+   events: [assignEventSchema] 
 
 }, { timestamps: true });
 

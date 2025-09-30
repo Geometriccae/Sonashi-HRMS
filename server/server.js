@@ -46,6 +46,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/documents', require('./routes/documentRoutes'));
 app.use('/api/employees', employeeRoutes);
+app.use('/api/employeedocuments', require('./routes/employeeDocumentRoutes'));
 //  Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend server is running!', timestamp: new Date() });

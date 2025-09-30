@@ -2,37 +2,37 @@
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
-const Document = require("../models/Documents");
+const Document = require("../models/EmployeeDocuments");
 
 const router = express.Router();
 
 // Configure multer for file uploads to server/uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, "../uploads/clientdocuments")),
+  destination: (req, file, cb) => cb(null, path.join(__dirname, "../uploads/employeedocuments")),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });
 
-// Get all documents for a client
-router.get("/:clientId", async (req, res) => {
+// Get all documents for a employee
+router.get("/:employeeId", async (req, res) => {
   try {
-    const documents = await Document.find({ clientId: req.params.clientId });
+    const documents = await Document.find({ employeeId: req.params.employeeId });
     res.json(documents);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Upload document for client
-router.post("/:clientId", upload.single("file"), async (req, res) => {
+// Upload document for employee
+router.post("/:employeeId", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
     const newDoc = new Document({
-      clientId: req.params.clientId,
+      employeeId: req.params.employeeId,
       fileName: req.file.originalname,
-      filePath: `/uploads/clientdocuments/${path.basename(req.file.destination) === 'uploads' ? '' : path.basename(req.file.destination) + '/'}${req.file.filename}`.replace('//','/'),
+      filePath: `/uploads/employeedocuments/${path.basename(req.file.destination) === 'uploads' ? '' : path.basename(req.file.destination) + '/'}${req.file.filename}`.replace('//','/'),
       fileType: req.file.mimetype,
       fileSize: req.file.size,
       uploadedBy: req.body.uploadedBy,

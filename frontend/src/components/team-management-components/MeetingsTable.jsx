@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import format from 'date-fns/format';
 import parse from 'date-fns/parse';
@@ -11,6 +11,9 @@ import isSameMonth from 'date-fns/isSameMonth';
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import styles from "./MeetingsTable.module.css";
 import DateRangePickerModal from "../DateRangePickerModal";
+import EditEventModal from "./EditAssignTaskModal";
+import DeleteModal from "../delete-modal/DeleteModal";
+import { getEventsByEmployeeId, deleteEvent } from "../../services/AssignEventService";
 
 const locales = {
   'en-US': require('date-fns/locale/en-US'),
@@ -24,13 +27,21 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-const MeetingsTable = () => {
+const MeetingsTable = ({employeeId, key: calendarKey}) => {
   const [view, setView] = useState(Views.MONTH);
   const [date, setDate] = useState(new Date());
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
   const [dateRange, setDateRange] = useState({ start: new Date(), end: new Date() });
+  const [events, setEvents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [eventToEdit, setEventToEdit] = useState(null);
+  const [eventToDelete, setEventToDelete] = useState(null);
 
+
+  // Check if current view shows today's date
   const isCurrentPeriod = useMemo(() => {
     const now = new Date();
     switch (view) {
@@ -45,8 +56,55 @@ const MeetingsTable = () => {
     }
   }, [view, date]);
 
-  const events = [
-    // ...your events array...
+  // Fetch events from backend
+  useEffect(() => {
+    const fetchEvents = async () => {
+      if (!employeeId) return;
+
+      try {
+        setIsLoading(true);
+        const fetchedEvents = await getEventsByEmployeeId(employeeId);
+
+        // Transform backend events to react-big-calendar format
+        const transformedEvents = fetchedEvents.map(event => {
+          // Create proper start date from date and time
+          let startDate = new Date(event.date);
+          if (event.time) {
+            const [hours, minutes] = event.time.split(':');
+            startDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          }
+
+          // Create end date (default 2 hours duration)
+          const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+
+          return {
+            id: event._id || event.id,
+            title: event.eventName,
+            start: startDate,
+            end: endDate,
+            color: event.color || '#007AFF',
+            eventType: event.eventType,
+            notes: event.notes,
+            link: event.link,
+            assignedTeamMember: event.assignedTeamMember
+          };
+        });
+
+        setEvents(transformedEvents);
+      } catch (error) {
+        console.error('Error fetching events:', error);
+        // Fallback to sample events for demonstration
+        setEvents(sampleEvents);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [employeeId, calendarKey]); // Add calendarKey to dependencies for refresh
+
+  // Sample events for fallback/demonstration
+  const sampleEvents = [
     {
       id: 1,
       title: "General with dev team on Issue #47",
@@ -151,6 +209,17 @@ const MeetingsTable = () => {
 
   ];
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="calendar-container">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+          <div>Loading events...</div>
+        </div>
+      </div>
+    );
+  }
+
   const handleNavigate = (newDate) => {
     setDate(newDate);
   };
@@ -165,6 +234,96 @@ const MeetingsTable = () => {
 
   const closeMeetingModal = () => {
     setSelectedMeeting(null);
+  };
+
+  const handleEditEvent = () => {
+    setEventToEdit(selectedMeeting);
+    setIsEditModalOpen(true);
+    setSelectedMeeting(null);
+  };
+
+  const handleDeleteEvent = () => {
+    setEventToDelete(selectedMeeting);
+    setIsDeleteModalOpen(true);
+    setSelectedMeeting(null);
+  };
+
+  const handleEventUpdated = (updatedEvent) => {
+    // Refresh events after update
+    const fetchEvents = async () => {
+      try {
+        const fetchedEvents = await getEventsByEmployeeId(employeeId);
+        const transformedEvents = fetchedEvents.map(event => {
+          let startDate = new Date(event.date);
+          if (event.time) {
+            const [hours, minutes] = event.time.split(':');
+            startDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          }
+          const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+
+          return {
+            id: event._id || event.id,
+            title: event.eventName,
+            start: startDate,
+            end: endDate,
+            color: event.color || '#007AFF',
+            eventType: event.eventType,
+            notes: event.notes,
+            link: event.link,
+            assignedTeamMember: event.assignedTeamMember
+          };
+        });
+        setEvents(transformedEvents);
+      } catch (error) {
+        console.error('Error refreshing events:', error);
+      }
+    };
+    fetchEvents();
+    setIsEditModalOpen(false);
+  };
+
+  const confirmDeleteEvent = async () => {
+    if (!eventToDelete) return;
+
+    try {
+      await deleteEvent(employeeId, eventToDelete.id);
+      // Refresh events after deletion
+      const fetchEvents = async () => {
+        try {
+          const fetchedEvents = await getEventsByEmployeeId(employeeId);
+          const transformedEvents = fetchedEvents.map(event => {
+            let startDate = new Date(event.date);
+            if (event.time) {
+              const [hours, minutes] = event.time.split(':');
+              startDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+            }
+            const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+
+            return {
+              id: event._id || event.id,
+              title: event.eventName,
+              start: startDate,
+              end: endDate,
+              color: event.color || '#007AFF',
+              eventType: event.eventType,
+              notes: event.notes,
+              link: event.link,
+              assignedTeamMember: event.assignedTeamMember
+            };
+          });
+          setEvents(transformedEvents);
+        } catch (error) {
+          console.error('Error refreshing events:', error);
+        }
+      };
+      fetchEvents();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event. Please try again.');
+    } finally {
+      setIsDeleteModalOpen(false);
+      setEventToDelete(null);
+    }
   };
 
   const handlePeriodClick = () => {
@@ -212,6 +371,8 @@ const MeetingsTable = () => {
     return {
       style: {
         backgroundColor: isCurrentDate ? 'white' : 'white',
+        // borderRight: '2px solid #F5F6F7',
+        // borderBottom: '2px solid #F5F6F7'
       }
     };
   };
@@ -325,6 +486,8 @@ const MeetingsTable = () => {
         view={view}
         onView={handleView}
         date={date}
+         min={new Date(0, 0, 0, 9, 0, 0)} // Set minimum time to 9:00 AM
+         max={new Date(0, 0, 0, 23, 0, 0)} // Set maximum time to 8:00 PM
         onNavigate={handleNavigate}
         onSelectEvent={handleSelectEvent}
         eventPropGetter={eventStyleGetter}
@@ -342,20 +505,23 @@ const MeetingsTable = () => {
                 <span>Meeting</span>
               </div>
               <div className={styles["modal-actions"]}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" onClick={handleEditEvent} style={{cursor: 'pointer'}}>
                   <path d="M8.00031 13.3332H14.0003M10.0003 3.33316L12.0003 5.33316M10.9176 2.41449C11.183 2.1491 11.543 2 11.9183 2C12.2936 2 12.6536 2.1491 12.919 2.41449C13.1844 2.67988 13.3335 3.03983 13.3335 3.41516C13.3335 3.79048 13.1844 4.15043 12.919 4.41582L4.91231 12.4232C4.75371 12.5818 4.55766 12.6978 4.34231 12.7605L2.42764 13.3192C2.37028 13.3359 2.30947 13.3369 2.25158 13.3221C2.1937 13.3072 2.14086 13.2771 2.09861 13.2349C2.05635 13.1926 2.02624 13.1398 2.01141 13.0819C1.99658 13.024 1.99758 12.9632 2.01431 12.9058L2.57298 10.9912C2.63579 10.776 2.75181 10.5802 2.91031 10.4218L10.9176 2.41449Z" stroke="#FF9500" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" onClick={handleDeleteEvent} style={{cursor: 'pointer'}}>
                   <path d="M2 3.99967H14M12.6667 3.99967V13.333C12.6667 13.9997 12 14.6663 11.3333 14.6663H4.66667C4 14.6663 3.33333 13.9997 3.33333 13.333V3.99967M5.33333 3.99967V2.66634C5.33333 1.99967 6 1.33301 6.66667 1.33301H9.33333C10 1.33301 10.6667 1.99967 10.6667 2.66634V3.99967M6.66667 7.33301V11.333M9.33333 7.33301V11.333" stroke="#ED5E56" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" onClick={closeMeetingModal}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" onClick={closeMeetingModal} style={{cursor: 'pointer'}}>
                   <path d="M12 4L4 12M4 4L12 12" stroke="#007AFF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
             </div>
             <div className={styles["modal-body"]}>
               <div className={styles["meeting-title"]}>{selectedMeeting.title}</div>
-              <div className={styles["meeting-notes"]}>No Notes Added</div>
+              <div className={styles["meeting-notes"]}>{selectedMeeting.notes || 'No Notes Added'}</div>
+              {selectedMeeting.assignedTeamMember && (
+                <div className="meeting-member">Assigned to: {selectedMeeting.assignedTeamMember}</div>
+              )}
             </div>
             <div className={styles["color-selector"]}>
               <div className={`${styles["color-option"]} ${styles["active"]}`} style={{ backgroundColor: '#FF9500' }} />
@@ -373,6 +539,22 @@ const MeetingsTable = () => {
         onApplyDateRange={handleApplyDateRange}
         initialStartDate={dateRange.start}
         initialEndDate={dateRange.end}
+      />
+
+      <EditEventModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        employeeId={employeeId}
+        eventData={eventToEdit}
+        onEventUpdated={handleEventUpdated}
+      />
+
+      <DeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDeleteEvent}
+        title="Delete this Event?"
+        description="Are you sure you want to delete this event? This action cannot be undone."
       />
     </div>
   );

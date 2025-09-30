@@ -1,11 +1,10 @@
-import React, { useState } from "react";
-import styles from "./AssignTaskModal.module.css";
-import InputField from "../InputField";
+import React, { useState, useEffect } from "react";
+import "../../components/sales-and-leads/CreateEventModal.css"; // Reusing the same styles
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
-import { createEvent } from "../../services/AssignEventService"; // We'll create this
+import { updateEvent } from "../../services/AssignEventService";
 
-function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
+function EditAssignTaskModal({ isOpen, onClose, employeeId, eventData, onEventUpdated }) {
   const [formData, setFormData] = useState({
     eventName: "",
     eventType: "",
@@ -19,6 +18,26 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Populate form data when eventData changes
+  useEffect(() => {
+    if (eventData && isOpen) {
+      const eventDate = new Date(eventData.start);
+      const timeString = eventDate.toTimeString().slice(0, 5); // HH:MM format
+      const dateString = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+      setFormData({
+        eventName: eventData.title || "",
+        eventType: eventData.eventType || "",
+        date: dateString,
+        time: timeString,
+        assignedTeamMember: eventData.assignedTeamMember || "",
+        notes: eventData.notes || "",
+        link: eventData.link || "",
+        color: eventData.color || "#FF9500",
+      });
+    }
+  }, [eventData, isOpen]);
 
   if (!isOpen) return null;
 
@@ -48,31 +67,24 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
 
     setIsLoading(true);
     try {
-      // Parse yyyy-mm-dd as local date to avoid timezone shifting
-      let eventDate = null;
-      if (formData.date) {
-        const [y, m, d] = formData.date.split("-").map((v) => parseInt(v, 10));
-        eventDate = new Date(y, (m || 1) - 1, d || 1);
-      }
-
-      const eventData = {
+      const updatedEventData = {
         ...formData,
         employeeId,
-        date: eventDate,
+        date: new Date(formData.date),
         time: formData.time,
       };
 
-      const createdEvent = await createEvent(employeeId, eventData);
-      console.log("Event created:", createdEvent);
+      const updatedEvent = await updateEvent(employeeId, eventData.id, updatedEventData);
+      console.log("Event updated:", updatedEvent);
 
-      if (onEventCreated) {
-        onEventCreated(createdEvent);
+      if (onEventUpdated) {
+        onEventUpdated(updatedEvent);
       }
 
       onClose();
     } catch (error) {
-      console.error("Error creating event:", error);
-      alert("Failed to create event. Please try again.");
+      console.error("Error updating event:", error);
+      alert("Failed to update event. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -86,7 +98,7 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
     setIsDatePickerOpen(false);
   };
 
-  const handleDateSelect = (selectedDate) => {
+   const handleDateSelect = (selectedDate) => {
     // Format as local yyyy-mm-dd (no timezone shift)
     const y = selectedDate.getFullYear();
     const m = String(selectedDate.getMonth() + 1).padStart(2, "0");
@@ -96,7 +108,7 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
     setIsDatePickerOpen(false);
   };
 
-  const formatDateForDisplay = (dateString) => {
+const formatDateForDisplay = (dateString) => {
     if (!dateString) return "";
     // Expect yyyy-mm-dd, render dd/mm/yyyy
     const [y, m, d] = dateString.split("-");
@@ -113,9 +125,9 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
       <div className="create-event-modal">
         <div className="modal-event-content">
           <div className="modal-eventheader">
-            <h2 className="modal-title">Create Event</h2>
+            <h2 className="modal-title">Edit Event</h2>
             <p className="modal-subtitle">
-              Select your event type, add labels and links.
+              Update your event details, labels and links.
             </p>
           </div>
 
@@ -126,7 +138,7 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Eg. Client Meeting"
+                  placeholder="Eg. Employee Meeting"
                   value={formData.eventName}
                   onChange={(e) =>
                     handleInputChange("eventName", e.target.value)
@@ -269,47 +281,71 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
               </div>
             </div>
 
-            <div className="color-selector">
+            {/* <div className="color-selector">
+              <label className="field-label">Event Color</label>
               <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
                 {["#FF9500", "#007AFF", "#34C759", "#30B0C7"].map((color) => (
-                  <label
+                  <div
                     key={color}
                     style={{
-                      display: "inline-block",
                       width: "24px",
                       height: "24px",
                       borderRadius: "50%",
-                      border: `3px solid ${
-                        formData.color === color ? "#000" : color
-                      }`,
+                      backgroundColor: color,
+                      border:
+                        formData.color === color
+                          ? "2px solid #000"
+                          : "2px solid transparent",
                       cursor: "pointer",
-                      position: "relative",
                     }}
-                  >
-                    <input
-                      type="radio"
-                      name="eventColor"
-                      value={color}
-                      style={{ display: "none" }}
-                      checked={formData.color === color}
-                      onChange={() => handleColorSelect(color)}
-                    />
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: "50%",
-                        backgroundColor:
-                          formData.color === color ? color : "transparent",
-                        transition: "0.2s",
-                      }}
-                    />
-                  </label>
+                    onClick={() => handleColorSelect(color)}
+                  />
                 ))}
               </div>
-            </div>
+            </div> */}
+
+            <div className="color-selector">
+  <label className="field-label">Event Color</label>
+  <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+    {["#FF9500", "#007AFF", "#34C759", "#30B0C7"].map((color) => (
+      <label
+        key={color}
+        style={{
+          display: "inline-block",
+          width: "24px",
+          height: "24px",
+          borderRadius: "50%",
+          border: `3px solid ${formData.color === color ? "#000" : color}`,
+          cursor: "pointer",
+          position: "relative",
+        }}
+      >
+        <input
+          type="radio"
+          name="eventColor"
+          value={color}
+          style={{ display: "none" }}
+          checked={formData.color === color}   // pre-selects saved color
+          onChange={() => handleColorSelect(color)}
+        />
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: "50%",
+            backgroundColor: formData.color === color ? color : "transparent",
+            transition: "0.2s",
+          }}
+        />
+      </label>
+    ))}
+  </div>
+</div>
+
           </div>
         </div>
+
+
 
         <div className="modal-actions">
           <button
@@ -324,7 +360,7 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
             onClick={handleSubmit}
             disabled={isLoading}
           >
-            {isLoading ? "Creating..." : "Add Event"}
+            {isLoading ? "Updating..." : "Update Event"}
           </button>
         </div>
       </div>
@@ -339,4 +375,4 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
   );
 }
 
-export default AssignTaskModal;
+export default EditAssignTaskModal;

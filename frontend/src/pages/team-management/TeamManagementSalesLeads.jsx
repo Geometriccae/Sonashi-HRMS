@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import styles from "./TeamManagementSalesLeads.module.css";
 import Side from "../sidebar/Sidebar";
 import employeeService from "../../services/EmployeeService";
+import DocumentsService from "../../services/EmployeeDocumentService";
 import EditEmployeeModal from "../../components/team-management-components/EditEmployeeModal";
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
 // import Calendar from "../../components/CalendarComponent";
@@ -12,7 +13,6 @@ import DeleteModal from "../../components/delete-modal/DeleteModal";
 import AssignTaskModal from "../../components/team-management-components/AssignTaskModal";
 import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
-
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -26,27 +26,30 @@ import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
 
-
-
 function TeamManagementSalesLeads() {
-  const [activeTab, setActiveTab] = useState('basicInfo');
+  const [activeTab, setActiveTab] = useState("basicInfo");
   const basicInfoRef = useRef(null);
   const meetingsRef = useRef(null);
   const documentsRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deleteType, setDeleteType] = useState(''); // 'entry' or 'data'
-  const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [deleteType, setDeleteType] = useState(""); // 'entry' or 'data'
+ const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
   // const { employeeId } = useParams();
+
   const { id: employeeId } = useParams();
 
-   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [calendarKey, setCalendarKey] = useState(0); // Force calendar refresh
+  const [documentsKey, setDocumentsKey] = useState(0); // Force documents refresh
 
+  const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
 
   const [username, setUsername] = useState("");
   const [employee, setEmployee] = useState(null);
@@ -81,49 +84,48 @@ function TeamManagementSalesLeads() {
   // };
 
   const fetchEmployeeData = async () => {
-  if (!employeeId) {
-    setError("Employee ID is missing in URL");
-    setLoading(false);
-    return;
-  }
-
-  try {
-    setLoading(true);
-    setError(null);
-
-    console.log("Fetching employee with ID:", employeeId);
-
-    const employeeData = await employeeService.getEmployee(employeeId);
-
-    console.log("Fetched employee data:", employeeData);
-
-    if (!employeeData) {
-      setError("No employee data returned from API");
-      setEmployee(null);
-    } else {
-      setEmployee(employeeData);
+    if (!employeeId) {
+      setError("Employee ID is missing in URL");
+      setLoading(false);
+      return;
     }
-  } catch (err) {
-    console.error("Error fetching employee:", err);
-    setError("Failed to load employee data. Please try again.");
-    setEmployee(null);
-  } finally {
-    setLoading(false);
-  }
-};
 
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log("Fetching employee with ID:", employeeId);
+
+      const employeeData = await employeeService.getEmployee(employeeId);
+
+      console.log("Fetched employee data:", employeeData);
+
+      if (!employeeData) {
+        setError("No employee data returned from API");
+        setEmployee(null);
+      } else {
+        setEmployee(employeeData);
+      }
+    } catch (err) {
+      console.error("Error fetching employee:", err);
+      setError("Failed to load employee data. Please try again.");
+      setEmployee(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const updateIndicatorPosition = () => {
       let activeElement;
       switch (activeTab) {
-        case 'basicInfo':
+        case "basicInfo":
           activeElement = basicInfoRef.current;
           break;
-        case 'meetings':
+        case "meetings":
           activeElement = meetingsRef.current;
           break;
-        case 'documents':
+        case "documents":
           activeElement = documentsRef.current;
           break;
         default:
@@ -132,47 +134,56 @@ function TeamManagementSalesLeads() {
 
       if (activeElement) {
         const rect = activeElement.getBoundingClientRect();
-        const containerRect = activeElement.parentElement.getBoundingClientRect();
+        const containerRect =
+          activeElement.parentElement.getBoundingClientRect();
         setIndicatorStyle({
           width: rect.width,
-          left: rect.left - containerRect.left
+          left: rect.left - containerRect.left,
         });
       }
     };
 
     updateIndicatorPosition();
-    window.addEventListener('resize', updateIndicatorPosition);
+    window.addEventListener("resize", updateIndicatorPosition);
 
     return () => {
-      window.removeEventListener('resize', updateIndicatorPosition);
+      window.removeEventListener("resize", updateIndicatorPosition);
     };
   }, [activeTab]);
 
   const handleDeleteEntry = () => {
-    setDeleteType('entry');
+    setDeleteType("entry");
     setIsDeleteModalOpen(true);
   };
 
   const handleDeleteData = () => {
-    setDeleteType('data');
+    setDeleteType("data");
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deleteType === 'entry') {
-      console.log("Delete Entry confirmed");
-      // Implement delete entry logic here
-    } else if (deleteType === 'data') {
-      console.log("Delete Data confirmed");
-      // Implement delete data logic here
-    }
-    setIsDeleteModalOpen(false);
-    setDeleteType('');
-  };
+  const handleDeleteConfirm = async () => {
+      try {
+        if (deleteType === "entry") {
+          await employeeService.deleteEmployee(employeeId);
+          navigate("/teammanagement");
+          return; // no further cleanup needed, leaving page
+        } else if (deleteType === "data") {
+          // Optional: implement bulk document delete for this client in backend later
+          // For now, simply refresh documents list key
+          setDocumentsKey(prev => prev + 1);
+        }
+      } catch (e) {
+        console.error("Delete failed", e);
+        alert(e.message || "Delete failed");
+      } finally {
+        setIsDeleteModalOpen(false);
+        setDeleteType("");
+      }
+    };
 
   const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
-    setDeleteType('');
+    setDeleteType("");
   };
 
   const handleNewEvent = () => {
@@ -183,10 +194,18 @@ function TeamManagementSalesLeads() {
     setIsCreateEventModalOpen(false);
   };
 
-   const handleEditEmployeeClose = () => {
+  const handleEditEmployeeClose = () => {
     setIsEditEmployeeModalOpen(false);
   };
 
+   const handleEventCreated = (newEvent) => {
+    console.log("Event created successfully:", newEvent);
+    // Force calendar component to refresh by updating its key
+    setCalendarKey(prev => prev + 1);
+    // You can also update local events state if needed
+    setEvents(prev => [...prev, newEvent]);
+  };
+  
   const handleEditEmployeeSubmit = async (updatedEmployee) => {
     try {
       // Update the client data in local state
@@ -206,10 +225,24 @@ function TeamManagementSalesLeads() {
     setIsFileUploadModalOpen(false);
   };
 
-  const handleFileUploadComplete = (files) => {
-    console.log("Files uploaded:", files);
-    // Handle uploaded files here
-    setIsFileUploadModalOpen(false);
+  const handleFileUploadComplete = async (files) => {
+    try {
+      if (!employeeId || !files || files.length === 0) return;
+      // Upload each file sequentially (could be parallel if desired)
+      for (const file of files) {
+        await DocumentsService.uploadForEmployee(employeeId, file, {
+          uploadedBy: "Current User",
+          userRole: "Sales Executive",
+        });
+      }
+      // Refresh documents tab
+      setDocumentsKey(prev => prev + 1);
+    } catch (e) {
+      console.error("Upload failed", e);
+      alert(e.message || "Upload failed");
+    } finally {
+      setIsFileUploadModalOpen(false);
+    }
   };
 
   const handleExportClick = (event) => {
@@ -217,7 +250,7 @@ function TeamManagementSalesLeads() {
       const rect = exportButtonRef.current.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom + 8,
-        left: rect.left
+        left: rect.left,
       });
     }
     setIsDropdownOpen(!isDropdownOpen);
@@ -230,19 +263,19 @@ function TeamManagementSalesLeads() {
   const handleExportOptionSelect = (option) => {
     console.log(`Export as ${option} selected`);
     switch (option) {
-      case 'pdf':
+      case "pdf":
         alert("Exporting as PDF...");
         // Implement PDF export logic here
         break;
-      case 'csv':
+      case "csv":
         alert("Exporting as CSV...");
         // Implement CSV export logic here
         break;
-      case 'txt':
+      case "txt":
         alert("Exporting as TXT...");
         // Implement TXT export logic here
         break;
-      case 'print':
+      case "print":
         alert("Printing document...");
         // Implement print logic here
         window.print();
@@ -252,45 +285,48 @@ function TeamManagementSalesLeads() {
     }
   };
 
- // Render different buttons based on active tab
+  // Render different buttons based on active tab
   const renderButtons = () => {
     switch (activeTab) {
-      case 'basicInfo':
+      case "basicInfo":
         return (
           <div className={styles.row_view5}>
             {/* <button className={`${styles.button_row_view} ${styles.editbutton}`} onClick={() => alert("Edit Data Pressed!")}>
               <span className={`${styles.text3} ${styles.editbuttontext}`}>Edit Data</span>
               <img src={pencillineblue} className={styles.image3} alt="edit"/>
             </button> */}
-              <button
-                          className={`${styles.button_row_view} ${styles.editbutton}`}
-                          onClick={() => setIsEditEmployeeModalOpen(true)}
-                        >
-                          <span className={`${styles.text3} ${styles.editbuttontext}`}>
-                            Edit Data
-                          </span>
-                          <img src={pencillineblue} className={styles.image3} alt="edit" />
-                        </button>
+            <button
+              className={`${styles.button_row_view} ${styles.editbutton}`}
+              onClick={() => setIsEditEmployeeModalOpen(true)}
+            >
+              <span className={`${styles.text3} ${styles.editbuttontext}`}>
+                Edit Data
+              </span>
+              <img src={pencillineblue} className={styles.image3} alt="edit" />
+            </button>
             <button
               ref={exportButtonRef}
               className={styles.button_row_view2}
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={upload} className={styles.image3} alt="export"/>
+              <img src={upload} className={styles.image3} alt="export" />
             </button>
-            <button className={styles.button_row_view3} onClick={handleDeleteEntry}>
+            <button
+              className={styles.button_row_view3}
+              onClick={handleDeleteEntry}
+            >
               <span className={styles.text5}>Delete Entry</span>
-              <img src={deletewhite} className={styles.image3} alt="delete"/>
+              <img src={deletewhite} className={styles.image3} alt="delete" />
             </button>
           </div>
         );
-      case 'meetings':
+      case "meetings":
         return (
           <div className={styles.row_view5}>
             <button className={styles.button_row_view} onClick={handleNewEvent}>
               <span className={styles.text3}>Assign Task</span>
-              <img src={plus} className={styles.image3} alt=""/>
+              <img src={plus} className={styles.image3} alt="" />
             </button>
             <button
               ref={exportButtonRef}
@@ -298,16 +334,19 @@ function TeamManagementSalesLeads() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={upload} className={styles.image3} alt="export"/>
+              <img src={upload} className={styles.image3} alt="export" />
             </button>
           </div>
         );
-      case 'documents':
+      case "documents":
         return (
           <div className={styles.row_view5}>
-            <button className={styles.button_row_view} onClick={handleFileUpload}>
+            <button
+              className={styles.button_row_view}
+              onClick={handleFileUpload}
+            >
               <span className={styles.text3}>Upload</span>
-              <img src={plus} className={styles.image3} alt=""/>
+              <img src={plus} className={styles.image3} alt="" />
             </button>
             <button
               ref={exportButtonRef}
@@ -315,9 +354,12 @@ function TeamManagementSalesLeads() {
               onClick={handleExportClick}
             >
               <span className={styles.text4}>Export</span>
-              <img src={upload} className={styles.image3} alt="export"/>
+              <img src={upload} className={styles.image3} alt="export" />
             </button>
-            <button className={styles.button_row_view3} onClick={handleDeleteData}>
+            <button
+              className={styles.button_row_view3}
+              onClick={handleDeleteData}
+            >
               <span className={styles.text5}>Delete Data</span>
               <img src={deletewhite} className={styles.image3} alt="delete" />
             </button>
@@ -329,86 +371,6 @@ function TeamManagementSalesLeads() {
   };
 
 
-  const documentsData = [
-    {
-      id: 1,
-      fileName: "Cargo Load",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Ramesh Mohan",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "8/21/15",
-    },
-    {
-      id: 2,
-      fileName: "Info Document",
-      fileSize: "56KB",
-      fileType: "document",
-      type: "Extra",
-      uploadedBy: "Gurpreet Singh",
-      userRole: "Sales Executive",
-      filetype: "Document",
-      uploadedDate: "6/19/14",
-    },
-    {
-      id: 3,
-      fileName: "Shipping demo",
-      fileSize: "56KB",
-      fileType: "video",
-      type: "Important",
-      uploadedBy: "Nayantara S",
-      userRole: "Sales Executive",
-      filetype: "Video",
-      uploadedDate: "2/11/12",
-    },
-    {
-      id: 4,
-      fileName: "Cargo Images",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Albin Antony",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "8/16/13",
-    },
-    {
-      id: 5,
-      fileName: "Audio Recording",
-      fileSize: "56KB",
-      fileType: "audio",
-      type: "Extra",
-      uploadedBy: "Priya Warrier",
-      userRole: "Sales Executive",
-      filetype: "Audio",
-      uploadedDate: "4/21/12",
-    },
-    {
-      id: 6,
-      fileName: "Shipment Manifest",
-      fileSize: "56KB",
-      fileType: "document",
-      type: "Important",
-      uploadedBy: "Ganesh R",
-      userRole: "Sales Executive",
-      filetype: "Document",
-      uploadedDate: "3/4/16",
-    },
-    {
-      id: 7,
-      fileName: "Image 031",
-      fileSize: "56KB",
-      fileType: "image",
-      type: "Important",
-      uploadedBy: "Nayantara S",
-      userRole: "Sales Executive",
-      filetype: "Image",
-      uploadedDate: "2/11/12",
-    },
-  ];
-
   return (
     <div className={styles["dashboard-layout"]}>
       <Side />
@@ -418,13 +380,21 @@ function TeamManagementSalesLeads() {
             <div className={styles["dashboard-title"]}>Sales & Leads</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img src={belldot} alt="belldot" className={styles["belldot-icon"]} />
+              <img
+                src={belldot}
+                alt="belldot"
+                className={styles["belldot-icon"]}
+              />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
-                 
-                 <ProfileAvatar size={40} className={styles["profile-picture"]} />
+                  <ProfileAvatar
+                    size={40}
+                    className={styles["profile-picture"]}
+                  />
                   <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
+                    <div className={styles["profile-name"]}>
+                      {username?.toUpperCase()}
+                    </div>
                     <div className={styles["profile-type"]}>Administrator</div>
                   </div>
                 </div>
@@ -439,7 +409,13 @@ function TeamManagementSalesLeads() {
           <div className={styles["breadcrumb"]}>
             <div className={styles["breadcrumb-notactive"]}>Home</div>
             <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-notactive"]} onClick={() => navigate("/teammanagement")}style={{ cursor: "pointer" }}>Team Management</div>
+            <div
+              className={styles["breadcrumb-notactive"]}
+              onClick={() => navigate("/teammanagement")}
+              style={{ cursor: "pointer" }}
+            >
+              Team Management
+            </div>
             <img src={chevrondright} alt="" />
             <div className={styles["breadcrumb-active"]}>
               {loading ? "Loading..." : employee?.employeeName || "Employee"}
@@ -456,8 +432,8 @@ function TeamManagementSalesLeads() {
                     src={arrowleft}
                     className={styles.image}
                     alt="Go Back"
-                   style={{ cursor: "pointer" }}
-                    onClick={() => navigate(-1)} 
+                    style={{ cursor: "pointer" }}
+                    onClick={() => navigate(-1)}
                   />
                   <div className={styles.row_view3}>
                     <div className={styles.row_view4}>
@@ -485,27 +461,34 @@ function TeamManagementSalesLeads() {
                       )} */}
 
                       {employee ? (
-  employee.profilePhoto ? (
-    <img
-      src={`${config.API_BASE_URL.replace('/api', '')}${employee.profilePhoto}`}
-      className={styles.image2}
-      alt={`${employee.employeeName} logo`}
-    />
-  ) : (
-    <div className={styles.defaultCompanyLogo}>
-      {employee.employeeName?.charAt(0)?.toUpperCase() || 'C'}
-    </div>
-  )
-) : (
-  <div className={styles.defaultCompanyLogo}>C</div> // fallback while loading
-)}
+                        employee.profilePhoto ? (
+                          <img
+                            src={`${config.API_BASE_URL.replace("/api", "")}${
+                              employee.profilePhoto
+                            }`}
+                            className={styles.image2}
+                            alt={`${employee.employeeName} logo`}
+                          />
+                        ) : (
+                          <div className={styles.defaultCompanyLogo}>
+                            {employee.employeeName?.charAt(0)?.toUpperCase() ||
+                              "C"}
+                          </div>
+                        )
+                      ) : (
+                        <div className={styles.defaultCompanyLogo}>C</div> // fallback while loading
+                      )}
 
                       <span className={styles.text}>
-                        {loading ? "Loading..." : employee?.employeeName || "Employee Name"}
+                        {loading
+                          ? "Loading..."
+                          : employee?.employeeName || "Employee Name"}
                       </span>
                     </div>
-                    <button className={styles.button}
-                      onClick={()=>alert("Pressed!")}>
+                    <button
+                      className={styles.button}
+                      onClick={() => alert("Pressed!")}
+                    >
                       <span className={styles.text2}>
                         {loading ? "..." : employee?.attendance || "On Site"}
                       </span>
@@ -545,7 +528,7 @@ function TeamManagementSalesLeads() {
                     />
                   </button>
                 </div> */}
-                   {renderButtons()}
+                {renderButtons()}
               </div>
 
               {/* Tab Navigation */}
@@ -553,32 +536,36 @@ function TeamManagementSalesLeads() {
                 <div className={styles.column2}>
                   <span
                     ref={basicInfoRef}
-                    className={`${styles.text6} ${activeTab === 'basicInfo' ? styles.active : ''}`}
-                    onClick={() => setActiveTab('basicInfo')}
+                    className={`${styles.text6} ${
+                      activeTab === "basicInfo" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("basicInfo")}
                   >
                     {"Basic Info"}
                   </span>
                   <span
                     ref={meetingsRef}
-                    className={`${styles.text7} ${activeTab === 'meetings' ? styles.active : ''}`}
-                    onClick={() => setActiveTab('meetings')}
+                    className={`${styles.text7} ${
+                      activeTab === "meetings" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("meetings")}
                   >
                     {"Meetings"}
                   </span>
                   <div
                     ref={documentsRef}
-                    className={`${styles.view2} ${activeTab === 'documents' ? styles.active : ''}`}
-                    onClick={() => setActiveTab('documents')}
+                    className={`${styles.view2} ${
+                      activeTab === "documents" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("documents")}
                   >
-                    <span className={styles.text8}>
-                      {"Documents"}
-                    </span>
+                    <span className={styles.text8}>{"Documents"}</span>
                   </div>
                   <div
                     className={styles.box}
                     style={{
                       width: `${indicatorStyle.width}px`,
-                      left: `${indicatorStyle.left}px`
+                      left: `${indicatorStyle.left}px`,
                     }}
                   />
                 </div>
@@ -587,7 +574,7 @@ function TeamManagementSalesLeads() {
 
             {/* Tab Content */}
             <div className={styles.column3}>
-              {activeTab === 'basicInfo' && (
+              {activeTab === "basicInfo" && (
                 <>
                   {loading ? (
                     <div style={{ padding: "40px", textAlign: "center" }}>
@@ -610,55 +597,79 @@ function TeamManagementSalesLeads() {
                       <div className={styles.row_view6}>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Employee ID</span>
-                          <span className={styles.text10}>{employee.employeeId || "Not provided"}</span>
+                          <span className={styles.text10}>
+                            {employee.employeeId || "Not provided"}
+                          </span>
                         </div>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Employee Name</span>
-                          <span className={styles.text10}>{employee.employeeName || "Not provided"}</span>
+                          <span className={styles.text10}>
+                            {employee.employeeName || "Not provided"}
+                          </span>
                         </div>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Email ID</span>
-                          <span className={styles.text10}>{employee.emailId || "Not provided"}</span>
+                          <span className={styles.text10}>
+                            {employee.emailId || "Not provided"}
+                          </span>
                         </div>
                         <div className={styles.column5}>
                           <span className={styles.text9}>Mobile Number</span>
-                          <span className={styles.text10}>{employee.mobile || "Not provided"}</span>
+                          <span className={styles.text10}>
+                            {employee.mobile || "Not provided"}
+                          </span>
                         </div>
                       </div>
                       {/* second row */}
                       <div className={styles.row_view6}>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Role</span>
-                          <span className={styles.text10}>{employee.role || "Not provided"}</span>
+                          <span className={styles.text10}>
+                            {employee.role || "Not provided"}
+                          </span>
                         </div>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Designation</span>
-                          <span className={styles.text10}>{employee.designation || "Not provided"}</span>
+                          <span className={styles.text10}>
+                            {employee.designation || "Not provided"}
+                          </span>
                         </div>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Department</span>
-                          <span className={styles.text10}>{employee.department || "Not provided"}</span>
+                          <span className={styles.text10}>
+                            {employee.department || "Not provided"}
+                          </span>
                         </div>
                         <div className={styles.column5}>
-                          <span className={styles.text9}>Attendance Status</span>
-                          <span className={styles.text10}>{employee.attendance || "Not provided"}</span>
+                          <span className={styles.text9}>
+                            Attendance Status
+                          </span>
+                          <span className={styles.text10}>
+                            {employee.attendance || "Not provided"}
+                          </span>
                         </div>
                       </div>
                       {/* third row - Projects */}
                       <div className={styles.row_view6}>
                         <div className={styles.column4}>
-                          <span className={styles.text9}>Assigned Projects</span>
+                          <span className={styles.text9}>
+                            Assigned Projects
+                          </span>
                           <span className={styles.text10}>
-                            {employee.assignedProjects && Array.isArray(employee.assignedProjects)
+                            {employee.assignedProjects &&
+                            Array.isArray(employee.assignedProjects)
                               ? employee.assignedProjects.join(", ")
-                              : employee.assignedProjects || "No projects assigned"}
+                              : employee.assignedProjects ||
+                                "No projects assigned"}
                           </span>
                         </div>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Profile Created</span>
                           <span className={styles.text10}>
                             {employee.createdAt
-                              ? new Date(employee.createdAt).toLocaleDateString()
+                              ? new Date(
+                                  employee.createdAt
+                                ).toLocaleDateString()
                               : "Not available"}
                           </span>
                         </div>
@@ -666,7 +677,9 @@ function TeamManagementSalesLeads() {
                           <span className={styles.text9}>Last Updated</span>
                           <span className={styles.text10}>
                             {employee.updatedAt
-                              ? new Date(employee.updatedAt).toLocaleDateString()
+                              ? new Date(
+                                  employee.updatedAt
+                                ).toLocaleDateString()
                               : "Not available"}
                           </span>
                         </div>
@@ -684,19 +697,19 @@ function TeamManagementSalesLeads() {
                 </>
               )}
 
-              {activeTab === 'meetings' && (
+              {activeTab === "meetings" && (
                 <div className={styles.meetingsContent}>
-                  <Meetingstable />
+                  <Meetingstable key={calendarKey} employeeId={employeeId}/>
                 </div>
               )}
 
-              {activeTab === 'documents' && (
-                <div >
+              {activeTab === "documents" && (
+                <div>
                   {/* <p>Documents content will be displayed here</p> */}
                   {/* Add your documents content here when ready */}
                   <section className="documents-table-section">
-                <Documents  />
-               </section>
+                    <Documents employeeId={employeeId} refreshKey={documentsKey}  />
+                  </section>
                 </div>
               )}
             </div>
@@ -708,11 +721,13 @@ function TeamManagementSalesLeads() {
         isOpen={isDeleteModalOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
-        title={deleteType === 'entry' ? 'Delete this Entry?' : 'Delete this Data?'}
+        title={
+          deleteType === "entry" ? "Delete this Entry?" : "Delete this Data?"
+        }
         description={
-          deleteType === 'entry'
-            ? 'Are you sure you want to delete this entry? This action cannot be undone.'
-            : 'Are you sure you want to delete this data? This action cannot be undone.'
+          deleteType === "entry"
+            ? "Are you sure you want to delete this entry? This action cannot be undone."
+            : "Are you sure you want to delete this data? This action cannot be undone."
         }
       />
 
@@ -727,7 +742,14 @@ function TeamManagementSalesLeads() {
         onUpload={handleFileUploadComplete}
       />
 
-        <EditEmployeeModal
+      <AssignTaskModal
+        isOpen={isCreateEventModalOpen}
+        onClose={handleCreateEventClose}
+        employeeId={employeeId}
+        onEventCreated={handleEventCreated}
+      />
+
+      <EditEmployeeModal
         isOpen={isEditEmployeeModalOpen}
         onClose={handleEditEmployeeClose}
         onSubmit={handleEditEmployeeSubmit}
@@ -742,6 +764,6 @@ function TeamManagementSalesLeads() {
       />
     </div>
   );
-} 
+}
 
 export default TeamManagementSalesLeads;
