@@ -8,6 +8,7 @@ import DocumentsService from "../services/DocumentsService";
 import Calendar from "../components/sales-and-leads/CalendarComponent";
 import DeleteModal from "../components/delete-modal/DeleteModal";
 import CreateEventModal from "../components/sales-and-leads/CreateEventModal";
+import CreateTaskModal from "../components/sales-and-leads/CreateTaskModal";
 import EditClientModal from "../components/sales-and-leads/EditClientModal";
 import FileUploadModal from "../components/FileUploadModal";
 import DropDownList from "../components/DropDownList";
@@ -37,6 +38,7 @@ function SalesAndLeadsClient(clientId ) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteType, setDeleteType] = useState(""); // 'entry' or 'data'
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -227,6 +229,23 @@ function SalesAndLeadsClient(clientId ) {
     setEvents(prev => [...prev, newEvent]);
   };
 
+   const handleNewTask = () => {
+    setIsCreateTaskModalOpen(true);
+  };
+
+  const handleCreateTaskClose = () => {
+    setIsCreateTaskModalOpen(false);
+  };
+
+const handleTaskCreated = (newEvent) => {
+    console.log("Task created successfully:", newEvent);
+    // Force calendar component to refresh by updating its key
+    setCalendarKey(prev => prev + 1);
+    // You can also update local events state if needed
+    setEvents(prev => [...prev, newEvent]);
+  };
+  
+
   const handleEditClientClose = () => {
     setIsEditClientModalOpen(false);
   };
@@ -391,7 +410,7 @@ function SalesAndLeadsClient(clientId ) {
           <div className={styles.row_view5}>
             <button
               className={styles.button_row_view}
-              onClick={() => alert("New Task Pressed!")}
+              onClick={handleNewTask}
             >
               <span className={styles.text3}>New Task</span>
               <img src={plus} alt="newtask" className={styles.image3} />
@@ -454,7 +473,9 @@ function SalesAndLeadsClient(clientId ) {
               Sales and Leads
             </div>
             <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-active"]}>Maersk</div>
+            <div className={styles["breadcrumb-active"]}>
+                 {clientData?.companyName || "Client"}
+            </div>
           </div>
         </section>
 
@@ -771,6 +792,13 @@ function SalesAndLeadsClient(clientId ) {
         onClose={handleDropdownClose}
         onOptionSelect={handleExportOptionSelect}
         position={dropdownPosition}
+      />
+
+       <CreateTaskModal
+        isOpen={isCreateTaskModalOpen}
+        onClose={handleCreateTaskClose}
+        clientId={id}
+        onTaskCreated={handleTaskCreated}
       />
     </div>
   );

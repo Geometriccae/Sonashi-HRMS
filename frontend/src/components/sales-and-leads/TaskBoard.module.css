@@ -365,6 +365,9 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   border: 2px dashed rgba(59, 130, 246, 0.3);
 }
+.clickable {
+  cursor: pointer;
+}
 
 /* Responsive adjustments */
 @media (max-width: 991px) {

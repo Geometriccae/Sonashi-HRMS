@@ -1,0 +1,319 @@
+import React, { useEffect, useState, useMemo } from "react";
+import "./CreateEventModal.css";
+import DatePickerModal from "../DatePickerModal";
+import calendarIcon from "../../assets/dashboard/calendar.svg";
+import { createTask } from "../../services/TaskService";
+import employeeService from "../../services/EmployeeService";
+import Select from "react-select";
+
+function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
+  const [formData, setFormData] = useState({
+    eventName: "",
+    project: "",
+    priority: "",
+    date: "",
+    assignedTeamMembers: [],
+  });
+
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [employees, setEmployees] = useState([]);
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const data = await employeeService.getEmployees();
+        setEmployees(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load employees", e);
+        setEmployees([]);
+      }
+    };
+    loadEmployees();
+  }, []);
+
+  if (!isOpen) return null;
+
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.eventName || !formData.date) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Parse yyyy-mm-dd as local date to avoid timezone shifting
+      let eventDate = null;
+      if (formData.date) {
+        const [y, m, d] = formData.date.split("-").map((v) => parseInt(v, 10));
+        eventDate = new Date(y, (m || 1) - 1, d || 1);
+      }
+
+      const taskData = {
+        title: formData.eventName,
+        project: formData.project,
+        priority: formData.priority || "Medium",
+        date: eventDate,
+        assignedEmployees: formData.assignedTeamMembers,
+        status: "todo",
+      };
+
+      const createdTask = await createTask(clientId, taskData);
+      console.log("Task created:", createdTask);
+
+      if (onTaskCreated) {
+        onTaskCreated(createdTask);
+      }
+
+      onClose();
+    } catch (error) {
+      console.error("Error creating task:", error);
+      alert("Failed to create task. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDateIconClick = () => {
+    setIsDatePickerOpen(true);
+  };
+
+  const handleDatePickerClose = () => {
+    setIsDatePickerOpen(false);
+  };
+
+  const handleDateSelect = (selectedDate) => {
+    // Format as local yyyy-mm-dd (no timezone shift)
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, "0");
+    const d = String(selectedDate.getDate()).padStart(2, "0");
+    const formattedLocal = `${y}-${m}-${d}`;
+    handleInputChange("date", formattedLocal);
+    setIsDatePickerOpen(false);
+  };
+
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "";
+    // Expect yyyy-mm-dd, render dd/mm/yyyy
+    const [y, m, d] = dateString.split("-");
+    if (!y || !m || !d) return dateString;
+    return `${d}/${m}/${y}`;
+  };
+
+  const handleColorSelect = (color) => {
+    handleInputChange("color", color);
+  };
+
+  return (
+    <div className="create-event-modal-backdrop" onClick={handleBackdropClick}>
+      <div className="create-event-modal">
+        <div className="modal-event-content">
+          <div className="modal-eventheader">
+            <h2 className="modal-title">Create Task</h2>
+            <p className="modal-subtitle">
+              Select your task priority, add people and a date.
+            </p>
+          </div>
+
+          <div className="form-fields">
+            <div className="input-field">
+              <label className="field-label">Task Name *</label>
+              <div className="input-wrapper">
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Eg. Client Meeting"
+                  value={formData.eventName}
+                  onChange={(e) =>
+                    handleInputChange("eventName", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="input-field">
+              <label className="field-label">Select Project *</label>
+              <div className="select-wrapper">
+                <select
+                  className="form-select"
+                  value={formData.project}
+                  onChange={(e) => handleInputChange("project", e.target.value)}
+                >
+                  <option value="">Select Project</option>
+                  <option value="Project A">Project A</option>
+                  <option value="Project B">Project B</option>
+                  <option value="Project C">Project C</option>
+                  <option value="Project D">Project D</option>
+                  <option value="Project E">Project E</option>
+                </select>
+                <div className="select-icon">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M4 6L8 10L12 6"
+                      stroke="#98A1B0"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="input-field">
+              <label className="field-label">Event Priority *</label>
+              <div className="select-wrapper">
+                <select
+                  className="form-select"
+                  value={formData.priority}
+                  onChange={(e) =>
+                    handleInputChange("priority", e.target.value)
+                  }
+                >
+                  <option value="">Select type</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+                <div className="select-icon">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M4 6L8 10L12 6"
+                      stroke="#98A1B0"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="input-field">
+              <label className="field-label">Select a date *</label>
+              <div className="date-wrapper">
+                <input
+                  type="text"
+                  className="form-input has-icon"
+                  value={formatDateForDisplay(formData.date)}
+                  placeholder="DD/MM/YYYY"
+                  readOnly
+                />
+                <div className="input-icon" onClick={handleDateIconClick}>
+                  <img
+                    src={calendarIcon}
+                    alt="Calendar"
+                    width="16"
+                    height="16"
+                    style={{ cursor: "pointer" }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="input-field">
+              <label className="field-label">Assign Team Members</label>
+              <Select
+                isMulti
+                options={employees.map((emp) => ({
+                  value: emp._id,
+                  label: emp.employeeName,
+                }))}
+                value={employees
+                  .filter((emp) =>
+                    formData.assignedTeamMembers.includes(emp._id)
+                  )
+                  .map((emp) => ({ value: emp._id, label: emp.employeeName }))}
+                onChange={(selectedOptions) => {
+                  const values = selectedOptions
+                    ? selectedOptions.map((o) => o.value)
+                    : [];
+                  handleInputChange("assignedTeamMembers", values);
+                }}
+                placeholder="Select team members..."
+                className="form-select" // using your Figma-based class
+                classNamePrefix="select"
+                styles={{
+                  control: (provided) => ({
+                    ...provided,
+                    minHeight: "48px",
+                    borderRadius: "4px",
+                    borderColor: "#ccc",
+                    boxShadow: "none",
+                    padding: "2px 8px",
+                  }),
+                  multiValue: (provided) => ({
+                    ...provided,
+                    backgroundColor: "#e5e5e5",
+                    color: "#333",
+                  }),
+                  multiValueLabel: (provided) => ({
+                    ...provided,
+                    color: "#333",
+                  }),
+                  placeholder: (provided) => ({
+                    ...provided,
+                    color: "#888",
+                  }),
+                }}
+              />
+            </div>
+
+            
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button
+            className="event-cancel-button"
+            onClick={onClose}
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            className="event-attach-button"
+            onClick={handleSubmit}
+            disabled={isLoading}
+          >
+            {isLoading ? "Creating..." : "Add Task"}
+          </button>
+        </div>
+      </div>
+
+      <DatePickerModal
+        isOpen={isDatePickerOpen}
+        onClose={handleDatePickerClose}
+        onSelectDate={handleDateSelect}
+        selectedDate={formData.date}
+      />
+    </div>
+  );
+}
+
+export default CreateTaskModal;

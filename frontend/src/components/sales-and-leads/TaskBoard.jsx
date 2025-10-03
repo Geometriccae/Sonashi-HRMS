@@ -1,141 +1,84 @@
-import React, { useState } from 'react';
-import styles from './TaskBoard.module.css';
+import React, { useEffect, useMemo, useState } from "react";
+import styles from "./TaskBoard.module.css";
+import { getTasksByClient, updateTask, deleteTask } from "../../services/TaskService";
+import { useParams } from "react-router-dom";
 
-import plus from '../../assets/dashboard/plus.svg';
-import add_circle_outline from '../../assets/dashboard/add_circle_outline.svg';
-import trashred from '../../assets/dashboard/trash-red.svg';
-import more_horiz from '../../assets/dashboard/more_horiz.svg';
-import pencilline from '../../assets/dashboard/pencil-line.svg';
-
+import plus from "../../assets/dashboard/plus.svg";
+import add_circle_outline from "../../assets/dashboard/add_circle_outline.svg";
+import trashred from "../../assets/dashboard/trash-red.svg";
+import more_horiz from "../../assets/dashboard/more_horiz.svg";
+import pencilline from "../../assets/dashboard/pencil-line.svg";
+import EditTaskModal from "./EditTaskModal";
+import DeleteModal from "../delete-modal/DeleteModal";
 
 const TaskBoard = () => {
-  const [taskColumns, setTaskColumns] = useState([
-    {
-      id: 'backlog',
-      title: 'Backlog Tasks',
-      count: 5,
-      countColor: 'yellow',
-      tasks: [
-        {
-          id: 1,
-          date: '11/07/2025',
-          title: 'This is an entry with a very long title as the task.',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 2,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 3,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 4,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        }
-      ]
-    },
-    {
-      id: 'todo',
-      title: 'To Do Tasks',
-      count: 3,
-      countColor: 'pink',
-      tasks: [
-        {
-          id: 5,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 6,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        }
-      ]
-    },
-    {
-      id: 'inprogress',
-      title: 'In Progress',
-      count: 2,
-      countColor: 'purple',
-      tasks: [
-        {
-          id: 7,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 8,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 9,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        }
-      ]
-    },
-    {
-      id: 'done',
-      title: 'Done',
-      count: 5,
-      countColor: 'green',
-      tasks: [
-        {
-          id: 10,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 11,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 12,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        },
-        {
-          id: 13,
-          date: '11/07/2025',
-          title: 'Model Answer',
-          priority: 'Priority:Medium',
-          avatars: 'https://api.builder.io/api/v1/image/assets/TEMP/9618b216ac9c01c046c3b565636c4645a33c3c6d?placeholderIfAbsent=true&apiKey=0fcd4f274d044277b0fae139470e27f9'
-        }
-      ]
-    }
-  ]);
-
+  const { id: clientId } = useParams();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const data = await getTasksByClient(clientId);
+        setTasks(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load tasks", e);
+        setError("Failed to load tasks");
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (clientId) load();
+  }, [clientId]);
+
+  const columnsFromTasks = useMemo(() => {
+    const groups = {
+      backlog: [],
+      todo: [],
+      inprogress: [],
+      done: [],
+    };
+    for (const t of tasks) {
+      const key = t.status || "todo";
+      groups[key] = groups[key] || [];
+      groups[key].push({
+        id: t._id,
+        date: new Date(t.date).toLocaleDateString("en-GB"),
+        title: t.title,
+        priority: `Priority:${t.priority || "Medium"}`,
+        avatars: plus,
+        fullTask: t, // Store the full task object for editing
+      });
+    }
+    return [
+      {
+        id: "backlog",
+        title: "Backlog Tasks",
+        countColor: "yellow",
+        tasks: groups.backlog,
+      },
+      {
+        id: "todo",
+        title: "To Do Tasks",
+        countColor: "pink",
+        tasks: groups.todo,
+      },
+      {
+        id: "inprogress",
+        title: "In Progress",
+        countColor: "purple",
+        tasks: groups.inprogress,
+      },
+      { id: "done", title: "Done", countColor: "green", tasks: groups.done },
+    ].map((col) => ({ ...col, count: col.tasks.length }));
+  }, [tasks]);
 
   const handleDragStart = (e, taskId, sourceColumnId) => {
     if (!taskId || !sourceColumnId) {
@@ -144,17 +87,20 @@ const TaskBoard = () => {
     }
 
     try {
-      e.dataTransfer.setData('text/plain', JSON.stringify({ taskId, sourceColumnId }));
-      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData(
+        "text/plain",
+        JSON.stringify({ taskId, sourceColumnId })
+      );
+      e.dataTransfer.effectAllowed = "move";
     } catch (error) {
-      console.error('Error during drag start:', error);
+      console.error("Error during drag start:", error);
       e.preventDefault();
     }
   };
 
   const handleDragOver = (e, columnId) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
     setDragOverColumn(columnId);
   };
 
@@ -164,12 +110,68 @@ const TaskBoard = () => {
     }
   };
 
-  const handleDrop = (e, targetColumnId) => {
+  const handleEditTask = (task) => {
+    // Pass the full task object from the backend
+    setSelectedTask(task.fullTask);
+    setIsEditModalOpen(true);
+  };
+
+  const handleDeleteTask = (task) => {
+    // Open delete modal and store task to delete
+    setTaskToDelete(task);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteTask = async () => {
+    if (!taskToDelete) return;
+
+    try {
+      // Optimistic UI update - remove task immediately
+      setTasks((prev) => prev.filter((t) => t._id !== taskToDelete.id));
+
+      // Delete from backend
+      await deleteTask(clientId, taskToDelete.id);
+      
+      console.log("Task deleted successfully");
+      
+      // Close modal and clear state
+      setIsDeleteModalOpen(false);
+      setTaskToDelete(null);
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      alert("Failed to delete task. Please try again.");
+      
+      // Refresh tasks on error to restore correct state
+      try {
+        const fetchedTasks = await getTasksByClient(clientId);
+        setTasks(fetchedTasks);
+      } catch (refreshError) {
+        console.error("Error refreshing tasks:", refreshError);
+      }
+      
+      // Close modal and clear state
+      setIsDeleteModalOpen(false);
+      setTaskToDelete(null);
+    }
+  };
+
+  const handleTaskUpdated = async (updatedTask) => {
+    try {
+      const fetchedTasks = await getTasksByClient(clientId);
+      setTasks(fetchedTasks);
+      setIsEditModalOpen(false);
+      setSelectedTask(null);
+    } catch (error) {
+      console.error("Error refreshing tasks:", error);
+    }
+  };
+
+  const handleDrop = async (e, targetColumnId) => {
     e.preventDefault();
     setDragOverColumn(null);
 
     try {
-      const dragData = e.dataTransfer.getData('text/plain');
+      const dragData = e.dataTransfer.getData("text/plain");
       if (!dragData) return;
 
       const data = JSON.parse(dragData);
@@ -179,31 +181,21 @@ const TaskBoard = () => {
         return;
       }
 
-      setTaskColumns(prevColumns => {
-        const newColumns = [...prevColumns];
-        const sourceColumnIndex = newColumns.findIndex(col => col.id === sourceColumnId);
-        const targetColumnIndex = newColumns.findIndex(col => col.id === targetColumnId);
+      // Optimistic UI: update local tasks state
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === taskId ? { ...t, status: targetColumnId } : t
+        )
+      );
 
-        if (sourceColumnIndex === -1 || targetColumnIndex === -1) {
-          return prevColumns;
-        }
-
-        const taskToMove = newColumns[sourceColumnIndex].tasks.find(task => task.id === parseInt(taskId));
-
-        if (!taskToMove) {
-          return prevColumns;
-        }
-
-        newColumns[sourceColumnIndex].tasks = newColumns[sourceColumnIndex].tasks.filter(task => task.id !== parseInt(taskId));
-        newColumns[targetColumnIndex].tasks.push(taskToMove);
-
-        newColumns[sourceColumnIndex].count = newColumns[sourceColumnIndex].tasks.length;
-        newColumns[targetColumnIndex].count = newColumns[targetColumnIndex].tasks.length;
-
-        return newColumns;
-      });
+      // Persist status change
+      try {
+        await updateTask(clientId, taskId, { status: targetColumnId });
+      } catch (err) {
+        console.error("Failed to update task status", err);
+      }
     } catch (error) {
-      console.error('Error during drag and drop:', error);
+      console.error("Error during drag and drop:", error);
     }
   };
 
@@ -238,13 +230,13 @@ const TaskBoard = () => {
         </div>
         <div className={styles.taskFooter}>
           <div className={styles.avatarGroup}>
-            <img 
-              src={task.avatars} 
-              alt="avatars" 
+            <img
+              src={task.avatars}
+              alt="avatars"
               className={styles.avatarImage}
             />
             <div className={styles.addButton}>
-              <img 
+              <img
                 src={add_circle_outline}
                 alt="Add"
                 className={styles.addIcon}
@@ -252,15 +244,23 @@ const TaskBoard = () => {
             </div>
           </div>
           <div className={styles.actionIcons}>
-            <img 
+            <img
               src={pencilline}
               alt="edit"
-              className={styles.actionIcon}
+              role="button"
+              tabIndex={0}
+              className={`${styles.actionIcon} clickable`}
+              onClick={() => handleEditTask(task)}
+              style={{ cursor: "pointer" }}
             />
             <img 
-              src={trashred}
-              alt="delete"
-              className={styles.actionIcon}
+              src={trashred} 
+              alt="delete" 
+              role="button"
+              tabIndex={0}
+              className={`${styles.actionIcon} clickable`}
+              onClick={() => handleDeleteTask(task)}
+              style={{ cursor: "pointer" }}
             />
           </div>
         </div>
@@ -273,7 +273,7 @@ const TaskBoard = () => {
 
     return (
       <div
-        className={`${styles.column} ${isDragOver ? styles.dragOver : ''}`}
+        className={`${styles.column} ${isDragOver ? styles.dragOver : ""}`}
         onDragOver={(e) => handleDragOver(e, column.id)}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, column.id)}
@@ -281,11 +281,20 @@ const TaskBoard = () => {
         <div className={styles.columnHeader}>
           <div className={styles.columnLeft}>
             <div className={styles.columnTitle}>{column.title}</div>
-            <div className={`${styles.counter} ${styles[`counter${column.countColor.charAt(0).toUpperCase() + column.countColor.slice(1)}`]}`}>
+            <div
+              className={`${styles.counter} ${
+                styles[
+                  `counter${
+                    column.countColor.charAt(0).toUpperCase() +
+                    column.countColor.slice(1)
+                  }`
+                ]
+              }`}
+            >
               <div className={styles.badgeNumber}>{column.count}</div>
             </div>
           </div>
-          <img 
+          <img
             src={more_horiz}
             alt="More options"
             className={styles.moreIcon}
@@ -297,13 +306,15 @@ const TaskBoard = () => {
               key={task.id}
               task={task}
               columnId={column.id}
-              isMinimal={index === column.tasks.length - 1 && column.tasks.length > 3}
+              isMinimal={
+                index === column.tasks.length - 1 && column.tasks.length > 3
+              }
             />
           ))}
         </div>
-        {(column.id === 'todo' || column.id === 'inprogress') && (
+        {(column.id === "todo" || column.id === "inprogress") && (
           <div className={styles.addColumnButton}>
-            <img 
+            <img
               src={add_circle_outline}
               alt="Add"
               className={styles.addColumnIcon}
@@ -314,10 +325,17 @@ const TaskBoard = () => {
     );
   };
 
+  if (loading) {
+    return <div className={styles.taskBoard}>Loading tasks...</div>;
+  }
+  if (error) {
+    return <div className={styles.taskBoard}>{error}</div>;
+  }
+
   return (
     <div className={styles.taskBoard}>
       <div className={styles.boardContainer}>
-        {taskColumns.map(column => (
+        {columnsFromTasks.map((column) => (
           <Column key={column.id} column={column} />
         ))}
         <div className={styles.addNewColumn}>
@@ -326,6 +344,28 @@ const TaskBoard = () => {
           </div>
         </div>
       </div>
+
+      <EditTaskModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedTask(null);
+        }}
+        clientId={clientId}
+        task={selectedTask}
+        onTaskUpdated={handleTaskUpdated}
+      />
+
+      <DeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setTaskToDelete(null);
+        }}
+        onConfirm={confirmDeleteTask}
+        title="Delete this Task?"
+        description={`Are you sure you want to delete "${taskToDelete?.title}"? This action cannot be undone.`}
+      />
     </div>
   );
 };
