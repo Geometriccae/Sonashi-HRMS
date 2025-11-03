@@ -14,59 +14,29 @@
 
 /* Modal Container */
 .add-client-modal {
-  width: 1200px;
-  height: 850px;
-  border-radius: 16px;
+  width: 75rem; /* 1200px */
+  height: 53.125rem; /* 850px */
+  border-radius: 1rem; /* 16px */
   position: relative;
   margin: 0 auto;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 0.25rem 0.375rem -0.0625rem rgba(0, 0, 0, 0.1), 0 0.125rem 0.25rem -0.0625rem rgba(0, 0, 0, 0.06);
   background-color: #fff;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-@media (max-width: 991px) {
-  .add-client-modal {
-    width: 90%;
-    max-width: 768px;
-    height: 90vh;
-    max-height: 850px;
-  }
-}
-
-@media (max-width: 640px) {
-  .add-client-modal {
-    width: 95%;
-    height: 90vh;
-  }
-}
-
 /* Header */
 .add-client-header {
   display: flex;
   width: 100%;
-  padding: 32px 56px;
+  padding: 2rem 3.5rem; /* 32px 56px */
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  height: 100px;
+  height: 6.25rem; /* 100px */
   box-sizing: border-box;
   flex-shrink: 0;
-}
-
-@media (max-width: 991px) {
-  .add-client-header {
-    padding: 24px 32px;
-  }
-}
-
-@media (max-width: 640px) {
-  .add-client-header {
-    padding: 16px 24px;
-    height: auto;
-    min-height: 80px;
-  }
 }
 
 .add-client-title {
@@ -80,15 +50,9 @@
   margin: 0;
 }
 
-@media (max-width: 640px) {
-  .add-client-title {
-    font-size: 20px;
-  }
-}
-
 .close-button {
-  width: 36px;
-  height: 36px;
+  width: 2.25rem; /* 36px */
+  height: 2.25rem; /* 36px */
   flex-shrink: 0;
   background: transparent;
   border: none;
@@ -105,7 +69,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 1.5rem; /* 24px */
   color: #666;
 }
 
@@ -118,8 +82,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 36px;
-  padding: 40px 154px;
+  gap: 2.25rem; /* 36px */
+  padding: 2.5rem 9.625rem; /* 40px 154px */
   flex: 1;
   overflow-y: auto;
   min-height: 0;
@@ -127,75 +91,37 @@
   width: auto !important;
 }
 
-@media (max-width: 991px) {
-  .add-client-content {
-    padding: 24px 32px;
-  }
-}
-
-@media (max-width: 640px) {
-  .add-client-content {
-    padding: 24px;
-  }
-}
-
 .form-fields-grid {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   align-content: flex-start;
-  row-gap: 24px;
+  row-gap: 1.5rem; /* 24px */
   width: 100%;
-  max-width: 892px;
+  max-width: 55.75rem; /* 892px */
   flex-wrap: wrap;
   overflow-x: hidden;
-}
-
-@media (max-width: 991px) {
-  .form-fields-grid {
-    justify-content: center;
-    gap: 16px;
-  }
-}
-
-@media (max-width: 640px) {
-  .form-fields-grid {
-    flex-direction: column;
-    align-items: center;
-  }
 }
 
 /* Billing Content */
 .billing-content {
   flex: 1;
-  padding: 40px 154px;
+  padding: 2.5rem 9.625rem; /* 40px 154px */
   overflow-y: auto;
   min-height: 0;
 }
 
-@media (max-width: 991px) {
-  .billing-content {
-    padding: 24px 32px;
-  }
-}
-
-@media (max-width: 640px) {
-  .billing-content {
-    padding: 24px;
-  }
-}
-
 .billing-form-container {
   width: 100%;
-  max-width: 892px;
+  max-width: 55.75rem; /* 892px */
   margin: 0 auto;
 }
 
 .billing-title {
-  font-size: 20px;
+  font-size: 1.25rem; /* 20px */
   font-weight: 600;
   color: #333;
-  margin-bottom: 32px;
+  margin-bottom: 2rem; /* 32px */
   text-align: center;
 }
 
@@ -204,51 +130,30 @@
   justify-content: space-between;
   align-items: flex-start;
   align-content: flex-start;
-  row-gap: 24px;
+  row-gap: 1.5rem; /* 24px */
   width: 100%;
   flex-wrap: wrap;
-  margin-bottom: 32px;
-}
-
-@media (max-width: 991px) {
-  .billing-form-grid {
-    justify-content: center;
-    gap: 16px;
-  }
-}
-
-@media (max-width: 640px) {
-  .billing-form-grid {
-    flex-direction: column;
-    align-items: center;
-  }
+  margin-bottom: 2rem; /* 32px */
 }
 
 .billing-field-placeholder {
-  width: 274px;
+  width: 17.125rem; /* 274px */
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-@media (max-width: 640px) {
-  .billing-field-placeholder {
-    width: 100%;
-    max-width: 400px;
-  }
+  gap: 0.5rem; /* 8px */
 }
 
 .billing-label {
   color: #333;
-  font-size: 14px;
+  font-size: 0.875rem; /* 14px */
   font-weight: 500;
   font-family: Inter, sans-serif;
 }
 
 .billing-input-placeholder {
-  height: 48px;
+  height: 3rem; /* 48px */
   border: 1px dashed #ccc;
-  border-radius: 8px;
+  border-radius: 0.5rem; /* 8px */
   background-color: #f9f9f9;
   display: flex;
   align-items: center;
@@ -259,103 +164,72 @@
 .billing-input-placeholder::after {
   content: "Field will be added";
   color: #999;
-  font-size: 12px;
+  font-size: 0.75rem; /* 12px */
   font-style: italic;
 }
 
 .billing-note {
   text-align: center;
-  padding: 24px;
+  padding: 1.5rem; /* 24px */
   background-color: #f5f6f7;
-  border-radius: 8px;
-  border-left: 4px solid #007aff;
+  border-radius: 0.5rem; /* 8px */
+  border-left: 0.25rem solid #007aff; /* 4px */
 }
 
 .billing-note p {
   margin: 0;
   color: #666;
-  font-size: 14px;
+  font-size: 0.875rem; /* 14px */
   font-style: italic;
 }
 
 /* Client Review Content */
 .client-review-content {
   flex: 1;
-  padding: 40px 154px;
+  padding: 2.5rem 9.625rem; /* 40px 154px */
   overflow-y: auto;
   min-height: 0;
 }
 
-@media (max-width: 991px) {
-  .client-review-content {
-    padding: 24px 32px;
-  }
-}
-
-@media (max-width: 640px) {
-  .client-review-content {
-    padding: 24px;
-  }
-}
-
 .company-profile-section {
-  /* border-radius: 12px;
+  border-radius: 0.75rem; /* 12px */
   background-color: #f5f6f7;
   display: flex;
   width: 100%;
-  max-width: 570px;
-  margin: 80 auto 36px;
+  max-width: 35.625rem; /* 570px */
+  margin: 5rem auto 2.25rem; /* 80px auto 36px */
   align-items: center;
-  gap: 100px;
+  gap: 6.25rem; /* 100px */
   overflow: hidden;
   font-weight: 500;
   justify-content: space-between;
   flex-wrap: wrap;
-  padding: 24px; */
-      border-radius: 12px;
-    background-color: #f5f6f7;
-    display: flex;
-    width: 100%;
-    max-width: 570px;
-    margin: 80px auto 36px;
-    align-items: center;
-    gap: 100px;
-    overflow: hidden;
-    font-weight: 500;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    padding: 24px;
-}
-
-@media (max-width: 991px) {
-  .company-profile-section {
-    gap: 40px;
-  }
+  padding: 1.5rem; /* 24px */
 }
 
 .company-info {
   display: flex;
   align-items: center;
-  gap: 14px;
-  font-size: 18px;
+  gap: 0.875rem; /* 14px */
+  font-size: 1.125rem; /* 18px */
   color: #212121;
   text-align: center;
-  letter-spacing: -0.36px;
+  letter-spacing: -0.0225rem; /* -0.36px */
 }
 
 .company-logo {
   aspect-ratio: 1;
   object-fit: cover;
   object-position: center;
-  width: 72px;
-  height: 72px;
+  width: 4.5rem; /* 72px */
+  height: 4.5rem; /* 72px */
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .default-company-logo {
-  width: 72px;
-  height: 72px;
+  width: 4.5rem; /* 72px */
+  height: 4.5rem; /* 72px */
   border-radius: 50%;
   background-color: #007AFF;
   display: flex;
@@ -363,7 +237,7 @@
   justify-content: center;
   color: white;
   font-weight: 600;
-  font-size: 24px;
+  font-size: 1.5rem; /* 24px */
   flex-shrink: 0;
 }
 
@@ -373,15 +247,15 @@
 
 .edit-photo-button {
   display: flex;
-  padding: 4px 12px;
+  padding: 0.25rem 0.75rem; /* 4px 12px */
   align-items: center;
-  gap: 8px;
-  border-radius: 8px;
+  gap: 0.5rem; /* 8px */
+  border-radius: 0.5rem; /* 8px */
   border: 1px solid #007aff;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(0.625rem); /* 10px */
   cursor: pointer;
   background: transparent;
-  font-size: 13px;
+  font-size: 0.8125rem; /* 13px */
   color: #007aff;
   line-height: 2;
 }
@@ -394,53 +268,35 @@
   aspect-ratio: 1;
   object-fit: contain;
   object-position: center;
-  width: 16px;
-  height: 16px;
+  width: 1rem; /* 16px */
+  height: 1rem; /* 16px */
 }
 
 .client-data-section {
   width: 100%;
-  max-width: 808px;
+  max-width: 50.5rem; /* 808px */
   margin: 0 auto;
-  font-size: 16px;
-  letter-spacing: -0.32px;
+  font-size: 1rem; /* 16px */
+  letter-spacing: -0.02rem; /* -0.32px */
 }
 
 .data-row {
   display: flex;
   width: 100%;
   align-items: start;
-  gap: 200px;
+  gap: 12.5rem; /* 200px */
   justify-content: start;
   flex-wrap: wrap;
-  margin-bottom: 36px;
+  margin-bottom: 2.25rem; /* 36px */
 }
 
 .data-row:last-child {
   margin-bottom: 0;
 }
 
-@media (max-width: 991px) {
-  .data-row {
-    gap: 24px;
-  }
-}
-
 .data-field {
   min-width: 0;
   flex: 1;
-}
-
-@media (max-width: 991px) {
-  .data-field {
-    flex: 1 1 200px;
-  }
-}
-
-@media (max-width: 640px) {
-  .data-field {
-    flex: 1 1 100%;
-  }
 }
 
 .field-label {
@@ -451,7 +307,7 @@
 .field-value {
   color: #212121;
   font-weight: 500;
-  margin-top: 12px;
+  margin-top: 0.75rem; /* 12px */
 }
 
 /* Actions */
@@ -459,42 +315,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 26px;
-  padding: 24px;
-  /* border-top: 1px solid rgba(0, 0, 0, 0.1); */
+  gap: 1.625rem; /* 26px */
+  padding: 1.5rem; /* 24px */
   flex-shrink: 0;
   background-color: #fff;
 }
 
-@media (max-width: 640px) {
-  .form-actions {
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-  }
-}
-
 .button-secondary {
   display: flex;
-  width: 120px;
-  padding: 10px 20px;
+  width: 7.5rem; /* 120px */
+  padding: 0.625rem 1.25rem; /* 10px 20px */
   justify-content: center;
   align-items: center;
-  gap: 12px;
-  border-radius: 8px;
+  gap: 0.75rem; /* 12px */
+  border-radius: 0.5rem; /* 8px */
   border: 1px solid #007aff;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(0.625rem); /* 10px */
   cursor: pointer;
   background: transparent;
   color: #007aff;
-  font: 500 16px/150% Inter, sans-serif;
-}
-
-@media (max-width: 640px) {
-  .button-secondary {
-    width: 100%;
-    max-width: 200px;
-  }
+  font: 500 1rem/150% Inter, sans-serif;
 }
 
 .button-secondary:hover {
@@ -503,26 +343,262 @@
 
 .button-primary {
   display: flex;
-  width: 120px;
-  padding: 10px 20px;
+  width: 7.5rem; /* 120px */
+  padding: 0.625rem 1.25rem; /* 10px 20px */
   justify-content: center;
   align-items: center;
-  gap: 12px;
-  border-radius: 8px;
+  gap: 0.75rem; /* 12px */
+  border-radius: 0.5rem; /* 8px */
   border: 1px solid rgba(255, 255, 255, 0.05);
   cursor: pointer;
   background-color: #007aff;
   color: rgba(255, 255, 255, 0.9);
-  font: 500 16px/150% Inter, sans-serif;
-}
-
-@media (max-width: 640px) {
-  .button-primary {
-    width: 100%;
-    max-width: 200px;
-  }
+  font: 500 1rem/150% Inter, sans-serif;
 }
 
 .button-primary:hover {
   background-color: #0056cc;
+}
+
+/* ========== RESPONSIVE BREAKPOINTS ========== */
+
+/* 991px Breakpoint */
+@media (max-width: 61.9375rem) { /* 991px */
+  .add-client-modal {
+    width: 90%;
+    max-width: 48rem; /* 768px */
+    height: 90vh;
+    max-height: 53.125rem; /* 850px */
+  }
+
+  .add-client-header {
+    padding: 1.5rem 2rem; /* 24px 32px */
+  }
+
+  .add-client-content {
+    padding: 1.5rem 2rem; /* 24px 32px */
+  }
+
+  .form-fields-grid {
+    justify-content: center;
+    gap: 1rem; /* 16px */
+  }
+
+  .billing-content {
+    padding: 1.5rem 2rem; /* 24px 32px */
+  }
+
+  .billing-form-grid {
+    justify-content: center;
+    gap: 1rem; /* 16px */
+  }
+
+  .client-review-content {
+    padding: 1.5rem 2rem; /* 24px 32px */
+  }
+
+  .company-profile-section {
+    gap: 2.5rem; /* 40px */
+  }
+
+  .data-row {
+    gap: 1.5rem; /* 24px */
+  }
+
+  .data-field {
+    flex: 1 1 12.5rem; /* 200px */
+  }
+}
+
+/* 768px Breakpoint */
+@media (max-width: 48rem) { /* 768px */
+  .add-client-modal {
+    width: 95%;
+    max-width: 42.5rem; /* 680px */
+    height: 95vh;
+  }
+
+  .add-client-header {
+    padding: 1.25rem 1.5rem; /* 20px 24px */
+    height: auto;
+    min-height: 5rem; /* 80px */
+  }
+
+  .add-client-title {
+    font-size: 1.25rem; /* 20px */
+  }
+
+  .add-client-content {
+    padding: 1.25rem 1.5rem; /* 20px 24px */
+    gap: 1.5rem; /* 24px */
+  }
+
+  .billing-content {
+    padding: 1.25rem 1.5rem; /* 20px 24px */
+  }
+
+  .client-review-content {
+    padding: 1.25rem 1.5rem; /* 20px 24px */
+  }
+
+  .company-profile-section {
+    margin: 3rem auto 1.5rem; /* 48px auto 24px */
+    gap: 1.5rem; /* 24px */
+    padding: 1rem; /* 16px */
+  }
+
+  .company-info {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.5rem; /* 8px */
+  }
+
+  .data-row {
+    gap: 1rem; /* 16px */
+    margin-bottom: 1.5rem; /* 24px */
+  }
+}
+
+/* 680px Breakpoint */
+@media (max-width: 42.5rem) { /* 680px */
+  .add-client-modal {
+    width: 98%;
+    height: 98vh;
+    border-radius: 0.5rem; /* 8px */
+  }
+
+  .add-client-header {
+    padding: 1rem 1.25rem; /* 16px 20px */
+  }
+
+  .add-client-content {
+    padding: 1rem 1.25rem; /* 16px 20px */
+    gap: 1rem; /* 16px */
+  }
+
+  .form-fields-grid {
+    flex-direction: column;
+    align-items: center;
+    row-gap: 1rem; /* 16px */
+  }
+
+  .billing-content {
+    padding: 1rem 1.25rem; /* 16px 20px */
+  }
+
+  .billing-form-grid {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .billing-field-placeholder {
+    width: 100%;
+    max-width: 25rem; /* 400px */
+  }
+
+  .client-review-content {
+    padding: 1rem 1.25rem; /* 16px 20px */
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 0.75rem; /* 12px */
+    width: 100%;
+  }
+
+  .button-secondary,
+  .button-primary {
+    width: 100%;
+    max-width: 12.5rem; /* 200px */
+  }
+}
+
+/* 480px Breakpoint */
+@media (max-width: 30rem) { /* 480px */
+  .add-client-modal {
+    width: 100%;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .add-client-header {
+    padding: 0.75rem 1rem; /* 12px 16px */
+    min-height: 4rem; /* 64px */
+  }
+
+  .add-client-title {
+    font-size: 1.125rem; /* 18px */
+  }
+
+  .add-client-content {
+    padding: 0.75rem 1rem; /* 12px 16px */
+    gap: 0.75rem; /* 12px */
+  }
+
+  .form-fields-grid {
+    margin-top: 0;
+    row-gap: 0.75rem; /* 12px */
+  }
+
+  .billing-content {
+    padding: 0.75rem 1rem; /* 12px 16px */
+  }
+
+  .billing-title {
+    font-size: 1.125rem; /* 18px */
+    margin-bottom: 1.5rem; /* 24px */
+  }
+
+  .billing-form-grid {
+    row-gap: 0.75rem; /* 12px */
+    margin-bottom: 1.5rem; /* 24px */
+  }
+
+  .client-review-content {
+    padding: 0.75rem 1rem; /* 12px 16px */
+  }
+
+  .company-profile-section {
+    margin: 2rem auto 1rem; /* 32px auto 16px */
+    gap: 1rem; /* 16px */
+    padding: 0.75rem; /* 12px */
+  }
+
+  .company-info {
+    font-size: 1rem; /* 16px */
+  }
+
+  .company-logo,
+  .default-company-logo {
+    width: 3rem; /* 48px */
+    height: 3rem; /* 48px */
+  }
+
+  .default-company-logo {
+    font-size: 1.125rem; /* 18px */
+  }
+
+  .data-field {
+    flex: 1 1 100%;
+  }
+
+  .data-row {
+    flex-direction: column;
+    gap: 0.75rem; /* 12px */
+    margin-bottom: 1rem; /* 16px */
+  }
+
+  .field-value {
+    margin-top: 0.375rem; /* 6px */
+  }
+
+  .form-actions {
+    padding: 1rem; /* 16px */
+  }
+
+  .button-secondary,
+  .button-primary {
+    max-width: 100%;
+    padding: 0.75rem 1rem; /* 12px 16px */
+  }
 }

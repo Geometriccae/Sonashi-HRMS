@@ -9,14 +9,16 @@
 @media (max-width: 991px) {
   .input-field {
     width: 100%;
-    max-width: 300px;
+    /* max-width: 300px; */
+    max-width: 450px;
   }
 }
 
 @media (max-width: 640px) {
   .input-field {
     width: 100%;
-    max-width: 280px;
+    /* max-width: 280px; */
+     max-width: 450px;
   }
 }
 

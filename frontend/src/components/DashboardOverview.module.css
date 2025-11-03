@@ -244,7 +244,7 @@
   /* padding: 0 10px; */
 }
 
-.cardHeaderCalendar{
+.cardHeaderCalendar {
   display: flex;
   width: 100%;
   align-items: center;
@@ -253,17 +253,16 @@
   padding: 0 30px 0 30px;
 }
 
-
 .cardHeaderCalendar h3,
 .cardHeader h3 {
- color: #161616;
-leading-trim: both;
-text-edge: cap;
-font-family: "Inter Tight";
-font-size: 1.5rem;
-font-style: normal;
-font-weight: 600;
-line-height: 116%; /* 1.74rem */
+  color: #161616;
+  leading-trim: both;
+  text-edge: cap;
+  font-family: "Inter Tight";
+  font-size: 1.5rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 116%; /* 1.74rem */
 }
 
 .actionButton {
@@ -506,9 +505,9 @@ line-height: 116%; /* 1.74rem */
   line-height: normal;
 }
 
-.dividerLine{
+.dividerLine {
   opacity: 0.5;
-background: #DEDEDE;
+  background: #dedede;
 }
 
 .graphContainer {
@@ -538,15 +537,15 @@ background: #DEDEDE;
   border-radius: 0.5rem;
   box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1); */
   width: 15.24731rem;
-height: 4.08438rem;
-flex-shrink: 0;
-border-radius: 0.5rem;
-border: 0.8px solid #334AFA;
-background: #FFF;
-display: flex;
-font-weight: 700;
-align-items: center;
-justify-content: space-around;
+  height: 4.08438rem;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  border: 0.8px solid #334afa;
+  background: #fff;
+  display: flex;
+  font-weight: 700;
+  align-items: center;
+  justify-content: space-around;
 }
 
 .dateLabel {
@@ -765,29 +764,29 @@ background: #FFF; */
 }
 
 .taskInfo h4 {
-color: #161616;
-font-family: "Inter Tight";
-font-size: 1.25rem;
-font-style: normal;
-font-weight: 500;
-line-height: 130%; /* 1.625rem */
-align-self: stretch;
+  color: #161616;
+  font-family: "Inter Tight";
+  font-size: 1.25rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 130%; /* 1.625rem */
+  align-self: stretch;
 }
 
 .taskInfo p {
- color: #818181;
-font-family: "Inter Tight";
-font-size: 1.06481rem;
-font-style: normal;
-font-weight: 400;
-line-height: normal;
+  color: #818181;
+  font-family: "Inter Tight";
+  font-size: 1.06481rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
 }
 
 .taskAvatar {
   width: 41px;
   height: 41px;
   border-radius: 50%;
-  background-color: #FF801F;
+  background-color: #ff801f;
   color: #fff;
   display: flex;
   align-items: center;
@@ -800,7 +799,7 @@ line-height: normal;
   width: 41px;
   height: 41px;
   border-radius: 50%;
-  background-color: #20D668;
+  background-color: #20d668;
   color: #fff;
   display: flex;
   align-items: center;
@@ -874,45 +873,241 @@ line-height: normal;
   .headerRow {
     flex-direction: column;
     align-items: stretch;
+    gap: 20px;
   }
 
   .welcomeCard {
     padding: 16px 20px;
+    width: 100%;
+    max-width: 100%;
   }
 
   .metricsRow {
     flex-direction: column;
     gap: 16px;
+    width: 100%;
   }
 
   .metricCard {
     padding: 20px;
+    min-width: 100%;
+    width: 100%;
   }
 
   .contentRow {
     flex-direction: column;
+    gap: 20px;
+  }
+
+  .leadConversionCard {
+    width: 100%;
+    min-width: 100%;
   }
 
   .bottomRow {
     flex-direction: column;
+    gap: 20px;
   }
 
   .calendarCard {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding: 16px 18px;
+    width: 100%;
+    min-width: 100%;
   }
 
   .tasksCard {
     padding: 16px 20px 0;
+    width: 100%;
+    min-width: 100%;
+  }
+}
+
+/* Mobile Specific Styles */
+@media (max-width: 768px) {
+  .dashboardOverview {
+    padding: 0;
+    margin-top: 20px;
+    padding-left: 20px;
+  }
+
+  .headerRow {
+    display: block; /* Hide welcome card on mobile - shown in header */
+  }
+
+  /* .dashboardOverview{
+    overflow: visible !important;
+  } */
+   
+
+  .metricsRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: flex-start;
+    flex-direction: row;
+    width: calc(100% - 20px);
+    overflow-x: visible;
+    padding-bottom: 10px;
+    margin-top: 10px;
+
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    scrollbar-width: none; /* Hide scrollbar for Firefox */
+    -ms-overflow-style: none; /* Hide scrollbar for IE/Edge */
+  }
+
+  .metricsRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .metricCard {
+    border-radius: 18px;
+    background-color: #fff;
+    align-self: stretch;
+    display: flex;
+    min-width: 240px;
+    align-items: center;
+    gap: 40px 65px;
+    justify-content: space-between;
+    margin: auto 0;
+    padding: 25px;
+    border: 1px solid #e4e4e4;
+
+    flex: 0 0 auto; /* Prevent cards from shrinking */
+    scroll-snap-align: start; /* Snap to start of each card */
+  }
+
+  .metricsRow {
+    scroll-snap-type: x mandatory;
+  }
+
+  .profitCard {
+    background-color: #334afa;
+    color: #fff;
+  }
+
+  .metricsContainer {
+    position: relative;
+  }
+
+  .scrollIndicator {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 18px;
+    z-index: 2;
+  }
+
+  .metricContent {
+    width: auto;
+    min-width: 97px;
+  }
+
+  .metricLabel {
+    color: #161616;
+    font-size: 14px;
+    line-height: 1;
+    text-align: left;
+    font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
+    font-weight: 500;
+  }
+
+  .metricValue {
+    color: #161616;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: -0.78px;
+    margin-top: 9px;
+    font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
+    font-weight: 500;
+  }
+
+  .metricDetails {
+    width: 58px;
+    align-items: flex-end;
+  }
+
+  .changeChip {
+    border-radius: 181px;
+    background-color: #eafdee;
+    display: flex;
+    align-items: flex-start;
+    gap: 2px;
+    justify-content: flex-start;
+    padding: 4px 7px;
+    margin-top: 22px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .leadConversionCard {
+    border-radius: 13px;
+    background-color: #fff;
+    width: calc(100% - 20px);
+    padding: 16px 18px;
+    border: 1px solid #e4e4e4;
+    margin-top: 20px;
+  }
+
+  .cardHeader h3 {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .actionButton {
+    border-radius: 7px;
+    background-color: #fff;
+    min-height: 36px;
+    width: 36px;
+    height: 36px;
+    padding: 0 7px;
+    border: 1px solid #e4e4e4;
+  }
+
+  .actionButton img {
+    width: 22px;
+  }
+
+  .percentageValue {
+    font-size: 32px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.88px;
+  }
+
+  .description {
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.17px;
+    margin-top: 18px;
   }
 }
 
 @media (max-width: 640px) {
   .welcomeContent {
-    flex-direction: column;
-    text-align: center;
+    /* flex-direction: column; */
+    text-align: start;
   }
-
+.greeting{
+  font-size: 1rem;
+}
+  .date {
+  font-family: "Inter Tight";
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 500;
+  
+}
   .welcomeText {
     width: 100%;
   }
@@ -925,8 +1120,9 @@ line-height: normal;
 
   .imagePlaceholder {
     width: 100%;
-    max-width: 200px;
+    max-width: 132px;
     margin: 0 auto;
+    height: auto;
   }
 
   .timeGrid {
@@ -938,5 +1134,36 @@ line-height: normal;
     position: static;
     margin-bottom: 16px;
     width: 100%;
+  }
+
+  .calendarCard {
+    border-radius: 18px;
+    background-color: #fff;
+    width: calc(100% - 20px);
+    padding: 16px 18px 36px;
+    border: 2px solid #e4e4e4;
+    margin-top: 20px;
+  }
+
+  .tasksCard {
+    border-radius: 13px;
+    background-color: #fff;
+    width: calc(100% - 20px);
+    padding: 16px 20px 0;
+    border: 1px solid #e4e4e4;
+    margin-top: 20px;
+  }
+
+  .activityGrid {
+    gap: 8px;
+  }
+
+  .activityRow {
+    gap: 8px;
+  }
+
+  .activityCell {
+    width: 11px;
+    height: 11px;
   }
 }

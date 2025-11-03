@@ -65,7 +65,7 @@ function ProfilePhotoUpload({ onUpload, initialImage, clientData }) {
             <>
               <div className="avatar-bg">
                 <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-                  <circle cx="36" cy="36" r="36" fill="#B3B9C4" />
+                  <circle className="circle" cx="36" cy="36" r="36" fill="#B3B9C4" />
                 </svg>
               </div>
               <div className="user-icon">

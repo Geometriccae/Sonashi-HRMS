@@ -2,35 +2,36 @@ import React, { useState, useEffect } from "react";
 import styles from "./SalesAndLeads.module.css"; //
 import Side from "./sidebar/Sidebar";
 import ClientsTable from "../components/sales-and-leads/ClientsTable";
-
-import belldot from "../assets/dashboard/bell-dot.svg";
+import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import arrowupright from "../assets/dashboard/arrow-up-right.svg";
 import arrowdownup from "../assets/dashboard/arrow-down-up.svg";
+import NotificationBell from "../components/NotificationBell";
 
 function SalesAndLeads() {
   const [username, setUsername] = useState("");
-
+  const [userRole, setUserRole] = useState("");
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
+    setUserRole(localStorage.getItem("role") || "");
   }, []);
 
   return (
     <div className={styles["dashboard-layout"]}>
-      <Side />
+      <div className={styles["desktop-sidebar"]}>
+        <Side />
+      </div>
+
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
             <div className={styles["dashboard-title"]}>Sales & Leads</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img
-                src={belldot}
-                alt="belldot"
-                className={styles["belldot-icon"]}
-              />
+              <NotificationBell />
+
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                   <ProfileAvatar size={40} className={styles["profile-picture"]} />
@@ -38,7 +39,9 @@ function SalesAndLeads() {
                     <div className={styles["profile-name"]}>
                       {username?.toUpperCase()}
                     </div>
-                    <div className={styles["profile-type"]}>Administrator</div>
+                    <div className={styles["profile-type"]}>
+                      {userRole?.toUpperCase()}
+                    </div>
                   </div>
                 </div>
                 <img src={chevrondown} alt="" />
@@ -66,9 +69,9 @@ function SalesAndLeads() {
                   <img src={arrowupright} alt="arrowup" />
                 </div>
               </div>
-              <h2>₹3,52,947</h2>
+              <h2>&#8377;0,00,000</h2>
               <p className={styles.cardsuccess}>
-                21% up <span>from last week</span>
+                00% up <span>from last week</span>
               </p>
             </div>
           </div>
@@ -82,9 +85,9 @@ function SalesAndLeads() {
                   <img src={arrowupright} alt="arrowup" />
                 </div>
               </div>
-              <h2>₹12,947</h2>
+              <h2>&#8377;00,000</h2>
               <p className={styles.cardfail}>
-                1.5% down <span>from last week</span>
+                0.0% down <span>from last week</span>
               </p>
             </div>
           </div>
@@ -99,8 +102,8 @@ function SalesAndLeads() {
                 </div>
               </div>
               <div className={styles.cardamount}>
-                <div className={styles.cardamountvalue}>₹113,364</div>
-                <div className={styles.cardneutral}>↑ 0.4%</div>
+                <div className={styles.cardamountvalue}>&#8377;000,000</div>
+                <div className={styles.cardneutral}>&#8599; 0.4%</div>
               </div>
 
               <div className={styles.barchart}>
@@ -206,106 +209,6 @@ function SalesAndLeads() {
                 </svg>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  width="33"
-                  height="105"
-                  viewBox="0 0 33 105"
-                  fill="none"
-                >
-                  <path
-                    d="M0 8.89973C0 4.21781 3.79545 0.422363 8.47737 0.422363H24.5226C29.2046 0.422363 33 4.21781 33 8.89973V104.422H0V8.89973Z"
-                    fill="#FFF4E6"
-                  />
-                  <path
-                    d="M33 33.4774C33 28.7955 29.2046 25 24.5226 25L8.47738 25C3.79546 25 7.30068e-06 28.7954 6.89519e-06 33.4774L1.30702e-06 98L33 98L33 33.4774Z"
-                    fill="#FFCE8A"
-                  />
-                  <path
-                    d="M0 49.4774C0 44.7954 3.79545 41 8.47737 41H24.5226C29.2046 41 33 44.7954 33 49.4774V104H0V49.4774Z"
-                    fill="#FFAA33"
-                  />
-                </svg>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="33"
-                  height="100"
-                  viewBox="0 0 33 100"
-                  fill="none"
-                >
-                  <path
-                    d="M0 8.89973C0 4.21781 3.79545 0.422363 8.47737 0.422363H23.5226C28.2046 0.422363 32 4.21781 32 8.89973V99.4224H0V8.89973Z"
-                    fill="#FFF4E6"
-                  />
-                  <path
-                    d="M33 32.8997C33 28.2178 29.2046 24.4224 24.5226 24.4224L9.47737 24.4224C4.79545 24.4224 1.00001 28.2178 1 32.8997L1 95.4224L33 95.4224L33 32.8997Z"
-                    fill="#FFCE8A"
-                  />
-                  <path
-                    d="M0 75.4774C0 70.7954 3.79545 67 8.47737 67H24.5226C29.2046 67 33 70.7954 33 75.4774V99H0V75.4774Z"
-                    fill="#FFAA33"
-                  />
-                </svg>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="34"
-                  height="87"
-                  viewBox="0 0 34 87"
-                  fill="none"
-                >
-                  <path
-                    d="M1 8.89974C1 4.21782 4.79545 0.422363 9.47737 0.422363H24.5226C29.2046 0.422363 33 4.21781 33 8.89973V86.4224H1V8.89974Z"
-                    fill="#FFF4E6"
-                  />
-                  <path
-                    d="M32.8 31.8997C32.8 27.2178 29.0046 23.4224 24.3227 23.4224L9.27742 23.4224C4.5955 23.4224 0.800054 27.2178 0.800054 31.8997L0.80005 81.4224L32.8 81.4224L32.8 31.8997Z"
-                    fill="#FFCE8A"
-                  />
-                  <path
-                    d="M0.821045 68.8997C0.821045 64.2178 4.61649 60.4224 9.29841 60.4224H24.5465C29.2284 60.4224 33.0238 64.2178 33.0238 68.8997V86.7213H0.821045V68.8997Z"
-                    fill="#FFAA33"
-                  />
-                </svg>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="33"
-                  height="105"
-                  viewBox="0 0 33 105"
-                  fill="none"
-                >
-                  <path
-                    d="M0 8.89973C0 4.21781 3.79545 0.422363 8.47737 0.422363H24.5226C29.2046 0.422363 33 4.21781 33 8.89973V104.422H0V8.89973Z"
-                    fill="#FFF4E6"
-                  />
-                  <path
-                    d="M33 33.4774C33 28.7955 29.2046 25 24.5226 25L8.47738 25C3.79546 25 7.30068e-06 28.7954 6.89519e-06 33.4774L1.30702e-06 98L33 98L33 33.4774Z"
-                    fill="#FFCE8A"
-                  />
-                  <path
-                    d="M0 49.4774C0 44.7954 3.79545 41 8.47737 41H24.5226C29.2046 41 33 44.7954 33 49.4774V104H0V49.4774Z"
-                    fill="#FFAA33"
-                  />
-                </svg>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="34"
-                  height="87"
-                  viewBox="0 0 34 87"
-                  fill="none"
-                >
-                  <path
-                    d="M1 8.89974C1 4.21782 4.79545 0.422363 9.47737 0.422363H24.5226C29.2046 0.422363 33 4.21781 33 8.89973V86.4224H1V8.89974Z"
-                    fill="#FFF4E6"
-                  />
-                  <path
-                    d="M32.8 31.8997C32.8 27.2178 29.0046 23.4224 24.3227 23.4224L9.27742 23.4224C4.5955 23.4224 0.800054 27.2178 0.800054 31.8997L0.80005 81.4224L32.8 81.4224L32.8 31.8997Z"
-                    fill="#FFCE8A"
-                  />
-                  <path
-                    d="M0.821045 68.8997C0.821045 64.2178 4.61649 60.4224 9.29841 60.4224H24.5465C29.2284 60.4224 33.0238 64.2178 33.0238 68.8997V86.7213H0.821045V68.8997Z"
-                    fill="#FFAA33"
-                  />
-                </svg>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
                   width="34"
                   height="87"
                   viewBox="0 0 34 87"
@@ -354,6 +257,8 @@ function SalesAndLeads() {
           <ClientsTable />
         </section>
       </main>
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNavigation />
     </div>
   );
 }

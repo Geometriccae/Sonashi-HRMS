@@ -20,6 +20,16 @@ function Login() {
       localStorage.setItem("token", res.data.token);
       localStorage.setItem('username', res.data.username);
       console.log(res.data.username); 
+
+      // Store the token and user data in localStorage
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem('username', res.data.username);
+      localStorage.setItem('userId', res.data.user._id); // Add this line
+      localStorage.setItem('role', res.data.user.role); // Store user role
+      
+      console.log("Login successful, user ID:", res.data.user._id);
+      console.log("Stored user ID:", localStorage.getItem('userId'));
+      
       // Navigate to dashboard
       navigate('/dashboard');
     } catch (err) {

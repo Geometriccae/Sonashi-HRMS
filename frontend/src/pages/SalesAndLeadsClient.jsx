@@ -5,6 +5,8 @@ import Side from "./sidebar/Sidebar";
 
 import Documents from "../components/sales-and-leads/Documents";
 import DocumentsService from "../services/DocumentsService";
+import { exportClientBasicInfo, exportEvents, exportDocuments, exportTasks, exportToPDF, exportToTXT } from "../utils/exportUtils";
+import { getTasksByClient } from "../services/TaskService";
 import Calendar from "../components/sales-and-leads/CalendarComponent";
 import DeleteModal from "../components/delete-modal/DeleteModal";
 import CreateEventModal from "../components/sales-and-leads/CreateEventModal";
@@ -15,7 +17,7 @@ import DropDownList from "../components/DropDownList";
 import TaskBoard from "../components/sales-and-leads/TaskBoard";
 import clientService from "../services/ClientService"; // Import your client service
 import config from "../config/config";
-
+import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import belldot from "../assets/dashboard/bell-dot.svg";
 import admindemo from "../assets/dashboard/admin-demo.jpg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
@@ -27,6 +29,8 @@ import pencillineblue from "../assets/dashboard/pencil-line-blue.svg";
 import upload from "../assets/dashboard/upload.svg";
 import deletewhite from "../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
+import { io as ioClient } from 'socket.io-client';
+import NotificationBell from "../components/NotificationBell";
 
 function SalesAndLeadsClient(clientId ) {
   const [activeTab, setActiveTab] = useState("basicInfo");
@@ -55,9 +59,10 @@ function SalesAndLeadsClient(clientId ) {
   const [documentsKey, setDocumentsKey] = useState(0); // Force documents refresh
 
    const [username, setUsername] = useState("");
-    
+   const [userRole, setUserRole] = useState("");
       useEffect(() => {
         setUsername(localStorage.getItem("username") || "");
+        setUserRole(localStorage.getItem("role") || "");
       }, []);
     
 
@@ -142,11 +147,54 @@ function SalesAndLeadsClient(clientId ) {
     }
   }, [clientData, activeTab]);
 
+  // Socket: join client room and listen for client-specific events
+  useEffect(() => {
+    if (!id) return;
+
+    const raw = config.API_BASE_URL || '';
+    const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
+    const socket = ioClient(socketUrl, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnection: true
+    });
+
+    socket.on('connect', () => {
+      console.log('Client page socket connected', socket.id);
+      // join the client room so we receive client-specific events
+      socket.emit('join-client', id);
+    });
+
+    // When a client-event is received, refresh the client's events from server
+    socket.on('client-event', async (payload) => {
+      try {
+        console.log('Received client-event for client page:', payload);
+        // Re-fetch the client to get canonical events array
+        const updatedClient = await clientService.getClient(id);
+        if (updatedClient && Array.isArray(updatedClient.events)) {
+          setEvents(updatedClient.events);
+          // bump calendar key so calendar components refresh
+          setCalendarKey(k => k + 1);
+        }
+      } catch (err) {
+        console.error('Failed to refresh client events after client-event:', err);
+      }
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('Client page socket connect_error', err);
+    });
+
+    return () => {
+      try { socket.disconnect(); } catch (e) { /* ignore */ }
+    };
+  }, [id]);
+
   // Add loading and error states
   if (isLoading) {
     return (
       <div className={styles["dashboard-layout"]}>
-        <Side />
+                <Side />
         <main>
           <div className={styles.loadingState}>Loading client data...</div>
         </main>
@@ -157,7 +205,9 @@ function SalesAndLeadsClient(clientId ) {
   if (error) {
     return (
       <div className={styles["dashboard-layout"]}>
+       
         <Side />
+      
         <main>
           <div className={styles.errorState}>
             <p>Error: {error}</p>
@@ -304,28 +354,56 @@ const handleTaskCreated = (newEvent) => {
     setIsDropdownOpen(false);
   };
 
-  const handleExportOptionSelect = (option) => {
-    console.log(`Export as ${option} selected`);
-    switch (option) {
-      case "pdf":
-        alert("Exporting as PDF...");
-        // Implement PDF export logic here
-        break;
-      case "csv":
-        alert("Exporting as CSV...");
-        // Implement CSV export logic here
-        break;
-      case "txt":
-        alert("Exporting as TXT...");
-        // Implement TXT export logic here
-        break;
-      case "print":
-        alert("Printing document...");
-        // Implement print logic here
-        window.print();
-        break;
-      default:
-        console.log("Unknown export option:", option);
+  const handleExportOptionSelect = async (option) => {
+    try {
+      if (activeTab === "basicInfo") {
+        if (option === "pdf") return exportToPDF();
+        if (option === "txt") return exportToTXT(JSON.stringify(clientData, null, 2), `${clientData?.companyName || 'client'}_basic_info.txt`);
+        // default to CSV for csv
+        return exportClientBasicInfo(clientData);
+      }
+
+      if (activeTab === "meetings") {
+        // Fetch client events from backend
+        const token = localStorage.getItem('token');
+        const resp = await fetch(`${config.API_BASE_URL}/api/clients/${id}/events`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        const events = resp.ok ? await resp.json() : [];
+        // Map events for export utility shape
+        const mapped = (events || []).map(e => ({
+          title: e.eventName || e.title,
+          date: e.date,
+          time: e.time,
+          eventType: e.eventType,
+          notes: e.notes,
+          link: e.link,
+          assignedTeamMember: e.assignedTeamMember,
+          color: e.color
+        }));
+        if (option === "pdf") return exportToPDF();
+        if (option === "txt") return exportToTXT(JSON.stringify(mapped, null, 2), `${clientData?.companyName || 'client'}_events.txt`);
+        return exportEvents(mapped, clientData?.companyName || 'client');
+      }
+
+      if (activeTab === "documents") {
+        const docs = await DocumentsService.listByClient(id);
+        if (option === "pdf") return exportToPDF();
+        if (option === "txt") return exportToTXT(JSON.stringify(docs, null, 2), `${clientData?.companyName || 'client'}_documents.txt`);
+        return exportDocuments(docs, clientData?.companyName || 'client');
+      }
+
+      if (activeTab === "tasks") {
+        const tasks = await getTasksByClient(id);
+        if (option === "pdf") return exportToPDF();
+        if (option === "txt") return exportToTXT(JSON.stringify(tasks, null, 2), `${clientData?.companyName || 'client'}_tasks.txt`);
+        return exportTasks(tasks, clientData?.companyName || 'client');
+      }
+    } catch (e) {
+      console.error('Export failed:', e);
+      alert(e.message || 'Export failed');
+    } finally {
+      setIsDropdownOpen(false);
     }
   };
 
@@ -434,24 +512,24 @@ const handleTaskCreated = (newEvent) => {
 
   return (
     <div className={styles["dashboard-layout"]}>
-      <Side />
+     <div className={styles["desktop-sidebar"]}>
+        <Side />
+      </div>
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
             <div className={styles["dashboard-title"]}>Sales & Leads</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img
-                src={belldot}
-                alt="belldot"
-                className={styles["belldot-icon"]}
-              />
+                <NotificationBell/>
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                 <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                    <div className={styles["profile-type"]}>Administrator</div>
+                    <div className={styles["profile-type"]}>
+                                          {userRole?.toUpperCase()}
+                                        </div>
                   </div>
                 </div>
                 <img src={chevrondown} alt="" />
@@ -676,21 +754,21 @@ const handleTaskCreated = (newEvent) => {
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>Cargo Type</span>
+                      <span className={styles.text9}>Lead Source</span>
                       <span className={styles.text10}>
-                        {clientData.cargoType || "Not provided"}
+                        {clientData.leadSource || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column4}>
-                      <span className={styles.text9}>Account Manager</span>
+                      <span className={styles.text9}>Lead Status</span>
                       <span className={styles.text10}>
-                        {clientData.accountManager || "Not provided"}
+                        {clientData.currentStatus || "Not provided"}
                       </span>
                     </div>
                     <div className={styles.column5}>
-                      <span className={styles.text9}>Decision Maker</span>
+                      <span className={styles.text9}>Category</span>
                       <span className={styles.text10}>
-                        {clientData.decisionMaker || "Not provided"}
+                        {clientData.category || "Not provided"}
                       </span>
                     </div>
                   </div>
@@ -751,6 +829,9 @@ const handleTaskCreated = (newEvent) => {
           </div>
         </div>
       </main>
+
+       {/* Mobile Bottom Navigation */}
+      <MobileBottomNavigation />
 
       <DeleteModal
         isOpen={isDeleteModalOpen}

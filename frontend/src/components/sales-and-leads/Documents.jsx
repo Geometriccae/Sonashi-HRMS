@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import "./Documents.css";
 import DataTable from "../DataTable";
 import DocumentsService from "../../services/DocumentsService";
-
+import MobileBottomNavigation from "../../components/MobileBottomNavigation";
 
 
 
@@ -54,6 +54,8 @@ function Documents({ clientId, refreshKey }) {
           }}
         />
       </section>
+       {/* Mobile Bottom Navigation */}
+      <MobileBottomNavigation />
     </div>
   );
 }

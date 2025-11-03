@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styles from "./AssignTaskModal.module.css";
 import InputField from "../InputField";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { createEvent } from "../../services/AssignEventService"; // We'll create this
+import employeeService from "../../services/EmployeeService";
+import Select from "react-select";
+
 
 function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
   const [formData, setFormData] = useState({
@@ -11,7 +14,7 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
     eventType: "",
     date: "",
     time: "",
-    assignedTeamMember: "",
+    assignedTeamMembers: [],
     notes: "",
     link: "",
     color: "#FF9500",
@@ -19,6 +22,20 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [employees, setEmployees] = useState([]);
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const data = await employeeService.getEmployees();
+        setEmployees(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load employees", e);
+        setEmployees([]);
+      }
+    };
+    loadEmployees();
+  }, []);
 
   if (!isOpen) return null;
 
@@ -34,6 +51,8 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
       [field]: value,
     }));
   };
+
+
 
   const handleSubmit = async () => {
     if (
@@ -207,40 +226,51 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
             </div>
 
             <div className="input-field">
-              <label className="field-label">Assign a Team Member</label>
-              <div className="select-wrapper">
-                <select
-                  className="form-select"
-                  value={formData.assignedTeamMember}
-                  onChange={(e) =>
-                    handleInputChange("assignedTeamMember", e.target.value)
-                  }
-                >
-                  <option value="">Select team member</option>
-                  <option value="Venkat">Venkatesh</option>
-                  <option value="Mukesh">Mukesh</option>
-                  <option value="Varun">Varun</option>
-                  <option value="Dinesh">Dinesh</option>
-                </select>
-
-                <div className="select-icon">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M4 6L8 10L12 6"
-                      stroke="#98A1B0"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
+              <label className="field-label">Assign Team Members</label>
+              <Select
+                isMulti
+                options={employees.map((emp) => ({
+                  value: emp._id,
+                  label: emp.employeeName,
+                }))}
+                value={employees
+                  .filter((emp) =>
+                    formData.assignedTeamMembers.includes(emp._id)
+                  )
+                  .map((emp) => ({ value: emp._id, label: emp.employeeName }))}
+                onChange={(selectedOptions) => {
+                  const values = selectedOptions
+                    ? selectedOptions.map((o) => o.value)
+                    : [];
+                  handleInputChange("assignedTeamMembers", values);
+                }}
+                placeholder="Select team members..."
+                className="form-select"
+                classNamePrefix="select"
+                styles={{
+                  control: (provided) => ({
+                    ...provided,
+                    minHeight: "48px",
+                    borderRadius: "4px",
+                    borderColor: "#ccc",
+                    boxShadow: "none",
+                    padding: "2px 8px",
+                  }),
+                  multiValue: (provided) => ({
+                    ...provided,
+                    backgroundColor: "#e5e5e5",
+                    color: "#333",
+                  }),
+                  multiValueLabel: (provided) => ({
+                    ...provided,
+                    color: "#333",
+                  }),
+                  placeholder: (provided) => ({
+                    ...provided,
+                    color: "#888",
+                  }),
+                }}
+              />
             </div>
 
             <div className="input-field">

@@ -2,7 +2,9 @@ import React, { useState, useEffect } from "react";
 import styles from "./DashboardOverview.module.css";
 import { formatDate } from "../utils/dateUtils";
 import ConversionDataChart from "./ConversionDataChart";
-
+import CheckIn from "../components/CheckIn";
+import checkInService from "../services/CheckInService";
+import NotificationBell from "../components/NotificationBell";
 // Import available icons
 import arrowupright from "../assets/dashboard/arrow-up-right.svg";
 import settings from "../assets/dashboard/settings.svg";
@@ -17,9 +19,15 @@ import Ellipse_dot from "../assets/dashboard/Ellipse27.svg";
 function DashboardOverview() {
   const [username, setUsername] = useState("");
   const [currentDate, setCurrentDate] = useState("");
+  const [lastCheckInTime, setLastCheckInTime] = useState(null);
+  const [debugInfo, setDebugInfo] = useState("");
 
   useEffect(() => {
-    setUsername(localStorage.getItem("username") || "User");
+    const storedUsername = localStorage.getItem("username") || "User";
+    const storedUserId = localStorage.getItem("userId");
+    
+    setUsername(storedUsername);
+    console.log("Dashboard mounted - User ID:", storedUserId);
 
     const now = new Date();
     const options = {
@@ -30,7 +38,62 @@ function DashboardOverview() {
     };
     const formatted = now.toLocaleDateString("en-US", options);
     setCurrentDate(`It's ${formatted}`);
+
+    fetchLastCheckIn();
   }, []);
+
+  const fetchLastCheckIn = async () => {
+    try {
+      const userId = localStorage.getItem("userId");
+      const role = localStorage.getItem("role") || "";
+      console.log("Fetching check-ins for user:", userId, "role:", role);
+      setDebugInfo(`User ID: ${userId || 'NOT FOUND'} | Role: ${role || 'NOT FOUND'}`);
+      
+      // Don't return early if userId missing — service can use /user/me
+      if (role === 'admin') {
+        // Admin: fetch global latest check-ins (page 1, limit 1)
+        const resp = await checkInService.getCheckIns(1, 1);
+        console.log('Admin getCheckIns response:', resp);
+        let latest = null;
+        if (resp && Array.isArray(resp.checkIns) && resp.checkIns.length > 0) {
+          latest = resp.checkIns[0];
+        } else if (Array.isArray(resp) && resp.length > 0) {
+          latest = resp[0];
+        }
+        if (latest && latest.timestamp) {
+          setLastCheckInTime(latest.timestamp);
+          setDebugInfo(`Admin latest check-in: ${new Date(latest.timestamp).toString()}`);
+        } else {
+          setLastCheckInTime(null);
+          setDebugInfo("Admin: no check-ins found");
+        }
+      } else {
+        // Non-admin: fetch only their check-ins.
+        // If userId is present pass it; otherwise call service without id to use /user/me
+        const checkIns = await checkInService.getCheckInsByUser(userId || undefined);
+        console.log("User check-ins response:", checkIns);
+        if (checkIns && checkIns.length > 0) {
+          setLastCheckInTime(checkIns[0].timestamp);
+          setDebugInfo(`Found ${checkIns.length} check-ins, latest: ${new Date(checkIns[0].timestamp).toString()}`);
+        } else {
+          setLastCheckInTime(null);
+          setDebugInfo("No check-ins found for user");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching check-ins:", err);
+      setLastCheckInTime(null);
+      setDebugInfo(`Error: ${err.message}`);
+    }
+  };
+
+  // Pass this to CheckIn so it can refresh after submit
+  const handleCheckInLogged = () => {
+    console.log("Check-in logged, refreshing...");
+    setDebugInfo("Refreshing after check-in...");
+    fetchLastCheckIn();
+  };
+
 
   const getTimeGreeting = () => {
     const hour = new Date().getHours();
@@ -41,6 +104,19 @@ function DashboardOverview() {
 
   return (
     <div className={styles.dashboardOverview}>
+
+       {/* Temporary debug info */}
+      <div style={{ 
+        background: '#f0f0f0', 
+        padding: '10px', 
+        margin: '10px', 
+        borderRadius: '5px',
+        fontSize: '12px',
+        color: '#666'
+      }}>
+        <strong>Debug Info:</strong> {debugInfo}<br/>
+        <strong>Last Check-in Time:</strong> {lastCheckInTime ? new Date(lastCheckInTime).toString() : 'null'}
+      </div>
       {/* Header Section */}
       <div className={styles.headerRow}>
         <div className={styles.welcomeCard}>
@@ -64,14 +140,14 @@ function DashboardOverview() {
           <div className={styles.metricCard}>
             <div className={styles.metricContent}>
               <div className={styles.metricLabel}>Total Payables</div>
-              <div className={styles.metricValue}>$13,375</div>
+              <div className={styles.metricValue}>&#8377;00,000</div>
             </div>
             <div className={styles.metricDetails}>
               <img src={threedot} alt="trend" className={styles.trendIcon} />
               <div className={styles.changeIndicator}>
                 <div className={styles.changeChip}>
-                  <span className={styles.changeIcon}>↗</span>
-                  <span className={styles.grow}>04%</span>
+                  <span className={styles.changeIcon}>&#8599;</span>
+                  <span className={styles.grow}>00%</span>
                 </div>
               </div>
             </div>
@@ -81,14 +157,14 @@ function DashboardOverview() {
           <div className={styles.metricCard}>
             <div className={styles.metricContent}>
               <div className={styles.metricLabel}>Total Receivables</div>
-              <div className={styles.metricValue}>$343,130</div>
+              <div className={styles.metricValue}>&#8377;000,000</div>
             </div>
             <div className={styles.metricDetails}>
               <img src={threedot} alt="trend" className={styles.trendIcon} />
               <div className={styles.changeIndicator}>
                 <div className={styles.changeChip}>
-                  <span className={styles.changeIcon}>↗</span>
-                  <span className={styles.grow}>1.3%</span>
+                  <span className={styles.changeIcon}>&#8599;</span>
+                  <span className={styles.grow}>0.0%</span>
                 </div>
               </div>
             </div>
@@ -98,7 +174,7 @@ function DashboardOverview() {
           <div className={`${styles.metricCard} ${styles.profitCard}`}>
             <div className={styles.metricContent}>
               <div className={styles.metricLabel}>Total Profit this month</div>
-              <div className={styles.metricValue}>$220,420</div>
+              <div className={styles.metricValue}>&#8377;000,000</div>
             </div>
             <div className={styles.metricDetails}>
               <img src={threedot} alt="trend" className={styles.trendIcon} />
@@ -108,14 +184,22 @@ function DashboardOverview() {
                     className={styles.changeIcon}
                     style={{ color: "white" }}
                   >
-                    ↗
+                    &#8599;
                   </span>
-                  <span style={{ color: "white" }}>20%</span>
+                  <span style={{ color: "white" }}>00%</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      <div className={styles["mobile-checkin"]}>
+        <CheckIn
+         
+          lastCheckInTime={lastCheckInTime}
+    onCheckInLogged={handleCheckInLogged}
+        />
       </div>
 
       {/* Content Row */}
@@ -131,10 +215,10 @@ function DashboardOverview() {
 
           <div className={styles.conversionStats}>
             <div className={styles.statsRow}>
-              <div className={styles.percentageValue}>58%</div>
+              <div className={styles.percentageValue}>00%</div>
               <div className={styles.changeChip}>
-                <span className={styles.changeIcon}>↗</span>
-                <span className={styles.grow}>2.34%</span>
+                <span className={styles.changeIcon}>&#8599;</span>
+                <span className={styles.grow}>0.00%</span>
               </div>
             </div>
             <div className={styles.description}>

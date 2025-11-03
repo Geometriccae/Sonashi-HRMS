@@ -1,0 +1,121 @@
+.import-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647; /* very high to avoid being hidden */
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.import-modal-container {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  max-height: 90vh;
+  overflow: auto;
+  width: 720px;
+  padding: 20px;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  color: #111827;
+  position: relative;
+}
+
+/* Header */
+.import-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.import-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.import-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* File input / preview */
+.import-modal-file input[type="file"] {
+  width: 100%;
+  margin: 10px;
+}
+.import-modal-selected {
+  margin-bottom: 8px;
+  color: #333;
+}
+.import-modal-preview .import-modal-preview-title {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 6px;
+}
+.import-modal-preview-table {
+  max-height: 140px;
+  overflow: auto;
+  border: 1px solid #eee;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.import-modal-preview-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.import-modal-preview-table th,
+.import-modal-preview-table td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid #eee;
+}
+
+/* Actions */
+.import-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.primary-button, .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+.primary-button {
+  background: #007aff;
+  color: #fff;
+}
+.primary-button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.secondary-button {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* Summary / errors */
+.import-modal-summary { margin-top: 8px; }
+.import-modal-error-list {
+  margin-top: 8px;
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff7f7;
+  border: 1px solid #fee2e2;
+}
+.import-modal-error-list ul { margin: 0; padding-left: 18px; }
+.import-modal-too-many { font-size: 12px; color: #666; margin-top: 6px; }

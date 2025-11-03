@@ -12,17 +12,13 @@
 @media (max-width: 991px) {
   .profile-upload-container {
     width: 100%;
-    flex-direction: column;
+    flex-direction: row;
     gap: 16px;
     text-align: center;
   }
 }
 
-@media (max-width: 640px) {
-  .profile-upload-container {
-    padding: 16px;
-  }
-}
+
 
 .profile-info {
   display: flex;
@@ -106,4 +102,27 @@
   height: 72px;
   border-radius: 50%;
   object-fit: cover;
+}
+@media (max-width: 640px) {
+  .profile-upload-container {
+    padding: 13px;
+    font-size: 12px !important;
+    margin-top: 0px;
+  }
+  .profile-text{
+    font-size: 12px;
+  }
+
+  /* .user-icon{
+    width: 22px;
+    height: 22px;
+  }
+
+  .avatar-bg{
+    width: 24px;
+    height: 24px;
+    padding: 0;
+  } */
+
+  
 }

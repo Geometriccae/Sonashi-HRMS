@@ -160,7 +160,7 @@
 
 @media (max-width: 640px) {
   .form-fields-grid {
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
   }
 }
@@ -323,7 +323,7 @@
 .company-info {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   font-size: 18px;
   color: #212121;
   text-align: center;
@@ -439,7 +439,7 @@
 
 @media (max-width: 640px) {
   .form-actions {
-    flex-direction: column;
+    flex-direction: row;
     gap: 12px;
     width: 100%;
   }
@@ -496,4 +496,10 @@
 
 .button-primary:hover {
   background-color: #0056cc;
+}
+
+@media (max-width: 480px) {
+  .form-fields-grid{
+    margin-top: 0px;
+  }
 }

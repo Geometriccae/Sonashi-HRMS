@@ -6,7 +6,10 @@ import Side from "../sidebar/Sidebar";
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
 // import Calendar from "../../components/CalendarComponent";
 import Meetingstable from "./YourCalendarMeetings";
-
+import clientService from "../../services/ClientService";
+import employeeService from "../../services/EmployeeService";
+import config from "../../config/config";
+import MobileBottomNavigation from "../../components/MobileBottomNavigation";
 import DeleteModal from "../../components/delete-modal/DeleteModal";
 import CreateEventModal from "../../components/sales-and-leads/CreateEventModal";
 import FileUploadModal from "../../components/FileUploadModal";
@@ -23,6 +26,7 @@ import pencillineblue from "../../assets/dashboard/pencil-line-blue.svg";
 import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
+import NotificationBell from "../../components/NotificationBell";
 
 function YourCalendar() {
   const [activeTab, setActiveTab] = useState("meetings");
@@ -39,11 +43,128 @@ function YourCalendar() {
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
-    
+  const [userRole, setUserRole] = useState("");
+  const [meetings, setMeetings] = useState([]);
+  const [isLoadingMeetings, setIsLoadingMeetings] = useState(false);
 
       useEffect(() => {
         setUsername(localStorage.getItem("username") || "");
+        setUserRole(localStorage.getItem("role") || "");
+        loadMeetingsForCurrentUser();
       }, []);
+  
+    // Load and filter events according to role: admin => all, user => assigned OR created
+    async function loadMeetingsForCurrentUser() {
+      setIsLoadingMeetings(true);
+      try {
+        const token = localStorage.getItem("token");
+        // get current user from server (fallback to localStorage)
+        let me = null;
+        try {
+          const resp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/,'')}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resp.ok) me = await resp.json();
+        } catch (e) {
+          // ignore - fallback to localStorage
+        }
+        me = me || { _id: localStorage.getItem('userId'), username: localStorage.getItem('username'), emailId: localStorage.getItem('email'), role: localStorage.getItem('role') };
+        const role = me.role || userRole || 'sales_executive';
+  
+        // fetch aggregated client events
+        let events = [];
+        try {
+          const allEventsResp = await fetch(`${clientService.baseURL.replace(/\/clients\/?$/,'')}/clients/events`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (allEventsResp.ok) events = await allEventsResp.json();
+        } catch (e) {
+          console.warn('Failed to fetch client events', e);
+          events = [];
+        }
+  
+        if (role === 'admin') {
+          // Admin sees all events
+          setMeetings(Array.isArray(events) ? events : []);
+        } else if (role === 'sales_executive') {
+          // Sales executive sees events they created or are assigned to
+          // resolve employee linked to this user
+          let employee = null;
+          try {
+            const employees = await employeeService.getEmployees();
+            employee = (employees || []).find(emp =>
+              String(emp.user) === String(me._id) ||
+              (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
+            );
+          } catch (e) {
+            console.warn('Failed to resolve employee:', e);
+          }
+  
+          const empId = employee?._id ? String(employee._id) : null;
+          const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
+          const userId = me._id ? String(me._id) : null;
+  
+          const filtered = (events || []).filter(ev => {
+            // Check if user created this event
+            if (ev.createdBy && (
+                (userId && String(ev.createdBy) === userId) || 
+                (usernameKey && ev.createdBy.toLowerCase && String(ev.createdBy).toLowerCase() === usernameKey)
+              )) {
+              return true;
+            }
+            
+            // Check if user is assigned to this event
+            // ev may include assignedTeamMembers (array of ids) and assignedBy (string)
+            const assignedTeam = ev.assignedTeamMembers || ev.meta?.event?.assignedTeamMembers || ev.assignedTo || ev.meta?.assignedTeamMembers;
+            if (empId && Array.isArray(assignedTeam) && assignedTeam.map(String).includes(String(empId))) return true;
+            
+            // Check if user is the one who assigned this event
+            if (ev.assignedBy && usernameKey && String(ev.assignedBy).toLowerCase() === usernameKey) return true;
+            
+            // fallback: check payload/meta fields
+            const metaAssigned = ev.meta?.event?.assignedTeamMembers || ev.meta?.assignedTeamMembers;
+            if (empId && Array.isArray(metaAssigned) && metaAssigned.map(String).includes(String(empId))) return true;
+            
+            return false;
+          });
+          
+          console.log('Filtered events for sales_executive:', filtered.length);
+          setMeetings(filtered);
+        } else {
+          // Other roles - use the same logic as before
+          let employee = null;
+          try {
+            const employees = await employeeService.getEmployees();
+            employee = (employees || []).find(emp =>
+              String(emp.user) === String(me._id) ||
+              (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
+            );
+          } catch (e) {
+            console.warn('Failed to resolve employee:', e);
+          }
+  
+          const empId = employee?._id ? String(employee._id) : null;
+          const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
+  
+          const filtered = (events || []).filter(ev => {
+            // ev may include assignedTeamMembers (array of ids) and assignedBy (string)
+            const assignedTeam = ev.assignedTeamMembers || ev.meta?.event?.assignedTeamMembers || ev.assignedTo || ev.meta?.assignedTeamMembers;
+            if (empId && Array.isArray(assignedTeam) && assignedTeam.map(String).includes(String(empId))) return true;
+            if (ev.assignedBy && usernameKey && String(ev.assignedBy).toLowerCase() === usernameKey) return true;
+            // fallback: check payload/meta fields
+            const metaAssigned = ev.meta?.event?.assignedTeamMembers || ev.meta?.assignedTeamMembers;
+            if (empId && Array.isArray(metaAssigned) && metaAssigned.map(String).includes(String(empId))) return true;
+            return false;
+          });
+          setMeetings(filtered);
+        }
+      } catch (err) {
+        console.error('Error loading meetings for calendar:', err);
+        setMeetings([]);
+      } finally {
+        setIsLoadingMeetings(false);
+      }
+    }
 
   useEffect(() => {
     const updateIndicatorPosition = () => {
@@ -176,10 +297,11 @@ function YourCalendar() {
       case "meetings":
         return (
           <div className={styles.row_view5}>
-            <button className={styles.button_row_view} onClick={handleNewEvent}>
+            {/* hide for now */}
+            {/* <button className={styles.button_row_view} onClick={handleNewEvent}>
               <span className={styles.text3}>New Event</span>
               <img src={plus} className={styles.image3} alt="" />
-            </button>
+            </button> */}
             <button
               ref={exportButtonRef}
               className={styles.button_row_view2}
@@ -196,25 +318,25 @@ function YourCalendar() {
   };
 
   return (
-    <div className={styles["dashboard-layout"]}>
-      <Side />
+    <div className={styles["dashboard-layout"]}> 
+      <div className={styles["desktop-sidebar"]}>
+        <Side />
+      </div>
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
             <div className={styles["dashboard-title"]}>Calendar</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img
-                src={belldot}
-                alt="belldot"
-                className={styles["belldot-icon"]}
-              />
+                <NotificationBell />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                   <ProfileAvatar size={40} className={styles["profile-picture"]} />
                   <div className={styles["profile-column"]}>
                     <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                    <div className={styles["profile-type"]}>Administrator</div>
+                     <div className={styles["profile-type"]}>
+                                          {userRole?.toUpperCase()}
+                                        </div>
                   </div>
                 </div>
                 <img src={chevrondown} alt="" />
@@ -259,7 +381,7 @@ function YourCalendar() {
             <div className={styles.column3}>
               {activeTab === "meetings" && (
                 <div className={styles.meetingsContent} >
-                  <Meetingstable />
+                  <Meetingstable meetings={meetings} isLoading={isLoadingMeetings} reloadMeetings={loadMeetingsForCurrentUser} />
                 </div>
               )}
             </div>
@@ -298,6 +420,8 @@ function YourCalendar() {
         onOptionSelect={handleExportOptionSelect}
         position={dropdownPosition}
       />
+       {/* Mobile Bottom Navigation */}
+      <MobileBottomNavigation />
     </div>
   );
 }

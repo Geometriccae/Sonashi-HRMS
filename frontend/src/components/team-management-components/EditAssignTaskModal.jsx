@@ -3,14 +3,22 @@ import "../../components/sales-and-leads/CreateEventModal.css"; // Reusing the s
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { updateEvent } from "../../services/AssignEventService";
+import employeeService from "../../services/EmployeeService";
+import Select from "react-select";
 
-function EditAssignTaskModal({ isOpen, onClose, employeeId, eventData, onEventUpdated }) {
+function EditAssignTaskModal({
+  isOpen,
+  onClose,
+  employeeId,
+  eventData,
+  onEventUpdated,
+}) {
   const [formData, setFormData] = useState({
     eventName: "",
     eventType: "",
     date: "",
     time: "",
-    assignedTeamMember: "",
+    assignedTeamMembers: [],
     notes: "",
     link: "",
     color: "#FF9500",
@@ -18,26 +26,90 @@ function EditAssignTaskModal({ isOpen, onClose, employeeId, eventData, onEventUp
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [employees, setEmployees] = useState([]);
+
+  // Load employees when component mounts
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const data = await employeeService.getEmployees();
+        setEmployees(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load employees", e);
+        setEmployees([]);
+      }
+    };
+    loadEmployees();
+  }, []);
 
   // Populate form data when eventData changes
   useEffect(() => {
     if (eventData && isOpen) {
+      console.log("EditAssignTaskModal - eventData received:", eventData);
+
       const eventDate = new Date(eventData.start);
       const timeString = eventDate.toTimeString().slice(0, 5); // HH:MM format
-      const dateString = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const dateString = eventDate.toISOString().split("T")[0]; // YYYY-MM-DD format
+
+      // Handle different formats of assignedTeamMembers - following EditTaskModal pattern
+      let assignedMembers = [];
+      if (eventData.assignedTeamMembers) {
+        if (Array.isArray(eventData.assignedTeamMembers)) {
+          assignedMembers = eventData.assignedTeamMembers.map((emp) => {
+            // Handle both ObjectId strings and employee objects
+            if (typeof emp === "string") {
+              return emp;
+            } else if (emp && emp._id) {
+              return emp._id.toString();
+            }
+            return emp;
+          });
+        } else if (typeof eventData.assignedTeamMembers === "string") {
+          // Handle old single-assignment format
+          assignedMembers = [eventData.assignedTeamMembers];
+        }
+      } else if (eventData.assignedTeamMember) {
+        // Handle old single-assignment format
+        assignedMembers = [eventData.assignedTeamMember];
+      }
+
+      console.log(
+        "EditAssignTaskModal - assignedTeamMembers processed:",
+        assignedMembers
+      );
 
       setFormData({
         eventName: eventData.title || "",
         eventType: eventData.eventType || "",
         date: dateString,
         time: timeString,
-        assignedTeamMember: eventData.assignedTeamMember || "",
+        assignedTeamMembers: assignedMembers,
         notes: eventData.notes || "",
         link: eventData.link || "",
         color: eventData.color || "#FF9500",
       });
     }
   }, [eventData, isOpen]);
+
+  // Debug log to see when employees and formData are both loaded
+  useEffect(() => {
+    if (employees.length > 0 && formData.assignedTeamMembers.length > 0) {
+      console.log("EditAssignTaskModal - Employees loaded:", employees.length);
+      console.log(
+        "EditAssignTaskModal - Form data assignedTeamMembers:",
+        formData.assignedTeamMembers
+      );
+
+      // Check if assigned team members exist in employees list
+      const validEmployees = employees.filter((emp) =>
+        formData.assignedTeamMembers.includes(emp._id)
+      );
+      console.log(
+        "EditAssignTaskModal - Valid assigned employees found:",
+        validEmployees
+      );
+    }
+  }, [employees, formData.assignedTeamMembers]);
 
   if (!isOpen) return null;
 
@@ -74,7 +146,11 @@ function EditAssignTaskModal({ isOpen, onClose, employeeId, eventData, onEventUp
         time: formData.time,
       };
 
-      const updatedEvent = await updateEvent(employeeId, eventData.id, updatedEventData);
+      const updatedEvent = await updateEvent(
+        employeeId,
+        eventData.id,
+        updatedEventData
+      );
       console.log("Event updated:", updatedEvent);
 
       if (onEventUpdated) {
@@ -98,7 +174,7 @@ function EditAssignTaskModal({ isOpen, onClose, employeeId, eventData, onEventUp
     setIsDatePickerOpen(false);
   };
 
-   const handleDateSelect = (selectedDate) => {
+  const handleDateSelect = (selectedDate) => {
     // Format as local yyyy-mm-dd (no timezone shift)
     const y = selectedDate.getFullYear();
     const m = String(selectedDate.getMonth() + 1).padStart(2, "0");
@@ -108,7 +184,7 @@ function EditAssignTaskModal({ isOpen, onClose, employeeId, eventData, onEventUp
     setIsDatePickerOpen(false);
   };
 
-const formatDateForDisplay = (dateString) => {
+  const formatDateForDisplay = (dateString) => {
     if (!dateString) return "";
     // Expect yyyy-mm-dd, render dd/mm/yyyy
     const [y, m, d] = dateString.split("-");
@@ -219,40 +295,54 @@ const formatDateForDisplay = (dateString) => {
             </div>
 
             <div className="input-field">
-              <label className="field-label">Assign a Team Member</label>
-              <div className="select-wrapper">
-                <select
-                  className="form-select"
-                  value={formData.assignedTeamMember}
-                  onChange={(e) =>
-                    handleInputChange("assignedTeamMember", e.target.value)
-                  }
-                >
-                  <option value="">Select team member</option>
-                  <option value="Venkat">Venkatesh</option>
-                  <option value="Mukesh">Mukesh</option>
-                  <option value="Varun">Varun</option>
-                  <option value="Dinesh">Dinesh</option>
-                </select>
-
-                <div className="select-icon">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M4 6L8 10L12 6"
-                      stroke="#98A1B0"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
+              <label className="field-label">Assign Team Members</label>
+              <Select
+                isMulti
+                options={employees.map((emp) => ({
+                  value: emp._id.toString(),
+                  label: emp.employeeName,
+                }))}
+                value={employees
+                  .filter((emp) =>
+                    formData.assignedTeamMembers.includes(emp._id.toString())
+                  )
+                  .map((emp) => ({
+                    value: emp._id.toString(),
+                    label: emp.employeeName,
+                  }))}
+                onChange={(selectedOptions) => {
+                  const values = selectedOptions
+                    ? selectedOptions.map((o) => o.value)
+                    : [];
+                  handleInputChange("assignedTeamMembers", values);
+                }}
+                placeholder="Select team members..."
+                className="form-select"
+                classNamePrefix="select"
+                styles={{
+                  control: (provided) => ({
+                    ...provided,
+                    minHeight: "48px",
+                    borderRadius: "4px",
+                    borderColor: "#ccc",
+                    boxShadow: "none",
+                    padding: "2px 8px",
+                  }),
+                  multiValue: (provided) => ({
+                    ...provided,
+                    backgroundColor: "#e5e5e5",
+                    color: "#333",
+                  }),
+                  multiValueLabel: (provided) => ({
+                    ...provided,
+                    color: "#333",
+                  }),
+                  placeholder: (provided) => ({
+                    ...provided,
+                    color: "#888",
+                  }),
+                }}
+              />
             </div>
 
             <div className="input-field">
@@ -305,47 +395,47 @@ const formatDateForDisplay = (dateString) => {
             </div> */}
 
             <div className="color-selector">
-  <label className="field-label">Event Color</label>
-  <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-    {["#FF9500", "#007AFF", "#34C759", "#30B0C7"].map((color) => (
-      <label
-        key={color}
-        style={{
-          display: "inline-block",
-          width: "24px",
-          height: "24px",
-          borderRadius: "50%",
-          border: `3px solid ${formData.color === color ? "#000" : color}`,
-          cursor: "pointer",
-          position: "relative",
-        }}
-      >
-        <input
-          type="radio"
-          name="eventColor"
-          value={color}
-          style={{ display: "none" }}
-          checked={formData.color === color}   // pre-selects saved color
-          onChange={() => handleColorSelect(color)}
-        />
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            borderRadius: "50%",
-            backgroundColor: formData.color === color ? color : "transparent",
-            transition: "0.2s",
-          }}
-        />
-      </label>
-    ))}
-  </div>
-</div>
-
+              <label className="field-label">Event Color</label>
+              <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                {["#FF9500", "#007AFF", "#34C759", "#30B0C7"].map((color) => (
+                  <label
+                    key={color}
+                    style={{
+                      display: "inline-block",
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "50%",
+                      border: `3px solid ${
+                        formData.color === color ? "#000" : color
+                      }`,
+                      cursor: "pointer",
+                      position: "relative",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="eventColor"
+                      value={color}
+                      style={{ display: "none" }}
+                      checked={formData.color === color} // pre-selects saved color
+                      onChange={() => handleColorSelect(color)}
+                    />
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: "50%",
+                        backgroundColor:
+                          formData.color === color ? color : "transparent",
+                        transition: "0.2s",
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-
-
 
         <div className="modal-actions">
           <button

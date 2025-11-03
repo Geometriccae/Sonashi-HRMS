@@ -926,6 +926,11 @@ letter-spacing: -0.5px;
     min-width: 100px;
   }
 }
+@media (max-width: 991px) {
+  .desktop-sidebar {
+    display: none;
+  }
+}
 
 .project-name {
   color: #161616;
@@ -1017,4 +1022,7 @@ letter-spacing: -0.5px;
   .page-info {
     order: -1;
   }
+
 }
+
+

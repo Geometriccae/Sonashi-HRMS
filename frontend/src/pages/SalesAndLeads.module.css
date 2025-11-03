@@ -1,16 +1,19 @@
+/* Desktop Layout */
 .dashboard-layout {
   width: 120rem;
   height: 67.5rem;
   display: flex;
-  overflow: hidden; /* Prevent overall scrolling */
+  overflow: hidden;
   position: relative;
   background-color: #FAFBFB;
 }
+
 main {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
+
 .dashboard-header {
   display: flex;
   width: 99.25rem;
@@ -18,11 +21,9 @@ main {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.625rem;
-  border-bottom: 1.2px solid #e4e4e4;
+  border-bottom: 0.075rem solid #e4e4e4;
   background: #fff;
 }
-
-
 
 .dashboard-row {
   display: flex;
@@ -33,9 +34,7 @@ main {
 
 .dashboard-title {
   color: #161616;
-
-  /* Headings/Heading 4 */
-  font-family: Inter;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 1.875rem;
   font-style: normal;
   font-weight: 600;
@@ -58,7 +57,7 @@ main {
   align-items: center;
   gap: 0.89288rem;
   border-radius: 0.5rem;
-  border: 1.429px solid #e4e4e4;
+  border: 0.089rem solid #e4e4e4;
   background: #fff;
 }
 
@@ -92,21 +91,21 @@ main {
 
 .profile-name {
   color: #161616;
-  font-family: "Inter Tight";
+  font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 1.125rem;
   font-style: normal;
   font-weight: 550;
-  line-height: 116%; /* 1.305rem */
+  line-height: 116%;
   letter-spacing: 0.00888rem;
 }
 
 .profile-type {
   color: rgba(22, 22, 22, 0.8);
-  font-family: "Inter Tight";
+  font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 0.875rem;
   font-style: normal;
   font-weight: 400;
-  line-height: 116%; /* 1.015rem */
+  line-height: 116%;
   letter-spacing: 0.00888rem;
 }
 
@@ -115,8 +114,8 @@ main {
   width: 99.25rem;
   padding: 0.625rem 84.5rem 0.625rem 1.5rem;
   align-items: center;
-  border-bottom: 1px solid #E4E4E4;
-background: #FFF;
+  border-bottom: 0.0625rem solid #E4E4E4;
+  background: #FFF;
 }
 
 .breadcrumb {
@@ -127,108 +126,106 @@ background: #FFF;
 
 .breadcrumb-one {
   color: var(--Foundation-Neutral-N100, #7a8699);
-  font-family: Inter;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 1rem;
   font-style: normal;
   font-weight: 550;
-  line-height: 1.19038rem; /* 119.037% */
+  line-height: 1.19038rem;
   letter-spacing: -0.0625rem;
 }
+
 .breadcrumb-two {
   color: var(--Button-normal, #007aff);
-  font-family: Inter;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 1rem;
   font-style: normal;
   font-weight: 550;
-  line-height: 1.19038rem; /* 119.037% */
+  line-height: 1.19038rem;
   letter-spacing: -0.0625rem;
 }
 
 .main-content {
   flex: 1;
-  padding: 24px;
+  padding: 1.5rem;
   background-color: #FAFBFB;
   overflow-x: auto;
 }
 
-
-
 /* Card Container Section */
 .cardcontainer {
   display: flex;
-  gap: 20.32px;
-  padding: 25px;
+  gap: 1.27rem;
+  padding: 1.5625rem;
   padding-bottom: 0;
 }
 
 /* Common card styles */
 .cardbox {
- display: flex;
-width: 26.875rem;
-height: 14.4375rem;
-padding: 1.5rem;
-flex-direction: column;
-justify-content: center;
-align-items: flex-start;
-gap: 1.64481rem;
-flex-shrink: 0;
-border-radius: 1rem;
-border: 1.5px solid #E4E4E4;
-background: #FFF;
+  display: flex;
+  width: 26.875rem;
+  height: 14.4375rem;
+  padding: 1.5rem;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1.64481rem;
+  flex-shrink: 0;
+  border-radius: 1rem;
+  border: 0.09375rem solid #E4E4E4;
+  background: #FFF;
 }
 
-.cardboxcontent{
-
-justify-content: space-between;
-align-items: flex-start;
-align-self: stretch;
+.cardboxcontent {
+  justify-content: space-between;
+  align-items: flex-start;
+  align-self: stretch;
 }
 
 /* Third (larger) card */
 .large {
   display: flex;
-width: 39.5rem;
-height: 14.4375rem;
-padding: 1.5rem;
-flex-direction: column;
-justify-content: center;
-align-items: flex-start;
-gap: 1.64481rem;
-flex-shrink: 0;
-border-radius: 1rem;
-border: 1.5px solid #E4E4E4;
-background: #FFF;
+  width: 39.5rem;
+  height: 14.4375rem;
+  padding: 1.5rem;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1.64481rem;
+  flex-shrink: 0;
+  border-radius: 1rem;
+  border: 0.09375rem solid #E4E4E4;
+  background: #FFF;
 }
 
 /* Text styles */
 .cardbox h4 {
   color: rgba(22, 22, 22, 0.50);
-font-family: Inter;
-font-size: 1.5rem;
-font-style: normal;
-font-weight: 550;
-line-height: 1.71456rem; /* 114.305% */
-letter-spacing: -0.0625rem;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 1.5rem;
+  font-style: normal;
+  font-weight: 550;
+  line-height: 1.71456rem;
+  letter-spacing: -0.0625rem;
 }
 
 .cardbox h2 {
   color: #161616;
-font-family: Inter;
-font-size: 2.5rem;
-font-style: normal;
-font-weight: 550;
-line-height: 4.38169rem; /* 175.267% */
-letter-spacing: -0.09375rem;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 2.5rem;
+  font-style: normal;
+  font-weight: 550;
+  line-height: 4.38169rem;
+  letter-spacing: -0.09375rem;
 }
 
 .cardbox p span {
   color: rgba(22, 22, 22, 0.50);
-font-family: Inter;
-font-size: 1.25rem;
-font-style: normal;
-font-weight: 550;
-line-height: 1.71456rem;
-letter-spacing: -0.03125rem;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 1.25rem;
+  font-style: normal;
+  font-weight: 550;
+  line-height: 1.71456rem;
+  letter-spacing: -0.03125rem;
 }
 
 .cardheader {
@@ -236,50 +233,53 @@ letter-spacing: -0.03125rem;
   justify-content: space-between;
   align-items: center;
 }
+
 .cardamount {
   display: flex;
   align-items: center;
 }
-.cardbox.large .cardheader .cardname {
-color: rgba(22, 22, 22, 0.50);
-font-family: Inter;
-font-size: 1rem;
-font-style: normal;
-font-weight: 550;
-line-height: 1.19038rem; /* 119.037% */
-letter-spacing: -0.0625rem;
 
+.cardbox.large .cardheader .cardname {
+  color: rgba(22, 22, 22, 0.50);
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 550;
+  line-height: 1.19038rem;
+  letter-spacing: -0.0625rem;
 }
 
 .cardbox.large .cardamountvalue {
-color: #161616;
-text-align: right;
-font-family: "Inter Tight";
-font-size: 2rem;
-font-style: normal;
-font-weight: 550;
-line-height: 3.04206rem; /* 152.103% */
+  color: #161616;
+  text-align: right;
+  font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 2rem;
+  font-style: normal;
+  font-weight: 550;
+  line-height: 3.04206rem;
 }
+
 .iconlink {
- display: flex;
-width: 2.88075rem;
-height: 2.88075rem;
-justify-content: center;
-align-items: center;
-border-radius: 0.57613rem;
-border: 1.152px solid #E4E4E4;
-background: #FFF;
+  display: flex;
+  width: 2.88075rem;
+  height: 2.88075rem;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.57613rem;
+  border: 0.072rem solid #E4E4E4;
+  background: #FFF;
 }
+
 .cardbox.large .iconlink {
   display: flex;
-width: 3.783rem;
-height: 3.783rem;
-padding: 1.13488rem;
-justify-content: center;
-align-items: center;
-border-radius: 0.75663rem;
-border: 1.513px solid #E4E4E4;
-background: #FFF;
+  width: 3.783rem;
+  height: 3.783rem;
+  padding: 1.13488rem;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.75663rem;
+  border: 0.09456rem solid #E4E4E4;
+  background: #FFF;
 }
 
 .iconlink:hover {
@@ -288,87 +288,357 @@ background: #FFF;
 
 .cardsuccess {
   color: rgba(93, 210, 122, 1);
-  font-family: Inter;
-font-size: 1.25rem;
-font-style: normal;
-font-weight: 600;
-line-height: 1.71456rem; /* 137.166% */
-letter-spacing: -0.03125rem;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 1.25rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.71456rem;
+  letter-spacing: -0.03125rem;
 }
 
 .cardfail {
- color: var(--Foundation-Red-red-400, #ED5E56);
-font-family: Inter;
-font-size: 1.25rem;
-font-style: normal;
-font-weight: 600;
-line-height: 1.71456rem; /* 137.166% */
-letter-spacing: -0.03125rem;
+  color: var(--Foundation-Red-red-400, #ED5E56);
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 1.25rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.71456rem;
+  letter-spacing: -0.03125rem;
 }
 
 .cardneutral {
   color: #147129;
-  font-size: 10px;
+  font-size: 0.625rem;
   background-color: #e6f4ea;
-  padding: 4px 8px;
-  border-radius: 12px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.75rem;
   font-weight: 600;
-  margin-left: 2px;
+  margin-left: 0.125rem;
   display: inline-block;
-  /* padding-top: 12px; */
 }
 
-.barchart{
+.barchart {
   display: flex;
-height: 6.4375rem;
-gap: 1rem;
-align-items: flex-end;
-flex-shrink: 0;
-align-self: stretch;
+  height: 6.4375rem;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+@media (max-width: 991) {
+  .main-content {
+    padding: 1rem;
+  }
 }
 
 
-@media (max-width: 991px) {
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .dashboard-layout {
+    background-color: #fafbfb;
+    max-width: 39rem;
+    width: 100%;
+    overflow: hidden;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+
+   /* Hide desktop elements */
+  .desktop-sidebar {
+    display: none;
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dashboard-header {
+    background-color: #ffffff;
+    border-bottom: 0.0625rem solid #e4e4e4;
+    padding: 1.25rem;
+    width: 100%;
+  }
+
+  .dashboard-row {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .dashboard-title {
+    color: #161616;
+    letter-spacing: -0.045rem;
+    font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .dashboard-profile .profile-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
+    letter-spacing: 0.00875rem;
+  }
+
+  .profile-row {
+    gap: 0.75rem;
+  }
+
+  .profile-picture {
+    border-radius: 2.8125rem;
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .profile-column {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .profile-name {
+    color: #161616;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .profile-type {
+    color: #161616;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .belldot-icon {
+    display: none;
+  }
+
+  .dashboard-profile .profile-info img {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+
+  .breadcrumb-section {
+    display: none;
+  }
+
+  .cardcontainer {
+    margin-top: 1.25rem;
+    width: 100%;
+    padding: 0 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .cardbox {
+    border-radius: 0.8125rem;
+    background-color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+    padding: 0.9375rem;
+    border: 0.0625rem solid #e4e4e4;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .cardbox h4 {
+    color: #161616;
+    font-size: 0.875rem;
+    line-height: 1;
+    text-align: left;
+  }
+
+  .cardbox h2 {
+    color: #161616;
+    font-size: 1.5rem;
+    line-height: 1;
+    letter-spacing: -0.04875rem;
+    margin-top: 0.5625rem;
+  }
+
+  .cardboxcontent {
+    display: flex;
+    flex-direction: column;
+    font-weight: 500;
+    min-width: 6.0625rem;
+    width: 100%;
+  }
+
+  .cardbox .metricIndicator {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.6875rem;
+    color: #147129;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1;
+    width: 3.625rem;
+  }
+
+  .cardbox .trendIcon {
+    width: 1.1875rem;
+    height: 1.1875rem;
+  }
+
+  .cardbox .percentageChip {
+    border-radius: 11.3125rem;
+    background-color: #eafdee;
+    display: flex;
+    margin-top: 1.375rem;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.25rem 0.4375rem;
+    color: #147129;
+    font-size: 0.6875rem;
+    font-weight: 600;
+  }
+
+  .cardbox .chipIcon {
+    width: 0.9375rem;
+    height: 0.9375rem;
+    flex-shrink: 0;
+  }
+
+  .cardbox p {
+    display: none;
+  }
+
+  /* Large Card (Monthly Spends) */
+  .large {
+    border-radius: 0.5625rem;
+    background-color: #ffffff;
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    padding: 0.9375rem;
+    border: 0.0625rem solid #e4e4e4;
+    height: auto;
+    gap: 1rem;
+  }
+
+ .cardheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  
+}
+
+
+  .large .cardheader {
+    display: flex;
+    width: 100%;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .large .cardheader .cardname {
+    color: #161616;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .large .cardamount {
+    display: flex;
+    margin-top: 0.25rem;
+    width: 100%;
+    align-items: center;
+    gap: 0.4375rem;
+  }
+
+  .large .cardamountvalue {
+    color: #161616;
+    font-size: 1.5rem;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.04875rem;
+    text-align: left;
+  }
+
+  .large .cardneutral {
+    border-radius: 8.625rem;
+    background-color: #eafdee;
+    display: flex;
+    align-items: center;
+    gap: 0.0625rem;
+    font-size: 0.5rem;
+    color: #147129;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1;
+    padding: 0.1875rem 0.3125rem;
+    margin: 0;
+  }
+
+  .large .cardneutral::before {
+    content: '↑';
+    font-size: 0.6875rem;
+  }
+
+  .large .iconlink {
+    border-radius: 0.4375rem;
+    background-color: #ffffff;
+    display: flex;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0 0.4375rem;
+    border: 0.0625rem solid #e4e4e4;
+  }
+
+  .large .iconlink img {
+    width: 1.375rem;
+    height: 1.375rem;
+  }
+
+  .barchart {
+    display: flex;
+    margin-top: 0.9375rem;
+    height: 3.625rem;
+    width: 100%;
+    align-items: flex-end;
+    gap: 0.5625rem;
+    justify-content: space-between;
+  }
+
+  .barchart svg {
+    width: 1.125rem;
+    height: auto;
+  }
+
   .main-content {
-    padding: 16px;
+    flex: 1;
+    padding: 0;
+    background-color: #fafbfb;
+    overflow-x: visible;
   }
 }
 
 @media (max-width: 640px) {
   .main-content {
-    padding: 12px;
+    padding: 0.75rem;
   }
 }
-
-/* Laptop (1366px) */
-/* @media (max-width: 1366px) {
-  .dashboard-layout {
-    width: 100vw;
-    height: 100vh;
-    padding: 2rem;
-  }
-
-  .bell{
-    display: flex;
-width: 3rem;
-height: 2.5rem;
-padding: 0rem 0.89288rem;
-justify-content: center;
-align-items: center;
-gap: 0.89288rem;
-border-radius: 0.5rem;
-border: 1.429px solid #E4E4E4;
-background: #FFF;
-}
-
-} */
-
-/* Tablet and below */
-/* @media (max-width: 768px) {
-  .dashboard-layout {
-    width: 100%;
-    height: auto;
-    padding: 1rem;
-    font-size: 0.9rem;
-  }
-} */

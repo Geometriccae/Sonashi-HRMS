@@ -7,6 +7,7 @@ import EditEmployeeModal from "./EditEmployeeModal";
 import FilterDropdown from "../FilterDropdown";
 import employeeService from "../../services/EmployeeService";
 import config from "../../config/config";
+import { io as ioClient } from "socket.io-client";
 
 // SVG Components (reusing from ClientsTable)
 const UserPlusIcon = () => (
@@ -28,6 +29,7 @@ const UserPlusIcon = () => (
     />
   </svg>
 );
+
 const SearchIcon = () => (
   <svg
     width="24"
@@ -134,10 +136,36 @@ function TeamMembersTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const filterButtonRef = useRef(null);
-
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5; 
   // Fetch employees from API
   useEffect(() => {
     fetchEmployees();
+
+    // Listen for real-time employee creations so UI updates without manual refresh
+    const raw = config.API_BASE_URL || '';
+    const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
+    const socket = ioClient(socketUrl, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnection: true
+    });
+
+    const onEmployeeCreated = (employee) => {
+      if (!employee) return;
+      setEmployees((prev) => {
+        if (!prev) return [employee];
+        const exists = prev.some((e) => String(e._id) === String(employee._id));
+        if (exists) return prev;
+        return [employee, ...prev];
+      });
+    };
+
+    socket.on('employee-created', onEmployeeCreated);
+
+    return () => {
+      try { socket.off('employee-created', onEmployeeCreated); socket.disconnect(); } catch (e) {}
+    };
   }, []);
 
   const fetchEmployees = async () => {
@@ -149,8 +177,8 @@ function TeamMembersTable() {
       setEmployees(employeesData || []);
     } catch (err) {
       console.error("Error fetching employees:", err);
+      // Keep existing list visible; surface error inline
       setError("Failed to load employees. Please try again.");
-      setEmployees([]);
     } finally {
       setLoading(false);
     }
@@ -202,8 +230,14 @@ function TeamMembersTable() {
 
   const handleAddEmployeeSubmit = async (formData) => {
     try {
-      // Refresh the employees list after adding
-      await fetchEmployees();
+      // If the AddEmployeeModal returns the created employee, append optimistically.
+      // Expectation: onSubmit may return the created employee object; if not, we still refresh.
+      const created = formData?.createdEmployee || null;
+      if (created) {
+        setEmployees((prev) => [created, ...prev]);
+      }
+      // run background refresh to reconcile server state
+      fetchEmployees().catch((e) => console.warn('Background refresh after add employee failed', e));
     } catch (err) {
       console.error("Error refreshing employees after add:", err);
     }
@@ -237,6 +271,7 @@ function TeamMembersTable() {
     console.log("Filter selected:", option);
   };
 
+  // Filter employees first
   const filteredData = employees.filter((member) => {
     let matchesFilter = true;
     if (activeFilter === "Active") {
@@ -244,14 +279,32 @@ function TeamMembersTable() {
     } else if (activeFilter === "Inactive") {
       matchesFilter = member.attendance === "Leave";
     }
-    
+
     const matchesSearch =
       (member.employeeName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (member.emailId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (member.role || "").toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     return matchesFilter && matchesSearch;
   });
+
+  // Compute total pages (at least 1 to avoid pagination math issues)
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage || 1));
+
+  // Reset to first page when filters/search/list length change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter, searchTerm, employees.length]);
+
+  // Keep currentPage within valid bounds whenever totalPages changes
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+    if (currentPage < 1) setCurrentPage(1);
+  }, [totalPages, currentPage]);
+
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, endIndex);
 
   const getProjectsDisplay = (assignedProjects) => {
     if (!assignedProjects || assignedProjects.length === 0) {
@@ -269,35 +322,26 @@ function TeamMembersTable() {
     return { main: assignedProjects, description: "Project assigned" };
   };
 
-  if (loading) {
-    return (
-      <div className="clients-table-container">
-        <div style={{ padding: "40px", textAlign: "center" }}>
-          <p>Loading employees...</p>
+  // Inline top banners
+  const inlineBanner = (
+    <>
+      {loading && employees.length > 0 && (
+        <div style={{ padding: "8px 12px", background: "#f3f4f6", borderRadius: 6, marginBottom: 12 }}>
+          Refreshing employees...
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="clients-table-container">
-        <div style={{ padding: "40px", textAlign: "center" }}>
-          <p style={{ color: "#ED5E56" }}>{error}</p>
-          <button 
-            onClick={fetchEmployees}
-            className="primary-button"
-            style={{ marginTop: "16px" }}
-          >
-            Try Again
-          </button>
+      )}
+      {error && (
+        <div style={{ padding: "8px 12px", background: "#fff1f0", color: "#b91c1c", borderRadius: 6, marginBottom: 12 }}>
+          <span>{error}</span>
+          <button onClick={fetchEmployees} style={{ marginLeft: 12 }}>Retry</button>
         </div>
-      </div>
-    );
-  }
+      )}
+    </>
+  );
 
   return (
     <div className="clients-table-container">
+      {inlineBanner}
       <div className="table-header-section">
         <div className="table-title-section">
           <h2 className="table-title">Team Members</h2>
@@ -364,7 +408,7 @@ function TeamMembersTable() {
         <>
           <div className="table-section">
             <div className="table-wrapper">
-              <div className="table-columns">
+              <div className="table-columns" style={{ maxHeight: 480, overflowY: 'auto', width: '100%' }}>
                 {/* Employee Name Column */}
                 <div className="table-column company-column">
                   <div className="table-header">
@@ -375,7 +419,7 @@ function TeamMembersTable() {
                       </div>
                     </div>
                   </div>
-                  {filteredData.map((member) => (
+                  {paginatedData.map((member) => (
                     <Link  
                       key={member._id || member.id} 
                       to={`/teammanagement_salesleads/${member._id || member.id}`} 
@@ -412,7 +456,7 @@ function TeamMembersTable() {
                       </div>
                     </div>
                   </div>
-                  {filteredData.map((member) => (
+                  {paginatedData.map((member) => (
                     <div key={member._id || member.id} className="table-cell type-cell">
                       <div className={`type-chip ${(member.attendance || 'onsite').toLowerCase().replace(' ', '')}`}>
                         <span className="chip-text">{member.attendance || 'Onsite'}</span>
@@ -431,7 +475,7 @@ function TeamMembersTable() {
                       </div>
                     </div>
                   </div>
-                  {filteredData.map((member) => (
+                  {paginatedData.map((member) => (
                     <div key={member._id || member.id} className="table-cell assigned-cell">
                       <div className="assigned-info">
                         <div className="assigned-name">{member.emailId || 'No Email'}</div>
@@ -449,7 +493,7 @@ function TeamMembersTable() {
                       </div>
                     </div>
                   </div>
-                  {filteredData.map((member) => (
+                  {paginatedData.map((member) => (
                     <div key={member._id || member.id} className="table-cell categories-cell">
                       <div className="category-info">
                         <div className="category-text">{member.mobile || 'No Phone'}</div>
@@ -468,7 +512,7 @@ function TeamMembersTable() {
                       </div>
                     </div>
                   </div>
-                  {filteredData.map((member) => {
+                  {paginatedData.map((member) => {
                     const projectDisplay = getProjectsDisplay(member.assignedProjects);
                     return (
                       <div key={member._id || member.id} className="table-cell phone-cell">
@@ -486,7 +530,7 @@ function TeamMembersTable() {
                   <div className="table-header">
                     <div className="table-header-cell"></div>
                   </div>
-                  {filteredData.map((member) => (
+                  {paginatedData.map((member) => (
                     <div key={member._id || member.id} className="table-cell edit-actions-cell">
                       <button
                         className="action-button edit-button"
@@ -504,7 +548,7 @@ function TeamMembersTable() {
                   <div className="table-header">
                     <div className="table-header-cell"></div>
                   </div>
-                  {filteredData.map((member) => (
+                  {paginatedData.map((member) => (
                     <div key={member._id || member.id} className="table-cell delete-actions-cell">
                       <button
                         className="action-button delete-button"
@@ -519,19 +563,32 @@ function TeamMembersTable() {
               </div>
             </div>
           </div>
-          
-          <div className="pagination-section">
-            <button className="pagination-button">
-              <span>Previous</span>
-            </button>
-            <span className="page-info">
-              Page 1 of {Math.ceil(filteredData.length / 10) || 1}
-            </span>
-            <button className="pagination-button">
-              <span>Next</span>
-            </button>
-          </div>
-        </>
+
+
+        
+         <div className="pagination-section">
+  <button
+    className="pagination-button"
+    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+    disabled={currentPage === 1 || totalPages === 0}
+  >
+    <span>Previous</span>
+  </button>
+
+  <span className="page-info">
+    Page {totalPages === 0 ? 0 : currentPage} of {totalPages || 0}
+  </span>
+
+  <button
+    className="pagination-button"
+    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, Math.max(1, totalPages)))}
+    disabled={currentPage === totalPages || totalPages === 0}
+  >
+    <span>Next</span>
+  </button>
+</div>
+
+          </>
       )}
       
       <DeleteModal

@@ -15,6 +15,8 @@ import Example from "./pages/Example";
 import TeamManagement from "./pages/team-management/TeamManagement";
 import TeamManagementSalesAndLeads from "./pages/team-management/TeamManagementSalesLeads";
 import Venkat from "./pages/Venkat";
+import CheckInHistory from "./pages/CheckInHistory";
+import UserManagement from "./pages/UserManagement";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 
@@ -41,6 +43,8 @@ function App() {
           <ProtectedRoute><SalesAndLeads /></ProtectedRoute>
         } />
 
+      
+
         <Route path="/reports" element={
           <ProtectedRoute><Reports /></ProtectedRoute>
         } />
@@ -58,6 +62,10 @@ function App() {
 
         <Route path="/teammanagement" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
         <Route path="/teammanagement_salesleads/:id" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />
+
+        <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+
+        <Route path="/checkin-history" element={<ProtectedRoute><CheckInHistory /></ProtectedRoute>} />
 
         <Route path="/venkat" element={<ProtectedRoute><Venkat /></ProtectedRoute>} />
         <Route path="/example" element={<Example />} />

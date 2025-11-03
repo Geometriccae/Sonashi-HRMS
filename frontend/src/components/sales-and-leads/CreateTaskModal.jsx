@@ -4,6 +4,7 @@ import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { createTask } from "../../services/TaskService";
 import employeeService from "../../services/EmployeeService";
+import clientService from "../../services/ClientService";
 import Select from "react-select";
 
 function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
@@ -18,6 +19,7 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
+  const [clients, setClients] = useState([]);
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -30,6 +32,19 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
       }
     };
     loadEmployees();
+  }, []);
+
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const data = await clientService.getClients();
+        setClients(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load clients", e);
+        setClients([]);
+      }
+    };
+    loadClients();
   }, []);
 
   if (!isOpen) return null;
@@ -62,9 +77,13 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
         eventDate = new Date(y, (m || 1) - 1, d || 1);
       }
 
+       // Get project name instead of client ID
+    const selectedClient = clients.find(client => client._id === formData.project);
+    const projectName = selectedClient ? selectedClient.companyName : formData.project;
+    
       const taskData = {
         title: formData.eventName,
-        project: formData.project,
+        project: projectName,
         priority: formData.priority || "Medium",
         date: eventDate,
         assignedEmployees: formData.assignedTeamMembers,
@@ -153,11 +172,11 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
                   onChange={(e) => handleInputChange("project", e.target.value)}
                 >
                   <option value="">Select Project</option>
-                  <option value="Project A">Project A</option>
-                  <option value="Project B">Project B</option>
-                  <option value="Project C">Project C</option>
-                  <option value="Project D">Project D</option>
-                  <option value="Project E">Project E</option>
+                  {clients.map((client) => (
+                    <option key={client._id} value={client._id}>
+                      {client.companyName}
+                    </option>
+                  ))}
                 </select>
                 <div className="select-icon">
                   <svg

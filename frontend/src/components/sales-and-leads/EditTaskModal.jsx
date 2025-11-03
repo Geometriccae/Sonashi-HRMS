@@ -4,6 +4,7 @@ import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { updateTask } from "../../services/TaskService";
 import employeeService from "../../services/EmployeeService";
+import clientService from "../../services/ClientService";
 import Select from "react-select";
 
 function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
@@ -18,6 +19,7 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
+  const [clients, setClients] = useState([]);
 
   // Load employees
   useEffect(() => {
@@ -31,6 +33,20 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
       }
     };
     loadEmployees();
+  }, []);
+
+  // Load clients
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const data = await clientService.getClients();
+        setClients(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load clients", e);
+        setClients([]);
+      }
+    };
+    loadClients();
   }, []);
 
   // Populate form with task data when modal opens or task changes
@@ -186,11 +202,11 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
                   onChange={(e) => handleInputChange("project", e.target.value)}
                 >
                   <option value="">Select Project</option>
-                  <option value="Project A">Project A</option>
-                  <option value="Project B">Project B</option>
-                  <option value="Project C">Project C</option>
-                  <option value="Project D">Project D</option>
-                  <option value="Project E">Project E</option>
+                  {clients.map((client) => (
+                    <option key={client._id} value={client._id}>
+                      {client.companyName}
+                    </option>
+                  ))}
                 </select>
                 <div className="select-icon">
                   <svg

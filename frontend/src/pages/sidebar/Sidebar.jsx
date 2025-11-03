@@ -39,11 +39,16 @@ function Sidebar() {
   const location = useLocation();
   const isActive = (path) => location.pathname.startsWith(path);
   const navigate = useNavigate();
+  
+
+  // Fix: Get role directly from localStorage
+  const userRole = localStorage.getItem("role"); // This returns a string like "sales_executive"
 
   const handleLogout = () => {
     // Clear authentication data
     localStorage.removeItem("token");
     localStorage.removeItem("username");
+    localStorage.removeItem("role"); // Also clear role on logout
     // Redirect to login page
     navigate("/login", { replace: true });
   };
@@ -103,16 +108,22 @@ function Sidebar() {
                 </Link>
               </li>
 
-              <li className={isActive("/teammanagement") ? styles.active : ""}>
-                <Link to="/teammanagement" className={styles["sidebar-link"]}>
-                  <img
-                    src={users}
-                    alt="teamManagement"
-                    className={styles.icon}
-                  />{" "}
-                  Team Management
-                </Link>
-              </li>
+              {/* */}
+                {/* Fixed: Compare userRole directly, not userRole.role */}
+              {userRole !== "sales_executive" && (
+                <li className={isActive("/teammanagement") ? styles.active : ""}>
+                  <Link to="/teammanagement" className={styles["sidebar-link"]}>
+                    <img
+                      src={users}
+                      alt="teamManagement"
+                      className={styles.icon}
+                    />{" "}
+                    Team Management
+                  </Link>
+                </li>
+              )}
+
+             
 
               {/* <li>
                 <img src={packageicon} alt="Sales" className={styles.icon} /> Sales &
@@ -150,6 +161,31 @@ function Sidebar() {
                   Reports
                 </Link>
               </li>
+              
+              <li className={isActive("/checkin-history") ? styles.active : ""}>
+                <Link to="/checkin-history" className={styles["sidebar-link"]}>
+                  <img
+                    src={scaneye}
+                    alt="Check-in History"
+                    className={styles.icon}
+                  />
+                  Check-in History
+                </Link>
+              </li>
+
+               {/* User Management - Admin Only */}
+              {userRole === "admin" && (
+                <li className={isActive("/user-management") ? styles.active : ""}>
+                  <Link to="/user-management" className={styles["sidebar-link"]}>
+                    <img
+                      src={userplus}
+                      alt="User Management"
+                      className={styles.icon}
+                    />{" "}
+                    User Management
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
 

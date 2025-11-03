@@ -10,6 +10,7 @@ import isSameWeek from 'date-fns/isSameWeek';
 import isSameMonth from 'date-fns/isSameMonth';
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import styles from "../../components/team-management-components/MeetingsTable.module.css";
+import MobileBottomNavigation from "../../components/MobileBottomNavigation";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
 import { getAllEvents } from '../../services/CreateEventService';
 
@@ -297,6 +298,8 @@ const YourCalendarMeetings = ({ events: externalEvents }) => {
         initialStartDate={dateRange.start}
         initialEndDate={dateRange.end}
       />
+         {/* Mobile Bottom Navigation */}
+      <MobileBottomNavigation />
     </div>
   );
 };

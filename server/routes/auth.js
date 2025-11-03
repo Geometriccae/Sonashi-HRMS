@@ -7,6 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
+const Notification = require('../models/Notification');
 
 
 let otpStore = {}; // TEMP store (better use Redis or DB)
@@ -193,5 +194,165 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
+// ************************************ USER MANAGEMENT ROUTES (ADMIN ONLY) *****************************
+
+// Middleware to check if user is admin
+const requireAdmin = async (req, res, next) => {
+  try {
+    const userId = getUserIdFromReq(req);
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    
+    const user = await User.findById(userId);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    
+    req.user = user;
+    next();
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+// Get all users (Admin only)
+router.get('/users', requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find({}).select('-password').sort({ createdAt: -1 });
+    res.json(users);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// Create new user (Admin only)
+router.post('/users', requireAdmin, async (req, res) => {
+  try {
+    const { username, password, emailId, phoneNumber, role } = req.body;
+    
+    // Validation
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required' });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+    
+    if (emailId && !/\S+@\S+\.\S+/.test(emailId)) {
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+    
+    // Check if username already exists
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+    
+    // Check if email already exists (if provided)
+    if (emailId) {
+      const existingEmail = await User.findOne({ emailId });
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+    }
+    
+    // Hash password if hashing is enabled
+    let hashedPassword = password;
+    if (process.env.HASH_PASSWORDS === 'true') {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+    
+    const user = new User({
+      username,
+      password: hashedPassword,
+      emailId: emailId || '',
+      phoneNumber: phoneNumber || '',
+      role: role || 'sales_executive'
+    });
+    
+    await user.save();
+    
+    // Send welcome email with credentials (plain password as requested)
+    if (user.emailId) {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+        });
+        const mailHtml = `
+          <div style="font-family: Arial, sans-serif; padding:20px;">
+            <h2>Welcome to Auxin</h2>
+            <p>Your account has been created by an administrator.</p>
+            <p><strong>Username:</strong> ${username}</p>
+            <p><strong>Password:</strong> ${password}</p>
+            <p>Please login at <a href="${process.env.FRONTEND_URL || 'https://your-app.example.com'}">the website</a> and change your password after first login.</p>
+          </div>
+        `;
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: user.emailId,
+          subject: 'Your new account details',
+          html: mailHtml
+        });
+        console.log(`Sent new-user email to ${user.emailId}`);
+      } catch (mailErr) {
+        console.error('Failed to send new-user email:', mailErr);
+      }
+    }
+    
+    // Emit browser notification and persist it so user receives it in-app or on next login
+    try {
+      const io = req.app.get('io');
+      const payload = {
+        id: `user-created-${user._id}-${Date.now()}`,
+        type: 'user-created',
+        title: 'Your account has been created',
+        body: `Username: ${username}. Use the provided password to login.`,
+        meta: { userId: user._id, username, emailId: user.emailId },
+        timestamp: new Date()
+      };
+      if (io) {
+        // Emit to email room and user-id room (user likely not connected yet)
+        if (user.emailId) io.to(`email-${user.emailId}`).emit('notification', payload);
+        io.to(`user-${user._id}`).emit('notification', payload);
+      }
+      await Notification.create({ title: payload.title, body: payload.body, payload, userId: user._id, email: user.emailId });
+    } catch (notifErr) {
+      console.error('Failed to emit/persist new-user notification:', notifErr);
+    }
+    
+    // Return user without password
+    const userResponse = await User.findById(user._id).select('-password');
+    res.status(201).json(userResponse);
+  } catch (e) {
+    if (e.code === 11000) {
+      res.status(400).json({ message: 'Username or email already exists' });
+    } else {
+      res.status(500).json({ message: e.message });
+    }
+  }
+});
+
+// Delete user (Admin only)
+router.delete('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Prevent admin from deleting themselves
+    const currentUserId = getUserIdFromReq(req);
+    if (userId === currentUserId) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+    
+    const user = await User.findByIdAndDelete(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
 
 module.exports = router;

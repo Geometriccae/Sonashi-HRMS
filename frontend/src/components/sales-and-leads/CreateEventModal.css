@@ -258,7 +258,7 @@
     width: 90%;
     max-width: 480px;
     padding: 20px;
-    gap: 28px;
+    /* gap: 28px; */
   }
 
   .modal-title {
@@ -293,10 +293,11 @@
   .create-event-modal {
     width: 95%;
     padding: 16px;
-    gap: 24px;
+    /* gap: 24px; */
     border-radius: 8px;
     height: auto;
-    max-height: 90vh;
+    max-height: 60vh;
+    overflow: auto;
   }
 
   .modal-title {
@@ -338,8 +339,10 @@
   }
 
   .modal-actions {
-    flex-direction: column;
+    flex-direction: row;
     gap: 8px;
+    margin-top: 7px;
+    justify-content: space-between;
   }
 
   .event-cancel-button,

@@ -301,12 +301,34 @@
     height: 350px;
     border-radius: 12px;
   }
+ 
+  .chartBackground,
+  .chartLine,
+  .chartPoint1,
+  .chartPoint2,
+  .chartPoint3,
+  .chartPoint4,
+  .chartPoint5,
+  .chartPoint6,
+  .chartPoint7 {
+  display: none;
   
+}
   .header {
     left: 20px;
     top: 20px;
     width: calc(100% - 40px);
+    flex-direction: row;
   }
+
+  .fadeOverlay {
+  width: 346px;
+  height: 17px;
+  background: linear-gradient(270deg, #FFF 89.99%, rgba(255, 255, 255, 0.00) 99.6%);
+  position: absolute;
+  left: 645px;
+  top: 256px;
+}
   
   .title {
     font-size: 18px;

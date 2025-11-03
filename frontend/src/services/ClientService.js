@@ -18,6 +18,36 @@ class ClientService {
 
   }
 
+  // Remove empty-string values (and trim strings) to avoid sending invalid enum '' to backend
+  sanitizePayload(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const cloned = Array.isArray(obj) ? [] : {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '') continue; // skip empty strings
+        cloned[key] = trimmed;
+      } else if (val === null || val === undefined) {
+        continue;
+      } else if (Array.isArray(val)) {
+        // keep array but sanitize elements if they are objects
+        cloned[key] = val
+          .map((it) => (typeof it === 'object' ? this.sanitizePayload(it) : it))
+          .filter((it) => !(it === undefined || it === null));
+        if (cloned[key].length === 0) delete cloned[key];
+      } else if (typeof val === 'object') {
+        const nested = this.sanitizePayload(val);
+        if (nested && (Array.isArray(nested) ? nested.length > 0 : Object.keys(nested).length > 0)) {
+          cloned[key] = nested;
+        }
+      } else {
+        cloned[key] = val;
+      }
+    }
+    return cloned;
+  }
+
   // Get auth token from localStorage
   getAuthToken() {
     return localStorage.getItem('token');
@@ -52,6 +82,30 @@ class ClientService {
     }
   }
 
+  // Get clients filtered by followStatus (and role visibility on server)
+  async getClientsByFollowupStatus(followupStatus, startDate, endDate) {
+    try {
+      const params = new URLSearchParams();
+      if (followupStatus) params.set('followupStatus', followupStatus);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      const url = `${this.baseURL}?${params.toString()}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching clients by followStatus:', error);
+      throw error;
+    }
+  }
+
   // Get single client by ID
   async getClient(id) {
     try {
@@ -77,10 +131,11 @@ class ClientService {
       console.log('Creating client at:', this.baseURL); // Debug log
       console.log('Client data:', clientData); // Debug log
 
+      const payload = this.sanitizePayload(clientData);
       const response = await fetch(this.baseURL, {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(clientData),
+        body: JSON.stringify(payload),
       });
 
       console.log('Response status:', response.status); // Debug log
@@ -102,7 +157,7 @@ class ClientService {
   async updateClient(id, clientData) {
     try {
       const formData = new FormData();
-      formData.append('data', JSON.stringify(clientData));
+      formData.append('data', JSON.stringify(this.sanitizePayload(clientData)));
 
       console.log('Creating client at:', this.baseURL); // Debug log
       console.log('Client data:', clientData); // Debug log
@@ -160,7 +215,7 @@ class ClientService {
       const formDataToSend = new FormData();
 
       // Append client data as JSON string
-      formDataToSend.append("data", JSON.stringify(clientData));
+      formDataToSend.append("data", JSON.stringify(this.sanitizePayload(clientData)));
 
       // Append profile image if provided - using consistent field name
       if (profileImage) {
@@ -207,7 +262,7 @@ class ClientService {
       const formDataToSend = new FormData();
 
       // Append client data as JSON string
-      formDataToSend.append("data", JSON.stringify(clientData));
+      formDataToSend.append("data", JSON.stringify(this.sanitizePayload(clientData)));
 
       // Append profile image if provided
       if (profileImage) {

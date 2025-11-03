@@ -9,3 +9,8 @@
   top: -20px;
 }
 
+@media (max-width: 30rem) {
+.documents-table-section {
+margin-bottom: 10px;
+}
+}

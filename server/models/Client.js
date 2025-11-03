@@ -51,6 +51,26 @@ const clientSchema = new mongoose.Schema({
   followUpDate: { type: Date },
   notes: { type: String },
 
+  // Follow-up pipeline status for reporting
+  followupStatus: {
+    type: String,
+    enum: [
+      "Contacted",
+      "Needs Analysis",
+      "Demo Scheduled",
+      "Proposal Sent",
+      "Completed",
+      "Pending",
+      "Progress",
+      "Won",
+      "Lost"
+    ],
+    default: "Pending"
+  },
+
+  // Category (new dropdown)
+  category: { type: String, default: "" },
+
   // 6. Operational Links
   preferredLoadPorts: { type: String },
   preferredDischargePorts: { type: String },
@@ -58,7 +78,19 @@ const clientSchema = new mongoose.Schema({
   preferredAgents: { type: String },
   incoterms: { type: String }, // FOB / CIF / DAP
 
-   events: [createEventSchema] 
+  // Add ownership fields
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  },
+  assignedTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  },
+
+  events: [createEventSchema]
 }, { timestamps: true });
 
 module.exports = mongoose.model("Client", clientSchema);

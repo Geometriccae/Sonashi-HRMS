@@ -1,263 +1,13 @@
-// import React, { useState } from "react";
-// import axios from "axios";
-// import "./CreateEventModal.css";
-// import InputField from "../InputField";
-// import DatePickerModal from "../DatePickerModal";
-// import calendarIcon from "../../assets/dashboard/calendar.svg";
-// import { createEvent } from "../../services/CreateEventService";
 
-// function CreateEventModal({ isOpen, onClose, clientId, onEventAdded }) {
-
-//   const [formData, setFormData] = useState({
-//     eventName: "",
-//     eventType: "",
-//     date: "",
-//     time: "",
-//     notes: "",
-//     link: "",
-//     assignedTeamMember: ""
-//   });
-
-//   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-
-//   if (!isOpen) return null;
-
-//   const handleBackdropClick = (e) => {
-//     if (e.target === e.currentTarget) {
-//       onClose();
-//     }
-//   };
-
-//   const handleInputChange = (field, value) => {
-//     setFormData(prev => ({
-//       ...prev,
-//       [field]: value
-//     }));
-//   };
-
-//   const handleSubmit = async () => {
-//     try {
-//       const response = await axios.post(
-//         `http://localhost:5000/api/clients/${clientId}/events`,
-//         formData
-//       );
-//       console.log("Event saved:", response.data);
-
-//       // Optional: notify parent
-//       if (onEventAdded) {
-//         onEventAdded(response.data.client.events);
-//       }
-
-//       onClose();
-//     } catch (error) {
-//       console.error("Error saving event:", error);
-//     }
-//   };
-
-//   const handleDateIconClick = () => {
-//     setIsDatePickerOpen(true);
-//   };
-
-//   const handleDatePickerClose = () => {
-//     setIsDatePickerOpen(false);
-//   };
-
-//   const handleDateSelect = (selectedDate) => {
-//     const formattedDate = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-//     handleInputChange('date', formattedDate);
-//     setIsDatePickerOpen(false);
-//   };
-
-//   const formatDateForDisplay = (dateString) => {
-//     if (!dateString) return "";
-//     const date = new Date(dateString);
-//     return date.toLocaleDateString('en-US', {
-//       month: '2-digit',
-//       day: '2-digit',
-//       year: 'numeric'
-//     });
-//   };
-
-//   return (
-//     <div className="create-event-modal-backdrop" onClick={handleBackdropClick}>
-//       <div className="create-event-modal">
-//         <div className="modal-event-content">
-//           <div className="modal-eventheader">
-//             <h2 className="modal-title">Create Event</h2>
-//             <p className="modal-subtitle">Select your event type, add labels and links.</p>
-//           </div>
-
-//           <div className="form-fields">
-//             <div className="input-field">
-//               <label className="field-label">Event Name *</label>
-//               <div className="input-wrapper">
-//                 <input
-//                   type="text"
-//                   className="form-input"
-//                   placeholder="Eg. Client Meeting"
-//                   value={formData.eventName}
-//                   onChange={(e) => handleInputChange('eventName', e.target.value)}
-//                 />
-//               </div>
-//             </div>
-
-//             <div className="input-field">
-//               <label className="field-label">Event Type *</label>
-//               <div className="select-wrapper">
-//                 <select
-//                   className="form-select"
-//                   value={formData.eventType}
-//                   onChange={(e) => handleInputChange('eventType', e.target.value)}
-//                 >
-//                   <option value="">Select type</option>
-//                   <option value="meeting">Meeting</option>
-//                   <option value="call">Call</option>
-//                   <option value="presentation">Presentation</option>
-//                   <option value="workshop">Workshop</option>
-//                 </select>
-
-//                 <div className="select-icon">
-//                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-//                     <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-//                   </svg>
-//                 </div>
-//               </div>
-//             </div>
-
-//             <div className="input-field">
-//               <label className="field-label">Select a date *</label>
-//               <div className="date-wrapper">
-//                 <input
-//                   type="text"
-//                   className="form-input has-icon"
-//                   value={formatDateForDisplay(formData.date)}
-//                   onChange={(e) => handleInputChange('date', e.target.value)}
-//                   placeholder="MM/DD/YYYY"
-//                   readOnly
-//                 />
-//                 <div className="input-icon" onClick={handleDateIconClick}>
-//                   <img
-//                     src={calendarIcon}
-//                     alt="Calendar"
-//                     width="16"
-//                     height="16"
-//                     style={{cursor: 'pointer'}}
-//                   />
-//                 </div>
-//               </div>
-//             </div>
-
-//             <div className="input-field">
-//               <label className="field-label">Select a Time *</label>
-//               <div className="time-wrapper">
-//                 <input
-//                   type="time"
-//                   className="form-input has-icon"
-//                   value={formData.time}
-//                   onChange={(e) => handleInputChange('time', e.target.value)}
-
-//                 />
-//                 {/* <div className="input-icon">
-//                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-//                     <g clipPath="url(#clip0_2031_8954)">
-//                       <path d="M8.00016 4.00016V8.00016L10.6668 9.3335M14.6668 8.00016C14.6668 11.6821 11.6821 14.6668 8.00016 14.6668C4.31826 14.6668 1.3335 11.6821 1.3335 8.00016C1.3335 4.31826 4.31826 1.3335 8.00016 1.3335C11.6821 1.3335 14.6668 4.31826 14.6668 8.00016Z" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-//                     </g>
-//                     <defs>
-//                       <clipPath id="clip0_2031_8954">
-//                         <rect width="16" height="16" fill="white"/>
-//                       </clipPath>
-//                     </defs>
-//                   </svg>
-//                 </div> */}
-//               </div>
-//             </div>
-
-//             <div className="input-field">
-//               <label className="field-label">Assign a Team Member</label>
-//               <div className="select-wrapper">
-//                 <select
-//                   className="form-select"
-//                   value={formData.assignedTeamMember}
-//                   onChange={(e) => handleInputChange('assignedTeamMember', e.target.value)}
-//                 >
-//                   <option value="">Select team member</option>
-//                   <option value="Venkat">Venkatesh</option>
-//                   <option value="Mukesh">Mukesh</option>
-//                   <option value="Varun">Varun</option>
-//                   <option value="Dinesh">Dinesh</option>
-//                 </select>
-
-//                 <div className="select-icon">
-//                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-//                     <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-//                   </svg>
-//                 </div>
-//               </div>
-//             </div>
-
-//             <div className="input-field">
-//               <label className="field-label">Add notes</label>
-//               <div className="input-wrapper">
-//                 <input
-//                   type="text"
-//                   className="form-input"
-//                   placeholder="Eg. Client Meeting"
-//                   value={formData.notes}
-//                   onChange={(e) => handleInputChange('notes', e.target.value)}
-//                 />
-//               </div>
-//             </div>
-
-//             <div className="input-field">
-//               <label className="field-label">Attach Link</label>
-//               <div className="input-wrapper">
-//                 <input
-//                   type="text"
-//                   className="form-input"
-//                   placeholder="www.google.com"
-//                   value={formData.link}
-//                   onChange={(e) => handleInputChange('link', e.target.value)}
-//                 />
-//               </div>
-//             </div>
-
-//             <div className="color-selector">
-//               <svg width="132" height="24" viewBox="0 0 132 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-//                 <circle cx="12" cy="12" r="11" stroke="#FF9500" strokeWidth="2"/>
-//                 <circle cx="48" cy="12" r="11" stroke="#007AFF" strokeWidth="2"/>
-//                 <circle cx="84" cy="12" r="11" stroke="#34C759" strokeWidth="2"/>
-//                 <circle cx="120" cy="12" r="11" stroke="#30B0C7" strokeWidth="2"/>
-//               </svg>
-//             </div>
-//           </div>
-//         </div>
-
-//         <div className="modal-actions">
-//           <button className="event-cancel-button" onClick={onClose}>
-//             Cancel
-//           </button>
-//           <button className="event-attach-button" onClick={handleSubmit}>
-//             Add Event
-//           </button>
-//         </div>
-//       </div>
-
-//       <DatePickerModal
-//         isOpen={isDatePickerOpen}
-//         onClose={handleDatePickerClose}
-//         onSelectDate={handleDateSelect}
-//         selectedDate={formData.date}
-//       />
-//     </div>
-//   );
-// }
 
 // export default CreateEventModal;
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./CreateEventModal.css";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { createEvent } from "../../services/CreateEventService"; // We'll create this
+import employeeService from "../../services/EmployeeService";
+import Select from "react-select";
 
 function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
   const [formData, setFormData] = useState({
@@ -265,7 +15,7 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
     eventType: "",
     date: "",
     time: "",
-    assignedTeamMember: "",
+    assignedTeamMembers: [],
     notes: "",
     link: "",
     color: "#FF9500",
@@ -273,6 +23,20 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [employees, setEmployees] = useState([]);
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const data = await employeeService.getEmployees();
+        setEmployees(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load employees", e);
+        setEmployees([]);
+      }
+    };
+    loadEmployees();
+  }, []);
 
   if (!isOpen) return null;
 
@@ -461,40 +225,51 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
             </div>
 
             <div className="input-field">
-              <label className="field-label">Assign a Team Member</label>
-              <div className="select-wrapper">
-                <select
-                  className="form-select"
-                  value={formData.assignedTeamMember}
-                  onChange={(e) =>
-                    handleInputChange("assignedTeamMember", e.target.value)
-                  }
-                >
-                  <option value="">Select team member</option>
-                  <option value="Venkat">Venkatesh</option>
-                  <option value="Mukesh">Mukesh</option>
-                  <option value="Varun">Varun</option>
-                  <option value="Dinesh">Dinesh</option>
-                </select>
-
-                <div className="select-icon">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M4 6L8 10L12 6"
-                      stroke="#98A1B0"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
+              <label className="field-label">Assign Team Members</label>
+              <Select
+                isMulti
+                options={employees.map((emp) => ({
+                  value: emp._id,
+                  label: emp.employeeName,
+                }))}
+                value={employees
+                  .filter((emp) =>
+                    formData.assignedTeamMembers.includes(emp._id)
+                  )
+                  .map((emp) => ({ value: emp._id, label: emp.employeeName }))}
+                onChange={(selectedOptions) => {
+                  const values = selectedOptions
+                    ? selectedOptions.map((o) => o.value)
+                    : [];
+                  handleInputChange("assignedTeamMembers", values);
+                }}
+                placeholder="Select team members..."
+                className="form-select"
+                classNamePrefix="select"
+                styles={{
+                  control: (provided) => ({
+                    ...provided,
+                    minHeight: "48px",
+                    borderRadius: "4px",
+                    borderColor: "#ccc",
+                    boxShadow: "none",
+                    padding: "2px 8px",
+                  }),
+                  multiValue: (provided) => ({
+                    ...provided,
+                    backgroundColor: "#e5e5e5",
+                    color: "#333",
+                  }),
+                  multiValueLabel: (provided) => ({
+                    ...provided,
+                    color: "#333",
+                  }),
+                  placeholder: (provided) => ({
+                    ...provided,
+                    color: "#888",
+                  }),
+                }}
+              />
             </div>
 
             {/* <div className="input-field">

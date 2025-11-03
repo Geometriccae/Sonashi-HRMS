@@ -56,16 +56,69 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
     followUpDate: "",
     notes: "",
 
+    // Follow-up pipeline status
+    followupStatus: "",
+
     // 6. Operational Links
     preferredLoadPorts: "",
     preferredDischargePorts: "",
     demurrageTerms: "",
     preferredAgents: "",
     incoterms: "",
+
+    // Additional fields
+    category: "",
   });
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Dropdown definitions (same as AddClientModal)
+  const leadSourceOptions = [
+    { value: "COLD CALL", label: "COLD CALL" },
+    { value: "ADVERTISEMENT", label: "ADVERTISEMENT" },
+    { value: "EMPLOYEE", label: "EMPLOYEE" },
+    { value: "REFERRAL", label: "REFERRAL" },
+    { value: "EXTERNAL", label: "EXTERNAL" }
+  ];
+
+  const leadStatusOptions = [
+    { value: "NEW", label: "NEW" },
+    { value: "ATTEMPTED TO", label: "ATTEMPTED TO" },
+    { value: "CONTACT", label: "CONTACT" },
+    { value: "CONTACTED", label: "CONTACTED" },
+    { value: "QUALIFIED", label: "QUALIFIED" },
+    { value: "CONTACT", label: "CONTACT" }
+  ];
+
+  const industryTypeOptions = [
+  { value: "", label: "-None-" },
+  { value: "FREIGHT", label: "FREIGHT" },
+  { value: "FORWARDERS", label: "FORWARDERS" },
+  { value: "INDUSTRIAL BOILER", label: "INDUSTRIAL BOILER" },
+  { value: "OFFSHORE COMPANIES", label: "OFFSHORE COMPANIES" },
+  { value: "JACK UP RIG OWNERS", label: "JACK UP RIG OWNERS" },
+  { value: "OIL AND GAS COMPANIES", label: "OIL AND GAS COMPANIES" },
+  { value: "THERMAL POWER", label: "THERMAL POWER" },
+  { value: "NUCLEAR POWER", label: "NUCLEAR POWER" },
+  { value: "HYDRO POWER", label: "HYDRO POWER" },
+  { value: "NAVY", label: "NAVY" },
+  { value: "WINDMILL COMPANIES", label: "WINDMILL COMPANIES" },
+  { value: "OFFSHORE WINDMILL COMPANIES", label: "OFFSHORE WINDMILL COMPANIES" },
+  { value: "STEEL TRADERS", label: "STEEL TRADERS" },
+  { value: "SHIP BUILDING", label: "SHIP BUILDING" },
+  { value: "SHIPYARDS", label: "SHIPYARDS" },
+  { value: "DRY DOCKS", label: "DRY DOCKS" },
+  { value: "PORT INFRASTRUCTURE COMPANIES", label: "PORT INFRASTRUCTURE COMPANIES" }
+];
+
+
+  const categoryOptions = [
+    { value: "", label: "-None-" },
+    { value: "BULK", label: "BULK" },
+    { value: "BREAKBULK", label: "BREAKBULK" },
+    { value: "PROJECT", label: "PROJECT" }
+  ];
 
   // Effect to populate form data when clientData is provided
   useEffect(() => {
@@ -111,6 +164,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
         riskNotes: clientData.riskNotes || "",
         leadSource: clientData.leadSource || "",
         currentStatus: clientData.currentStatus || "",
+        followupStatus: clientData.followupStatus || clientData.followStatus || "",
         opportunityValue: clientData.opportunityValue || "",
         followUpDate: formatDateForInput(clientData.followUpDate),
         notes: clientData.notes || "",
@@ -119,6 +173,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
         demurrageTerms: clientData.demurrageTerms || "",
         preferredAgents: clientData.preferredAgents || "",
         incoterms: clientData.incoterms || "",
+        category: clientData.category || "",
       });
     }
   }, [clientData, isOpen]);
@@ -223,9 +278,9 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
   // };
 
   const handleFinish = async () => {
-  // Validate required fields
-  if (!formData.companyName || !formData.email) {
-    setError("Company Name and Email are required fields");
+  // Validate required fields - only companyName is required according to server model
+  if (!formData.companyName) {
+    setError("Company Name is a required field");
     return;
   }
 
@@ -389,6 +444,18 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
     { value: "Lost", label: "Lost" },
   ];
 
+  const followupStatusOptions = [
+    { value: "Contacted", label: "Contacted" },
+    { value: "Needs Analysis", label: "Needs Analysis" },
+    { value: "Demo Scheduled", label: "Demo Scheduled" },
+    { value: "Proposal Sent", label: "Proposal Sent" },
+    { value: "Completed", label: "Completed" },
+    { value: "Pending", label: "Pending" },
+    { value: "Progress", label: "Progress" },
+    { value: "Won", label: "Won" },
+    { value: "Lost", label: "Lost" },
+  ];
+
   const incotermsOptions = [
     { value: "FOB", label: "FOB" },
     { value: "CIF", label: "CIF" },
@@ -512,6 +579,8 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
               <InputField
                 label="Industry Type"
                 placeholder="Industry Type"
+                isDropdown
+                options={industryTypeOptions}
                 value={formData.industryType}
                 onChange={(e) =>
                   handleInputChange("industryType", e.target.value)
@@ -519,10 +588,30 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
               />
 
               <InputField
-                label="Cargo Type"
-                placeholder="Cargo Type"
-                value={formData.cargoType}
-                onChange={(e) => handleInputChange("cargoType", e.target.value)}
+                label="Category"
+                placeholder="Select category"
+                isDropdown
+                options={categoryOptions}
+                value={formData.category}
+                onChange={(e) => handleInputChange("category", e.target.value)}
+              />
+
+              <InputField
+                label="Lead Source"
+                placeholder="Select lead source"
+                isDropdown
+                options={leadSourceOptions}
+                value={formData.leadSource}
+                onChange={(e) => handleInputChange("leadSource", e.target.value)}
+              />
+
+              <InputField
+                label="Lead Status"
+                placeholder="Select lead status"
+                isDropdown
+                options={leadStatusOptions}
+                value={formData.currentStatus}
+                onChange={(e) => handleInputChange("currentStatus", e.target.value)}
               />
 
               <InputField
@@ -556,15 +645,15 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
                 }
               />
 
-              <InputField
+              {/* <InputField
                 label="Lead Source"
                 placeholder="Lead Source"
                 value={formData.leadSource} // Changed from accountManager
                 onChange={(e) =>
                   handleInputChange("leadSource", e.target.value)
                 }
-              />
-              <InputField
+              /> */}
+              {/* <InputField
                 label="Lead Current Status"
                 placeholder="Select status"
                 isDropdown
@@ -573,6 +662,14 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
                 onChange={(e) =>
                   handleInputChange("currentStatus", e.target.value)
                 }
+              /> */}
+              <InputField
+                label="Follow-up Status"
+                placeholder="Select follow-up status"
+                isDropdown
+                options={followupStatusOptions}
+                value={formData.followupStatus}
+                onChange={(e) => handleInputChange("followupStatus", e.target.value)}
               />
               <InputField
                 label="Opportunity Value"
@@ -763,10 +860,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
       case 3:
         const reviewData = [
           [
-            {
-              label: "Company Name",
-              value: formData.companyName || "Not provided",
-            },
+            { label: "Company Name", value: formData.companyName || "Not provided" },
             { label: "Client Type", value: formData.type || "Not provided" },
             { label: "Email", value: formData.email || "Not provided" },
           ],
@@ -833,6 +927,20 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
               value: formData.opportunityValue
                 ? `$${formData.opportunityValue}`
                 : "Not provided",
+            },
+          ],
+          [
+            {
+              label: "Category",
+              value: formData.category || "Not provided",
+            },
+            {
+              label: "Lead Source",
+              value: formData.leadSource || "Not provided",
+            },
+            {
+              label: "Lead Status",
+              value: formData.currentStatus || "Not provided",
             },
           ],
         ];

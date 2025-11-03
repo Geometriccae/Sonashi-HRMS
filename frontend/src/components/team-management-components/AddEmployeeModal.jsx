@@ -298,9 +298,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 <div className="company-name">
                   {formData.employeeName || "Employee Name"}
                 </div>
-                <div className="employee-id">
+                {/* <div className="employee-id">
                   {formData.employeeId || "Employee ID"}
-                </div>
+                </div> */}
               </div>
               <button className="edit-photo-button" onClick={handleEditPhoto}>
                 <span className="edit-photo-text">Edit Photo</span>
@@ -351,7 +351,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         <div className="add-client-header">
           <h1 className="add-client-title">{getStepTitle()}</h1>
           <button className="close-button" onClick={onClose}>
-            <div className="close-icon">×</div>
+            <div className="close-icon">&times;</div>
           </button>
         </div>
 

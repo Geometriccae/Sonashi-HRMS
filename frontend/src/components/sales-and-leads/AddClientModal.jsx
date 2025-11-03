@@ -57,12 +57,18 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
     followUpDate: "",
     notes: "",
 
+    // Follow-up pipeline status
+    followupStatus: "Pending",
+
     // 6. Operational Links
     preferredLoadPorts: "",
     preferredDischargePorts: "",
     demurrageTerms: "",
     preferredAgents: "",
     incoterms: "",
+
+    // New field
+    category: "",
   });
 
   const [error, setError] = useState("");
@@ -196,6 +202,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
         demurrageTerms: "",
         preferredAgents: "",
         incoterms: "",
+        category: "",
       });
     } catch (err) {
       console.error("Error creating client1:", err);
@@ -243,7 +250,20 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
   const currentStatusOptions = [
     { value: "Lead", label: "Lead" },
     { value: "Quoted", label: "Quoted" },
+    { value: "Contacted", label: "Contacted" },
     { value: "Negotiation", label: "Negotiation" },
+    { value: "Won", label: "Won" },
+    { value: "Lost", label: "Lost" },
+  ];
+
+  const followupStatusOptions = [
+    { value: "Contacted", label: "Contacted" },
+    { value: "Needs Analysis", label: "Needs Analysis" },
+    { value: "Demo Scheduled", label: "Demo Scheduled" },
+    { value: "Proposal Sent", label: "Proposal Sent" },
+    { value: "Completed", label: "Completed" },
+    { value: "Pending", label: "Pending" },
+    { value: "Progress", label: "Progress" },
     { value: "Won", label: "Won" },
     { value: "Lost", label: "Lost" },
   ];
@@ -258,6 +278,53 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
     // { value: "CIP", label: "CIP" },
     // { value: "DPU", label: "DPU" },
     // { value: "DDP", label: "DDP" },
+  ];
+
+  // New dropdown option lists
+  const leadSourceOptions = [
+    { value: "COLD CALL", label: "COLD CALL" },
+    { value: "ADVERTISEMENT", label: "ADVERTISEMENT" },
+    { value: "EMPLOYEE", label: "EMPLOYEE" },
+    { value: "REFERRAL", label: "REFERRAL" },
+    { value: "EXTERNAL", label: "EXTERNAL" }
+  ];
+  
+  const leadStatusOptions = [
+    { value: "NEW", label: "NEW" },
+    { value: "ATTEMPTED TO", label: "ATTEMPTED TO" },
+    { value: "CONTACT", label: "CONTACT" },
+    { value: "CONTACTED", label: "CONTACTED" },
+    { value: "QUALIFIED", label: "QUALIFIED" },
+    { value: "CONTACT", label: "CONTACT" }
+  ];
+  
+  const industryTypeOptions = [
+  { value: "", label: "-None-" },
+  { value: "FREIGHT", label: "FREIGHT" },
+  { value: "FORWARDERS", label: "FORWARDERS" },
+  { value: "INDUSTRIAL BOILER", label: "INDUSTRIAL BOILER" },
+  { value: "OFFSHORE COMPANIES", label: "OFFSHORE COMPANIES" },
+  { value: "JACK UP RIG OWNERS", label: "JACK UP RIG OWNERS" },
+  { value: "OIL AND GAS COMPANIES", label: "OIL AND GAS COMPANIES" },
+  { value: "THERMAL POWER", label: "THERMAL POWER" },
+  { value: "NUCLEAR POWER", label: "NUCLEAR POWER" },
+  { value: "HYDRO POWER", label: "HYDRO POWER" },
+  { value: "NAVY", label: "NAVY" },
+  { value: "WINDMILL COMPANIES", label: "WINDMILL COMPANIES" },
+  { value: "OFFSHORE WINDMILL COMPANIES", label: "OFFSHORE WINDMILL COMPANIES" },
+  { value: "STEEL TRADERS", label: "STEEL TRADERS" },
+  { value: "SHIP BUILDING", label: "SHIP BUILDING" },
+  { value: "SHIPYARDS", label: "SHIPYARDS" },
+  { value: "DRY DOCKS", label: "DRY DOCKS" },
+  { value: "PORT INFRASTRUCTURE COMPANIES", label: "PORT INFRASTRUCTURE COMPANIES" }
+];
+
+  
+  const categoryOptions = [
+    { value: "", label: "-None-" },
+    { value: "BULK", label: "BULK" },
+    { value: "BREAKBULK", label: "BREAKBULK" },
+    { value: "PROJECT", label: "PROJECT" }
   ];
 
   const renderStepContent = () => {
@@ -371,6 +438,8 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
               <InputField
                 label="Industry Type"
                 placeholder="Industry Type"
+                isDropdown
+                options={industryTypeOptions}
                 value={formData.industryType}
                 onChange={(e) =>
                   handleInputChange("industryType", e.target.value)
@@ -378,10 +447,12 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
               />
 
               <InputField
-                label="Cargo Type"
-                placeholder="Cargo Type"
-                value={formData.cargoType}
-                onChange={(e) => handleInputChange("cargoType", e.target.value)}
+                label="Category"
+                placeholder="Select category"
+                isDropdown
+                options={categoryOptions}
+                value={formData.category}
+                onChange={(e) => handleInputChange("category", e.target.value)}
               />
 
               <InputField
@@ -417,22 +488,22 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
 
               <InputField
                 label="Lead Source"
-                placeholder="Lead Source"
-                value={formData.leadSource} // Changed from accountManager
-                onChange={(e) =>
-                  handleInputChange("leadSource", e.target.value)
-                }
-              />
-              <InputField
-                label="Lead Current Status"
-                placeholder="Select status"
+                placeholder="Select lead source"
                 isDropdown
-                options={currentStatusOptions}
-                value={formData.currentStatus} // Changed from relationshipStatus
-                onChange={(e) =>
-                  handleInputChange("currentStatus", e.target.value)
-                }
+                options={leadSourceOptions}
+                value={formData.leadSource}
+                onChange={(e) => handleInputChange("leadSource", e.target.value)}
               />
+
+              <InputField
+                label="Lead Status"
+                placeholder="Select lead status"
+                isDropdown
+                options={leadStatusOptions}
+                value={formData.currentStatus} // stored to currentStatus field
+                onChange={(e) => handleInputChange("currentStatus", e.target.value)}
+              />
+
               <InputField
                 label="Opportunity Value"
                 placeholder="Opportunity Value"
@@ -770,7 +841,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
         <div className="add-client-header">
           <h1 className="add-client-title">{getStepTitle()}</h1>
           <button className="close-button" onClick={onClose}>
-            <div className="close-icon">×</div>
+            <div className="close-icon">&times;</div>
           </button>
         </div>
 

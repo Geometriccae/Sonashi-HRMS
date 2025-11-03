@@ -9,12 +9,15 @@ import admindemo from "../../assets/dashboard/admin-demo.jpg";
 import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import TeamMembersTable from "../../components/team-management-components/TeamMembersTable";
 import ProfileAvatar from "../../components/ProfileAvatar";
+import NotificationBell from "../../components/NotificationBell";
 
 function TeamManagement() {
   const [username, setUsername] = useState("");
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
+    setUserRole(localStorage.getItem("role") || "");
   }, []);
 
   return (
@@ -26,11 +29,7 @@ function TeamManagement() {
             <div className={styles["dashboard-title"]}>Team Management</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img
-                src={belldot}
-                alt="belldot"
-                className={styles["belldot-icon"]}
-              />
+                <NotificationBell/>
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                   
@@ -38,7 +37,9 @@ function TeamManagement() {
                   <div className={styles["profile-column"]}>
                     <div className={styles["profile-name"]}>{username?.toUpperCase()}
                     </div>
-                    <div className={styles["profile-type"]}>Administrator</div>
+                     <div className={styles["profile-type"]}>
+                                          {userRole?.toUpperCase()}
+                                        </div>
                   </div>
                 </div>
                 <img src={chevrondown} alt="" />
@@ -64,7 +65,7 @@ function TeamManagement() {
               <div className={styles["card-title-section"]}>
                 <div className={styles["card-title"]}>Today's Attendance</div>
                 <div className={styles["card-main-stat"]}>
-                  <div className={styles["percentage"]}>98%</div>
+                  <div className={styles["percentage"]}>00%</div>
                   <div className={styles["growth-chip"]}>
                     <svg
                       width="20"
@@ -201,9 +202,9 @@ function TeamManagement() {
                   <img src={arrowupright} alt="arrowup" />
                 </div>
               </div>
-              <h2>78%</h2>
+              <h2>00%</h2>
               <p className={styles["success-text"]}>
-                1.5% down <span>from last week</span>
+                0.0% down <span>from last week</span>
               </p>
             </div>
           </div>
@@ -234,9 +235,9 @@ function TeamManagement() {
                   <img src={arrowupright} alt="arrowup" />
                 </div>
               </div>
-              <h2>78%</h2>
+              <h2>00%</h2>
               <p className={styles["error-text"]}>
-                1.5% down <span>from last week</span>
+                0.0% down <span>from last week</span>
               </p>
             </div>
           </div>

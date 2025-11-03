@@ -478,3 +478,28 @@ background: #42B0D5;
   overflow-x: auto;
   padding: 20px 0;
 }
+@media (max-width: 991px) {
+  .desktop-sidebar {
+    display: none;
+  }
+}
+@media (max-width: 768px) {
+
+   /* Hide desktop elements */
+  .desktop-sidebar {
+    display: none;
+  }
+}
+
+/* Mobile Bottom Navigation Fix */
+@media (max-width: 48rem) {
+  .dashboard-layout {
+    padding-bottom: 5rem;
+  }
+  
+  .bottomNavigation {
+    display: flex !important;
+  }
+
+  
+}

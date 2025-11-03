@@ -13,6 +13,8 @@ import DeleteModal from "../../components/delete-modal/DeleteModal";
 import AssignTaskModal from "../../components/team-management-components/AssignTaskModal";
 import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
+import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
+import { getEventsByEmployeeId } from "../../services/AssignEventService";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -25,6 +27,7 @@ import pencillineblue from "../../assets/dashboard/pencil-line-blue.svg";
 import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
+import NotificationBell from "../../components/NotificationBell";
 
 function TeamManagementSalesLeads() {
   const [activeTab, setActiveTab] = useState("basicInfo");
@@ -52,12 +55,14 @@ function TeamManagementSalesLeads() {
   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
 
   const [username, setUsername] = useState("");
+  const [userRole, setUserRole] = useState("");
   const [employee, setEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
+    setUserRole(localStorage.getItem("role") || "");
   }, []);
 
   // Fetch employee data when component mounts or employeeId changes
@@ -260,28 +265,46 @@ function TeamManagementSalesLeads() {
     setIsDropdownOpen(false);
   };
 
-  const handleExportOptionSelect = (option) => {
-    console.log(`Export as ${option} selected`);
-    switch (option) {
-      case "pdf":
-        alert("Exporting as PDF...");
-        // Implement PDF export logic here
-        break;
-      case "csv":
-        alert("Exporting as CSV...");
-        // Implement CSV export logic here
-        break;
-      case "txt":
-        alert("Exporting as TXT...");
-        // Implement TXT export logic here
-        break;
-      case "print":
-        alert("Printing document...");
-        // Implement print logic here
-        window.print();
-        break;
-      default:
-        console.log("Unknown export option:", option);
+  const handleExportOptionSelect = async (option) => {
+    try {
+      if (activeTab === "basicInfo") {
+        if (option === "pdf") return exportToPDF();
+        if (option === "txt") return exportToTXT(JSON.stringify(employee, null, 2), `${employee?.employeeName || 'employee'}_basic_info.txt`);
+        return exportEmployeeBasicInfo(employee);
+      }
+
+      if (activeTab === "meetings") {
+        const events = await getEventsByEmployeeId(employeeId);
+        const mapped = (events || []).map(e => ({
+          title: e.eventName || e.title,
+          date: e.date,
+          time: e.time,
+          eventType: e.eventType,
+          notes: e.notes,
+          link: e.link,
+          assignedTeamMember: e.assignedTeamMember,
+          color: e.color
+        }));
+        if (option === "pdf") return exportToPDF();
+        if (option === "txt") return exportToTXT(JSON.stringify(mapped, null, 2), `${employee?.employeeName || 'employee'}_events.txt`);
+        return exportEvents(mapped, employee?.employeeName || 'employee');
+      }
+
+      if (activeTab === "documents") {
+        const docs = await DocumentsService.listByEmployee(employeeId);
+        if (option === "pdf") return exportToPDF();
+        if (option === "txt") return exportToTXT(JSON.stringify(docs, null, 2), `${employee?.employeeName || 'employee'}_documents.txt`);
+        return exportDocuments(docs, employee?.employeeName || 'employee');
+      }
+
+      if (option === "print") {
+        return window.print();
+      }
+    } catch (e) {
+      console.error('Export failed:', e);
+      alert(e.message || 'Export failed');
+    } finally {
+      setIsDropdownOpen(false);
     }
   };
 
@@ -380,11 +403,7 @@ function TeamManagementSalesLeads() {
             <div className={styles["dashboard-title"]}>Sales & Leads</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img
-                src={belldot}
-                alt="belldot"
-                className={styles["belldot-icon"]}
-              />
+                <NotificationBell/>
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                   <ProfileAvatar
@@ -395,7 +414,9 @@ function TeamManagementSalesLeads() {
                     <div className={styles["profile-name"]}>
                       {username?.toUpperCase()}
                     </div>
-                    <div className={styles["profile-type"]}>Administrator</div>
+                     <div className={styles["profile-type"]}>
+                                          {userRole?.toUpperCase()}
+                                        </div>
                   </div>
                 </div>
                 <img src={chevrondown} alt="" />
