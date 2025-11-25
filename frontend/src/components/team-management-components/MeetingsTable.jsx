@@ -86,7 +86,7 @@ const MeetingsTable = ({employeeId, key: calendarKey}) => {
             eventType: event.eventType,
             notes: event.notes,
             link: event.link,
-            assignedTeamMember: event.assignedTeamMember
+            assignedTeamMembers: event.assignedTeamMembers
           };
         });
 
@@ -270,7 +270,7 @@ const MeetingsTable = ({employeeId, key: calendarKey}) => {
             eventType: event.eventType,
             notes: event.notes,
             link: event.link,
-            assignedTeamMember: event.assignedTeamMember
+            assignedTeamMembers: event.assignedTeamMembers
           };
         });
         setEvents(transformedEvents);
@@ -308,7 +308,7 @@ const MeetingsTable = ({employeeId, key: calendarKey}) => {
               eventType: event.eventType,
               notes: event.notes,
               link: event.link,
-              assignedTeamMember: event.assignedTeamMember
+              assignedTeamMembers: event.assignedTeamMembers
             };
           });
           setEvents(transformedEvents);
@@ -519,9 +519,16 @@ const MeetingsTable = ({employeeId, key: calendarKey}) => {
             <div className={styles["modal-body"]}>
               <div className={styles["meeting-title"]}>{selectedMeeting.title}</div>
               <div className={styles["meeting-notes"]}>{selectedMeeting.notes || 'No Notes Added'}</div>
-              {selectedMeeting.assignedTeamMember && (
-                <div className="meeting-member">Assigned to: {selectedMeeting.assignedTeamMember}</div>
+              {selectedMeeting.link && (
+                <div className="meeting-link">
+                  <a href={selectedMeeting.link} target="_blank" rel="noopener noreferrer">
+                    {selectedMeeting.link}
+                  </a>
+                </div>
               )}
+              {/* {selectedMeeting.assignedTeamMembers && (
+                <div className="meeting-member">Assigned to: {selectedMeeting.assignedTeamMembers}</div>
+              )} */}
             </div>
             <div className={styles["color-selector"]}>
               <div className={`${styles["color-option"]} ${styles["active"]}`} style={{ backgroundColor: '#FF9500' }} />

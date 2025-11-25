@@ -19,6 +19,7 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
     notes: "",
     link: "",
     color: "#FF9500",
+     reminders: [60, 15, 3, 2, 1], // Default reminders: 1 hour, 15 min, 1 min before
   });
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);

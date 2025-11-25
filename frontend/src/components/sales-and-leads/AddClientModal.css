@@ -361,18 +361,116 @@
 }
 
 /* ========== RESPONSIVE BREAKPOINTS ========== */
+/* Laptops — slightly narrower modal, reduced paddings and tighter gaps for 1440px screens */
+@media (max-width: 1440px) {
+  .add-client-modal {
+    width: 64rem; /* ~1024px */
+    max-width: 92%;
+    padding: 1.25rem;
+    height: auto;
+  }
+  .add-client-header {
+    padding: 1.25rem 2rem;
+  }
+  .add-client-content {
+    padding: 1.25rem 4.5rem;
+    gap: 1.5rem;
+  }
+  .form-fields-grid {
+    max-width: 58rem;
+    gap: 0.875rem;
+  }
+  .add-employee-profile-section {
+    gap: 3.5rem;
+    padding: 1.125rem;
+  }
 
+  /* hero-section rules requested by client */
+  .hero-section {
+    padding: 3.75rem 2.5rem; /* 60px 40px */
+  }
+}
+
+/* Tablets — stack content more, two-column form layout where applicable for 1024px and below */
+@media (max-width: 1024px) {
+  .add-client-modal {
+    width: 92%;
+    max-width: 900px;
+    height: auto;
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  .add-client-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .add-client-content {
+    padding: 1rem 1.25rem;
+    gap: 1rem;
+  }
+
+  /* Keep a two-column feel for larger tablet widths by making form children take ~48% */
+  .form-fields-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+  .form-fields-grid > * {
+    flex: 1 1 48%;
+    max-width: 48%;
+    box-sizing: border-box;
+  }
+
+  /* Exceptions: full-width controls */
+  .form-fields-grid .billing-field-placeholder,
+  .form-fields-grid .billing-form-container,
+  .form-fields-grid .client-data-section {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  .add-employee-profile-section {
+    flex-direction: row;
+    gap: 1.5rem;
+    padding: 1rem;
+  }
+
+  .company-logo,
+  .default-company-logo {
+    width: 3.75rem; /* 60px */
+    height: 3.75rem;
+  }
+
+  .data-row {
+    gap: 1rem;
+  }
+
+  .button-secondary,
+  .button-primary {
+    padding: 0.5rem 0.875rem;
+  }
+
+  /* hero-section rules requested by client */
+  .hero-section {
+    flex-direction: column;
+    text-align: center;
+    padding: 2rem 1.25rem;
+  }
+}
 /* 991px Breakpoint */
 @media (max-width: 61.9375rem) { /* 991px */
   .add-client-modal {
-    width: 90%;
+    width: 80%;
     max-width: 48rem; /* 768px */
     height: 90vh;
     max-height: 53.125rem; /* 850px */
   }
 
   .add-client-header {
-    padding: 1.5rem 2rem; /* 24px 32px */
+    padding: 1.5rem 2rem; 
+    /* 24px 32px */
   }
 
   .add-client-content {
@@ -419,7 +517,8 @@
   }
 
   .add-client-header {
-    padding: 1.25rem 1.5rem; /* 20px 24px */
+    padding: 1.25rem 1.5rem; 
+    /* 20px 24px */
     height: auto;
     min-height: 5rem; /* 80px */
   }
@@ -468,7 +567,8 @@
   }
 
   .add-client-header {
-    padding: 1rem 1.25rem; /* 16px 20px */
+    padding: 1rem 1.25rem; 
+    /* 16px 20px */
   }
 
   .add-client-content {
@@ -519,11 +619,14 @@
     width: 100%;
     height: 100vh;
     border-radius: 0;
+    
   }
 
   .add-client-header {
-    padding: 0.75rem 1rem; /* 12px 16px */
+    /* 12px 16px */
+    padding: 0.75rem 1rem; 
     min-height: 4rem; /* 64px */
+    display: none;
   }
 
   .add-client-title {
@@ -602,3 +705,4 @@
     padding: 0.75rem 1rem; /* 12px 16px */
   }
 }
+

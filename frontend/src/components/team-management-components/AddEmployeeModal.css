@@ -37,8 +37,10 @@
 
 @media (max-width: 640px) {
   .add-client-modal {
+
     width: 95%;
-    height: 90vh;
+    height: 85vh;
+    /* height: 90vh; */
   }
 }
 
@@ -53,6 +55,7 @@
   height: 100px;
   box-sizing: border-box;
   flex-shrink: 0;
+  
 }
 
 @media (max-width: 991px) {
@@ -66,7 +69,10 @@
     padding: 16px 24px;
     height: auto;
     min-height: 80px;
+    /* hideed header */
+    display: none;  
   }
+  
 }
 
 .add-client-title {
@@ -136,6 +142,10 @@
 @media (max-width: 640px) {
   .add-client-content {
     padding: 24px;
+    padding-top: 0px;
+    gap: 0px;
+    padding-bottom: 0px;
+   
   }
 }
 
@@ -149,6 +159,7 @@
   max-width: 892px;
   flex-wrap: wrap;
   margin-top: 30px;
+  padding-bottom: 20%;
 }
 
 @media (max-width: 991px) {
@@ -323,7 +334,7 @@
 .company-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   font-size: 18px;
   color: #212121;
   text-align: center;
@@ -442,6 +453,7 @@
     flex-direction: row;
     gap: 12px;
     width: 100%;
+/* padding-top: 3px; */
   }
 }
 
@@ -496,10 +508,4 @@
 
 .button-primary:hover {
   background-color: #0056cc;
-}
-
-@media (max-width: 480px) {
-  .form-fields-grid{
-    margin-top: 0px;
-  }
 }

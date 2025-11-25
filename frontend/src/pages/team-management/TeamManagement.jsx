@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import styles from "./TeamManagement.module.css";
 import Side from "../sidebar/Sidebar";
 
@@ -9,16 +10,62 @@ import admindemo from "../../assets/dashboard/admin-demo.jpg";
 import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import TeamMembersTable from "../../components/team-management-components/TeamMembersTable";
 import ProfileAvatar from "../../components/ProfileAvatar";
-import NotificationBell from "../../components/NotificationBell";
+import EmployeeService from "../../services/EmployeeService";
 
 function TeamManagement() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [userRole, setUserRole] = useState("");
+  
+  // Stats state
+  const [stats, setStats] = useState({
+    attendancePercentage: 0,
+    totalAssignedProjects: 0,
+    totalEmployees: 0
+  });
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
     setUserRole(localStorage.getItem("role") || "");
+    fetchStats();
   }, []);
+
+  const fetchStats = async () => {
+    try {
+      const employees = await EmployeeService.getEmployees();
+      
+      // 1. Total Employees
+      const totalEmployees = employees.length;
+
+      // 2. Today's Attendance (Percentage of 'Onsite' employees)
+      const presentCount = employees.filter(emp => emp.attendance === 'Onsite').length;
+      const attendancePercentage = totalEmployees > 0 
+        ? Math.round((presentCount / totalEmployees) * 100) 
+        : 0;
+
+      // 3. Total Assigned Projects (Unique projects assigned across all employees)
+      const uniqueProjects = new Set();
+      employees.forEach(emp => {
+        if (Array.isArray(emp.assignedProjects)) {
+          emp.assignedProjects.forEach(proj => {
+            // Handle both populated objects and IDs
+            const projectId = (typeof proj === 'object' && proj !== null) ? proj._id : proj;
+            if (projectId) uniqueProjects.add(projectId.toString());
+          });
+        }
+      });
+      const totalAssignedProjects = uniqueProjects.size;
+
+      setStats({
+        attendancePercentage,
+        totalAssignedProjects,
+        totalEmployees
+      });
+
+    } catch (error) {
+      console.error("Error fetching team stats:", error);
+    }
+  };
 
   return (
     <div className={styles["dashboard-layout"]}>
@@ -29,7 +76,11 @@ function TeamManagement() {
             <div className={styles["dashboard-title"]}>Team Management</div>
 
             <div className={styles["dashboard-profile"]}>
-                <NotificationBell/>
+              <img
+                src={belldot}
+                alt="belldot"
+                className={styles["belldot-icon"]}
+              />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                   
@@ -65,7 +116,7 @@ function TeamManagement() {
               <div className={styles["card-title-section"]}>
                 <div className={styles["card-title"]}>Today's Attendance</div>
                 <div className={styles["card-main-stat"]}>
-                  <div className={styles["percentage"]}>00%</div>
+                  <div className={styles["percentage"]}>{stats.attendancePercentage}%</div>
                   <div className={styles["growth-chip"]}>
                     <svg
                       width="20"
@@ -82,11 +133,16 @@ function TeamManagement() {
                         strokeLinejoin="round"
                       />
                     </svg>
-                    <span>04%</span>
+                    {/* <span>04%</span> */}
                   </div>
                 </div>
               </div>
-              <div className={styles["iconlink"]}>
+              <div
+                className={styles["iconlink"]}
+                onClick={() => navigate("/attendance-management")}
+                title="Go to Attendance Management"
+                style={{ cursor: "pointer" }}
+              >
                 <img src={arrowupright} alt="arrowup" />
               </div>
             </div>
@@ -175,69 +231,32 @@ function TeamManagement() {
             </div>
           </div>
 
-          {/* Total Assigned Projects Card */}
-          {/* <div className={styles["stats-card"]}>
-            <div className={styles["card-header"]}>
-              <div className={styles["card-title-section"]}>
-                <div className={styles["card-title"]}>
-                  Total Assigned Projects
-                </div>
-                <div className={styles["card-value"]}>33</div>
-                <div className={styles["card-subtitle"]}>
-                  <span className={styles["success-text"]}>21% </span>up from
-                  last week
-                </div>
-              </div>
-              <div className={styles["iconlink"]}>
-                <img src={arrowupright} alt="arrowup" />
-              </div>
-            </div>
-          </div> */}
-
            <div className={styles.cardbox}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
                 <h4>Total Assigned Projects</h4>
-                <div className={styles.iconlink}>
+                {/* <div className={styles.iconlink}>
                   <img src={arrowupright} alt="arrowup" />
-                </div>
+                </div> */}
               </div>
-              <h2>00%</h2>
+              <h2>{stats.totalAssignedProjects}</h2>
               <p className={styles["success-text"]}>
                 0.0% down <span>from last week</span>
               </p>
             </div>
           </div>
 
-          {/* Lead Conversion Card */}
-          {/* <div className={styles["stats-card"]}>
-            <div className={styles["card-header"]}>
-              <div className={styles["card-title-section"]}>
-                <div className={styles["card-title"]}>Lead Conversion</div>
-                <div className={styles["card-value"]}>78%</div>
-                <div className={styles["card-subtitle"]}>
-                  <span className={styles["error-text"]}>1.5%</span>down from last week
-                </div>
-              </div>
-              <div className={styles["iconlink"]}>
-                <img src={arrowupright} alt="arrowup" />
-              </div>
-            </div>
-          </div> */}
-
-         
-
           <div className={styles.cardbox}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
-                <h4>Lead Conversion</h4>
-                <div className={styles.iconlink}>
+                <h4>Total Employees</h4>
+                {/* <div className={styles.iconlink}>
                   <img src={arrowupright} alt="arrowup" />
-                </div>
+                </div> */}
               </div>
-              <h2>00%</h2>
-              <p className={styles["error-text"]}>
-                0.0% down <span>from last week</span>
+              <h2>{stats.totalEmployees}</h2>
+              <p className={styles["success-text"]}>
+                Active Team Members
               </p>
             </div>
           </div>

@@ -45,17 +45,17 @@ router.get('/', authMiddleware, async (req, res) => {
     // Check if user is admin - if so, return all check-ins with full details
     // If not admin, only return their own check-ins
     let query = {};
-    
+
     if (req.user.role !== 'admin') {
       query.user = req.user._id;
     }
-    
+
     const checkIns = await CheckIn.find(query)
       .populate('clientId', 'companyName')
       .populate('teamMembers', 'name')
-      .populate('user', 'username emailId')
+      .populate('user', 'username emailId profilePicture')
       .sort({ timestamp: -1 });
-      
+
     console.log(`Found ${checkIns.length} check-ins for ${req.user.role}`);
     res.json(checkIns);
   } catch (err) {

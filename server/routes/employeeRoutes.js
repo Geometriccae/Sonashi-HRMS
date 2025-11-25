@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const nodemailer = require("nodemailer");
 const Notification = require('../models/Notification');
+const Attendance = require('../models/Attendance');
 
 // Storage config for employee profile photos
 const storage = multer.diskStorage({
@@ -40,10 +41,10 @@ async function sendTaskAssignedEmail(to, eventData, assignedBy) {
 
   const formattedDate = eventData.date
     ? new Date(eventData.date).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
     : "N/A";
 
   const mailOptions = {
@@ -99,10 +100,10 @@ router.get('/events', authMiddleware, async (req, res) => {
         }
       }
     }
-    
+
     // Get the IO instance if available
     const io = req.app.get('io');
-    
+
     // If socket.io is configured, emit a notification about events fetch
     if (io) {
       io.to('role-admin').emit('notification', {
@@ -113,7 +114,7 @@ router.get('/events', authMiddleware, async (req, res) => {
         timestamp: new Date()
       });
     }
-    
+
     res.json(allEvents);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching all events', error: error.message });
@@ -156,7 +157,7 @@ router.post('/', authMiddleware,
       } catch (emitErr) {
         console.warn('Failed to emit employee-created event:', emitErr);
       }
-      
+
       res.status(201).json(savedEmployee);
     } catch (error) {
       console.error("Create employee error:", error);
@@ -270,6 +271,19 @@ router.patch('/:id/attendance', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
+    // Also record daily attendance (upsert) for reporting
+    try {
+      const now = new Date();
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      await Attendance.findOneAndUpdate(
+        { employee: updatedEmployee._id, date: day },
+        { employee: updatedEmployee._id, date: day, status: attendance, updatedBy: req.user?._id },
+        { upsert: true, new: true }
+      );
+    } catch (logErr) {
+      console.warn('Failed to upsert attendance record:', logErr?.message);
+    }
+
     res.json({
       message: 'Attendance updated successfully',
       employee: updatedEmployee
@@ -373,81 +387,122 @@ router.get('/search/:query', authMiddleware, async (req, res) => {
 router.post('/:id/events', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const eventData = req.body;
+    const eventData = req.body || {};
     const assignedBy = req.user?.username || "Admin"; // logged-in user from token
+
+    // Basic validation (don't allow empty events that will cause downstream issues)
+    if (!eventData || !eventData.eventName) {
+      return res.status(400).json({ message: "eventName is required" });
+    }
 
     const employee = await Employee.findById(id);
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    // Add assignedBy inside event data
-    const eventWithAssignedBy = { ...eventData, assignedBy };
+    // Add assignedBy inside event data and set timestamps
+    const eventWithAssignedBy = {
+      ...eventData,
+      assignedBy,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Push and save
     employee.events.push(eventWithAssignedBy);
     await employee.save();
 
-    // Collect recipients (employee + team members)
-    const recipients = [];
+    // Get the saved event (the last pushed)
+    const savedEvent = employee.events[employee.events.length - 1];
 
-    if (employee.emailId) recipients.push(employee.emailId);
+    // Respond immediately with the persisted event and employee snapshot
+    res.status(201).json({
+      message: 'Event added successfully',
+      event: savedEvent,
+      employeeId: employee._id
+    });
 
-    if (Array.isArray(eventData.assignedTeamMembers)) {
-      for (const memberId of eventData.assignedTeamMembers) {
-        const member = await Employee.findById(memberId);
-        if (member?.emailId) recipients.push(member.emailId);
-      }
-    }
+    // Background tasks: send emails, emit socket notifications, persist Notification
+    (async () => {
+      try {
+        // Collect recipients (employee + team members)
+        const recipients = [];
+        if (employee.emailId) recipients.push(employee.emailId);
 
-    const uniqueRecipients = [...new Set(recipients)];
+        if (Array.isArray(eventData.assignedTeamMembers)) {
+          for (const memberId of eventData.assignedTeamMembers) {
+            try {
+              const member = await Employee.findById(memberId).lean();
+              if (member?.emailId) recipients.push(member.emailId);
+            } catch (e) {
+              console.warn(`Failed to lookup team member ${memberId}:`, e);
+            }
+          }
+        }
+        const uniqueRecipients = [...new Set(recipients)];
 
-    // Send email notification to all recipients
-    for (const email of uniqueRecipients) {
-      await sendTaskAssignedEmail(email, eventData, assignedBy);
-    }
+        // Send emails in parallel but don't fail the API if they fail
+        const emailPromises = uniqueRecipients.map(email =>
+          sendTaskAssignedEmail(email, eventWithAssignedBy, assignedBy).catch(err => {
+            console.error(`Failed to send event email to ${email}:`, err);
+            return { error: String(err) };
+          })
+        );
+        await Promise.allSettled(emailPromises);
 
-    // Emit browser notification (socket.io) and persist Notification for offline delivery
-    try {
-      const io = req.app.get('io');
-      if (io) {
-        const eventId = employee.events[employee.events.length - 1]._id;
+        // Build a single notification payload with stable id
         const payload = {
-          id: `employee-event-${employee._id}-${Date.now()}`,
+          id: `employee-event-${employee._id}-${savedEvent._id}`,
           type: 'employee-event',
           title: `New Event for ${employee.employeeName || 'Employee'}`,
-          body: `${eventData.eventName || 'An event'} was added`,
-          meta: { employeeId: employee._id, eventId, event: eventWithAssignedBy },
+          body: `${eventWithAssignedBy.eventName} was added`,
+          meta: { employeeId: employee._id, eventId: savedEvent._id, event: eventWithAssignedBy },
+          url: `/teammanagement_salesleads/${employee._id}`,
           timestamp: new Date()
         };
 
-        // Emit to room keyed by employee id (compat) and to email-based room
-        io.to(`user-${employee._id}`).emit('notification', payload);
-        if (employee.emailId) io.to(`email-${employee.emailId}`).emit('notification', payload);
+        // Emit notification and entity event
+        try {
+          const io = req.app.get('io');
+          if (io) {
+            // Generic notification channel (bell/native notifications)
+            io.emit('notification', payload);
+            // Domain event with saved event so UI lists can append the actual object
+            io.emit('employee-event', { ...payload, event: savedEvent });
+            // targeted rooms
+            io.to(`user-${employee._id}`).emit('notification', payload);
+            io.to(`user-${employee._id}`).emit('employee-event', { ...payload, event: savedEvent });
+            if (employee.emailId) {
+              io.to(`email-${employee.emailId}`).emit('notification', payload);
+              io.to(`email-${employee.emailId}`).emit('employee-event', { ...payload, event: savedEvent });
+            }
+          }
+        } catch (emitErr) {
+          console.error('Failed to emit socket notifications for employee event:', emitErr);
+        }
 
-        // persist notification for offline delivery (associate email and employee id)
-        await Notification.create({
-          title: payload.title,
-          body: payload.body,
-          payload,
-          userId: null, // employee may not map to a User; delivery by email or employee id rooms
-          email: employee.emailId || null
-        });
+        // Persist a Notification document for offline delivery (safe best-effort)
+        try {
+          await Notification.create({
+            title: payload.title,
+            body: payload.body,
+            payload,
+            email: employee.emailId || null
+          });
+        } catch (noteErr) {
+          console.error('Failed to persist notification for employee event:', noteErr);
+        }
+      } catch (bgErr) {
+        console.error('Background processing error for employee event:', bgErr);
       }
-    } catch (notifyErr) {
-      console.error('Error emitting/persisting notification for employee event:', notifyErr);
-    }
-    
-    res.status(201).json({
-      message: 'Event added and email(s) sent successfully',
-      employee
-    });
+    })();
 
   } catch (error) {
     console.error("Error adding event:", error);
+    // Provide helpful error message while avoiding leaking internals
     res.status(400).json({ message: 'Error adding event', error: error.message });
   }
 });
-
-
 
 // Get all events for an employee
 router.get('/:id/events', authMiddleware, async (req, res) => {
@@ -530,7 +585,7 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
     } catch (notifyErr) {
       console.error('Error emitting/persisting notification for employee event update:', notifyErr);
     }
-    
+
     res.json({
       message: 'Event updated and email(s) sent successfully',
       event,

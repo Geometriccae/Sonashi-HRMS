@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import styles from "./SalesAndLeads.module.css"; //
 import Side from "./sidebar/Sidebar";
 import ClientsTable from "../components/sales-and-leads/ClientsTable";
+import SalesLeadsDualGraph from "../components/sales-and-leads/SalesLeadsDualGraph";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
@@ -9,14 +10,86 @@ import ProfileAvatar from "../components/ProfileAvatar";
 import arrowupright from "../assets/dashboard/arrow-up-right.svg";
 import arrowdownup from "../assets/dashboard/arrow-down-up.svg";
 import NotificationBell from "../components/NotificationBell";
+import clientService from "../services/ClientService";
 
 function SalesAndLeads() {
   const [username, setUsername] = useState("");
   const [userRole, setUserRole] = useState("");
+  const [salesMetrics, setSalesMetrics] = useState({
+    totalSalesAndLeads: 0,
+    totalWon: 0,
+    totalOpportunityValue: 0,
+    monthlyGrowth: 0
+  });
+  const [clients, setClients] = useState([]);
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState(true);
+
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
     setUserRole(localStorage.getItem("role") || "");
+    calculateSalesMetrics();
   }, []);
+
+  const calculateSalesMetrics = async () => {
+    setIsLoadingMetrics(true);
+    try {
+      const clientsData = await clientService.getClients();
+      const clientsArray = Array.isArray(clientsData) ? clientsData : (clientsData.clients || []);
+      setClients(clientsArray);
+
+      console.log('=== SALES METRICS DEBUG ===');
+      console.log('Clients data:', clientsArray);
+
+      // Total Sales and Leads (both Client and Lead types)
+      const totalSalesAndLeads = clientsArray.length;
+      console.log('Total Sales and Leads:', totalSalesAndLeads);
+
+      // Total Won (currentStatus === 'Won')
+      const totalWon = clientsArray.filter(c => c.currentStatus === 'Won').length;
+      console.log('Total Won:', totalWon);
+
+      // Total Opportunity Value (sum of opportunityValue for all clients/leads)
+      const totalOpportunityValue = clientsArray.reduce((sum, c) => {
+        const value = parseFloat(c.opportunityValue) || 0;
+        return sum + value;
+      }, 0);
+      console.log('Total Opportunity Value:', totalOpportunityValue);
+
+      // Monthly growth (clients/leads added this month vs last month)
+      const thisMonth = new Date();
+      thisMonth.setDate(1); // First day of current month
+      const lastMonth = new Date(thisMonth);
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+      const thisMonthCount = clientsArray.filter(c => {
+        if (!c.createdAt) return false;
+        const createdDate = new Date(c.createdAt);
+        return createdDate >= thisMonth;
+      }).length;
+
+      const lastMonthCount = clientsArray.filter(c => {
+        if (!c.createdAt) return false;
+        const createdDate = new Date(c.createdAt);
+        return createdDate >= lastMonth && createdDate < thisMonth;
+      }).length;
+
+      const monthlyGrowth = lastMonthCount > 0 ?
+        (((thisMonthCount - lastMonthCount) / lastMonthCount) * 100).toFixed(1) : 0;
+
+      console.log('Monthly growth:', monthlyGrowth);
+
+      setSalesMetrics({
+        totalSalesAndLeads,
+        totalWon,
+        totalOpportunityValue,
+        monthlyGrowth: parseFloat(monthlyGrowth)
+      });
+    } catch (error) {
+      console.error('Error calculating sales metrics:', error);
+    } finally {
+      setIsLoadingMetrics(false);
+    }
+  };
 
   return (
     <div className={styles["dashboard-layout"]}>
@@ -60,50 +133,50 @@ function SalesAndLeads() {
         </section>
 
         <section className={styles.cardcontainer}>
-          {/* Card 1 */}
+          {/* Card 1 - Total Sales & Leads */}
           <div className={styles.cardbox}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
-                <h4>Total Receivables</h4>
-                <div className={styles.iconlink}>
+                <h4>Total Sales & Leads</h4>
+                {/* <div className={styles.iconlink}>
                   <img src={arrowupright} alt="arrowup" />
-                </div>
+                </div> */}
               </div>
-              <h2>&#8377;0,00,000</h2>
+              <h2>{isLoadingMetrics ? '--' : salesMetrics.totalSalesAndLeads}</h2>
               <p className={styles.cardsuccess}>
-                00% up <span>from last week</span>
+                {isLoadingMetrics ? '--' : `${salesMetrics.monthlyGrowth >= 0 ? '+' : ''}${salesMetrics.monthlyGrowth}%`} <span>from last month</span>
               </p>
             </div>
           </div>
 
-          {/* Card 2 */}
+          {/* Card 2 - Total Won */}
           <div className={styles.cardbox}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
-                <h4>Total Payables</h4>
-                <div className={styles.iconlink}>
+                <h4>Total Won</h4>
+                {/* <div className={styles.iconlink}>
                   <img src={arrowupright} alt="arrowup" />
-                </div>
+                </div> */}
               </div>
-              <h2>&#8377;00,000</h2>
+              <h2>{isLoadingMetrics ? '--' : salesMetrics.totalWon}</h2>
               <p className={styles.cardfail}>
-                0.0% down <span>from last week</span>
+                {isLoadingMetrics ? '--' : `${salesMetrics.monthlyGrowth >= 0 ? '+' : ''}${salesMetrics.monthlyGrowth}%`} <span>from last month</span>
               </p>
             </div>
           </div>
 
-          {/* Card 3 */}
+          {/* Card 3 - Total Opportunity Value */}
           <div className={`${styles.cardbox} ${styles.large}`}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
-                <div className={styles.cardname}>Monthly Spends</div>
-                <div className={styles.iconlink}>
+                <div className={styles.cardname}>Total Opportunity Value</div>
+                {/* <div className={styles.iconlink}>
                   <img src={arrowupright} alt="arrowup" />
-                </div>
+                </div> */}
               </div>
               <div className={styles.cardamount}>
-                <div className={styles.cardamountvalue}>&#8377;000,000</div>
-                <div className={styles.cardneutral}>&#8599; 0.4%</div>
+                <div className={styles.cardamountvalue}>&#8377;{isLoadingMetrics ? '--' : salesMetrics.totalOpportunityValue.toLocaleString('en-IN')}</div>
+                <div className={styles.cardneutral}>&#8599; {isLoadingMetrics ? '--' : `${salesMetrics.monthlyGrowth >= 0 ? '+' : ''}${salesMetrics.monthlyGrowth}%`}</div>
               </div>
 
               <div className={styles.barchart}>
@@ -251,6 +324,11 @@ function SalesAndLeads() {
             </div>
           </div>
         </section>
+
+        {/* Sales & Leads Graph */}
+        {/* <section className={styles["graph-section"]} style={{ marginBottom: '24px' }}>
+          <SalesLeadsDualGraph clients={clients} isLoading={isLoadingMetrics} />
+        </section> */}
 
         {/* Main Content */}
         <section className={styles["main-content"]}>

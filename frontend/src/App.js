@@ -18,6 +18,7 @@ import Venkat from "./pages/Venkat";
 import CheckInHistory from "./pages/CheckInHistory";
 import UserManagement from "./pages/UserManagement";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AttendanceManagement from "./pages/team-management/AttendanceManagement";
 
 
 
@@ -62,6 +63,8 @@ function App() {
 
         <Route path="/teammanagement" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
         <Route path="/teammanagement_salesleads/:id" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />
+
+        <Route path="/attendance-management" element={<ProtectedRoute><AttendanceManagement /></ProtectedRoute>} />
 
         <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
 

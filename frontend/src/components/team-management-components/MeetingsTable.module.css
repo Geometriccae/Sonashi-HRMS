@@ -475,3 +475,12 @@ margin: 0px;
 .rbc-time-gutter{
   padding-right: 0px;
 }
+
+@media (max-width: 768px) {
+
+   /* Hide desktop elements */
+  .desktop-sidebar {
+    display: none;
+  }
+   
+}

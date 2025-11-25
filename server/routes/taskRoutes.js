@@ -248,10 +248,43 @@ router.post('/clients/:clientId/tasks', authMiddleware, async (req, res) => {
       link,
       color,
       status,
+      reminders: Array.isArray(req.body.reminders) ? req.body.reminders : [],
     });
 
     const saved = await task.save();
     console.log("Task saved to database");
+
+    // Schedule reminders if any
+    if (saved.reminders && saved.reminders.length > 0) {
+      const taskDateTime = saved.date;
+      saved.reminders.forEach(reminderMinutes => {
+        const reminderTime = new Date(taskDateTime.getTime() - reminderMinutes * 60000);
+        const delay = reminderTime.getTime() - Date.now();
+        if (delay > 0) {
+          setTimeout(() => {
+            const io = req.app.get('io');
+            if (io) {
+              const reminderPayload = {
+                id: `task-reminder-${saved._id}-${reminderMinutes}`,
+                type: 'task-reminder',
+                title: `Reminder: ${saved.title}`,
+                body: `Task due in ${reminderMinutes} minutes`,
+                meta: { taskId: saved._id, task: saved, reminderMinutes },
+                url: `/tasks/${saved._id}`,
+                timestamp: new Date()
+              };
+              io.emit('task-reminder', reminderPayload);
+              // Emit to assigned employees and creator
+              const recipients = [...(saved.assignedEmployees || []), req.user.id].filter((v, i, a) => a.indexOf(v) === i);
+              recipients.forEach(userId => {
+                io.to(`user-${userId}`).emit('notification', reminderPayload);
+                io.to(`user-${userId}`).emit('task-reminder', reminderPayload);
+              });
+            }
+          }, delay);
+        }
+      });
+    }
 
     // Send response first for better UX
     res.status(201).json(saved);
@@ -459,96 +492,5 @@ router.delete('/clients/:clientId/tasks/:taskId', authMiddleware, async (req, re
 });
 
 module.exports = router;
-
-
-
-// const express = require('express');
-// const router = express.Router();
-// const authMiddleware = require('../middleware/authMiddleware');
-// const Task = require('../models/Task');
-
-// // Create task for a client
-// router.post('/clients/:clientId/tasks', authMiddleware, async (req, res) => {
-//   try {
-//     const { clientId } = req.params;
-//     const {
-//       title,
-//       project,
-//       priority,
-//       date,
-//       assignedEmployees,
-//       notes,
-//       link,
-//       color,
-//       status,
-//     } = req.body;
-
-//     if (!title || !date) {
-//       return res.status(400).json({ message: 'title and date are required' });
-//     }
-
-//     const task = new Task({
-//       clientId,
-//       title,
-//       project,
-//       priority,
-//       date,
-//       assignedEmployees: Array.isArray(assignedEmployees) ? assignedEmployees : [],
-//       notes,
-//       link,
-//       color,
-//       status,
-//     });
-
-//     const saved = await task.save();
-//     res.status(201).json(saved);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error creating task', error: error.message });
-//   }
-// });
-
-// // List tasks for a client
-// router.get('/clients/:clientId/tasks', authMiddleware, async (req, res) => {
-
-// console.log('Fetching tasks for client:', req.params.clientId);
-//   try {
-//     const { clientId } = req.params;
-//     const tasks = await Task.find({ clientId }).sort({ createdAt: -1 });
-//     res.json(tasks);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error fetching tasks', error: error.message });
-//   }
-// });
-
-// // Update a task
-// router.put('/clients/:clientId/tasks/:taskId', authMiddleware, async (req, res) => {
-//   try {
-//     const { clientId, taskId } = req.params;
-//     const update = req.body || {};
-//     const updated = await Task.findOneAndUpdate(
-//       { _id: taskId, clientId },
-//       update,
-//       { new: true }
-//     );
-//     if (!updated) return res.status(404).json({ message: 'Task not found' });
-//     res.json(updated);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error updating task', error: error.message });
-//   }
-// });
-
-// // Delete a task
-// router.delete('/clients/:clientId/tasks/:taskId', authMiddleware, async (req, res) => {
-//   try {
-//     const { clientId, taskId } = req.params;
-//     const deleted = await Task.findOneAndDelete({ _id: taskId, clientId });
-//     if (!deleted) return res.status(404).json({ message: 'Task not found' });
-//     res.json({ message: 'Task deleted' });
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error deleting task', error: error.message });
-//   }
-// });
-
-// module.exports = router;
 
 

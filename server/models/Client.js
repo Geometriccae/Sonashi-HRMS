@@ -4,7 +4,8 @@ const createEventSchema = require('./CreateEvent');
 const clientSchema = new mongoose.Schema({
   // 1. Company & Contact Details
   companyName: { type: String, required: true },
-  type: { type: String }, // Shipper / Consignee / Broker / Agent / Other
+  clientType: { type: String }, // Shipper / Consignee / Broker / Agent / Other
+  leadType: { type: String }, // Client / Lead 
   address: { type: String },
   country: { type: String },
   taxId: { type: String }, // GST / VAT

@@ -1,6 +1,6 @@
 .dashboard-layout {
-  width: 120rem;
-  height: 67.5rem;
+  /* width: 120rem;
+  height: 67.5rem; */
   display: flex;
   overflow: hidden; /* Prevent overall scrolling */
   position: relative;
@@ -36,6 +36,12 @@ main {
   .dashboard-header {
     width: 100%;
     left: 0;
+  }
+}
+@media (max-width: 768px) {
+  /* Hide desktop elements */
+  .desktop-sidebar {
+    display: none;
   }
 }
 
@@ -191,7 +197,7 @@ letter-spacing: -0.0625rem;
   flex: 1;
   padding: 24px;
   background-color: RGB(250 251 251);
-  /* overflow-x: auto; */
+  overflow-x: auto;
 }
 
 @media (max-width: 991px) {

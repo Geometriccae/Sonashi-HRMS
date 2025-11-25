@@ -6,6 +6,7 @@ import AddEmployeeModal from "./AddEmployeeModal";
 import EditEmployeeModal from "./EditEmployeeModal";
 import FilterDropdown from "../FilterDropdown";
 import employeeService from "../../services/EmployeeService";
+import ClientService from "../../services/ClientService";
 import config from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 
@@ -133,14 +134,16 @@ function TeamMembersTable() {
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [employees, setEmployees] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const filterButtonRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5; 
-  // Fetch employees from API
+  // Fetch employees and clients from API
   useEffect(() => {
     fetchEmployees();
+    fetchClients();
 
     // Listen for real-time employee creations so UI updates without manual refresh
     const raw = config.API_BASE_URL || '';
@@ -181,6 +184,16 @@ function TeamMembersTable() {
       setError("Failed to load employees. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const data = await ClientService.getClients();
+      const clientList = Array.isArray(data) ? data : data.clients || [];
+      setClients(clientList);
+    } catch (err) {
+      console.error("Failed to fetch clients:", err);
     }
   };
 
@@ -237,9 +250,20 @@ function TeamMembersTable() {
         setEmployees((prev) => [created, ...prev]);
       }
       // run background refresh to reconcile server state
-      fetchEmployees().catch((e) => console.warn('Background refresh after add employee failed', e));
+      await fetchEmployees();
+
+      // Show success notification
+      if (window.appNotifications) {
+        window.appNotifications.push({
+          type: 'success',
+          title: 'Employee Added',
+          message: `${formData.employeeName} has been successfully added.`
+        });
+      }
     } catch (err) {
       console.error("Error refreshing employees after add:", err);
+      // Re-fetch to ensure consistency on error
+      fetchEmployees();
     }
   };
 
@@ -275,9 +299,9 @@ function TeamMembersTable() {
   const filteredData = employees.filter((member) => {
     let matchesFilter = true;
     if (activeFilter === "Active") {
-      matchesFilter = member.attendance !== "Leave";
+      matchesFilter = member.employeeStatus !== "InActive";
     } else if (activeFilter === "Inactive") {
-      matchesFilter = member.attendance === "Leave";
+      matchesFilter = member.employeeStatus === "InActive";
     }
 
     const matchesSearch =
@@ -288,38 +312,88 @@ function TeamMembersTable() {
     return matchesFilter && matchesSearch;
   });
 
-  // Compute total pages (at least 1 to avoid pagination math issues)
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage || 1));
+  // Pagination: compute total pages (minimum 1 so UI behaves like ClientsTable)
+  const totalPages = Math.max(1, Math.ceil((filteredData.length || 0) / itemsPerPage));
 
   // Reset to first page when filters/search/list length change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter, searchTerm, employees.length]);
+  }, [activeFilter, searchTerm, employees.length]); // <-- removed filteredData.length here
 
-  // Keep currentPage within valid bounds whenever totalPages changes
+  // Ensure currentPage stays within bounds and derive a safe page for slicing
+  const currentPageSafe = Math.max(1, Math.min(currentPage, totalPages));
   useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-    if (currentPage < 1) setCurrentPage(1);
-  }, [totalPages, currentPage]);
+    if (currentPage !== currentPageSafe) setCurrentPage(currentPageSafe);
+  }, [currentPageSafe]); // ensure state sync if bounds changed externally
 
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, endIndex);
+  // If filteredData becomes empty, ensure we are on page 1
+  useEffect(() => {
+    if ((filteredData || []).length === 0 && currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [filteredData.length, currentPage]);
 
+  const startIndex = (currentPageSafe - 1) * itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+  // Debug: show pagination & filter state in console to help diagnose UI issues
+  useEffect(() => {
+    // small delay so logs reflect the latest state after renders
+    const id = setTimeout(() => {
+      console.debug("TeamMembersTable pagination debug:", {
+        activeFilter,
+        searchTerm,
+        employeesCount: employees.length,
+        filteredCount: filteredData.length,
+        itemsPerPage,
+        totalPages,
+        currentPage,
+        currentPageSafe,
+        paginatedCount: paginatedData.length,
+        startIndex
+      });
+    }, 0);
+    return () => clearTimeout(id);
+  }, [activeFilter, searchTerm, employees.length, filteredData.length, currentPage, currentPageSafe]);
+
+  // Helper to format assignedProjects for display with company names
   const getProjectsDisplay = (assignedProjects) => {
-    if (!assignedProjects || assignedProjects.length === 0) {
+    if (!assignedProjects) {
       return { main: "No Projects", description: "Not assigned" };
     }
-    
+
     if (Array.isArray(assignedProjects)) {
-      const main = assignedProjects[0];
-      const description = assignedProjects.length > 1 
-        ? `+${assignedProjects.length - 1} more projects` 
-        : "Single project assigned";
+      if (assignedProjects.length === 0) {
+        return { main: "No Projects", description: "Not assigned" };
+      }
+      
+      // Map project IDs to company names
+      const projectNames = assignedProjects
+        .map(projectId => {
+          // Handle both object and string IDs
+          const id = typeof projectId === 'object' && projectId !== null ? projectId._id : projectId;
+          const client = clients.find(c => c._id === id);
+          return client ? (client.clientName || client.companyName || "Unknown") : null;
+        })
+        .filter(name => name !== null);
+      
+      if (projectNames.length === 0) {
+        return { main: "No Projects", description: "Not assigned" };
+      }
+      
+      const main = projectNames[0];
+      const description =
+        projectNames.length > 1
+          ? `+${projectNames.length - 1} more projects`
+          : "Single project assigned";
       return { main, description };
     }
-    
-    return { main: assignedProjects, description: "Project assigned" };
+
+    // If it's a string or other primitive, try to find the company name
+    const id = typeof assignedProjects === 'object' && assignedProjects !== null ? assignedProjects._id : assignedProjects;
+    const client = clients.find(c => c._id === id);
+    const companyName = client ? (client.clientName || client.companyName || "Unknown") : String(assignedProjects);
+    return { main: companyName, description: "Project assigned" };
   };
 
   // Inline top banners
@@ -395,7 +469,7 @@ function TeamMembersTable() {
         </div>
       </div>
       
-      {filteredData.length === 0 ? (
+                {filteredData.length === 0 ? (
         <div style={{ padding: "40px", textAlign: "center" }}>
           <p>No employees found.</p>
           {searchTerm && (
@@ -408,7 +482,7 @@ function TeamMembersTable() {
         <>
           <div className="table-section">
             <div className="table-wrapper">
-              <div className="table-columns" style={{ maxHeight: 480, overflowY: 'auto', width: '100%' }}>
+              <div className="table-columns" style={{ maxHeight: 480, width: '100%' }}>
                 {/* Employee Name Column */}
                 <div className="table-column company-column">
                   <div className="table-header">
@@ -446,20 +520,20 @@ function TeamMembersTable() {
                   ))}
                 </div>
                 
-                {/* Attendance Column */}
+                {/* employeeStatus Column */}
                 <div className="table-column type-column">
                   <div className="table-header">
                     <div className="table-header-cell">
                       <div className="header-content">
-                        <span className="header-text">Attendance</span>
+                        <span className="header-text">Status</span>
                         <SortIcon />
                       </div>
                     </div>
                   </div>
                   {paginatedData.map((member) => (
                     <div key={member._id || member.id} className="table-cell type-cell">
-                      <div className={`type-chip ${(member.attendance || 'onsite').toLowerCase().replace(' ', '')}`}>
-                        <span className="chip-text">{member.attendance || 'Onsite'}</span>
+                      <div className={`type-chip ${(member.employeeStatus || 'active').toLowerCase().replace(' ', '')}`}>
+                        <span className="chip-text">{member.employeeStatus || 'Active'}</span>
                       </div>
                     </div>
                   ))}
@@ -563,33 +637,33 @@ function TeamMembersTable() {
               </div>
             </div>
           </div>
-
-
-        
-         <div className="pagination-section">
-  <button
-    className="pagination-button"
-    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-    disabled={currentPage === 1 || totalPages === 0}
-  >
-    <span>Previous</span>
-  </button>
-
-  <span className="page-info">
-    Page {totalPages === 0 ? 0 : currentPage} of {totalPages || 0}
-  </span>
-
-  <button
-    className="pagination-button"
-    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, Math.max(1, totalPages)))}
-    disabled={currentPage === totalPages || totalPages === 0}
-  >
-    <span>Next</span>
-  </button>
-</div>
-
-          </>
+        </>
       )}
+      
+      {/* Pagination - ALWAYS RENDERED (like in ClientsTable) */}
+      <div className="pagination-section" aria-hidden={filteredData.length === 0}>
+        <button
+          className="pagination-button"
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPageSafe === 1 || filteredData.length === 0}
+          aria-label="Previous page"
+        >
+          <span>Previous</span>
+        </button>
+
+        <span className="page-info" aria-live="polite">
+          Page {currentPageSafe} of {totalPages}
+        </span>
+
+        <button
+          className="pagination-button"
+          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+          disabled={currentPageSafe === totalPages || filteredData.length === 0}
+          aria-label="Next page"
+        >
+          <span>Next</span>
+        </button>
+      </div>
       
       <DeleteModal
         isOpen={isDeleteModalOpen}

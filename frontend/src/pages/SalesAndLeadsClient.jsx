@@ -57,6 +57,7 @@ function SalesAndLeadsClient(clientId ) {
   const [events, setEvents] = useState([]);
   const [calendarKey, setCalendarKey] = useState(0); // Force calendar refresh
   const [documentsKey, setDocumentsKey] = useState(0); // Force documents refresh
+  const taskBoardRefreshRef = useRef(null); // Reference to TaskBoard refresh function
 
    const [username, setUsername] = useState("");
    const [userRole, setUserRole] = useState("");
@@ -287,12 +288,25 @@ function SalesAndLeadsClient(clientId ) {
     setIsCreateTaskModalOpen(false);
   };
 
-const handleTaskCreated = (newEvent) => {
-    console.log("Task created successfully:", newEvent);
+const handleTaskCreated = (newTask) => {
+    console.log("Task created successfully:", newTask);
     // Force calendar component to refresh by updating its key
     setCalendarKey(prev => prev + 1);
+    // Refresh TaskBoard
+    if (taskBoardRefreshRef.current) {
+      taskBoardRefreshRef.current();
+    }
     // You can also update local events state if needed
-    setEvents(prev => [...prev, newEvent]);
+    setEvents(prev => [...prev, newTask]);
+
+    // Show success notification
+    if (window.appNotifications) {
+      window.appNotifications.push({
+        type: 'success',
+        title: 'Task Created',
+        message: `${newTask.title} has been successfully created.`
+      });
+    }
   };
   
 
@@ -649,160 +663,189 @@ const handleTaskCreated = (newEvent) => {
 
             {/* Tab Content */}
             <div className={styles.column3}>
-              {activeTab === "basicInfo" && (
-                <>
-                  {/* Company Details */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Company Name</span>
-                      <span className={styles.text10}>
-                        {clientData.companyName || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Client Type</span>
-                      <span className={styles.text10}>
-                        {clientData.type || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Email</span>
-                      <span className={styles.text10}>
-                        {clientData.email || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>Phone</span>
-                      <span className={styles.text10}>
-                        {clientData.phone || "Not provided"}
-                      </span>
-                    </div>
-                  </div>
+   {activeTab === "basicInfo" && (
+  <>
+    {/* Primary Contact & Company Info */}
+    <div className={styles.row_view6}>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Company Name</span>
+        <span className={styles.text10}>
+          {clientData.companyName || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Primary Contact Name</span>
+        <span className={styles.text10}>
+          {clientData.primaryContactName || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Email</span>
+        <span className={styles.text10}>
+          {clientData.email || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column5}>
+        <span className={styles.text9}>Mobile (Personal)</span>
+        <span className={styles.text10}>
+          {clientData.mobile || "Not provided"}
+        </span>
+      </div>
+    </div>
 
-                  {/* Contact Details */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Primary Contact</span>
-                      <span className={styles.text10}>
-                        {clientData.primaryContactName || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Designation</span>
-                      <span className={styles.text10}>
-                        {clientData.designation || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Mobile</span>
-                      <span className={styles.text10}>
-                        {clientData.mobile || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>Website</span>
-                      <span className={styles.text10}>
-                        {clientData.website ? (
-                          <a
-                            href={clientData.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {clientData.website}
-                          </a>
-                        ) : (
-                          "Not provided"
-                        )}
-                      </span>
-                    </div>
-                  </div>
+    {/* Secondary Contact & Business Type */}
+    <div className={styles.row_view6}>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Phone (Office)</span>
+        <span className={styles.text10}>
+          {clientData.phone || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Designation</span>
+        <span className={styles.text10}>
+          {clientData.designation || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Client Type</span>
+        <span className={styles.text10}>
+          {clientData.clientType || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column5}>
+        <span className={styles.text9}>Lead Type</span>
+        <span className={styles.text10}>
+          {clientData.leadType || "Not provided"}
+        </span>
+      </div>
+    </div>
 
-                  {/* Address Details */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Address</span>
-                      <span className={styles.text10}>
-                        {clientData.address || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Country</span>
-                      <span className={styles.text10}>
-                        {clientData.country || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Tax ID</span>
-                      <span className={styles.text10}>
-                        {clientData.taxId || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>Relationship Status</span>
-                      <span className={styles.text10}>
-                        {clientData.relationshipStatus || "Not provided"}
-                      </span>
-                    </div>
-                  </div>
+    {/* Business Status & Classification */}
+    <div className={styles.row_view6}>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Relationship Status</span>
+        <span className={styles.text10}>
+          {clientData.relationshipStatus || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Lead Status</span>
+        <span className={styles.text10}>
+          {clientData.currentStatus || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Follow-up Status</span>
+        <span className={styles.text10}>
+          {clientData.followupStatus || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column5}>
+        <span className={styles.text9}>Lead Source</span>
+        <span className={styles.text10}>
+          {clientData.leadSource || "Not provided"}
+        </span>
+      </div>
+    </div>
 
-                  {/* Business Details */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Industry Type</span>
-                      <span className={styles.text10}>
-                        {clientData.industryType || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Lead Source</span>
-                      <span className={styles.text10}>
-                        {clientData.leadSource || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Lead Status</span>
-                      <span className={styles.text10}>
-                        {clientData.currentStatus || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>Category</span>
-                      <span className={styles.text10}>
-                        {clientData.category || "Not provided"}
-                      </span>
-                    </div>
-                  </div>
+    {/* Location & Industry */}
+    <div className={styles.row_view6}>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Address</span>
+        <span className={styles.text10}>
+          {clientData.address || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Country</span>
+        <span className={styles.text10}>
+          {clientData.country || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Industry Type</span>
+        <span className={styles.text10}>
+          {clientData.industryType || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column5}>
+        <span className={styles.text9}>Cargo Type</span>
+        <span className={styles.text10}>
+          {clientData.cargoType || "Not provided"}
+        </span>
+      </div>
+    </div>
 
-                  {/* Additional Business Details */}
-                  <div className={styles.row_view6}>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Contract Type</span>
-                      <span className={styles.text10}>
-                        {clientData.contractType || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Incoterms</span>
-                      <span className={styles.text10}>
-                        {clientData.incoterms || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column4}>
-                      <span className={styles.text9}>Lead Source</span>
-                      <span className={styles.text10}>
-                        {clientData.leadSource || "Not provided"}
-                      </span>
-                    </div>
-                    <div className={styles.column5}>
-                      <span className={styles.text9}>Current Status</span>
-                      <span className={styles.text10}>
-                        {clientData.currentStatus || "Not provided"}
-                      </span>
-                    </div>
-                  </div>
-                  {/* Add more basic info content as needed */}
-                </>
-              )}
+    {/* Business Operations */}
+    <div className={styles.row_view6}>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Account Manager</span>
+        <span className={styles.text10}>
+          {clientData.accountManager || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Decision Maker</span>
+        <span className={styles.text10}>
+          {clientData.decisionMaker || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Contract Type</span>
+        <span className={styles.text10}>
+          {clientData.contractType || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column5}>
+        <span className={styles.text9}>Incoterms</span>
+        <span className={styles.text10}>
+          {clientData.incoterms || "Not provided"}
+        </span>
+      </div>
+    </div>
+
+    {/* Additional Info */}
+    <div className={styles.row_view6}>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Website</span>
+        <span className={styles.text10}>
+          {clientData.website ? (
+            <a href={clientData.website} target="_blank" rel="noopener noreferrer">
+              {clientData.website}
+            </a>
+          ) : (
+            "Not provided"
+          )}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Tax ID</span>
+        <span className={styles.text10}>
+          {clientData.taxId || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column4}>
+        <span className={styles.text9}>Category</span>
+        <span className={styles.text10}>
+          {clientData.category || "Not provided"}
+        </span>
+      </div>
+      <div className={styles.column5}>
+        <span className={styles.text9}>Social Links</span>
+        <span className={styles.text10}>
+          {clientData.socialLinks ? (
+            <a href={clientData.socialLinks} target="_blank" rel="noopener noreferrer">
+              {clientData.socialLinks}
+            </a>
+          ) : (
+            "Not provided"
+          )}
+        </span>
+      </div>
+    </div>
+  </>
+)}
 
               {activeTab === "meetings" && (
                 <div className={styles.meetingsContent}>
@@ -822,7 +865,7 @@ const handleTaskCreated = (newEvent) => {
 
               {activeTab === "tasks" && (
                 <div className={styles.tasksContent}>
-                  <TaskBoard />
+                  <TaskBoard onRefresh={taskBoardRefreshRef} />
                 </div>
               )}
             </div>

@@ -28,6 +28,7 @@ import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
 import NotificationBell from "../../components/NotificationBell";
+import MobileBottomNavigation from "../../components/MobileBottomNavigation";
 
 function TeamManagementSalesLeads() {
   const [activeTab, setActiveTab] = useState("basicInfo");
@@ -396,7 +397,9 @@ function TeamManagementSalesLeads() {
 
   return (
     <div className={styles["dashboard-layout"]}>
-      <Side />
+     <div className={styles["desktop-sidebar"]}>
+        <Side />
+      </div>
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
@@ -737,6 +740,9 @@ function TeamManagementSalesLeads() {
           </div>
         </div>
       </main>
+
+       {/* Mobile Bottom Navigation */}
+      <MobileBottomNavigation />
 
       <DeleteModal
         isOpen={isDeleteModalOpen}

@@ -11,6 +11,7 @@ const taskSchema = new mongoose.Schema({
   link: { type: String },
   color: { type: String },
   status: { type: String, enum: ['backlog', 'todo', 'inprogress', 'done'], default: 'todo' },
+  reminders: [{ type: Number, default: [] }], // array of minutes before task (e.g., [15, 60, 1440])
 }, { timestamps: true });
 
 module.exports = mongoose.model('Task', taskSchema);

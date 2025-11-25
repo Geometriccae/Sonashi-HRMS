@@ -6,15 +6,17 @@ import ProfilePhotoUpload from "../ProfilePhotoUpload";
 import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 import clientService from "../../services/ClientService";
 import config from "../../config/config";
+import Dropdown from "../DropDown";
 
 function AddClientModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     // 1. Company & Contact Details
     companyName: "",
-    type: "",
+    clientType: "",
+    leadType: "",
     address: "",
     country: "",
     taxId: "",
@@ -90,6 +92,8 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
     }));
   };
 
+
+
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
@@ -112,8 +116,6 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
   };
 
   const handleFinish = async () => {
-    
-
     // Validate required fields
     if (!formData.companyName || !formData.email) {
       setError("Company Name and Email are required fields");
@@ -135,11 +137,13 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
           filteredData.projectTimelineStart
         );
       }
+
       if (filteredData.projectTimelineEnd) {
         filteredData.projectTimelineEnd = new Date(
           filteredData.projectTimelineEnd
         );
       }
+
       if (filteredData.followUpDate) {
         filteredData.followUpDate = new Date(filteredData.followUpDate);
       }
@@ -150,7 +154,10 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
       }
 
       // const savedClient = await clientService.createClient(filteredData);
-      const savedClient = await clientService.createClientWithFile(filteredData, profileImage);
+      const savedClient = await clientService.createClientWithFile(
+        filteredData,
+        profileImage
+      );
 
       // Call the onSubmit callback with the saved client data
       if (onSubmit) {
@@ -163,7 +170,8 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
       // Reset form data
       setFormData({
         companyName: "",
-        type: "",
+        clientType: "",
+        leadType: "",
         address: "",
         country: "",
         taxId: "",
@@ -212,63 +220,76 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
     }
   };
 
- const handlePhotoUpload = (file) => {
-  setProfileImage(file);
-};
+  const handlePhotoUpload = (file) => {
+    setProfileImage(file);
+  };
 
   const handleEditPhoto = () => {
     console.log("Edit photo");
   };
 
-  const typeOptions = [
-    { value: "Shipper", label: "Shipper" },
-    { value: "Consignee", label: "Consignee" },
-    { value: "Broker", label: "Broker" },
+  const clientTypeOptions = [
+     { value: "", label: "-Select-" },
     { value: "Agent", label: "Agent" },
+    { value: "Barge Operator", label: "Barge Operator" },
+    { value: "Barge Owners", label: "Barge Owners" },
+    { value: "Broker", label: "Broker" },
+    { value: "Cha", label: "CHA" },
+    { value: "Consignee", label: "Consignee" },
+    { value: "Freigt Forwarder", label: "Freigt Forwarder" },
     { value: "Other", label: "Other" },
+    { value: "Ship Owners", label: "Ship Owners" },
+    { value: "Shipper", label: "Shipper" },
+    { value: "Transporter", label: "Transporter" },
   ];
 
   const decisionMakerOptions = [
-    { value: "Yes", label: "Yes" },
+     { value: "", label: "-Select-" },
     { value: "No", label: "No" },
+    { value: "Yes", label: "Yes" },
   ];
 
   const relationshipStatusOptions = [
-    { value: "Prospect", label: "Prospect" },
+     { value: "", label: "-Select-" },
     { value: "Active", label: "Active" },
     { value: "Dormant", label: "Dormant" },
     { value: "Lost", label: "Lost" },
+    { value: "Prospect", label: "Prospect" },
   ];
 
   const contractTypeOptions = [
-    { value: "COA", label: "COA" },
+     { value: "", label: "-Select-" },
+    { value: "Coa", label: "COA" },
+    { value: "Long-term", label: "Long-term" },
     { value: "Spot", label: "Spot" },
     { value: "Tender", label: "Tender" },
-    { value: "Long-term", label: "Long-term" },
   ];
 
   const currentStatusOptions = [
-    { value: "Lead", label: "Lead" },
-    { value: "Quoted", label: "Quoted" },
+     { value: "", label: "-Select-" },
     { value: "Contacted", label: "Contacted" },
-    { value: "Negotiation", label: "Negotiation" },
-    { value: "Won", label: "Won" },
+    { value: "Lead", label: "Lead" },
     { value: "Lost", label: "Lost" },
+    { value: "Negotiation", label: "Negotiation" },
+    { value: "Quoted", label: "Quoted" },
+    { value: "Won", label: "Won" },
   ];
 
   const followupStatusOptions = [
-    { value: "Contacted", label: "Contacted" },
-    { value: "Needs Analysis", label: "Needs Analysis" },
-    { value: "Demo Scheduled", label: "Demo Scheduled" },
-    { value: "Proposal Sent", label: "Proposal Sent" },
+     { value: "", label: "-Select-" },
     { value: "Completed", label: "Completed" },
+    { value: "Contacted", label: "Contacted" },
+    { value: "Demo Scheduled", label: "Demo Scheduled" },
+    { value: "Lost", label: "Lost" },
+    { value: "Needs Analysis", label: "Needs Analysis" },
     { value: "Pending", label: "Pending" },
     { value: "Progress", label: "Progress" },
+    { value: "Proposal Sent", label: "Proposal Sent" },
     { value: "Won", label: "Won" },
-    { value: "Lost", label: "Lost" },
   ];
 
   const incotermsOptions = [
+     { value: "", label: "-Select-" },
     { value: "FOB", label: "FOB" },
     { value: "CIF", label: "CIF" },
     { value: "DAP", label: "DAP" },
@@ -282,49 +303,113 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
 
   // New dropdown option lists
   const leadSourceOptions = [
-    { value: "COLD CALL", label: "COLD CALL" },
-    { value: "ADVERTISEMENT", label: "ADVERTISEMENT" },
-    { value: "EMPLOYEE", label: "EMPLOYEE" },
-    { value: "REFERRAL", label: "REFERRAL" },
-    { value: "EXTERNAL", label: "EXTERNAL" }
+     { value: "", label: "-Select-" },
+    { value: "Advertisement", label: "Advertisement" },
+    { value: "Cold Call", label: "Cold Call" },
+    { value: "Conference", label: "Conference" },
+    { value: "Employee Referral", label: "Employee Referral" },
+    { value: "Exhibitor", label: "Exhibitor" },
+    { value: "Exhibition As Visitor", label: "Exhibition As Visitor" },
+    { value: "External Referral", label: "External Referral" },
+    { value: "Social Media", label: "SOCIAL MEDIA" },
   ];
-  
-  const leadStatusOptions = [
-    { value: "NEW", label: "NEW" },
-    { value: "ATTEMPTED TO", label: "ATTEMPTED TO" },
-    { value: "CONTACT", label: "CONTACT" },
-    { value: "CONTACTED", label: "CONTACTED" },
-    { value: "QUALIFIED", label: "QUALIFIED" },
-    { value: "CONTACT", label: "CONTACT" }
-  ];
-  
-  const industryTypeOptions = [
-  { value: "", label: "-None-" },
-  { value: "FREIGHT", label: "FREIGHT" },
-  { value: "FORWARDERS", label: "FORWARDERS" },
-  { value: "INDUSTRIAL BOILER", label: "INDUSTRIAL BOILER" },
-  { value: "OFFSHORE COMPANIES", label: "OFFSHORE COMPANIES" },
-  { value: "JACK UP RIG OWNERS", label: "JACK UP RIG OWNERS" },
-  { value: "OIL AND GAS COMPANIES", label: "OIL AND GAS COMPANIES" },
-  { value: "THERMAL POWER", label: "THERMAL POWER" },
-  { value: "NUCLEAR POWER", label: "NUCLEAR POWER" },
-  { value: "HYDRO POWER", label: "HYDRO POWER" },
-  { value: "NAVY", label: "NAVY" },
-  { value: "WINDMILL COMPANIES", label: "WINDMILL COMPANIES" },
-  { value: "OFFSHORE WINDMILL COMPANIES", label: "OFFSHORE WINDMILL COMPANIES" },
-  { value: "STEEL TRADERS", label: "STEEL TRADERS" },
-  { value: "SHIP BUILDING", label: "SHIP BUILDING" },
-  { value: "SHIPYARDS", label: "SHIPYARDS" },
-  { value: "DRY DOCKS", label: "DRY DOCKS" },
-  { value: "PORT INFRASTRUCTURE COMPANIES", label: "PORT INFRASTRUCTURE COMPANIES" }
-];
 
-  
+  const leadStatusOptions = [
+    { value: "", label: "-Select-" },
+    { value: "Attempted To Contact", label: "Attempted to Contact" },
+    { value: "Contact In Future", label: "Contact In Future" },
+    { value: "Contacted", label: "Contacted" },
+    { value: "Junk Lead", label: "Junk lead" },
+    { value: "Lost Lead", label: "Lost Lead" },
+    { value: "Negotiation", label: "Negotiation" },
+    { value: "New", label: "New" },
+    { value: "Qualified", label: "Qualified" },
+    { value: "Quoted", label: "Quoted" },
+    { value: "Won", label: "Won" },
+  ];
+
+  const industryTypeOptions = [
+    { value: "", label: "-Select-" },
+    { value: "Bulk trading company", label: "Bulk trading company" },
+    {
+      value: "Cement manufacturing companies",
+      label: "Cement manufacturing companies",
+    },
+    {
+      value: "Cryogenic tank manufacturers",
+      label: "Cryogenic tank manufacturers",
+    },
+    { value: "Dredging companies", label: "Dredging companies" },
+    { value: "Drydocks", label: "Drydocks" },
+    {
+      value: "Fiber pipe manufacturing company",
+      label: "Fiber pipe manufacturing company",
+    },
+    { value: "Freight forwarders", label: "Freight forwarders" },
+    { value: "Gypsum traders", label: "Gypsum traders" },
+    { value: "Heavy engineering", label: "Heavy engineering" },
+    {
+      value: "Heavy transport companies in abroad",
+      label: "Heavy transport companies in abroad",
+    },
+    {
+      value: "Heavy transport companies in india",
+      label: "Heavy transport companies in india",
+    },
+    { value: "Hydro power", label: "Hydro power" },
+    {
+      value: "Industrial air filter companies",
+      label: "Industrial air filter companies",
+    },
+    { value: "Industrial boiler", label: "Industrial boiler" },
+    {
+      value: "Industrial gases tank / cylinders",
+      label: "Industrial gases tank / cylinders",
+    },
+    { value: "Jack up rig owners", label: "Jack up rig owners" },
+    { value: "Limestone traders", label: "Limestone traders" },
+    { value: "Mining companies", label: "Mining companies" },
+    { value: "Navy", label: "Navy" },
+    { value: "Nuclear power", label: "Nuclear power" },
+    { value: "Offshore companies", label: "Offshore companies" },
+    {
+      value: "Offshore windmill companies",
+      label: "Offshore windmill companies",
+    },
+    { value: "Oil and gas companies", label: "Oil and gas companies" },
+    { value: "Pick up trucks", label: "Pick up trucks" },
+    {
+      value: "Port infrastructure companies",
+      label: "Port infrastructure companies",
+    },
+    {
+      value: "Railway wagon manufacturers",
+      label: "Railway wagon manufacturers",
+    },
+    { value: "Shipbuilding", label: "Shipbuilding" },
+    { value: "Shipyards", label: "Shipyards" },
+    { value: "Silica sand manufacturers", label: "Silica sand manufacturers" },
+    { value: "Steel traders", label: "Steel traders" },
+    {
+      value: "Straddle carrier manufacturer",
+      label: "Straddle carrier manufacturer",
+    },
+    { value: "Thermal power", label: "Thermal power" },
+    { value: "Transformer manufacturers", label: "Transformer manufacturers" },
+    { value: "Windmill companies", label: "Windmill companies" },
+  ];
+
   const categoryOptions = [
-    { value: "", label: "-None-" },
-    { value: "BULK", label: "BULK" },
-    { value: "BREAKBULK", label: "BREAKBULK" },
-    { value: "PROJECT", label: "PROJECT" }
+     { value: "", label: "-Select-" },
+    { value: "Breakbulk", label: "Breakbulk" },
+    { value: "Bulk", label: "Bulk" },
+    { value: "Project", label: "Project" },
+  ];
+
+  const leadTypeOptions = [
+     { value: "", label: "-Select-" },
+    { value: "Client", label: "Client" },
+    { value: "Lead", label: "Lead" },
   ];
 
   const renderStepContent = () => {
@@ -334,7 +419,6 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
           <div className="add-client-content">
             <ProfilePhotoUpload onUpload={handlePhotoUpload} />
             <div className="form-fields-grid">
-              
               <InputField
                 label="Company Name *"
                 placeholder="Company Name"
@@ -345,13 +429,30 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
-              <InputField
+              <Dropdown
+                label="Lead Type"
+                placeholder="Select type"
+                options={leadTypeOptions}
+                value={formData.leadType}
+                onChange={(e) => handleInputChange("leadType", e.target.value)}
+              />
+
+         
+            {/* <InputField
                 label="Client Type"
                 placeholder="Select type"
                 isDropdown
                 options={typeOptions}
                 value={formData.type}
                 onChange={(e) => handleInputChange("type", e.target.value)}
+              /> */}
+
+              <Dropdown
+                label="Client Type"
+                placeholder="Select type"
+                options={clientTypeOptions}
+                value={formData.clientType}
+                onChange={(e) => handleInputChange("clientType", e.target.value)}
               />
 
               <InputField
@@ -366,6 +467,36 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 placeholder="Country"
                 value={formData.country}
                 onChange={(e) => handleInputChange("country", e.target.value)}
+              />
+
+               <Dropdown
+                label="Industry Type"
+                placeholder="Industry Type"
+                options={industryTypeOptions}
+                value={formData.industryType}
+                onChange={(e) =>
+                  handleInputChange("industryType", e.target.value)
+                }
+              />
+
+              <Dropdown
+                label="Lead Source"
+                placeholder="Select lead source"
+                options={leadSourceOptions}
+                value={formData.leadSource}
+                onChange={(e) =>
+                  handleInputChange("leadSource", e.target.value)
+                }
+              />
+
+              <Dropdown
+                label="Lead Status"
+                placeholder="Select lead status"
+                options={leadStatusOptions}
+                value={formData.currentStatus} // stored to currentStatus field
+                onChange={(e) =>
+                  handleInputChange("currentStatus", e.target.value)
+                }
               />
 
               <InputField
@@ -410,7 +541,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
               />
 
               <InputField
-                label="Mobile"
+                label="Mobile (Personal)"
                 placeholder="Mobile"
                 type="tel"
                 value={formData.mobile}
@@ -426,39 +557,23 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 onChange={(e) => handleInputChange("email", e.target.value)}
               />
 
-              <InputField
-                label="Social Links"
-                placeholder="Social media profiles"
-                value={formData.socialLinks}
-                onChange={(e) =>
-                  handleInputChange("socialLinks", e.target.value)
-                }
-              />
+             
 
-              <InputField
-                label="Industry Type"
-                placeholder="Industry Type"
-                isDropdown
-                options={industryTypeOptions}
-                value={formData.industryType}
-                onChange={(e) =>
-                  handleInputChange("industryType", e.target.value)
-                }
-              />
+             
 
-              <InputField
+              <Dropdown
                 label="Category"
                 placeholder="Select category"
-                isDropdown
+              
                 options={categoryOptions}
                 value={formData.category}
                 onChange={(e) => handleInputChange("category", e.target.value)}
               />
 
-              <InputField
+              <Dropdown
                 label="Decision Maker"
                 placeholder="Select option"
-                isDropdown
+                
                 options={decisionMakerOptions}
                 value={formData.decisionMaker}
                 onChange={(e) =>
@@ -466,10 +581,9 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
-              <InputField
+              <Dropdown
                 label="Relationship Status"
                 placeholder="Select status"
-                isDropdown
                 options={relationshipStatusOptions}
                 value={formData.relationshipStatus}
                 onChange={(e) =>
@@ -486,22 +600,15 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
-              <InputField
-                label="Lead Source"
-                placeholder="Select lead source"
-                isDropdown
-                options={leadSourceOptions}
-                value={formData.leadSource}
-                onChange={(e) => handleInputChange("leadSource", e.target.value)}
-              />
+           
 
-              <InputField
-                label="Lead Status"
-                placeholder="Select lead status"
-                isDropdown
-                options={leadStatusOptions}
-                value={formData.currentStatus} // stored to currentStatus field
-                onChange={(e) => handleInputChange("currentStatus", e.target.value)}
+               <InputField
+                label="Social Links"
+                placeholder="Social media profiles"
+                value={formData.socialLinks}
+                onChange={(e) =>
+                  handleInputChange("socialLinks", e.target.value)
+                }
               />
 
               <InputField
@@ -557,15 +664,24 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
-              <InputField
+              <Dropdown
                 label="Contract Type"
                 placeholder="Select contract type"
-                isDropdown
+              
                 options={contractTypeOptions}
                 value={formData.contractType}
                 onChange={(e) =>
                   handleInputChange("contractType", e.target.value)
                 }
+              />
+
+              
+              <Dropdown
+                label="Incoterms"
+                placeholder="Select incoterms"
+                options={incotermsOptions}
+                value={formData.incoterms}
+                onChange={(e) => handleInputChange("incoterms", e.target.value)}
               />
 
               <InputField
@@ -678,14 +794,6 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
-              <InputField
-                label="Incoterms"
-                placeholder="Select incoterms"
-                isDropdown
-                options={incotermsOptions}
-                value={formData.incoterms}
-                onChange={(e) => handleInputChange("incoterms", e.target.value)}
-              />
             </div>
           </div>
         );
@@ -697,18 +805,18 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
               label: "Company Name",
               value: formData.companyName || "Not provided",
             },
-            { label: "Client Type", value: formData.type || "Not provided" },
-            { label: "Email", value: formData.email || "Not provided" },
+            { label: "Client Type", value: formData.clientType || "Not provided" },
+            { label: "Lead Type", value: formData.leadType || "Not provided" },
           ],
           [
+            { label: "Email", value: formData.email || "Not provided" },
             { label: "Phone", value: formData.phone || "Not provided" },
             { label: "Mobile", value: formData.mobile || "Not provided" },
-            { label: "Country", value: formData.country || "Not provided" },
           ],
           [
             { label: "Address", value: formData.address || "Not provided" },
+            { label: "Country", value: formData.country || "Not provided" },
             { label: "Tax ID", value: formData.taxId || "Not provided" },
-            { label: "Website", value: formData.website || "Not provided" },
           ],
           [
             {
@@ -765,6 +873,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                 : "Not provided",
             },
           ],
+          [{ label: "Website", value: formData.website || "Not provided" }],
         ];
 
         return (
@@ -779,13 +888,15 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
                   />
                 ) : clientData?.profilePicture ? (
                   <img
-                    src={`${config.API_BASE_URL.replace('/api', '')}${clientData.profilePicture}`}
+                    src={`${config.API_BASE_URL.replace("/api", "")}${
+                      clientData.profilePicture
+                    }`}
                     alt="Company logo"
                     className="company-logo"
                   />
                 ) : (
                   <div className="default-company-logo">
-                    {formData.companyName?.charAt(0)?.toUpperCase() || 'C'}
+                    {formData.companyName?.charAt(0)?.toUpperCase() || "C"}
                   </div>
                 )}
                 <div className="company-name">

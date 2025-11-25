@@ -2,17 +2,21 @@ import React, { useEffect, useState } from "react";
 import UserService from "../services/UserService";
 import config from "../config/config";
 
-function ProfileAvatar({ size = 32, className = "" }) {
-  const [user, setUser] = useState(null);
+function ProfileAvatar({ size = 32, className = "", userData = null }) {
+  const [user, setUser] = useState(userData);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const me = await UserService.getMe();
-        setUser(me);
-      } catch (e) {}
-    })();
-  }, []);
+    if (userData) {
+      setUser(userData);
+    } else {
+      (async () => {
+        try {
+          const me = await UserService.getMe();
+          setUser(me);
+        } catch (e) {}
+      })();
+    }
+  }, [userData]);
 
   const src = user?.profilePicture
     ? `${config.API_BASE_URL.replace('/api', '')}${user.profilePicture}`

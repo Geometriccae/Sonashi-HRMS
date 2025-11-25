@@ -14,6 +14,7 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
     priority: "",
     date: "",
     assignedTeamMembers: [],
+    reminders: [60, 15, 1], // Default reminders: 1 hour, 15 min, 1 min before
   });
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -88,6 +89,7 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
         date: eventDate,
         assignedEmployees: formData.assignedTeamMembers,
         status: "todo",
+        reminders: formData.reminders || [],
       };
 
       const createdTask = await createTask(clientId, taskData);

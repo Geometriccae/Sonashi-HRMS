@@ -24,6 +24,11 @@ class ClientService {
     const cloned = Array.isArray(obj) ? [] : {};
     for (const key of Object.keys(obj)) {
       const val = obj[key];
+      // Preserve Date objects by converting to ISO strings
+      if (val instanceof Date) {
+        cloned[key] = val.toISOString();
+        continue;
+      }
       if (typeof val === 'string') {
         const trimmed = val.trim();
         if (trimmed === '') continue; // skip empty strings
@@ -126,7 +131,7 @@ class ClientService {
   }
 
   // Create new client
-  async createClient(clientData) {
+  async createClient_old(clientData) {
     try {
       console.log('Creating client at:', this.baseURL); // Debug log
       console.log('Client data:', clientData); // Debug log
@@ -152,6 +157,37 @@ class ClientService {
       throw error;
     }
   }
+
+  async createClient(clientData) {
+  try {
+    console.log('Creating client at:', this.baseURL);
+
+    const payload = this.sanitizePayload(clientData);
+    
+    // Add notification control - check if it's a bulk operation
+    if (clientData.disableNotifications || clientData.isBulkImport) {
+      payload.disableNotifications = true;
+    }
+
+    const response = await fetch(this.baseURL, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    console.log('Response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating client:', error);
+    throw error;
+  }
+}
 
   // Update client
   async updateClient(id, clientData) {
@@ -205,6 +241,38 @@ class ClientService {
       throw error;
     }
   }
+
+  // Add this to your clientService
+// Updated bulkCreateClients method
+async bulkCreateClients(clientsData) {
+  try {
+    const payload = {
+      clients: clientsData.map(client => this.sanitizePayload(client)),
+      options: {
+        disableNotifications: true,
+        isBulkImport: true
+      }
+    };
+
+    console.log('Bulk creating clients:', payload.clients.length, 'clients');
+    
+    const response = await fetch(`${this.baseURL}/bulk-import`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error bulk creating clients:', error);
+    throw error;
+  }
+}
 
   async createClientWithFile(clientData, profileImage) {
     try {

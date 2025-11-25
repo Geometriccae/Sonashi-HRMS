@@ -11,7 +11,7 @@ import pencilline from "../../assets/dashboard/pencil-line.svg";
 import EditTaskModal from "./EditTaskModal";
 import DeleteModal from "../delete-modal/DeleteModal";
 
-const TaskBoard = () => {
+const TaskBoard = ({ onRefresh }) => {
   const { id: clientId } = useParams();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,21 +22,29 @@ const TaskBoard = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
 
+  const loadTasks = async () => {
+    try {
+      setLoading(true);
+      const data = await getTasksByClient(clientId);
+      setTasks(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Failed to load tasks", e);
+      setError("Failed to load tasks");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const data = await getTasksByClient(clientId);
-        setTasks(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("Failed to load tasks", e);
-        setError("Failed to load tasks");
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (clientId) load();
+    if (clientId) loadTasks();
   }, [clientId]);
+
+  // Expose refresh method to parent
+  useEffect(() => {
+    if (onRefresh) {
+      onRefresh.current = loadTasks;
+    }
+  }, [onRefresh, loadTasks]);
 
   const columnsFromTasks = useMemo(() => {
     const groups = {

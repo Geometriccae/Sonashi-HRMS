@@ -65,6 +65,7 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
         (position) => {
           const { latitude, longitude } = position.coords;
           // Format coordinates like in the design: 10°02'09.4"N 76°25'21.4"E
+          // Use \u00B0 for degree symbol to avoid encoding issues
           const latDeg = Math.floor(Math.abs(latitude));
           const latMin = Math.floor((Math.abs(latitude) - latDeg) * 60);
           const latSec = ((Math.abs(latitude) - latDeg - latMin/60) * 3600).toFixed(1);
@@ -75,7 +76,7 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
           const lngSec = ((Math.abs(longitude) - lngDeg - lngMin/60) * 3600).toFixed(1);
           const lngDir = longitude >= 0 ? 'E' : 'W';
           
-          const formattedLocation = `${latDeg}°${latMin.toString().padStart(2, '0')}'${latSec}"${latDir} ${lngDeg}°${lngMin.toString().padStart(2, '0')}'${lngSec}"${lngDir}`;
+          const formattedLocation = `${latDeg}\u00B0${latMin.toString().padStart(2, '0')}'${latSec}"${latDir} ${lngDeg}\u00B0${lngMin.toString().padStart(2, '0')}'${lngSec}"${lngDir}`;
           
           setFormData(prev => ({
             ...prev,
@@ -89,6 +90,11 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
           console.error('Error getting location:', error);
           setError('Unable to get your location. Please enable GPS permissions.');
           setIsLoadingLocation(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
         }
       );
     } else {
@@ -356,24 +362,34 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
                   justifyContent: 'space-between',
                   width: '100%'
                 }}>
-                  <span style={{
-                    color: isLoadingLocation ? '#717680' : '#000',
-                    fontSize: '16px',
-                    flex: 1
-                  }}>
-                    {isLoadingLocation ? 'Getting location...' : formData.location || '10°02\'09.4"N 76°25\'21.4"E'}
-                  </span>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => handleInputChange('location', e.target.value)}
+                    placeholder={isLoadingLocation ? "Getting location..." : "Enter location"}
+                    disabled={isLoadingLocation}
+                    style={{
+                      border: 'none',
+                      outline: 'none',
+                      fontSize: '16px',
+                      width: '100%',
+                      color: '#000',
+                      backgroundColor: 'transparent'
+                    }}
+                  />
                   <button
                     type="button"
                     onClick={getCurrentLocation}
                     disabled={isLoadingLocation}
+                    title="Refresh Location"
                     style={{
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
                       padding: '4px',
                       display: 'flex',
-                      alignItems: 'center'
+                      alignItems: 'center',
+                      marginLeft: '8px'
                     }}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

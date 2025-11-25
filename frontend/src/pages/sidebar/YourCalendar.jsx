@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import styles from "../team-management/TeamManagementSalesLeads.module.css";
+// import styles from "../pages/SalesAndLeads.module.css";
+import styles from "../SalesAndLeadsClient.module.css";
 import Side from "../sidebar/Sidebar";
 
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
@@ -8,10 +9,12 @@ import Documents from "../../components/team-management-components/TeamMangement
 import Meetingstable from "./YourCalendarMeetings";
 import clientService from "../../services/ClientService";
 import employeeService from "../../services/EmployeeService";
+import MeetingService from "../../services/MeetingService";
 import config from "../../config/config";
 import MobileBottomNavigation from "../../components/MobileBottomNavigation";
 import DeleteModal from "../../components/delete-modal/DeleteModal";
-import CreateEventModal from "../../components/sales-and-leads/CreateEventModal";
+import CreateMeetingModal from "./CreateMeetingModal";
+import EditMeetingModal from "./EditMeetingModal";
 import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
 
@@ -37,6 +40,9 @@ function YourCalendar() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteType, setDeleteType] = useState(""); // 'entry' or 'data'
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [createEventInitial, setCreateEventInitial] = useState(null);
+  const [isEditMeetingModalOpen, setIsEditMeetingModalOpen] = useState(false);
+  const [editMeetingSelected, setEditMeetingSelected] = useState(null);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -46,6 +52,7 @@ function YourCalendar() {
   const [userRole, setUserRole] = useState("");
   const [meetings, setMeetings] = useState([]);
   const [isLoadingMeetings, setIsLoadingMeetings] = useState(false);
+  const [selectedMeetingToDelete, setSelectedMeetingToDelete] = useState(null);
 
       useEffect(() => {
         setUsername(localStorage.getItem("username") || "");
@@ -72,99 +79,136 @@ function YourCalendar() {
         const role = me.role || userRole || 'sales_executive';
   
         // fetch aggregated client events
-        let events = [];
+        let clientEvents = [];
         try {
           const allEventsResp = await fetch(`${clientService.baseURL.replace(/\/clients\/?$/,'')}/clients/events`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-          if (allEventsResp.ok) events = await allEventsResp.json();
+          if (allEventsResp.ok) clientEvents = await allEventsResp.json();
         } catch (e) {
           console.warn('Failed to fetch client events', e);
-          events = [];
+          clientEvents = [];
         }
+
+        // fetch standalone meetings (saved to /api/meetings)
+        let meetingsList = [];
+        try {
+          const raw = await MeetingService.getMeetings();
+          meetingsList = Array.isArray(raw) ? raw : (raw.meetings || []);
+        } catch (e) {
+          console.warn('Failed to fetch meetings from /api/meetings', e);
+          meetingsList = [];
+        }
+        
+        // Normalize meetings to the same structure as client events so filtering works
+        const normalizedMeetings = (meetingsList || []).map(m => {
+          const date = m.date ? new Date(m.date) : null;
+          return {
+            _id: m._id || m.id,
+            eventId: m._id || m.id,
+            eventName: m.title || m.eventName || '',
+            title: m.title || m.eventName || '',
+            date: date ? date.toISOString().split('T')[0] : null,
+            time: m.time || '',
+            clientId: m.clientId || null,
+            clientName: m.clientName || null,
+            assignedTeamMembers: m.assignedTeamMembers || [],
+            createdBy: m.createdBy || null,
+            // include color at top-level so downstream components can read it directly
+            color: m.color || (m.meta && m.meta.meeting && m.meta.meeting.color) || '#FF9500',
+            meta: { meeting: m }
+          };
+        });
   
+        // Merge client events and normalized meetings into a single array
+        const events = [
+          ...(Array.isArray(clientEvents) ? clientEvents : []),
+          ...normalizedMeetings
+        ];
+  
+        // Use `events` below in filtering logic instead of the old `events` variable
         if (role === 'admin') {
           // Admin sees all events
-          setMeetings(Array.isArray(events) ? events : []);
-        } else if (role === 'sales_executive') {
+          setMeetings(events);
+         } else if (role === 'sales_executive') {
           // Sales executive sees events they created or are assigned to
           // resolve employee linked to this user
-          let employee = null;
-          try {
-            const employees = await employeeService.getEmployees();
-            employee = (employees || []).find(emp =>
-              String(emp.user) === String(me._id) ||
-              (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
-            );
-          } catch (e) {
-            console.warn('Failed to resolve employee:', e);
-          }
-  
-          const empId = employee?._id ? String(employee._id) : null;
-          const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
-          const userId = me._id ? String(me._id) : null;
-  
+           let employee = null;
+           try {
+             const employees = await employeeService.getEmployees();
+             employee = (employees || []).find(emp =>
+               String(emp.user) === String(me._id) ||
+               (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
+             );
+           } catch (e) {
+             console.warn('Failed to resolve employee:', e);
+           }
+   
+           const empId = employee?._id ? String(employee._id) : null;
+           const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
+           const userId = me._id ? String(me._id) : null;
+   
           const filtered = (events || []).filter(ev => {
-            // Check if user created this event
-            if (ev.createdBy && (
-                (userId && String(ev.createdBy) === userId) || 
-                (usernameKey && ev.createdBy.toLowerCase && String(ev.createdBy).toLowerCase() === usernameKey)
-              )) {
-              return true;
-            }
-            
-            // Check if user is assigned to this event
-            // ev may include assignedTeamMembers (array of ids) and assignedBy (string)
-            const assignedTeam = ev.assignedTeamMembers || ev.meta?.event?.assignedTeamMembers || ev.assignedTo || ev.meta?.assignedTeamMembers;
-            if (empId && Array.isArray(assignedTeam) && assignedTeam.map(String).includes(String(empId))) return true;
-            
-            // Check if user is the one who assigned this event
-            if (ev.assignedBy && usernameKey && String(ev.assignedBy).toLowerCase() === usernameKey) return true;
-            
-            // fallback: check payload/meta fields
-            const metaAssigned = ev.meta?.event?.assignedTeamMembers || ev.meta?.assignedTeamMembers;
-            if (empId && Array.isArray(metaAssigned) && metaAssigned.map(String).includes(String(empId))) return true;
-            
-            return false;
-          });
-          
-          console.log('Filtered events for sales_executive:', filtered.length);
-          setMeetings(filtered);
-        } else {
+             // Check if user created this event
+             if (ev.createdBy && (
+                 (userId && String(ev.createdBy) === userId) || 
+                 (usernameKey && ev.createdBy.toLowerCase && String(ev.createdBy).toLowerCase() === usernameKey)
+               )) {
+               return true;
+             }
+             
+             // Check if user is assigned to this event
+             // ev may include assignedTeamMembers (array of ids) and assignedBy (string)
+             const assignedTeam = ev.assignedTeamMembers || ev.meta?.event?.assignedTeamMembers || ev.assignedTo || ev.meta?.assignedTeamMembers;
+             if (empId && Array.isArray(assignedTeam) && assignedTeam.map(String).includes(String(empId))) return true;
+             
+             // Check if user is the one who assigned this event
+             if (ev.assignedBy && usernameKey && String(ev.assignedBy).toLowerCase() === usernameKey) return true;
+             
+             // fallback: check payload/meta fields
+             const metaAssigned = ev.meta?.event?.assignedTeamMembers || ev.meta?.assignedTeamMembers;
+             if (empId && Array.isArray(metaAssigned) && metaAssigned.map(String).includes(String(empId))) return true;
+             
+             return false;
+           });
+           
+           console.log('Filtered events for sales_executive:', filtered.length);
+           setMeetings(filtered);
+         } else {
           // Other roles - use the same logic as before
-          let employee = null;
-          try {
-            const employees = await employeeService.getEmployees();
-            employee = (employees || []).find(emp =>
-              String(emp.user) === String(me._id) ||
-              (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
-            );
-          } catch (e) {
-            console.warn('Failed to resolve employee:', e);
-          }
-  
-          const empId = employee?._id ? String(employee._id) : null;
-          const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
-  
+           let employee = null;
+           try {
+             const employees = await employeeService.getEmployees();
+             employee = (employees || []).find(emp =>
+               String(emp.user) === String(me._id) ||
+               (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
+             );
+           } catch (e) {
+             console.warn('Failed to resolve employee:', e);
+           }
+   
+           const empId = employee?._id ? String(employee._id) : null;
+           const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
+   
           const filtered = (events || []).filter(ev => {
-            // ev may include assignedTeamMembers (array of ids) and assignedBy (string)
-            const assignedTeam = ev.assignedTeamMembers || ev.meta?.event?.assignedTeamMembers || ev.assignedTo || ev.meta?.assignedTeamMembers;
-            if (empId && Array.isArray(assignedTeam) && assignedTeam.map(String).includes(String(empId))) return true;
-            if (ev.assignedBy && usernameKey && String(ev.assignedBy).toLowerCase() === usernameKey) return true;
-            // fallback: check payload/meta fields
-            const metaAssigned = ev.meta?.event?.assignedTeamMembers || ev.meta?.assignedTeamMembers;
-            if (empId && Array.isArray(metaAssigned) && metaAssigned.map(String).includes(String(empId))) return true;
-            return false;
-          });
-          setMeetings(filtered);
-        }
-      } catch (err) {
-        console.error('Error loading meetings for calendar:', err);
-        setMeetings([]);
-      } finally {
-        setIsLoadingMeetings(false);
-      }
-    }
+             // ev may include assignedTeamMembers (array of ids) and assignedBy (string)
+             const assignedTeam = ev.assignedTeamMembers || ev.meta?.event?.assignedTeamMembers || ev.assignedTo || ev.meta?.assignedTeamMembers;
+             if (empId && Array.isArray(assignedTeam) && assignedTeam.map(String).includes(String(empId))) return true;
+             if (ev.assignedBy && usernameKey && String(ev.assignedBy).toLowerCase() === usernameKey) return true;
+             // fallback: check payload/meta fields
+             const metaAssigned = ev.meta?.event?.assignedTeamMembers || ev.meta?.assignedTeamMembers;
+             if (empId && Array.isArray(metaAssigned) && metaAssigned.map(String).includes(String(empId))) return true;
+             return false;
+           });
+           setMeetings(filtered);
+         }
+       } catch (err) {
+         console.error('Error loading meetings for calendar:', err);
+         setMeetings([]);
+       } finally {
+         setIsLoadingMeetings(false);
+       }
+     }
 
   useEffect(() => {
     const updateIndicatorPosition = () => {
@@ -212,29 +256,85 @@ function YourCalendar() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deleteType === "entry") {
-      console.log("Delete Entry confirmed");
-      // Implement delete entry logic here
-    } else if (deleteType === "data") {
-      console.log("Delete Data confirmed");
-      // Implement delete data logic here
+   const handleNewEvent = () => {
+     setCreateEventInitial(null);
+     setIsCreateEventModalOpen(true);
+   };
+
+   const handleCreateEventClose = () => {
+     setIsCreateEventModalOpen(false);
+     setCreateEventInitial(null);
+   };
+
+   // Called when CreateMeetingModal finishes (create or update)
+   const handleEventSaved = async (createdMeeting) => {
+     // refresh meetings list after save
+     try {
+       await loadMeetingsForCurrentUser();
+     } catch (e) {
+       console.warn("Failed to refresh meetings after event save", e);
+     }
+     // close modal handled by modal itself via onClose
+   };
+
+   // Called when calendar requests edit for an event
+   const handleEditEvent = (evt) => {
+     // evt is the event object from YourCalendarMeetings
+     // Close any create modal and open the dedicated EditMeetingModal so update will call PUT instead of creating new
+     setCreateEventInitial(null);
+     setIsCreateEventModalOpen(false);
+     setEditMeetingSelected(evt);
+     setIsEditMeetingModalOpen(true);
+   };
+
+   const handleEditModalClose = () => {
+     setIsEditMeetingModalOpen(false);
+     setEditMeetingSelected(null);
+   };
+   
+   const handleEventUpdated = async (updatedMeeting) => {
+     try {
+       await loadMeetingsForCurrentUser();
+     } catch (e) {
+       console.warn("Failed to refresh meetings after update", e);
+     }
+   };
+
+  // Child requests deletion: open DeleteModal and store meeting
+  const handleRequestDelete = (evt) => {
+    setSelectedMeetingToDelete(evt);
+    setDeleteType("meeting");
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      if (selectedMeetingToDelete && (selectedMeetingToDelete._id || selectedMeetingToDelete.id || selectedMeetingToDelete.eventId)) {
+        const id = selectedMeetingToDelete._id || selectedMeetingToDelete.id || selectedMeetingToDelete.eventId;
+        await MeetingService.deleteMeeting(id);
+        // reload meetings
+        await loadMeetingsForCurrentUser();
+      } else {
+        // handle other delete types if present
+        if (deleteType === "entry") {
+          console.log("Delete Entry confirmed");
+        } else if (deleteType === "data") {
+          console.log("Delete Data confirmed");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete meeting:", err);
+      // you may show a toast or set an error state
+    } finally {
+      setIsDeleteModalOpen(false);
+      setDeleteType("");
+      setSelectedMeetingToDelete(null);
     }
-    setIsDeleteModalOpen(false);
-    setDeleteType("");
   };
 
   const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
     setDeleteType("");
-  };
-
-  const handleNewEvent = () => {
-    setIsCreateEventModalOpen(true);
-  };
-
-  const handleCreateEventClose = () => {
-    setIsCreateEventModalOpen(false);
   };
 
   const handleFileUpload = () => {
@@ -297,11 +397,11 @@ function YourCalendar() {
       case "meetings":
         return (
           <div className={styles.row_view5}>
-            {/* hide for now */}
-            {/* <button className={styles.button_row_view} onClick={handleNewEvent}>
+          
+            <button className={styles.button_row_view} onClick={handleNewEvent}>
               <span className={styles.text3}>New Event</span>
               <img src={plus} className={styles.image3} alt="" />
-            </button> */}
+            </button>
             <button
               ref={exportButtonRef}
               className={styles.button_row_view2}
@@ -381,7 +481,13 @@ function YourCalendar() {
             <div className={styles.column3}>
               {activeTab === "meetings" && (
                 <div className={styles.meetingsContent} >
-                  <Meetingstable meetings={meetings} isLoading={isLoadingMeetings} reloadMeetings={loadMeetingsForCurrentUser} />
+                  <Meetingstable
+                    events={meetings}
+                    isLoading={isLoadingMeetings}
+                    reloadMeetings={loadMeetingsForCurrentUser}
+                    onEdit={handleEditEvent}
+                    onDelete={handleRequestDelete}
+                  />
                 </div>
               )}
             </div>
@@ -394,18 +500,30 @@ function YourCalendar() {
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title={
+          selectedMeetingToDelete ? `Delete "${selectedMeetingToDelete.title || selectedMeetingToDelete.eventName || 'this meeting'}"?` :
           deleteType === "entry" ? "Delete this Entry?" : "Delete this Data?"
         }
         description={
-          deleteType === "entry"
-            ? "Are you sure you want to delete this entry? This action cannot be undone."
-            : "Are you sure you want to delete this data? This action cannot be undone."
+          selectedMeetingToDelete
+            ? `This will permanently remove the selected meeting from the calendar. Proceed?`
+            : deleteType === "entry"
+              ? "Are you sure you want to delete this entry? This action cannot be undone."
+              : "Are you sure you want to delete this data? This action cannot be undone."
         }
       />
 
-      <CreateEventModal
+      <CreateMeetingModal
         isOpen={isCreateEventModalOpen}
         onClose={handleCreateEventClose}
+        onEventCreated={handleEventSaved}
+        initial={createEventInitial}
+      />
+
+      <EditMeetingModal
+        isOpen={isEditMeetingModalOpen}
+        onClose={handleEditModalClose}
+        meeting={editMeetingSelected}
+        onEventUpdated={handleEventUpdated}
       />
 
       <FileUploadModal

@@ -3,7 +3,23 @@ import styles from "./ConversionDataChart.module.css";
 import arrowupright from "../assets/dashboard/arrow-up-right.svg";
 import smile_emoji from "../assets/dashboard/bxs_smile.svg";
 
-function ConversionDataChart() {
+function ConversionDataChart({ conversionData = [], isLoading = false }) {
+  const getCurrentConversionRate = () => {
+    if (!conversionData || conversionData.length === 0) return 0;
+    const latestData = conversionData[conversionData.length - 1];
+    return latestData ? latestData.rate : 0;
+  };
+
+  const getPreviousConversionRate = () => {
+    if (!conversionData || conversionData.length < 2) return 0;
+    const previousData = conversionData[conversionData.length - 2];
+    return previousData ? previousData.rate : 0;
+  };
+
+  const currentRate = getCurrentConversionRate();
+  const previousRate = getPreviousConversionRate();
+  const improvement = previousRate > 0 ? (((currentRate - previousRate) / previousRate) * 100).toFixed(1) : 0;
+
   return (
     <div className={styles.conversionDataContainer}>
       {/* Background glow effect */}
@@ -37,9 +53,21 @@ function ConversionDataChart() {
         <div className={styles.headerContent}>
           <h2 className={styles.title}>Conversion data</h2>
           <p className={styles.subtitle}>
-            Conversion rate has improved from last month!
-            <br />
-            Keep up the good work!
+            {isLoading ? (
+              'Loading conversion data...'
+            ) : improvement >= 0 ? (
+              <>
+                Conversion rate has improved by {Math.abs(improvement)}% from last month!
+                <br />
+                Keep up the good work!
+              </>
+            ) : (
+              <>
+                Conversion rate has decreased by {Math.abs(improvement)}% from last month.
+                <br />
+                Let's work on improving it!
+              </>
+            )}
           </p>
         </div>
         <button className={styles.actionButton}>
@@ -170,8 +198,12 @@ function ConversionDataChart() {
           <img src={smile_emoji} alt="smile" />
         </div>
         <div className={styles.tooltipContent}>
-          <div className={styles.tooltipPercentage}>58%</div>
-          <div className={styles.tooltipDate}>Monday, 31st Sep 2025</div>
+          <div className={styles.tooltipPercentage}>
+            {isLoading ? '--' : `${currentRate.toFixed(0)}%`}
+          </div>
+          <div className={styles.tooltipDate}>
+            {isLoading ? 'Loading...' : new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
+          </div>
         </div>
       </div>
     </div>

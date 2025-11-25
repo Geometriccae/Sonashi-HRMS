@@ -9,7 +9,6 @@ import clientService from "../../services/ClientService";
 import config from "../../config/config";
 import plus from "../../assets/dashboard/plus.svg";
 import ImportCsvModal from "./ImportCsvModal";
-import { io as ioClient } from "socket.io-client";
 
 // SVG Components
 const UserPlusIcon = () => (
@@ -150,6 +149,8 @@ const DeleteIcon = () => (
 function ClientsTable() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
+  // Which field the search term applies to, set via FilterDropdown
+  const [activeSearchField, setActiveSearchField] = useState("company-name");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
@@ -179,7 +180,6 @@ function ClientsTable() {
       setError(null);
     } catch (err) {
       console.error("Error fetching clients:", err);
-      // Surface error but keep current list visible (avoid full-screen error)
       setError(err.message || "Failed to fetch clients");
     } finally {
       setIsLoading(false);
@@ -188,36 +188,6 @@ function ClientsTable() {
 
   useEffect(() => {
     fetchClients();
-
-    // real-time listener: update clients list when server broadcasts a new client
-    const raw = config.API_BASE_URL || '';
-    const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
-    const socket = ioClient(socketUrl, {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
-      reconnection: true
-    });
-
-    const onClientCreated = (client) => {
-      try {
-        if (!client) return;
-        setClientsData((prev) => {
-          if (!prev) return [client];
-          // avoid duplicate if already present
-          const exists = prev.some((c) => String(c._id) === String(client._id));
-          if (exists) return prev;
-          return [client, ...prev];
-        });
-      } catch (e) {
-        console.warn('Error handling client-created event', e);
-      }
-    };
-
-    socket.on('client-created', onClientCreated);
-
-    return () => {
-      try { socket.off('client-created', onClientCreated); socket.disconnect(); } catch (e) {}
-    };
   }, []);
 
   const handleEdit = (id) => {
@@ -261,33 +231,29 @@ function ClientsTable() {
     setIsAddClientModalOpen(false);
   };
 
-  const handleAddClientSubmit = async (formData, profileImage) => {
+  const handleAddClientSubmit = async (formData) => {
     try {
-      // Choose appropriate API call depending on whether a file was provided
-      let created;
-      if (profileImage) {
-        created = await clientService.createClientWithFile(formData, profileImage);
-      } else {
-        created = await clientService.createClient(formData);
-      }
+      // The modal's onSubmit now returns the newly created client
+      // Add optimistically to local state
+      setClientsData((prevClients) => [formData, ...prevClients]);
+      setIsAddClientModalOpen(false);
 
-      // Optimistically show the created client immediately (dedupe)
-      if (created) {
-        setClientsData((prev) => {
-          const exists = prev && prev.some((c) => String(c._id) === String(created._id));
-          if (exists) return prev;
-          return [created, ...(prev || [])];
+      // Refresh authoritative list from server to ensure consistency
+      await fetchClients();
+
+      // Show success notification
+      if (window.appNotifications) {
+        window.appNotifications.push({
+          type: 'success',
+          title: 'Client Added',
+          message: `${formData.companyName} has been successfully added.`
         });
       }
-      setIsAddClientModalOpen(false);
-      // Background refresh to reconcile server state; don't block UI and don't replace visible list on error
-      fetchClients().catch((e) => {
-        console.warn("Background refresh after create failed:", e);
-      });
     } catch (err) {
       console.error("Error creating client:", err);
       setError(err.message || "Failed to create client");
-      throw err;
+      // if the add fails, we should probably re-fetch to get back to a consistent state
+      fetchClients();
     }
   };
 
@@ -327,22 +293,89 @@ function ClientsTable() {
   };
 
   const handleFilterSelect = (option) => {
-    console.log("Filter selected:", option);
+    // option example: { id: 'company-name', label: 'Company Name', ... }
+    if (option && option.id) {
+      setActiveSearchField(option.id);
+    }
   };
 
   const filteredData = clientsData.filter((client) => {
     let matchesFilter = true;
-    if (activeFilter === "Clients") {
+    // if (activeFilter === "Clients") {
+    //   matchesFilter =
+    //     client.leadType === "Client" || client.relationshipStatus === "Active";
+    // } else if (activeFilter === "Leads") {
+    //   matchesFilter =
+    //     client.leadType === "Lead" || client.relationshipStatus === "Prospect";
+    // }
+
+     if (activeFilter === "Clients") {
       matchesFilter =
-        client.type === "Client" || client.relationshipStatus === "Active";
+        client.leadType === "Client" ;
     } else if (activeFilter === "Leads") {
       matchesFilter =
-        client.type === "Lead" || client.relationshipStatus === "Prospect";
+        client.leadType === "Lead";
     }
 
-    const matchesSearch =
-      client.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchTerm.toLowerCase());
+     
+    // Apply searchTerm based on the selected field
+    const term = (searchTerm || "").toLowerCase();
+    let matchesSearch = true;
+    if (term.trim() !== "") {
+      switch (activeSearchField) {
+        case "company-name": {
+          matchesSearch =
+            (client.companyName || "").toLowerCase().includes(term) ||
+            (client.email || "").toLowerCase().includes(term);
+          break;
+        }
+        case "phone-number": {
+          matchesSearch =
+            (client.mobile || "").toLowerCase().includes(term) ||
+            (client.phone || "").toLowerCase().includes(term);
+          break;
+        }
+        case "assigned-to": {
+          // The UI currently shows Lead Status in the "Assigned" column.
+          // Try matching against currentStatus, assignedRole, or assignedTo if available.
+          const assignedToLabel =
+            typeof client.assignedTo === "string"
+              ? client.assignedTo
+              : (client.assignedTo && (client.assignedTo.username || client.assignedTo.employeeName)) || "";
+          matchesSearch =
+            (client.currentStatus || "").toLowerCase().includes(term) ||
+            (client.assignedRole || "").toLowerCase().includes(term) ||
+            (assignedToLabel || "").toLowerCase().includes(term);
+          break;
+        }
+        case "categories": {
+          matchesSearch = (client.category || "").toLowerCase().includes(term);
+          break;
+        }
+        case "type": {
+          matchesSearch =
+            (client.leadType || "").toLowerCase().includes(term) ||
+            (client.relationshipStatus || "").toLowerCase().includes(term);
+          break;
+        }
+        case "added-on": {
+          // Match against createdAt date string if present
+          const createdAt = client.createdAt ? new Date(client.createdAt) : null;
+          const createdStrISO = createdAt ? createdAt.toISOString().slice(0, 10) : ""; // YYYY-MM-DD
+          const createdStrLocal = createdAt ? createdAt.toLocaleDateString() : "";
+          matchesSearch =
+            createdStrISO.toLowerCase().includes(term) ||
+            createdStrLocal.toLowerCase().includes(term);
+          break;
+        }
+        default: {
+          // Fallback: search company and email
+          matchesSearch =
+            (client.companyName || "").toLowerCase().includes(term) ||
+            (client.email || "").toLowerCase().includes(term);
+        }
+      }
+    }
 
     return matchesFilter && matchesSearch;
   });
@@ -355,7 +388,7 @@ function ClientsTable() {
   const goNext = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
 
   // Reset to first page when filters/search change
-  useEffect(() => { setCurrentPage(1); }, [activeFilter, searchTerm, clientsData.length]);
+  useEffect(() => { setCurrentPage(1); }, [activeFilter, activeSearchField, searchTerm, clientsData.length]);
 
   const triggerImport = () => {
     console.log("Import button clicked, opening modal");
@@ -380,30 +413,27 @@ function ClientsTable() {
     }
   };
 
-  // NOTE: don't early-return for loading/error so the existing list (if any) stays visible.
-  // If there are no clients yet, show loading/empty states below as usual.
-  // An inline banner will show transient loading or error information.
+  if (isLoading) {
+    return (
+      <div className={styles.clientsTableContainer}>
+        <div className={styles.loadingState}>Loading clients...</div>
+      </div>
+    );
+  }
 
-  // Render top inline banners
-  const topBanner = (
-    <>
-      {isLoading && clientsData.length > 0 && (
-        <div className={styles.loadingState} style={{ marginBottom: 8 }}>
-          Refreshing data...
+  if (error) {
+    return (
+      <div className={styles.clientsTableContainer}>
+        <div className={styles.errorState}>
+          <p>Error: {error}</p>
+          <button onClick={() => window.location.reload()}>Try Again</button>
         </div>
-      )}
-      {error && (
-        <div className={styles.errorState} style={{ marginBottom: 8 }}>
-          <span>Error: {error}</span>
-          <button onClick={fetchClients} style={{ marginLeft: 12 }}>Retry</button>
-        </div>
-      )}
-    </>
-  );
+      </div>
+    );
+  }
 
   return (
     <div className={styles.clientsTableContainer}>
-      {topBanner}
       <div className={styles.tableHeaderSection}>
         <div className={styles.tableTitleSection}>
           <h2 className={styles.tableTitle}>Clients and Leads</h2>
@@ -521,7 +551,7 @@ function ClientsTable() {
               <div className={styles.tableHeader}>
                 <div className={styles.tableHeaderCell}>
                   <div className={styles.headerContent}>
-                    <span className={styles.headerText}>Type</span>
+                    <span className={styles.headerText}>Lead Type</span>
                     <SortIcon />
                   </div>
                 </div>
@@ -530,7 +560,7 @@ function ClientsTable() {
                 <div key={client._id} className={`${styles.tableCell} ${styles.typeCell}`}>
                   <div
                     className={`${styles.typeChip} ${styles[(
-                      client.type ||
+                      client.leadType ||
                       client.relationshipStatus ||
                       ""
                     )
@@ -538,7 +568,7 @@ function ClientsTable() {
                       .replace(" ", "")]}`}
                   >
                     <span className={styles.chipText}>
-                      {client.type || client.relationshipStatus}
+                      {client.leadType || client.relationshipStatus}
                     </span>
                   </div>
                 </div>
@@ -550,7 +580,7 @@ function ClientsTable() {
               <div className={styles.tableHeader}>
                 <div className={styles.tableHeaderCell}>
                   <div className={styles.headerContent}>
-                    <span className={styles.headerText}>Assigned to</span>
+                    <span className={styles.headerText}>Lead Status</span>
                     <SortIcon />
                   </div>
                 </div>
@@ -558,8 +588,12 @@ function ClientsTable() {
               {pagedData.map((client) => (
                 <div key={client._id} className={`${styles.tableCell} ${styles.assignedCell}`}>
                   <div className={styles.assignedInfo}>
-                    <div className={styles.assignedName}>{/* display name or fallback */}
+                    {/* display name or fallback */}
+                    {/* <div className={styles.assignedName}>
                       {client.assignedTo && client.assignedTo.employeeName ? client.assignedTo.employeeName : (client.assignedTo?.username || client.assignedTo || 'Unassigned')}
+                    </div> */}
+                    <div className={styles.assignedName}>
+                      {client.currentStatus && client.currentStatus.employeeName ? client.currentStatus.employeeName : (client.currentStatus?.username || client.currentStatus || 'Unassigned')}
                     </div>
                     <div className={styles.assignedRole}>{client.assignedRole || ''}</div>
                   </div>

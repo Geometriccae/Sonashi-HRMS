@@ -262,7 +262,7 @@ class CheckInService {
 
       const result = await response.json();
       console.log('Check-ins API response:', result);
-      
+
       // Normalize response to array of check-ins
       if (Array.isArray(result)) {
         return result;
@@ -401,7 +401,7 @@ class CheckInService {
       const seconds = ((absolute - degrees - minutes / 60) * 3600).toFixed(1);
       const direction = isLatitude ? (coord >= 0 ? 'N' : 'S') : (coord >= 0 ? 'E' : 'W');
 
-      return `${degrees}°${minutes.toString().padStart(2, '0')}'${seconds}"${direction}`;
+      return `${degrees}\u00B0${minutes.toString().padStart(2, '0')}'${seconds}"${direction}`;
     };
 
     const latFormatted = formatCoordinate(latitude, true);

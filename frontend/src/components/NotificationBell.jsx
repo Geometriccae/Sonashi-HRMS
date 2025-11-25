@@ -142,7 +142,6 @@ function NotificationBell({ small = true }) {
         // Deduplicate by payload.id (server sets id)
         const id = payload?.id || `${payload?.type || 'n'}-${payload?.taskId || payload?.clientId || Date.now()}`;
         if (receivedIdsRef.current.has(id)) {
-          // already processed via another room
           return;
         }
         receivedIdsRef.current.add(id);
@@ -154,10 +153,8 @@ function NotificationBell({ small = true }) {
           body: payload.body || payload.message || '',
           meta: payload.meta || payload
         };
-        // push into the global notifications (updates component state)
         window.appNotifications?.push?.(item);
 
-        // show native notification if permitted
         if ("Notification" in window && Notification.permission === "granted") {
           try {
             const notification = new Notification(item.title, {
@@ -181,20 +178,64 @@ function NotificationBell({ small = true }) {
       }
     });
 
-    // DEBUG: listen for notification-debug events to confirm server emission
-    socket.on('notification-debug', (payload) => {
-      console.log('Received notification-debug from server:', payload);
+    // Additional specific events (some routes emit these): map them to unified notification push
+    const handleGenericEntityEvent = (payload, fallbackTitle) => {
       try {
-        // Push a small debug entry into the bell so it is visible in dropdown
-        window.appNotifications?.push?.({
-          title: `Debug: ${payload.origin || 'server'}`,
-          body: `${payload.action || ''} ${payload.taskId || payload.eventId || ''}`.trim(),
-          meta: payload
-        });
+        // compute stable id: prefer payload.id, else hash title+body+meta
+        const makeStableId = (p) => {
+          if (!p) return `gen-${Date.now()}`;
+          if (p.id) return p.id;
+          const title = p.title || p.companyName || p.employeeName || p.eventName || fallbackTitle || '';
+          const body = p.body || p.message || '';
+          const meta = JSON.stringify(p.meta || p);
+          // djb2 hash
+          let str = `${title}::${body}::${meta}`;
+          let hash = 5381;
+          for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) + hash) + str.charCodeAt(i);
+            hash = hash & hash;
+          }
+          return `gen-${Math.abs(hash)}`;
+        };
+
+        const id = makeStableId(payload);
+        if (receivedIdsRef.current.has(id)) return;
+        receivedIdsRef.current.add(id);
+
+        let item;
+        if (payload && payload.title) {
+          item = { title: payload.title, body: payload.body || payload.message || '', meta: payload.meta || payload, _id: id };
+        } else if (payload && (payload.companyName || payload.employeeName || payload.eventName)) {
+          const title = payload.companyName ? `Client: ${payload.companyName}` : (payload.employeeName ? `Employee: ${payload.employeeName}` : fallbackTitle);
+          const body = payload.email || payload.mobile || payload.role || '';
+          item = { title, body, meta: payload, _id: id };
+        } else {
+          item = { title: fallbackTitle || 'Notification', body: '', meta: payload, _id: id };
+        }
+
+        window.appNotifications?.push?.(item);
+
+        if ("Notification" in window && Notification.permission === "granted") {
+          try {
+            const n = new Notification(item.title, { body: item.body, tag: id });
+            n.onclick = () => { window.focus(); if (item.meta?.url) window.location.href = item.meta.url; n.close(); };
+            setTimeout(() => n.close(), 8000);
+          } catch (e) {
+            console.warn('Native notification error', e);
+          }
+        }
       } catch (e) {
-        console.error('Error handling notification-debug', e);
+        console.warn('handleGenericEntityEvent error', e);
       }
-    });
+    };
+
+    socket.on('client-created', (payload) => handleGenericEntityEvent(payload, 'New client added'));
+    socket.on('employee-created', (payload) => handleGenericEntityEvent(payload, 'New employee added'));
+    socket.on('client-event', (payload) => handleGenericEntityEvent(payload, 'Client event'));
+    socket.on('employee-event', (payload) => handleGenericEntityEvent(payload, 'Employee event'));
+    // Tasks may emit 'notification' already; some flows may emit 'task-created' — handle both
+    socket.on('task-created', (payload) => handleGenericEntityEvent(payload, 'New task created'));
+    socket.on('meeting-reminder', (payload) => handleGenericEntityEvent(payload, 'Meeting reminder'));
 
     // click outside closes dropdown — use ref to avoid stale closure of isOpen
     const onDocClick = (e) => {
@@ -265,7 +306,7 @@ function NotificationBell({ small = true }) {
                 }}
                 title="Close"
               >
-                ×
+                &times;
               </button>
             </div>
           </div>

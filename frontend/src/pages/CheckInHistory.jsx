@@ -278,7 +278,7 @@ function CheckInHistory() {
                         <td>
                           {checkIn.user ? (
                             <div className={styles["user-info"]}>
-                              <ProfileAvatar size={30} />
+                              <ProfileAvatar size={30} userData={checkIn.user} />
                               <span>{checkIn.user.username}</span>
                             </div>
                           ) : (
@@ -293,7 +293,7 @@ function CheckInHistory() {
                         <td>{formatDate(checkIn.date)}</td>
                         <td>{formatTime(checkIn.time)}</td>
                         <td className={styles["location-cell"]}>
-                          {checkIn.location}
+                          {checkIn.location ? checkIn.location.replace(/\uFFFD/g, '\u00B0') : ''}
                         </td>
                         <td>{checkIn.eventType}</td>
                         <td>
@@ -368,7 +368,7 @@ function CheckInHistory() {
               <div className={styles["detail-row"]}>
                 <div className={styles["detail-label"]}>Location:</div>
                 <div className={styles["detail-value"]}>
-                  {selectedCheckIn.location}
+                  {selectedCheckIn.location ? selectedCheckIn.location.replace(/\uFFFD/g, '\u00B0') : ''}
                 </div>
               </div>
               {selectedCheckIn.notes && (

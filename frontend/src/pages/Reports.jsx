@@ -1,247 +1,284 @@
 import React, { useState, useEffect } from "react";
 import styles from "./Reports.module.css";
 import Side from "./sidebar/Sidebar";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+
+
 
 import chevrondown from "../assets/dashboard/chevron-down.svg";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
-import admindemo from "../assets/dashboard/admin-demo.jpg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import clientService from "../services/ClientService";
+import employeeService from "../services/EmployeeService";
 import config from "../config/config";
 import NotificationBell from "../components/NotificationBell";
 
 function Reports() {
   const [username, setUsername] = useState("");
-   const [userRole, setUserRole] = useState("");
+  const [userRole, setUserRole] = useState("");
   const [reportType, setReportType] = useState("");
   const [format, setFormat] = useState("");
-  const [dateRange, setDateRange] = useState("10/07/2025");
-  const [enableAnalytics, setEnableAnalytics] = useState(true);
-  const [isReportTypeDropdownOpen, setIsReportTypeDropdownOpen] =
-    useState(false);
-  const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
-  const [followupStatus, setFollowupStatus] = useState("");
-  const [isFollowupStatusDropdownOpen, setIsFollowupStatusDropdownOpen] = useState(false);
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  
+  // Filters
+  const [leadType, setLeadType] = useState("All");
+  const [followupStatus, setFollowupStatus] = useState("All");
+  const [employeeStatus, setEmployeeStatus] = useState("All");
+  
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  // Dropdown states
+  const [isReportTypeDropdownOpen, setIsReportTypeDropdownOpen] = useState(false);
+  const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
+  const [isLeadTypeDropdownOpen, setIsLeadTypeDropdownOpen] = useState(false);
+  const [isFollowupStatusDropdownOpen, setIsFollowupStatusDropdownOpen] = useState(false);
+  const [isEmployeeStatusDropdownOpen, setIsEmployeeStatusDropdownOpen] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
     setUserRole(localStorage.getItem("role") || "");
   }, []);
 
-  const reportTypes = [
-    "Sales Report",
-    "Client Report",
-    "Team Performance Report",
-    "Financial Report",
-  ];
+  const reportTypes = ["Sales Report", "Employee Report"];
+  const formats = ["Excel", "CSV"]; // Focused on Excel as requested
 
-  const formats = ["PDF", "Excel", "CSV"];
-
+  // Options from AddClientModal
+  const leadTypeOptions = ["All", "Lead", "Client"];
   const followupStatusOptions = [
-    "All",
-    "Contacted",
-    "Needs Analysis",
-    "Demo Scheduled",
-    "Proposal Sent",
-    "Completed",
-    "Pending",
-    "Progress",
-    "Won",
-    "Lost",
+    "All", "Completed", "Contacted", "Demo Scheduled", "Lost", 
+    "Needs Analysis", "Pending", "Progress", "Proposal Sent", "Won"
   ];
+  
+  // Options from AddEmployeeModal
+  const employeeStatusOptions = ["All", "Active", "InActive"];
 
-  const handleGenerateReport = async () => {
-    // Only proceed if format selected
-    if (!format) {
-      alert('Please select a format (PDF, Excel, CSV).');
-      return;
-    }
+  // Full options for Excel "Legend" or reference
+  const clientDropdownOptions = {
+    clientType: ["Agent", "Barge Operator", "Barge Owners", "Broker", "CHA", "Consignee", "Freigt Forwarder", "Other", "Ship Owners", "Shipper", "Transporter"],
+    leadType: ["Client", "Lead"],
+    leadSource: ["Advertisement", "Cold Call", "Conference", "Employee Referral", "Exhibitor", "Exhibition As Visitor", "External Referral", "SOCIAL MEDIA"],
+    leadStatus: ["Attempted To Contact", "Contact In Future", "Contacted", "Junk Lead", "Lost Lead", "Negotiation", "New", "Qualified", "Quoted", "Won"],
+    industryType: ["Bulk trading company", "Cement manufacturing companies", "Cryogenic tank manufacturers", "Dredging companies", "Drydocks", "Fiber pipe manufacturing company", "Freight forwarders", "Gypsum traders", "Heavy engineering", "Heavy transport companies in abroad", "Heavy transport companies in india", "Hydro power", "Industrial air filter companies", "Industrial boiler", "Industrial gases tank / cylinders", "Jack up rig owners", "Limestone traders", "Mining companies", "Navy", "Nuclear power", "Offshore companies", "Offshore windmill companies", "Oil and gas companies", "Pick up trucks", "Port infrastructure companies", "Railway wagon manufacturers", "Shipbuilding", "Shipyards", "Silica sand manufacturers", "Steel traders", "Straddle carrier manufacturer", "Thermal power", "Transformer manufacturers", "Windmill companies"],
+    category: ["Breakbulk", "Bulk", "Project"],
+    decisionMaker: ["No", "Yes"],
+    relationshipStatus: ["Active", "Dormant", "Lost", "Prospect"],
+    contractType: ["COA", "Long-term", "Spot", "Tender"],
+    currentStatus: ["Contacted", "Lead", "Lost", "Negotiation", "Quoted", "Won"],
+    followupStatus: ["Completed", "Contacted", "Demo Scheduled", "Lost", "Needs Analysis", "Pending", "Progress", "Proposal Sent", "Won"],
+    incoterms: ["FOB", "CIF", "DAP"]
+  };
 
-    // Map Sales Report to clients/leads dataset
-    if (reportType === 'Sales Report' || reportType === 'Client Report' || reportType === 'Sales') {
-      // Ensure data is loaded for current filters
-      if (!results || results.length === 0) {
-        await fetchByFollowupStatus(followupStatus, startDate, endDate);
-      }
-
-      // Export in selected format
-      if (format === 'CSV') {
-        exportCSV();
-      } else if (format === 'Excel') {
-        // Use CSV for Excel-compatible export
-        exportCSV();
-      } else if (format === 'PDF') {
-        exportPDF();
-      } else {
-        alert('Unsupported format selected.');
-      }
-      return;
-    }
-
-    alert('Selected report type is not implemented yet. Choose Sales Report.');
+  const employeeDropdownOptions = {
+    attendance: ["Active", "InActive"],
+    department: ["Operations", "Sales", "Marketing", "HR", "Finance", "IT", "Logistics", "Customer Service"],
+    role: ["Operations Manager", "Sales Executive", "Logistics Coordinator", "Account Manager", "HR Manager", "Finance Analyst", "IT Specialist", "Customer Service Representative"]
   };
 
   const handleCancel = () => {
     setReportType("");
     setFormat("");
-    setDateRange("10/07/2025");
-    setEnableAnalytics(true);
-    setFollowupStatus("");
-    setResults([]);
-    setError("");
+    setLeadType("All");
+    setFollowupStatus("All");
+    setEmployeeStatus("All");
     setStartDate("");
     setEndDate("");
+    setError("");
   };
 
-  const fetchByFollowupStatus = async (status, sDate, eDate) => {
-    // If no filters at all, clear results
-    if ((!status || status === 'All') && !sDate && !eDate) {
-      setResults([]);
+  const handleGenerateReport = async () => {
+    if (!reportType) {
+      alert("Please select a report type.");
       return;
     }
+    if (!format) {
+      alert("Please select a format.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
     try {
-      setLoading(true);
-      setError("");
-
-      // Treat "All" as no status filter
-      const filterStatus = status === 'All' ? undefined : status;
-
-      // First try clientService helper if available
-      if (clientService && typeof clientService.getClientsByFollowupStatus === "function") {
-        try {
-          const data = await clientService.getClientsByFollowupStatus(filterStatus, sDate, eDate);
-          // normalize response to array
-          if (Array.isArray(data)) {
-            setResults(data);
-            return;
-          } else if (data && Array.isArray(data.clients)) {
-            setResults(data.clients);
-            return;
-          } else if (data && Array.isArray(data.data)) {
-            setResults(data.data);
-            return;
-          } else {
-            console.warn("clientService returned unexpected shape, falling back to direct fetch", data);
-            throw new Error("fallback");
-          }
-        } catch (svcErr) {
-          console.warn("clientService failed or returned unexpected data, falling back:", svcErr);
-          // continue to fallback
-        }
+      if (reportType === "Sales Report") {
+        await generateSalesReport();
+      } else if (reportType === "Employee Report") {
+        await generateEmployeeReport();
       }
-
-      // Fallback: direct fetch to backend /api/clients with query params
-      const params = new URLSearchParams();
-      if (filterStatus) params.append("followupStatus", filterStatus);
-      if (sDate) params.append("startDate", sDate);
-      if (eDate) params.append("endDate", eDate);
-
-      // Build API base reliably
-      let apiBase = (config.API_BASE_URL || "").replace(/\/+$/, "");
-      if (!apiBase.endsWith("/api")) apiBase = `${apiBase}/api`;
-      const url = `${apiBase}/clients${params.toString() ? `?${params.toString()}` : ""}`;
-
-      const token = localStorage.getItem("token");
-      const resp = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Authorization": token ? `Bearer ${token}` : ""
-        }
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Failed to fetch clients: ${resp.status} ${resp.statusText} - ${text.slice(0,200)}`);
-      }
-
-      const json = await resp.json();
-      if (Array.isArray(json)) {
-        setResults(json);
-      } else if (json && Array.isArray(json.clients)) {
-        setResults(json.clients);
-      } else if (json && Array.isArray(json.data)) {
-        setResults(json.data);
-      } else {
-        setResults(Array.isArray(json) ? json : []);
-      }
-    } catch (e) {
-      console.error("fetchByFollowupStatus error:", e);
-      setError(e.message || "Failed to fetch data");
-      setResults([]);
+    } catch (err) {
+      console.error("Report generation failed:", err);
+      setError("Failed to generate report. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const exportCSV = () => {
-    if (!results || results.length === 0) {
-      alert('No data available to export. Please select a status/date range and fetch data first.');
+  const generateSalesReport = async () => {
+    // Fetch all clients/leads
+    let data = await clientService.getClients();
+    let clients = Array.isArray(data) ? data : (data.clients || data.data || []);
+
+    // Apply Filters
+    if (leadType !== "All") {
+      clients = clients.filter(c => c.leadType === leadType);
+    }
+    if (followupStatus !== "All") {
+      clients = clients.filter(c => c.followupStatus === followupStatus);
+    }
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      clients = clients.filter(c => {
+        const date = new Date(c.createdAt); // Assuming filtering by creation date or followUpDate? Usually creation for general report
+        return date >= start && date <= end;
+      });
+    }
+
+    if (clients.length === 0) {
+      alert("No data found for the selected filters.");
       return;
     }
 
-    const headers = ["Company","Email","Phone","Follow-up Status","Created"];
-    const rows = (results || []).map(c => {
-      const email = (c.email || c.emailId || '') ;
-      const phone = (c.phone || c.mobile || c.phoneNumber || '');
-      const created = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '';
-      return [
-        c.companyName || c.clientName || '',
-        email,
-        phone,
-        c.followupStatus || '',
-        created
-      ];
-    });
+    // Prepare Data for Excel
+    // Include ALL columns from AddClientModal
+    const exportData = clients.map(c => ({
+      "Company Name": c.companyName || "",
+      "Client Type": c.clientType || "",
+      "Lead Type": c.leadType || "",
+      "Address": c.address || "",
+      "Country": c.country || "",
+      "Tax ID": c.taxId || "",
+      "Website": c.website || "",
+      "Primary Contact": c.primaryContactName || "",
+      "Designation": c.designation || "",
+      "Phone": c.phone || "",
+      "Mobile": c.mobile || "",
+      "Email": c.email || "",
+      "Social Links": c.socialLinks || "",
+      "Industry Type": c.industryType || "",
+      "Cargo Type": c.cargoType || "",
+      "Decision Maker": c.decisionMaker || "",
+      "Relationship Status": c.relationshipStatus || "",
+      "Account Manager": c.accountManager || "",
+      "Typical Cargoes": c.typicalCargoes || "",
+      "Avg Shipment Size": c.averageShipmentSize || "",
+      "Shipment Freq": c.shipmentFrequency || "",
+      "Trading Routes": c.tradingRoutes || "",
+      "Contract Type": c.contractType || "",
+      "Historical Volume": c.historicalVolume || "",
+      "Competitors": c.competitors || "",
+      "Project Name": c.projectName || "",
+      "Project Start": c.projectTimelineStart ? new Date(c.projectTimelineStart).toLocaleDateString() : "",
+      "Project End": c.projectTimelineEnd ? new Date(c.projectTimelineEnd).toLocaleDateString() : "",
+      "EPC Contractor": c.epcContractor || "",
+      "Special Reqs": c.specialRequirements || "",
+      "Risk Notes": c.riskNotes || "",
+      "Lead Source": c.leadSource || "",
+      "Current Status": c.currentStatus || "",
+      "Opportunity Value": c.opportunityValue || "",
+      "Follow-up Date": c.followUpDate ? new Date(c.followUpDate).toLocaleDateString() : "",
+      "Notes": c.notes || "",
+      "Follow-up Status": c.followupStatus || "",
+      "Pref Load Ports": c.preferredLoadPorts || "",
+      "Pref Discharge Ports": c.preferredDischargePorts || "",
+      "Demurrage Terms": c.demurrageTerms || "",
+      "Pref Agents": c.preferredAgents || "",
+      "Incoterms": c.incoterms || "",
+      "Category": c.category || "",
+      "Created At": c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ""
+    }));
 
-    // Add BOM for Excel compatibility
-    const bom = '\uFEFF';
-    const csv = [headers, ...rows].map(r => r.map(v => `"${(v??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const statusPart = followupStatus ? `_${followupStatus.replace(/\s+/g,'_')}` : '';
-    a.download = `clients_report${statusPart}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportToExcel(exportData, "Sales_Report", clientDropdownOptions);
   };
 
-  const exportPDF = () => {
-    const win = window.open('', '_blank');
-    const title = followupStatus ? `Clients - ${followupStatus}` : 'Clients';
-    const rows = (results || []).map(c => `
-      <tr>
-        <td>${c.companyName || ''}</td>
-        <td>${c.email || ''}</td>
-        <td>${c.phone || ''}</td>
-        <td>${c.followupStatus || ''}</td>
-        <td>${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}</td>
-      </tr>`).join('');
-    win.document.write(`
-      <html><head><title>${title}</title>
-      <style>
-        body{font-family:Arial;padding:16px}
-        h1{font-size:18px}
-        table{width:100%;border-collapse:collapse}
-        th,td{border:1px solid #ccc;padding:8px;text-align:left}
-        th{background:#f5f5f5}
-      </style>
-      </head><body>
-      <h1>${title}</h1>
-      <table>
-        <thead><tr><th>Company</th><th>Email</th><th>Phone</th><th>Follow-up Status</th><th>Created</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      </body></html>
-    `);
-    win.document.close();
-    win.focus();
-    win.print();
+  const generateEmployeeReport = async () => {
+    // Fetch all employees
+    let data = await employeeService.getEmployees();
+    let employees = Array.isArray(data) ? data : (data.employees || data.data || []);
+
+    // Apply Filters
+    if (employeeStatus !== "All") {
+      employees = employees.filter(e => e.attendance === employeeStatus);
+    }
+    // Date filter for employees? Usually joining date (createdAt)
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      employees = employees.filter(e => {
+        const date = new Date(e.createdAt);
+        return date >= start && date <= end;
+      });
+    }
+
+    if (employees.length === 0) {
+      alert("No data found for the selected filters.");
+      return;
+    }
+
+    // Prepare Data for Excel
+    const exportData = employees.map(e => ({
+      "Employee ID": e.employeeId || "",
+      "Name": e.employeeName || "",
+      "Mobile": e.mobile || "",
+      "Email": e.emailId || "",
+      "Role": e.role || "",
+      "Designation": e.designation || "",
+      "Department": e.department || "",
+      "Status": e.attendance || "",
+      "Assigned Projects": Array.isArray(e.assignedProjects) ? e.assignedProjects.length : 0,
+      "Created At": e.createdAt ? new Date(e.createdAt).toLocaleDateString() : ""
+    }));
+
+    exportToExcel(exportData, "Employee_Report", employeeDropdownOptions);
+  };
+
+  const exportToExcel = (data, fileName, dropdownOptions) => {
+    const wb = XLSX.utils.book_new();
+    
+    // 1. Main Data Sheet
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    // Map headers to dropdown options keys (kept for reference or future use, but comments removed)
+    /* 
+    const headerOptionMap = {
+      "Client Type": "clientType",
+      ...
+    };
+    */
+
+    // Comments removed as per user request to prevent overlaying data
+    // The AutoFilter below provides the interactive dropdowns instead.
+
+    // Enable AutoFilter for the header row
+    if (ws['!ref']) {
+      ws['!autofilter'] = { ref: ws['!ref'] };
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, "Report Data");
+
+    // 2. Legend Sheet (to show dropdown options)
+    if (dropdownOptions) {
+      const legendRows = [];
+      Object.keys(dropdownOptions).forEach(key => {
+        legendRows.push({ "Field": key.toUpperCase(), "Options": "" }); // Header for section
+        dropdownOptions[key].forEach(opt => {
+          legendRows.push({ "Field": "", "Options": opt });
+        });
+        legendRows.push({ "Field": "", "Options": "" }); // Spacer
+      });
+      const wsLegend = XLSX.utils.json_to_sheet(legendRows);
+      XLSX.utils.book_append_sheet(wb, wsLegend, "Dropdown Options");
+    }
+
+    // Generate file
+    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
+    saveAs(dataBlob, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   return (
@@ -251,27 +288,21 @@ function Reports() {
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
             <div className={styles["dashboard-title"]}>Generate a Report</div>
-
             <div className={styles["dashboard-profile"]}>
               <NotificationBell />
-
-               <div className={styles["profile-info"]}>
-                 <div className={styles["profile-row"]}>
+              <div className={styles["profile-info"]}>
+                <div className={styles["profile-row"]}>
                   <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                   <div className={styles["profile-column"]}>
-                     <div className={styles["profile-name"]}>
-                       {username?.toUpperCase()}
-                     </div>
-                     <div className={styles["profile-type"]}>
-                                          {userRole?.toUpperCase()}
-                                        </div>
-                   </div>
-                 </div>
-                 <img src={chevrondown} alt="" />
-               </div>
-             </div>
-           </div>
-         </header>
+                  <div className={styles["profile-column"]}>
+                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
+                    <div className={styles["profile-type"]}>{userRole?.toUpperCase()}</div>
+                  </div>
+                </div>
+                <img src={chevrondown} alt="" />
+              </div>
+            </div>
+          </div>
+        </header>
 
         <section className={styles["breadcrumb-section"]}>
           <div className={styles["breadcrumb"]}>
@@ -285,71 +316,40 @@ function Reports() {
           <div className={styles["report-container"]}>
             <div className={styles["report-header"]}>
               <div className={styles["report-title"]}>Generate Reports</div>
-
               <div className={styles["report-actions"]}>
-                <button
-                  className={styles["cancel-button"]}
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </button>
-                <button
-                  className={styles["generate-button"]}
-                  onClick={handleGenerateReport}
-                >
-                  Generate
+                <button className={styles["cancel-button"]} onClick={handleCancel}>Cancel</button>
+                <button className={styles["generate-button"]} onClick={handleGenerateReport} disabled={loading}>
+                  {loading ? "Generating..." : "Generate"}
                 </button>
               </div>
             </div>
           </div>
+
           <div className={styles["report-form"]}>
             <div className={styles["form-section"]}>
+              
+              {/* Report Type Selection */}
               <div className={styles["form-row"]}>
-                <div className={styles["form-label"]}>
-                  Select Type of Report
-                </div>
+                <div className={styles["form-label"]}>Select Type of Report</div>
                 <div className={styles["form-field"]}>
-                  <div
-                    className={styles["dropdown-field"]}
-                    onClick={() =>
-                      setIsReportTypeDropdownOpen(!isReportTypeDropdownOpen)
-                    }
-                  >
-                    <span
-                      className={
-                        reportType
-                          ? styles["field-text"]
-                          : styles["field-placeholder"]
-                      }
-                    >
+                  <div className={styles["dropdown-field"]} onClick={() => setIsReportTypeDropdownOpen(!isReportTypeDropdownOpen)}>
+                    <span className={reportType ? styles["field-text"] : styles["field-placeholder"]}>
                       {reportType || "Select type"}
                     </span>
-                    <svg
-                      className={styles["dropdown-icon"]}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                    >
-                      <path
-                        d="M4 6L8 10L12 6"
-                        stroke="#98A1B0"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                    <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                     {isReportTypeDropdownOpen && (
                       <div className={styles["dropdown-menu"]}>
                         {reportTypes.map((type) => (
-                          <div
-                            key={type}
-                            className={styles["dropdown-item"]}
-                            onClick={() => {
-                              setReportType(type);
-                              setIsReportTypeDropdownOpen(false);
-                            }}
-                          >
+                          <div key={type} className={styles["dropdown-item"]} onClick={() => {
+                            setReportType(type);
+                            setIsReportTypeDropdownOpen(false);
+                            // Reset filters when type changes
+                            setLeadType("All");
+                            setFollowupStatus("All");
+                            setEmployeeStatus("All");
+                          }}>
                             {type}
                           </div>
                         ))}
@@ -361,122 +361,132 @@ function Reports() {
 
               <div className={styles["divider-line"]}></div>
 
-              <div className={styles["form-row"]}>
-                <div className={styles["form-label"]}>Follow-up Status</div>
-                <div className={styles["form-field"]}>
-                  <div
-                    className={styles["dropdown-field"]}
-                    onClick={() =>
-                      setIsFollowupStatusDropdownOpen(!isFollowupStatusDropdownOpen)
-                    }
-                  >
-                    <span
-                      className={
-                        followupStatus
-                          ? styles["field-text"]
-                          : styles["field-placeholder"]
-                      }
-                    >
-                      {followupStatus || "Select follow-up status"}
-                    </span>
-                    <svg
-                      className={styles["dropdown-icon"]}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                    >
-                      <path
-                        d="M4 6L8 10L12 6"
-                        stroke="#98A1B0"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    {isFollowupStatusDropdownOpen && (
-                      <div className={styles["dropdown-menu"]}>
-                        {followupStatusOptions.map((s) => (
-                          <div
-                            key={s}
-                            className={styles["dropdown-item"]}
-                            onClick={() => {
-                              setFollowupStatus(s);
-                              setIsFollowupStatusDropdownOpen(false);
-                              fetchByFollowupStatus(s, startDate, endDate);
-                            }}
-                          >
-                            {s}
+              {/* Conditional Filters for Sales Report */}
+              {reportType === "Sales Report" && (
+                <>
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Lead Type</div>
+                    <div className={styles["form-field"]}>
+                      <div className={styles["dropdown-field"]} onClick={() => setIsLeadTypeDropdownOpen(!isLeadTypeDropdownOpen)}>
+                        <span className={styles["field-text"]}>{leadType}</span>
+                        <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {isLeadTypeDropdownOpen && (
+                          <div className={styles["dropdown-menu"]}>
+                            {leadTypeOptions.map((opt) => (
+                              <div key={opt} className={styles["dropdown-item"]} onClick={() => {
+                                setLeadType(opt);
+                                setIsLeadTypeDropdownOpen(false);
+                              }}>
+                                {opt}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div className={styles["divider-line"]}></div>
+                  <div className={styles["divider-line"]}></div>
 
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Follow-up Status</div>
+                    <div className={styles["form-field"]}>
+                      <div className={styles["dropdown-field"]} onClick={() => setIsFollowupStatusDropdownOpen(!isFollowupStatusDropdownOpen)}>
+                        <span className={styles["field-text"]}>{followupStatus}</span>
+                        <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {isFollowupStatusDropdownOpen && (
+                          <div className={styles["dropdown-menu"]}>
+                            {followupStatusOptions.map((opt) => (
+                              <div key={opt} className={styles["dropdown-item"]} onClick={() => {
+                                setFollowupStatus(opt);
+                                setIsFollowupStatusDropdownOpen(false);
+                              }}>
+                                {opt}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={styles["divider-line"]}></div>
+                </>
+              )}
+
+              {/* Conditional Filters for Employee Report */}
+              {reportType === "Employee Report" && (
+                <>
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Status</div>
+                    <div className={styles["form-field"]}>
+                      <div className={styles["dropdown-field"]} onClick={() => setIsEmployeeStatusDropdownOpen(!isEmployeeStatusDropdownOpen)}>
+                        <span className={styles["field-text"]}>{employeeStatus}</span>
+                        <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {isEmployeeStatusDropdownOpen && (
+                          <div className={styles["dropdown-menu"]}>
+                            {employeeStatusOptions.map((opt) => (
+                              <div key={opt} className={styles["dropdown-item"]} onClick={() => {
+                                setEmployeeStatus(opt);
+                                setIsEmployeeStatusDropdownOpen(false);
+                              }}>
+                                {opt}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={styles["divider-line"]}></div>
+                </>
+              )}
+
+              {/* Date Range */}
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Choose a date range</div>
                 <div className={styles["form-field"]} style={{ display: 'flex', gap: '8px' }}>
-                  <input className={styles["date-field"]} type="date" value={startDate} onChange={e => {
-                    setStartDate(e.target.value);
-                    fetchByFollowupStatus(followupStatus, e.target.value, endDate);
-                  }} />
-                  <input className={styles["date-field"]} type="date" value={endDate} onChange={e => {
-                    setEndDate(e.target.value);
-                    fetchByFollowupStatus(followupStatus, startDate, e.target.value);
-                  }} />
+                  <input 
+                    className={styles["date-field"]} 
+                    type="date" 
+                    value={startDate} 
+                    onChange={e => setStartDate(e.target.value)} 
+                  />
+                  <input 
+                    className={styles["date-field"]} 
+                    type="date" 
+                    value={endDate} 
+                    onChange={e => setEndDate(e.target.value)} 
+                  />
                 </div>
               </div>
-<div className={styles["divider-line"]}></div>
 
+              <div className={styles["divider-line"]}></div>
+
+              {/* Format Selection */}
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Select Format</div>
                 <div className={styles["form-field"]}>
-                  <div
-                    className={styles["dropdown-field"]}
-                    onClick={() =>
-                      setIsFormatDropdownOpen(!isFormatDropdownOpen)
-                    }
-                  >
-                    <span
-                      className={
-                        format
-                          ? styles["field-text"]
-                          : styles["field-placeholder"]
-                      }
-                    >
+                  <div className={styles["dropdown-field"]} onClick={() => setIsFormatDropdownOpen(!isFormatDropdownOpen)}>
+                    <span className={format ? styles["field-text"] : styles["field-placeholder"]}>
                       {format || "Select a format"}
                     </span>
-                    <svg
-                      className={styles["dropdown-icon"]}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                    >
-                      <path
-                        d="M4 6L8 10L12 6"
-                        stroke="#98A1B0"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                    <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                     {isFormatDropdownOpen && (
                       <div className={styles["dropdown-menu"]}>
-                        {formats.map((format) => (
-                          <div
-                            key={format}
-                            className={styles["dropdown-item"]}
-                            onClick={() => {
-                              setFormat(format);
-                              setIsFormatDropdownOpen(false);
-                            }}
-                          >
-                            {format}
+                        {formats.map((fmt) => (
+                          <div key={fmt} className={styles["dropdown-item"]} onClick={() => {
+                            setFormat(fmt);
+                            setIsFormatDropdownOpen(false);
+                          }}>
+                            {fmt}
                           </div>
                         ))}
                       </div>
@@ -485,77 +495,10 @@ function Reports() {
                 </div>
               </div>
 
-              <div className={styles["divider-line"]}></div>
+              {error && <div className={styles["error-message"]} style={{color: 'red', marginTop: '10px'}}>{error}</div>}
 
-              {/* <div className={styles["form-row"]}>
-                <div className={styles["form-label"]}>Choose a date range</div>
-                <div className={styles["form-field"]}>
-                  <div className={styles["date-field"]}>
-                    <span className={styles["field-text"]}>{dateRange}</span>
-                    <svg
-                      className={styles["calendar-icon"]}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                    >
-                      <path
-                        d="M5.33333 1.33398V4.00065M10.6667 1.33398V4.00065M2 6.66732H14M3.33333 2.66732H12.6667C13.403 2.66732 14 3.26427 14 4.00065V13.334C14 14.0704 13.403 14.6673 12.6667 14.6673H3.33333C2.59695 14.6673 2 14.0704 2 13.334V4.00065C2 3.26427 2.59695 2.66732 3.33333 2.66732Z"
-                        stroke="#98A1B0"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              <div className={styles["divider-line"]}></div> */}
-
-              <div className={styles["form-row"]}>
-                <div className={styles["form-label"]}>Additional Settings</div>
-                <div className={styles["form-field"]}>
-                  <div className={styles["checkbox-container"]}>
-                    <div
-                      className={`${styles["checkbox"]} ${
-                        enableAnalytics ? styles["checkbox-checked"] : ""
-                      }`}
-                      onClick={() => setEnableAnalytics(!enableAnalytics)}
-                    >
-                      {enableAnalytics && (
-                        <svg
-                          className={styles["checkbox-check"]}
-                          width="12"
-                          height="12"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                        >
-                          <path
-                            d="M1.875 6.75L4.5 9.375L10.5 3.375"
-                            stroke="white"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <div className={styles["checkbox-content"]}>
-                      <div className={styles["checkbox-title"]}>
-                        Enable Analytics
-                      </div>
-                      <div className={styles["checkbox-description"]}>
-                        Pictorial Graphs will be generated
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
-
-          {/* Results Section removed. Use Generate button and selected format for export. */}
         </section>
       </main>
     </div>

@@ -1,0 +1,347 @@
+/* SalesLeadsDualGraph.module.css */
+.conversionDataContainer {
+  width: 100%;
+  max-width: 1017px;
+  height: 600px; /* Increased height */
+  border-radius: 18px;
+  border: 1.513px solid #E4E4E4;
+  position: relative;
+  /* margin: 0 auto; */
+  background-color: #FFF;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+.backgroundGlow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 33px 43px;
+  position: relative;
+  z-index: 20;
+}
+
+.headerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  color: #000;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.subtitle {
+  color: #333;
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #E4E4E4;
+  background: #FFF;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+}
+
+.actionButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #E4E4E4;
+  background: #FFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.percentageIndicators {
+  display: flex;
+  gap: 40px;
+  position: absolute;
+  top: 110px;
+  left: 43px;
+  z-index: 20;
+}
+
+.percentageItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.indicatorValue {
+  font-size: 32px;
+  font-weight: 700;
+  color: #000;
+}
+
+.indicatorInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.indicatorTitle {
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.indicatorSubtitle {
+  color: #929292;
+  font-size: 12px;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trendPositive {
+  color: #22C55E;
+  font-weight: 600;
+}
+
+.trendNegative {
+  color: #EF4444;
+  font-weight: 600;
+}
+
+.yAxisLabels {
+  position: absolute;
+  left: 43px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #333;
+  font-size: 14px;
+  font-weight: 400;
+  z-index: 10;
+}
+
+.gridLine {
+  position: absolute;
+  left: 129px;
+  width: 821px;
+  height: 1px;
+  background: #F3F3F3;
+  z-index: 5;
+}
+
+.chartContainer {
+  /* Position is handled inline for dynamic values */
+  display: block;
+}
+
+.fadeOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 120px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.00) 0%, #FFF 100%);
+  pointer-events: none;
+  z-index: 15;
+}
+
+.legend {
+  display: flex;
+  gap: 24px;
+  position: absolute;
+  bottom: 60px; /* Moved to bottom */
+  left: 129px;
+  z-index: 20;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #333;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.legendDotA {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #334AFA;
+}
+
+.legendDotB {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #06b6d4;
+}
+
+.conversionTooltip {
+  position: absolute;
+  top: 120px; /* Adjusted position */
+  right: 43px;
+  display: flex;
+  padding: 10px;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 8px;
+  border: 0.756px solid #334AFA;
+  background: #FFF;
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.05);
+  z-index: 30;
+  min-width: 160px;
+}
+
+.tooltipIcon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #334AFA;
+}
+
+.tooltipContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tooltipPercentage {
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tooltipDate {
+  color: #929292;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.footer {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  z-index: 20;
+}
+
+.footerText {
+  color: #929292;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Responsive styles */
+@media (max-width: 991px) {
+  .conversionDataContainer {
+    width: 100%;
+    max-width: 800px;
+    height: 500px;
+  }
+  
+  .header {
+    width: calc(100% - 58px);
+    flex-direction: column;
+    gap: 20px;
+    height: auto;
+  }
+  
+  .percentageIndicators {
+    flex-direction: column;
+    gap: 16px;
+    top: 140px;
+  }
+  
+  .yAxisLabels {
+    height: 200px;
+    top: 200px;
+  }
+  
+  .gridLine {
+    width: calc(100% - 120px);
+  }
+  
+  .conversionTooltip {
+    right: 20px;
+    left: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .conversionDataContainer {
+    height: 450px;
+    border-radius: 12px;
+  }
+  
+  .header {
+    left: 20px;
+    top: 20px;
+    width: calc(100% - 40px);
+    flex-direction: row;
+  }
+  
+  .title {
+    font-size: 18px;
+  }
+  
+  .subtitle {
+    width: 100%;
+  }
+  
+  .yAxisLabels {
+    height: 150px;
+    top: 180px;
+    left: 20px;
+  }
+  
+  .gridLine {
+    width: calc(100% - 80px);
+    left: 60px;
+  }
+  
+  .conversionTooltip {
+    width: 200px;
+    height: 55px;
+    right: 10px;
+    top: 150px;
+  }
+  
+  .tooltipPercentage {
+    font-size: 16px;
+  }
+  
+  .fadeOverlay {
+    width: 250px;
+    left: calc(100% - 260px);
+    top: 200px;
+  }
+}

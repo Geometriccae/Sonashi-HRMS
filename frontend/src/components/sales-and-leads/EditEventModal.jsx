@@ -22,6 +22,7 @@ function EditEventModal({
     notes: "",
     link: "",
     color: "#FF9500",
+    reminders: [60, 15, 1], // Default reminders: 1 hour, 15 min, 1 min before
   });
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -56,22 +57,19 @@ function EditEventModal({
       if (eventData.assignedTeamMembers) {
         if (Array.isArray(eventData.assignedTeamMembers)) {
           assignedMembers = eventData.assignedTeamMembers.map((emp) => {
-            // Handle both ObjectId strings and employee objects
-            if (typeof emp === "string") {
-              return emp;
-            } else if (emp && emp._id) {
-              return emp._id.toString();
-            }
-            return emp;
+            if (typeof emp === "string") return emp;
+            if (emp && emp._id) return String(emp._id);
+            return String(emp);
           });
         } else if (typeof eventData.assignedTeamMembers === "string") {
-          // Handle old single-assignment format
-          assignedMembers = [eventData.assignedTeamMembers];
+          assignedMembers = [String(eventData.assignedTeamMembers)];
         }
       } else if (eventData.assignedTeamMember) {
-        // Handle old single-assignment format
-        assignedMembers = [eventData.assignedTeamMember];
+        assignedMembers = [String(eventData.assignedTeamMember)];
       }
+
+      // ensure all ids are strings
+      assignedMembers = assignedMembers.map(String);
 
       console.log(
         "EditEventModal - assignedTeamMembers processed:",
@@ -87,6 +85,7 @@ function EditEventModal({
         notes: eventData.notes || "",
         link: eventData.link || "",
         color: eventData.color || "#FF9500",
+        reminders: eventData.reminders || [60, 15, 1], // Load existing reminders or default
       });
     }
   }, [eventData, isOpen]);
@@ -110,6 +109,9 @@ function EditEventModal({
       );
     }
   }, [employees, formData.assignedTeamMembers]);
+
+  // build employee options (value are strings) and use them for Select value
+  const employeeOptions = employees.map((emp) => ({ value: String(emp._id), label: emp.employeeName }));
 
   if (!isOpen) return null;
 
@@ -298,22 +300,10 @@ function EditEventModal({
               <label className="field-label">Assign Team Members</label>
               <Select
                 isMulti
-                options={employees.map((emp) => ({
-                  value: emp._id.toString(),
-                  label: emp.employeeName,
-                }))}
-                value={employees
-                  .filter((emp) =>
-                    formData.assignedTeamMembers.includes(emp._id.toString())
-                  )
-                  .map((emp) => ({
-                    value: emp._id.toString(),
-                    label: emp.employeeName,
-                  }))}
+                options={employeeOptions}
+                value={employeeOptions.filter(o => (formData.assignedTeamMembers || []).map(String).includes(o.value))}
                 onChange={(selectedOptions) => {
-                  const values = selectedOptions
-                    ? selectedOptions.map((o) => o.value)
-                    : [];
+                  const values = selectedOptions ? selectedOptions.map((o) => String(o.value)) : [];
                   handleInputChange("assignedTeamMembers", values);
                 }}
                 placeholder="Select team members..."

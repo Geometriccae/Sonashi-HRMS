@@ -725,6 +725,19 @@
   margin-top: 10px;
 }
 
+.loadingMessage,
+.noMeetings {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #9ca1a0;
+  font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+}
+
 /* Tasks Card */
 .tasksCard {
   border-radius: 18px;

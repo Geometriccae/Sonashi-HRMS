@@ -18,6 +18,8 @@ const documentRoutes = require('./routes/documentRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
+const meetingsRoutes = require('./routes/meetings');
+const attendanceRoutes = require('./routes/attendanceRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -191,8 +193,10 @@ app.use('/api/employeedocuments', employeeDocumentRoutes);
 app.use('/api', taskRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/meetings', meetingsRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/checkins', require('./routes/checkInRoutes'));
+app.use('/api/attendance', attendanceRoutes);
 
 // ====== DATABASE CONNECTION ======
 mongoose.connect(process.env.MONGO_URI)

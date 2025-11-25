@@ -1,35 +1,57 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./AddEmployeeModal.css"; // Using the same CSS file
 import ProgressSteps from "../ProgressSteps";
 import InputField from "../InputField";
 import ProfilePhotoUpload from "../ProfilePhotoUpload";
 import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 import employeeService from "../../services/EmployeeService";
+import ClientService from "../../services/ClientService";
 import config from "../../config/config";
+import Dropdown from "../DropDown";
+import Select from "react-select";
 
 function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     // 1. Basic Information
     employeeId: "",
     employeeName: "",
     mobile: "",
     emailId: "",
-    
+
     // 2. Employment Details
     role: "",
     designation: "",
     department: "",
+    employeeStatus: "Active",
     attendance: "Onsite",
-    
+
     // 3. Project Assignments
-    assignedProjects: "",
+    assignedProjects: [], // Array of client IDs
   });
 
+  const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchClients();
+    }
+  }, [isOpen]);
+
+  const fetchClients = async () => {
+    try {
+      const data = await ClientService.getClients();
+      const clientList = Array.isArray(data) ? data : data.clients || [];
+      setClients(clientList);
+    } catch (err) {
+      console.error("Failed to fetch clients:", err);
+      setClients([]);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -44,6 +66,16 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  };
+
+  const handleProjectSelection = (selectedOptions) => {
+    const selectedValues = selectedOptions
+      ? selectedOptions.map((option) => option.value)
+      : [];
+    setFormData((prev) => ({
+      ...prev,
+      assignedProjects: selectedValues,
     }));
   };
 
@@ -70,9 +102,17 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
   const handleFinish = async () => {
     // Validate required fields
-    if (!formData.employeeId || !formData.employeeName || !formData.mobile || 
-        !formData.emailId || !formData.role || !formData.department) {
-      setError("Employee ID, Name, Mobile, Email, Role, and Department are required fields");
+    if (
+      !formData.employeeId ||
+      !formData.employeeName ||
+      !formData.mobile ||
+      !formData.emailId ||
+      !formData.role ||
+      !formData.department
+    ) {
+      setError(
+        "Employee ID, Name, Mobile, Email, Role, and Department are required fields"
+      );
       return;
     }
 
@@ -85,15 +125,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         Object.entries(formData).filter(([_, value]) => value !== "")
       );
 
-      // Convert assignedProjects from string to array
-      if (filteredData.assignedProjects) {
-        filteredData.assignedProjects = filteredData.assignedProjects
-          .split(",")
-          .map(project => project.trim())
-          .filter(project => project !== "");
-      }
+      // assignedProjects is already an array, no need to split
 
-      const savedEmployee = await employeeService.createEmployeeWithFile(filteredData, profileImage);
+      const savedEmployee = await employeeService.createEmployeeWithFile(
+        filteredData,
+        profileImage
+      );
 
       // Call the onSubmit callback with the saved employee data
       if (onSubmit) {
@@ -112,10 +149,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         role: "",
         designation: "",
         department: "",
+        employeeStatus: "Active",
         attendance: "Onsite",
-        assignedProjects: "",
+        assignedProjects: [],
       });
-      
+
       setProfileImage(null);
     } catch (err) {
       console.error("Error creating employee:", err);
@@ -134,12 +172,14 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   };
 
   // Options for dropdowns
-  const attendanceOptions = [
-    { value: "Onsite", label: "Onsite" },
-    { value: "Leave", label: "Leave" },
+  const activeOptions = [
+    { value: "", label: "-Select-" },
+    { value: "Active", label: "Active" },
+    { value: "InActive", label: "InActive" },
   ];
 
   const departmentOptions = [
+    { value: "", label: "-Select-" },
     { value: "Operations", label: "Operations" },
     { value: "Sales", label: "Sales" },
     { value: "Marketing", label: "Marketing" },
@@ -151,6 +191,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   ];
 
   const roleOptions = [
+    { value: "", label: "-Select-" },
     { value: "Operations Manager", label: "Operations Manager" },
     { value: "Sales Executive", label: "Sales Executive" },
     { value: "Logistics Coordinator", label: "Logistics Coordinator" },
@@ -158,8 +199,16 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     { value: "HR Manager", label: "HR Manager" },
     { value: "Finance Analyst", label: "Finance Analyst" },
     { value: "IT Specialist", label: "IT Specialist" },
-    { value: "Customer Service Representative", label: "Customer Service Representative" },
+    {
+      value: "Customer Service Representative",
+      label: "Customer Service Representative",
+    },
   ];
+
+  const clientOptions = clients.map((client) => ({
+    value: client._id,
+    label: client.clientName || client.companyName || "Unnamed Client",
+  }));
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -173,7 +222,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 placeholder="EMP-001"
                 required
                 value={formData.employeeId}
-                onChange={(e) => handleInputChange("employeeId", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("employeeId", e.target.value)
+                }
               />
 
               <InputField
@@ -181,7 +232,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 placeholder="Full Name"
                 required
                 value={formData.employeeName}
-                onChange={(e) => handleInputChange("employeeName", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("employeeName", e.target.value)
+                }
               />
 
               <InputField
@@ -202,10 +255,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 onChange={(e) => handleInputChange("emailId", e.target.value)}
               />
 
-              <InputField
+              <Dropdown
                 label="Role *"
                 placeholder="Select role"
-                isDropdown
                 options={roleOptions}
                 value={formData.role}
                 onChange={(e) => handleInputChange("role", e.target.value)}
@@ -215,7 +267,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 label="Designation"
                 placeholder="Designation"
                 value={formData.designation}
-                onChange={(e) => handleInputChange("designation", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("designation", e.target.value)
+                }
               />
             </div>
           </div>
@@ -225,40 +279,87 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         return (
           <div className="billing-content">
             <div className="form-fields-grid">
-              <InputField
+              <Dropdown
                 label="Department *"
                 placeholder="Select department"
-                isDropdown
                 options={departmentOptions}
                 value={formData.department}
-                onChange={(e) => handleInputChange("department", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("department", e.target.value)
+                }
               />
 
-              <InputField
-                label="Attendance Status"
+              <Dropdown
+                label="Active Status"
                 placeholder="Select status"
-                isDropdown
-                options={attendanceOptions}
-                value={formData.attendance}
-                onChange={(e) => handleInputChange("attendance", e.target.value)}
+                options={activeOptions}
+                value={formData.employeeStatus}
+                onChange={(e) =>
+                  handleInputChange("employeeStatus", e.target.value)
+                }
               />
 
-              <InputField
-                label="Assigned Projects"
-                placeholder="Project A, Project B, Project C"
-                value={formData.assignedProjects}
-                onChange={(e) => handleInputChange("assignedProjects", e.target.value)}
-                helperText="Enter projects separated by commas"
-              />
+              <div className="input-group" style={{ width: "100%" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "8px",
+                    fontWeight: "500",
+                    color: "#333",
+                    width: "100%",
+                  }}
+                
+                >
+                  Assigned Projects
+                </label>
+                <Select
+                  isMulti
+                  options={clientOptions}
+                  value={clientOptions.filter((option) =>
+                    formData.assignedProjects.includes(option.value)
+                  )}
+                  onChange={handleProjectSelection}
+                  placeholder="Select projects..."
+                  className="form-select-container"
+                  classNamePrefix="select"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "44px",
+                      borderRadius: "8px",
+                      borderColor: "#E0E0E0",
+                      boxShadow: "none",
+                      "&:hover": {
+                        borderColor: "#BDBDBD",
+                      },
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                  }}
+                />
+              </div>
             </div>
           </div>
         );
 
       case 3:
+        const selectedProjectNames = clients
+          .filter((c) => formData.assignedProjects.includes(c._id))
+          .map((c) => c.clientName || c.companyName)
+          .join(", ");
+
         const employeeData = [
           [
-            { label: "Employee ID", value: formData.employeeId || "Not provided" },
-            { label: "Employee Name", value: formData.employeeName || "Not provided" },
+            {
+              label: "Employee ID",
+              value: formData.employeeId || "Not provided",
+            },
+            {
+              label: "Employee Name",
+              value: formData.employeeName || "Not provided",
+            },
           ],
           [
             { label: "Mobile", value: formData.mobile || "Not provided" },
@@ -266,16 +367,25 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           ],
           [
             { label: "Role", value: formData.role || "Not provided" },
-            { label: "Designation", value: formData.designation || "Not provided" },
+            {
+              label: "Designation",
+              value: formData.designation || "Not provided",
+            },
           ],
           [
-            { label: "Department", value: formData.department || "Not provided" },
-            { label: "Attendance", value: formData.attendance || "Not provided" },
+            {
+              label: "Department",
+              value: formData.department || "Not provided",
+            },
+            {
+              label: "employeeStatus",
+              value: formData.employeeStatus || "Not provided",
+            },
           ],
           [
-            { 
-              label: "Assigned Projects", 
-              value: formData.assignedProjects || "Not assigned" 
+            {
+              label: "Assigned Projects",
+              value: selectedProjectNames || "Not assigned",
             },
           ],
         ];
@@ -292,7 +402,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   />
                 ) : (
                   <div className="default-company-logo">
-                    {formData.employeeName?.charAt(0)?.toUpperCase() || 'E'}
+                    {formData.employeeName?.charAt(0)?.toUpperCase() || "E"}
                   </div>
                 )}
                 <div className="company-name">

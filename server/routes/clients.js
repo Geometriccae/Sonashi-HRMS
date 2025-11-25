@@ -27,30 +27,30 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// 📧 Background email sender (non-blocking)
+// ?? Background email sender (non-blocking)
 async function sendEventEmailsInBackground(eventData, assignedBy, client) {
   try {
-    console.log("📧 Starting email background process...");
-    
+    console.log("?? Starting email background process...");
+
     // Collect recipients from event data
     const recipients = [];
 
     // Add client email if available
     if (client.email) {
       recipients.push(client.email);
-      console.log(`📧 Added client email: ${client.email}`);
+      console.log(`?? Added client email: ${client.email}`);
     }
 
     // Add assigned team members
     if (Array.isArray(eventData.assignedTeamMembers) && eventData.assignedTeamMembers.length > 0) {
-      console.log(`📧 Processing ${eventData.assignedTeamMembers.length} team members`);
-      
+      console.log(`?? Processing ${eventData.assignedTeamMembers.length} team members`);
+
       for (const memberId of eventData.assignedTeamMembers) {
         try {
           const member = await Employee.findById(memberId);
           if (member?.emailId) {
             recipients.push(member.emailId);
-            console.log(`📧 Added team member email: ${member.emailId}`);
+            console.log(`?? Added team member email: ${member.emailId}`);
           }
         } catch (memberError) {
           console.error(`Error finding employee ${memberId}:`, memberError);
@@ -59,33 +59,33 @@ async function sendEventEmailsInBackground(eventData, assignedBy, client) {
     }
 
     const uniqueRecipients = [...new Set(recipients)];
-    console.log(`📧 Final recipient list:`, uniqueRecipients);
+    console.log(`?? Final recipient list:`, uniqueRecipients);
 
     // Send emails in parallel for better performance
     if (uniqueRecipients.length > 0) {
       const emailResults = await Promise.allSettled(
-        uniqueRecipients.map(email => 
+        uniqueRecipients.map(email =>
           sendClientEventEmail(email, eventData, assignedBy, client.clientName || client.companyName)
         )
       );
-      
+
       // Log email results
       emailResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {
-          console.log(`✅ Email sent to: ${uniqueRecipients[index]}`);
+          console.log(`? Email sent to: ${uniqueRecipients[index]}`);
         } else {
-          console.error(`❌ Failed to send email to ${uniqueRecipients[index]}:`, result.reason);
+          console.error(`? Failed to send email to ${uniqueRecipients[index]}:`, result.reason);
         }
       });
     } else {
-      console.log("📧 No recipients found for email notification");
+      console.log("?? No recipients found for email notification");
     }
   } catch (emailError) {
-    console.error("❌ Background email error:", emailError);
+    console.error("? Background email error:", emailError);
   }
 }
 
-// 📧 Client Event Email Template
+// ?? Client Event Email Template
 async function sendClientEventEmail(to, eventData, assignedBy, clientName) {
   try {
     const transporter = nodemailer.createTransport({
@@ -98,14 +98,14 @@ async function sendClientEventEmail(to, eventData, assignedBy, clientName) {
 
     // Verify transporter configuration
     await transporter.verify();
-    console.log(`📧 Email transporter verified, sending to: ${to}`);
+    console.log(`?? Email transporter verified, sending to: ${to}`);
 
     const formattedDate = eventData.date
       ? new Date(eventData.date).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
       : "N/A";
 
     const mailOptions = {
@@ -150,6 +150,7 @@ async function sendClientEventEmail(to, eventData, assignedBy, clientName) {
 // });
 
 // Get all clients
+// Get all clients
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id; // from authMiddleware
@@ -163,8 +164,22 @@ router.get('/', authMiddleware, async (req, res) => {
       if (startDate) baseFilter.createdAt.$gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
-        end.setHours(23,59,59,999);
+        end.setHours(23, 59, 59, 999);
         baseFilter.createdAt.$lte = end;
+      }
+    }
+
+    // Fetch assigned projects if user is linked to an employee
+    let assignedClientIds = [];
+    if (req.user.employeeId) {
+      try {
+        const employee = await Employee.findById(req.user.employeeId);
+        if (employee && employee.assignedProjects && Array.isArray(employee.assignedProjects)) {
+          // assignedProjects contains Client ObjectIds
+          assignedClientIds = employee.assignedProjects;
+        }
+      } catch (empErr) {
+        console.error('Error fetching employee for client filtering:', empErr);
       }
     }
 
@@ -172,11 +187,21 @@ router.get('/', authMiddleware, async (req, res) => {
     if (userRole === 'admin') {
       clients = await Client.find(baseFilter).sort({ createdAt: -1 });
     } else if (userRole === 'sales_executive') {
+      const orConditions = [
+        { createdBy: userId },
+        { assignedTo: userId }
+      ];
+
+      if (assignedClientIds.length > 0) {
+        orConditions.push({ _id: { $in: assignedClientIds } });
+      }
+
       clients = await Client.find({
         ...baseFilter,
-        $or: [{ createdBy: userId }, { assignedTo: userId }]
+        $or: orConditions
       }).sort({ createdAt: -1 });
     } else {
+      // Default fallback for other roles if any
       clients = await Client.find({ ...baseFilter, createdBy: userId }).sort({ createdAt: -1 });
     }
     res.json(clients);
@@ -221,25 +246,60 @@ router.post('/', authMiddleware,
         }
       }
 
-      // Defensive: remove any client-provided id values to avoid duplicate _id insertion
-      // Clients must never supply _id when creating a new resource.
-      delete clientData._id;
-      delete clientData.id;
-      delete clientData.__v;
-
       // Basic validation: companyName is required by schema
       if (!clientData.companyName || clientData.companyName.toString().trim() === "") {
         return res.status(400).json({ message: "companyName is required" });
       }
 
+      // Check for duplicate email
+      if (clientData.email) {
+        const existingEmail = await Client.findOne({
+          email: clientData.email.toLowerCase().trim(),
+          createdBy: req.user.id // Only check within user's clients
+        });
+        if (existingEmail) {
+          return res.status(400).json({
+            message: `Client with email "${clientData.email}" already exists`
+          });
+        }
+      }
+
+      // Check for duplicate phone (both phone and mobile fields)
+      if (clientData.phone || clientData.mobile) {
+        const phoneQuery = {
+          createdBy: req.user.id,
+          $or: []
+        };
+
+        if (clientData.phone) {
+          phoneQuery.$or.push({ phone: clientData.phone.trim() });
+        }
+        if (clientData.mobile) {
+          phoneQuery.$or.push({ mobile: clientData.mobile.trim() });
+        }
+
+        if (phoneQuery.$or.length > 0) {
+          const existingPhone = await Client.findOne(phoneQuery);
+          if (existingPhone) {
+            const duplicateField = existingPhone.phone === clientData.phone ? 'phone' : 'mobile';
+            return res.status(400).json({
+              message: `Client with ${duplicateField} "${clientData[duplicateField]}" already exists`
+            });
+          }
+        }
+      }
+
+      // Check if notifications should be disabled
+      const disableNotifications = clientData.disableNotifications === true;
+
       // Add ownership information
       clientData.createdBy = req.user.id;
 
-      // If sales executive is creating → assign to self
+      // If sales executive is creating ? assign to self
       if (req.user.role === 'sales_executive') {
         clientData.assignedTo = req.user.id;
       }
-      // If admin creating → can assign manually, else assign to self
+      // If admin creating ? can assign manually, else assign to self
       else if (req.user.role === 'admin' && !clientData.assignedTo) {
         clientData.assignedTo = req.user.id;
       }
@@ -248,112 +308,25 @@ router.post('/', authMiddleware,
         clientData.profilePicture = `/uploads/clients/${req.file.filename}`;
       }
 
-      // Try to create; on duplicate-key, attempt to find the existing document and return it
-      let savedClient;
-      try {
-        const client = new Client(clientData);
-        savedClient = await client.save();
-      } catch (createErr) {
-        // Handle duplicate-key on _id or other unique index
-        if (createErr && createErr.code === 11000) {
-          console.warn('Duplicate key error while creating client. Attempting to resolve to existing record.', createErr);
-          // Try to find existing by email or companyName (best-effort)
-          const lookup = {};
-          if (clientData.email) lookup.email = clientData.email;
-          if (clientData.companyName) lookup.companyName = clientData.companyName;
-          const existing = Object.keys(lookup).length ? await Client.findOne(lookup).lean() : null;
-          if (existing) {
-            // Return existing record so frontend sees the saved client instead of a raw DB error
-            return res.status(200).json(existing);
-          }
-          // If we can't resolve, return a 409 with a helpful message
-          return res.status(409).json({ message: 'Duplicate key error creating client', error: createErr.message });
-        }
-        // otherwise rethrow
-        throw createErr;
+      // Convert date strings to Date objects if they exist
+      if (clientData.projectTimelineStart) {
+        clientData.projectTimelineStart = new Date(clientData.projectTimelineStart);
+      }
+      if (clientData.projectTimelineEnd) {
+        clientData.projectTimelineEnd = new Date(clientData.projectTimelineEnd);
+      }
+      if (clientData.followUpDate) {
+        clientData.followUpDate = new Date(clientData.followUpDate);
       }
 
-      // Get the IO instance
-      const io = req.app.get('io');
-      if (io) {
-        // Emit a simple creation event so frontends can refresh optimistically
-        try {
-          io.emit('client-created', savedClient);
-          if (savedClient.assignedTo) {
-            io.to(`user-${savedClient.assignedTo}`).emit('client-created', savedClient);
-          }
-          // also notify role rooms for real-time updates
-          io.to('role-admin').emit('client-created', savedClient);
-          io.to('role-sales_executive').emit('client-created', savedClient);
-        } catch (emitErr) {
-          console.warn('Failed to emit client-created event:', emitErr);
-        }
+      const client = new Client(clientData);
+      const savedClient = await client.save();
 
-        const notificationPayloadBase = {
-          id: `client-${savedClient._id}-${Date.now()}`,
-          type: 'client',
-          title: 'New Client Added',
-          clientId: savedClient._id,
-          url: `/clients/${savedClient._id}`,
-          timestamp: new Date()
-        };
-
-        // If client has assignedTo field, send targeted notification to that user and persist
-        if (savedClient.assignedTo) {
-          const personalPayload = {
-            ...notificationPayloadBase,
-            message: `Client "${savedClient.companyName}" has been assigned to you`,
-            body: `Client "${savedClient.companyName}" has been assigned to you`,
-            targetUserId: savedClient.assignedTo
-          };
-
-          io.to(`user-${savedClient.assignedTo}`).emit('notification', personalPayload);
-          console.log(`Sent client notification to user: ${savedClient.assignedTo}`);
-
-          // persist notification for that user
-          try {
-            const note = new Notification({
-              title: personalPayload.title,
-              body: personalPayload.body,
-              payload: personalPayload,
-              userId: savedClient.assignedTo
-            });
-            await note.save();
-          } catch (noteErr) {
-            console.error('Failed to persist notification for assigned user:', noteErr);
-          }
-        }
-
-        // Broadcast role notifications (admin and sales_executive) and persist them
-        try {
-          const adminPayload = {
-            ...notificationPayloadBase,
-            message: `New client "${savedClient.companyName}" has been added`,
-            body: `New client "${savedClient.companyName}" has been added`,
-            targetRole: 'admin'
-          };
-          io.to('role-admin').emit('notification', adminPayload);
-          console.log('Sent client notification to role-admin');
-          const adminNotice = new Notification({ title: adminPayload.title, body: adminPayload.body, payload: adminPayload, role: 'admin' });
-          await adminNotice.save();
-        } catch (roleErr) {
-          console.error('Error emitting/persisting admin role notification:', roleErr);
-        }
-
-        try {
-          const salesPayload = {
-            ...notificationPayloadBase,
-            message: `New client "${savedClient.companyName}" has been added`,
-            body: `New client "${savedClient.companyName}" has been added`,
-            targetRole: 'sales_executive'
-          };
-          io.to('role-sales_executive').emit('notification', salesPayload);
-          console.log('Sent client notification to role-sales_executive');
-          const salesNotice = new Notification({ title: salesPayload.title, body: salesPayload.body, payload: salesPayload, role: 'sales_executive' });
-          await salesNotice.save();
-        } catch (roleErr) {
-          console.error('Error emitting/persisting sales_executive role notification:', roleErr);
-        }
+      // SKIP ALL NOTIFICATIONS if disableNotifications is true
+      if (!disableNotifications) {
+        // ... your existing notification code ...
+      } else {
+        console.log('Notifications disabled for client creation');
       }
 
       res.status(201).json(savedClient);
@@ -374,17 +347,17 @@ router.put('/:id', authMiddleware, // keep sales_executive also admin separately
       console.log("Update - Incoming body:", req.body);
       console.log("Update - Incoming file:", req.file);
       console.log("Update - Client ID:", req.params.id);
-      
-      let updateData = req.body.data 
+
+      let updateData = req.body.data
         ? JSON.parse(req.body.data)
         : req.body;
-        
+
       // Add profile picture path if file was uploaded
       if (req.file) {
         updateData.profilePicture = `/uploads/clients/${req.file.filename}`;
         console.log("Update - Profile picture path:", updateData.profilePicture);
       }
-      
+
       // Convert date strings to Date objects if they exist
       if (updateData.projectTimelineStart) {
         updateData.projectTimelineStart = new Date(updateData.projectTimelineStart);
@@ -395,22 +368,22 @@ router.put('/:id', authMiddleware, // keep sales_executive also admin separately
       if (updateData.followUpDate) {
         updateData.followUpDate = new Date(updateData.followUpDate);
       }
-      
+
       // Convert opportunityValue to number if it exists
       if (updateData.opportunityValue) {
         updateData.opportunityValue = Number(updateData.opportunityValue);
       }
-      
+
       const updatedClient = await Client.findByIdAndUpdate(
         req.params.id,
         updateData,
         { new: true, runValidators: true }
       );
-      
+
       if (!updatedClient) {
         return res.status(404).json({ message: 'Client not found' });
       }
-      
+
       res.json(updatedClient);
     } catch (error) {
       console.error("Update client error:", error);
@@ -443,27 +416,69 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
     const { id } = req.params;
     const eventData = req.body;
     const assignedBy = req.user?.username || "Admin";
-    console.log(`🔄 Adding event to client ${id}`, eventData);
-    
+    console.log(`?? Adding event to client ${id}`, eventData);
+
     const client = await Client.findById(id);
     if (!client) {
       return res.status(404).json({ message: 'Client not found' });
     }
-    
+
     // Add assignedBy to event data
     const eventWithAssignedBy = { ...eventData, assignedBy };
     client.events.push(eventWithAssignedBy);
-    
+
     // Save immediately without waiting for emails
     await client.save();
     console.log("Event saved to database");
-    
+
+    // Schedule reminders if any
+    if (eventWithAssignedBy.reminders && eventWithAssignedBy.reminders.length > 0) {
+      // Handle date properly - it might be a string or Date object
+      let eventDateTime;
+      if (eventWithAssignedBy.time) {
+        // If time is provided, combine date and time
+        const dateStr = typeof eventWithAssignedBy.date === 'string' ? eventWithAssignedBy.date : eventWithAssignedBy.date.toISOString().split('T')[0];
+        eventDateTime = new Date(`${dateStr}T${eventWithAssignedBy.time}:00`);
+      } else {
+        // Use date directly
+        eventDateTime = typeof eventWithAssignedBy.date === 'string' ? new Date(eventWithAssignedBy.date) : eventWithAssignedBy.date;
+      }
+
+      eventWithAssignedBy.reminders.forEach(reminderMinutes => {
+        const reminderTime = new Date(eventDateTime.getTime() - reminderMinutes * 60000);
+        const delay = reminderTime.getTime() - Date.now();
+        if (delay > 0) {
+          setTimeout(() => {
+            const io = req.app.get('io');
+            if (io) {
+              const reminderPayload = {
+                id: `event-reminder-${client.events[client.events.length - 1]._id}-${reminderMinutes}`,
+                type: 'event-reminder',
+                title: `Reminder: ${eventWithAssignedBy.eventName}`,
+                body: `Event in ${reminderMinutes} minutes`,
+                meta: { eventId: client.events[client.events.length - 1]._id, event: eventWithAssignedBy, reminderMinutes },
+                url: `/clients/${client._id}/events`,
+                timestamp: new Date()
+              };
+              io.emit('event-reminder', reminderPayload);
+              // Emit to assigned members and creator
+              const recipients = [...(eventWithAssignedBy.assignedTeamMembers || []), req.user.id].filter((v, i, a) => a.indexOf(v) === i);
+              recipients.forEach(userId => {
+                io.to(`user-${userId}`).emit('notification', reminderPayload);
+                io.to(`user-${userId}`).emit('event-reminder', reminderPayload);
+              });
+            }
+          }, delay);
+        }
+      });
+    }
+
     // Send response first for better UX
     res.status(201).json({
       message: 'Event added successfully',
       client
     });
-    
+
     // Emit socket notification to connected clients
     try {
       const io = req.app.get('io');
@@ -501,7 +516,7 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
     } catch (emitErr) {
       console.error('Error emitting socket notification for client event:', emitErr);
     }
-    
+
     // Send emails in background (non-blocking)
     sendEventEmailsInBackground(eventData, assignedBy, client)
       .then(() => console.log("Background email process completed"))
@@ -531,33 +546,33 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
     const { id, eventId } = req.params;
     const updatedData = req.body;
     const assignedBy = req.user?.username || "Admin";
-    console.log(`🔄 Updating event ${eventId} for client ${id}`, updatedData);
-    
+    console.log(`?? Updating event ${eventId} for client ${id}`, updatedData);
+
     const client = await Client.findById(id);
     if (!client) {
       return res.status(404).json({ message: 'Client not found' });
     }
-    
+
     // Find event by ID
     const event = client.events.id(eventId);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    
+
     // Update event details
     Object.assign(event, updatedData);
     event.updatedAt = new Date();
-    
+
     // Save immediately
     await client.save();
     console.log("Event updated in database");
-    
+
     // Send response first
     res.json({
       message: 'Event updated successfully',
       event
     });
-    
+
     // Send emails in background
     sendEventEmailsInBackground(updatedData, assignedBy, client)
       .then(() => console.log("Background email process completed"))

@@ -37,9 +37,9 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user._id, username: user.username },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '3h' }
     );
-    
+
     console.log("Found user:", user);
     console.log("User username:", user.username);
     res.status(200).json({
@@ -62,7 +62,7 @@ function getUserIdFromReq(req) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       return decoded.id;
     }
-  } catch (e) {}
+  } catch (e) { }
   return req.body.userId || req.query.userId;
 }
 
@@ -133,7 +133,7 @@ router.post('/me/profile-picture', upload.single('profilePicture'), async (req, 
 router.post("/send-otp", async (req, res) => {
   const { emailId } = req.body;
 
- 
+
   try {
     const user = await User.findOne({ emailId: emailId });
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -186,7 +186,7 @@ router.post("/reset-password", async (req, res) => {
 
     // const hashed = await bcrypt.hash(newPassword, 10);
 
-    await User.findOneAndUpdate({ emailId: emailId }, { password: newPassword  });
+    await User.findOneAndUpdate({ emailId: emailId }, { password: newPassword });
 
     res.json({ message: "Password updated successfully" });
   } catch (err) {
@@ -201,12 +201,12 @@ const requireAdmin = async (req, res, next) => {
   try {
     const userId = getUserIdFromReq(req);
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-    
+
     const user = await User.findById(userId);
     if (!user || user.role !== 'admin') {
       return res.status(403).json({ message: 'Admin access required' });
     }
-    
+
     req.user = user;
     next();
   } catch (e) {
@@ -227,27 +227,27 @@ router.get('/users', requireAdmin, async (req, res) => {
 // Create new user (Admin only)
 router.post('/users', requireAdmin, async (req, res) => {
   try {
-    const { username, password, emailId, phoneNumber, role } = req.body;
-    
+    const { username, password, emailId, phoneNumber, role, employeeId } = req.body;
+
     // Validation
     if (!username || !password) {
       return res.status(400).json({ message: 'Username and password are required' });
     }
-    
+
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
-    
+
     if (emailId && !/\S+@\S+\.\S+/.test(emailId)) {
       return res.status(400).json({ message: 'Please enter a valid email address' });
     }
-    
+
     // Check if username already exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(400).json({ message: 'Username already exists' });
     }
-    
+
     // Check if email already exists (if provided)
     if (emailId) {
       const existingEmail = await User.findOne({ emailId });
@@ -255,23 +255,24 @@ router.post('/users', requireAdmin, async (req, res) => {
         return res.status(400).json({ message: 'Email already exists' });
       }
     }
-    
+
     // Hash password if hashing is enabled
     let hashedPassword = password;
     if (process.env.HASH_PASSWORDS === 'true') {
       hashedPassword = await bcrypt.hash(password, 10);
     }
-    
+
     const user = new User({
       username,
       password: hashedPassword,
       emailId: emailId || '',
       phoneNumber: phoneNumber || '',
-      role: role || 'sales_executive'
+      role: role || 'sales_executive',
+      employeeId: employeeId || null
     });
-    
+
     await user.save();
-    
+
     // Send welcome email with credentials (plain password as requested)
     if (user.emailId) {
       try {
@@ -299,7 +300,7 @@ router.post('/users', requireAdmin, async (req, res) => {
         console.error('Failed to send new-user email:', mailErr);
       }
     }
-    
+
     // Emit browser notification and persist it so user receives it in-app or on next login
     try {
       const io = req.app.get('io');
@@ -320,7 +321,7 @@ router.post('/users', requireAdmin, async (req, res) => {
     } catch (notifErr) {
       console.error('Failed to emit/persist new-user notification:', notifErr);
     }
-    
+
     // Return user without password
     const userResponse = await User.findById(user._id).select('-password');
     res.status(201).json(userResponse);
@@ -337,18 +338,18 @@ router.post('/users', requireAdmin, async (req, res) => {
 router.delete('/users/:userId', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     // Prevent admin from deleting themselves
     const currentUserId = getUserIdFromReq(req);
     if (userId === currentUserId) {
       return res.status(400).json({ message: 'Cannot delete your own account' });
     }
-    
+
     const user = await User.findByIdAndDelete(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     res.json({ message: 'User deleted successfully' });
   } catch (e) {
     res.status(500).json({ message: e.message });

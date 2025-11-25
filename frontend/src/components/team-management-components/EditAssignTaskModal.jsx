@@ -22,6 +22,7 @@ function EditAssignTaskModal({
     notes: "",
     link: "",
     color: "#FF9500",
+    reminders: [60, 15, 1], // Default reminders: 1 hour, 15 min, 1 min before
   });
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -33,7 +34,14 @@ function EditAssignTaskModal({
     const loadEmployees = async () => {
       try {
         const data = await employeeService.getEmployees();
-        setEmployees(Array.isArray(data) ? data : []);
+        // employeeService may return either an array or an object { employees: [...] }
+        setEmployees(
+          Array.isArray(data)
+            ? data
+            : data && Array.isArray(data.employees)
+            ? data.employees
+            : []
+        );
       } catch (e) {
         console.error("Failed to load employees", e);
         setEmployees([]);
@@ -42,75 +50,203 @@ function EditAssignTaskModal({
     loadEmployees();
   }, []);
 
-  // Populate form data when eventData changes
+   // Populate form data when eventData changes
+   // Populate form data when eventData changes - FIXED
+  // Populate form data when eventData changes - FIXED
   useEffect(() => {
     if (eventData && isOpen) {
-      console.log("EditAssignTaskModal - eventData received:", eventData);
-
-      const eventDate = new Date(eventData.start);
-      const timeString = eventDate.toTimeString().slice(0, 5); // HH:MM format
-      const dateString = eventDate.toISOString().split("T")[0]; // YYYY-MM-DD format
-
-      // Handle different formats of assignedTeamMembers - following EditTaskModal pattern
-      let assignedMembers = [];
-      if (eventData.assignedTeamMembers) {
-        if (Array.isArray(eventData.assignedTeamMembers)) {
-          assignedMembers = eventData.assignedTeamMembers.map((emp) => {
-            // Handle both ObjectId strings and employee objects
-            if (typeof emp === "string") {
-              return emp;
-            } else if (emp && emp._id) {
-              return emp._id.toString();
-            }
-            return emp;
-          });
-        } else if (typeof eventData.assignedTeamMembers === "string") {
-          // Handle old single-assignment format
-          assignedMembers = [eventData.assignedTeamMembers];
+      console.log("=== INITIAL DATA POPULATION DEBUG ===");
+      console.log("Raw eventData:", eventData);
+      
+      // Check ALL properties of eventData to find where assignedTeamMembers might be
+      console.log("All eventData properties:", Object.keys(eventData));
+      
+      // Check if there are any properties that might contain the assigned team members
+      for (let key in eventData) {
+        if (key.toLowerCase().includes('team') || key.toLowerCase().includes('assign')) {
+          console.log(`Found relevant property ${key}:`, eventData[key]);
         }
-      } else if (eventData.assignedTeamMember) {
-        // Handle old single-assignment format
-        assignedMembers = [eventData.assignedTeamMember];
       }
 
-      console.log(
-        "EditAssignTaskModal - assignedTeamMembers processed:",
-        assignedMembers
-      );
+      // Check nested objects
+      if (eventData.meta) {
+        console.log("meta properties:", Object.keys(eventData.meta));
+        for (let key in eventData.meta) {
+          if (key.toLowerCase().includes('team') || key.toLowerCase().includes('assign')) {
+            console.log(`Found relevant meta property ${key}:`, eventData.meta[key]);
+          }
+        }
+      }
+
+      if (eventData.extendedProps) {
+        console.log("extendedProps properties:", Object.keys(eventData.extendedProps));
+        for (let key in eventData.extendedProps) {
+          if (key.toLowerCase().includes('team') || key.toLowerCase().includes('assign')) {
+            console.log(`Found relevant extendedProps property ${key}:`, eventData.extendedProps[key]);
+          }
+        }
+      }
+
+      // Your existing logic continues...
+      const src = eventData.meta?.event || eventData.meta?.meeting || eventData.extendedProps || eventData;
+      
+      const dt = eventData.start || src?.date || eventData.date || null;
+      let eventDate = null;
+      try {
+        eventDate = dt ? new Date(dt) : null;
+      } catch (e) {
+        eventDate = null;
+      }
+      const timeString = eventDate
+        ? `${String(eventDate.getHours()).padStart(2, "0")}:${String(
+            eventDate.getMinutes()
+          ).padStart(2, "0")}`
+        : src?.time || eventData.time || "09:00";
+      const dateString = eventDate
+        ? eventDate.toISOString().split("T")[0]
+        : src?.date
+        ? new Date(src.date).toISOString().split("T")[0]
+        : eventData.date
+        ? new Date(eventData.date).toISOString().split("T")[0]
+        : "";
+
+      // FIXED: Check all possible locations for assignedTeamMembers
+      let assignedMembers = [];
+      
+      // Check direct properties first
+      if (eventData.assignedTeamMembers && Array.isArray(eventData.assignedTeamMembers)) {
+        assignedMembers = eventData.assignedTeamMembers;
+      } 
+      // Check in extendedProps (common in calendar events)
+      else if (eventData.extendedProps?.assignedTeamMembers && Array.isArray(eventData.extendedProps.assignedTeamMembers)) {
+        assignedMembers = eventData.extendedProps.assignedTeamMembers;
+      }
+      // Check in meta
+      else if (eventData.meta?.assignedTeamMembers && Array.isArray(eventData.meta.assignedTeamMembers)) {
+        assignedMembers = eventData.meta.assignedTeamMembers;
+      }
+      // Check in src
+      else if (src?.assignedTeamMembers && Array.isArray(src.assignedTeamMembers)) {
+        assignedMembers = src.assignedTeamMembers;
+      }
+      // Check single assignedTeamMember
+      else if (eventData.assignedTeamMember) {
+        assignedMembers = [eventData.assignedTeamMember];
+      }
+      else if (src?.assignedTeamMember) {
+        assignedMembers = [src.assignedTeamMember];
+      }
+
+      // If still empty, try to fetch the actual event data from the database
+      if (assignedMembers.length === 0) {
+        console.log("No assignedTeamMembers found in eventData, trying to fetch from API...");
+        // You might need to add a function to fetch the full event data by ID
+        // const fullEventData = await getEventById(eventData.id);
+        // if (fullEventData?.assignedTeamMembers) {
+        //   assignedMembers = fullEventData.assignedTeamMembers;
+        // }
+      }
+
+      // Normalize every id to string (handle objects with _id)
+      assignedMembers = assignedMembers.filter(Boolean).map((item) => {
+        if (typeof item === "string") return item;
+        if (item && (item._id || item.id)) return String(item._id || item.id);
+        return String(item);
+      });
+
+      console.log("Final assignedMembers:", assignedMembers);
 
       setFormData({
-        eventName: eventData.title || "",
-        eventType: eventData.eventType || "",
+        eventName: eventData.title || src?.eventName || "",
+        eventType: eventData.eventType || src?.eventType || "",
         date: dateString,
         time: timeString,
         assignedTeamMembers: assignedMembers,
-        notes: eventData.notes || "",
-        link: eventData.link || "",
-        color: eventData.color || "#FF9500",
+        notes: eventData.notes || src?.notes || "",
+        link: eventData.link || src?.link || "",
+        color: eventData.color || src?.color || "#FF9500",
+        reminders: src?.reminders || [60, 15, 1], // Load existing reminders or default
       });
+      console.log("=== END INITIAL DEBUG ===");
     }
   }, [eventData, isOpen]);
 
-  // Debug log to see when employees and formData are both loaded
+  
+  // derive a Set of selected ids for stable comparisons
+  const selectedIdsSet = new Set((formData.assignedTeamMembers || []).map(String));
+
+  // Ensure any assignedTeamMembers IDs are present in the employees list.
+  // Some event objects only include IDs; if the employee list didn't include those IDs
+  // we try to fetch each missing employee so react-select can match options.
   useEffect(() => {
-    if (employees.length > 0 && formData.assignedTeamMembers.length > 0) {
-      console.log("EditAssignTaskModal - Employees loaded:", employees.length);
-      console.log(
-        "EditAssignTaskModal - Form data assignedTeamMembers:",
-        formData.assignedTeamMembers
-      );
+    const missing = (formData.assignedTeamMembers || []).filter(
+      (id) => !employees.some((e) => String(e._id) === String(id))
+    );
+    if (!missing || missing.length === 0) return;
 
-      // Check if assigned team members exist in employees list
-      const validEmployees = employees.filter((emp) =>
-        formData.assignedTeamMembers.includes(emp._id)
+    let cancelled = false;
+    (async () => {
+      for (const id of missing) {
+        try {
+          // employeeService.getEmployee may exist; if not, try getEmployees fallback (no-op)
+          if (typeof employeeService.getEmployee === "function") {
+            const emp = await employeeService.getEmployee(id);
+            if (emp && !cancelled) {
+              setEmployees((prev) => {
+                if (!prev) return [emp];
+                if (prev.some((p) => String(p._id) === String(emp._id))) return prev;
+                return [...prev, emp];
+              });
+            }
+          } else {
+            // no per-id API available; skip and rely on server refresh elsewhere
+            console.warn("employeeService.getEmployee not available, cannot fetch missing employee", id);
+          }
+        } catch (err) {
+          console.warn("Failed to fetch employee for assignedTeamMembers:", id, err);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [formData.assignedTeamMembers, employees.length]);
+
+ 
+    // build employeeOptions once employees loaded - SIMPLIFIED
+  const employeeOptions = employees.map((emp) => ({
+    value: String(emp._id),
+    label: emp.employeeName || emp.employeeId || String(emp._id),
+  }));
+
+  // Debug log to see the actual data
+   // Comprehensive debug logging
+  useEffect(() => {
+    console.log("=== COMPREHENSIVE DEBUG ===");
+    console.log("isOpen:", isOpen);
+    console.log("eventData:", eventData);
+    console.log("formData.assignedTeamMembers:", formData.assignedTeamMembers);
+    console.log("Employees count:", employees.length);
+    console.log("Employee IDs:", employees.map(e => String(e._id)));
+    console.log("Employee options:", employeeOptions);
+    
+    if (formData.assignedTeamMembers.length > 0) {
+      const filteredOptions = employeeOptions.filter(o => 
+        formData.assignedTeamMembers.map(String).includes(String(o.value))
       );
-      console.log(
-        "EditAssignTaskModal - Valid assigned employees found:",
-        validEmployees
-      );
+      console.log("Filtered options result:", filteredOptions);
+      
+      // Check each assigned member
+      formData.assignedTeamMembers.forEach(memberId => {
+        const found = employees.find(e => String(e._id) === String(memberId));
+        console.log(`Member ID ${memberId} found in employees:`, !!found, found ? found.employeeName : 'NOT FOUND');
+      });
     }
-  }, [employees, formData.assignedTeamMembers]);
+    console.log("=== END DEBUG ===");
+  }, [isOpen, eventData, formData.assignedTeamMembers, employees, employeeOptions]);
 
+  // Remove all the complex selectedIdsSet and selectedEmployeeOptions logic
+
+  
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
@@ -293,27 +429,22 @@ function EditAssignTaskModal({
                 />
               </div>
             </div>
+           
+
 
             <div className="input-field">
               <label className="field-label">Assign Team Members</label>
               <Select
                 isMulti
-                options={employees.map((emp) => ({
-                  value: emp._id.toString(),
-                  label: emp.employeeName,
-                }))}
-                value={employees
-                  .filter((emp) =>
-                    formData.assignedTeamMembers.includes(emp._id.toString())
-                  )
-                  .map((emp) => ({
-                    value: emp._id.toString(),
-                    label: emp.employeeName,
-                  }))}
+                options={employeeOptions}
+                value={employeeOptions.filter(o => 
+                  (formData.assignedTeamMembers || []).map(String).includes(String(o.value))
+                )}
                 onChange={(selectedOptions) => {
                   const values = selectedOptions
-                    ? selectedOptions.map((o) => o.value)
+                    ? selectedOptions.map((o) => String(o.value))
                     : [];
+                  console.log("Selected team members changed:", values);
                   handleInputChange("assignedTeamMembers", values);
                 }}
                 placeholder="Select team members..."
@@ -344,6 +475,8 @@ function EditAssignTaskModal({
                 }}
               />
             </div>
+
+            
 
             <div className="input-field">
               <label className="field-label">Add notes</label>
@@ -395,7 +528,7 @@ function EditAssignTaskModal({
             </div> */}
 
             <div className="color-selector">
-              <label className="field-label">Event Color</label>
+              <label className="field-label"></label>
               <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
                 {["#FF9500", "#007AFF", "#34C759", "#30B0C7"].map((color) => (
                   <label
@@ -459,7 +592,7 @@ function EditAssignTaskModal({
         isOpen={isDatePickerOpen}
         onClose={handleDatePickerClose}
         onSelectDate={handleDateSelect}
-        selectedDate={formData.date}
+        selectedDate={formData.date ? new Date(formData.date) : null}
       />
     </div>
   );

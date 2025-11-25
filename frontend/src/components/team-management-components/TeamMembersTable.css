@@ -322,7 +322,9 @@
 @media (max-width: 640px) {
   .table-wrapper {
     min-width: 800px;
+
   }
+  
 }
 
 .table-columns {
@@ -453,14 +455,33 @@
   gap: 16px;
 }
 
-.avatar {
+/* .avatar {
   width: 48px;
   height: 48px;
   border-radius: 59.57px;
   background-color: #606060;
   color: white;
   font-weight: 600;
+} */
+
+.avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 3.723rem;
+  background-color: #606060;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.client-profile-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 
 .companyinfo {
   display: flex;
@@ -502,11 +523,11 @@
   
 }
 
-.type-chip.onsite {
+.type-chip.active {
   background-color: #ebf9ee;
 }
 
-.type-chip.leave {
+.type-chip.inactive {
   background-color: #eaf2fd;
 }
 
@@ -517,11 +538,11 @@
     sans-serif;
 }
 
-.type-chip.onsite .chip-text {
+.type-chip.active .chip-text {
   color: #258d3f;
 }
 
-.type-chip.leave .chip-text {
+.type-chip.inactive .chip-text {
   color: #006fe8;
 }
 

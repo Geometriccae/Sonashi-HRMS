@@ -86,7 +86,7 @@ const CalendarComponent = ({ clientId, key: calendarKey }) => {
             eventType: event.eventType,
             notes: event.notes,
             link: event.link,
-            assignedTeamMember: event.assignedTeamMember
+            assignedTeamMembers: event.assignedTeamMembers
           };
         });
 
@@ -269,7 +269,7 @@ const CalendarComponent = ({ clientId, key: calendarKey }) => {
             eventType: event.eventType,
             notes: event.notes,
             link: event.link,
-            assignedTeamMember: event.assignedTeamMember
+            assignedTeamMembers: event.assignedTeamMembers
           };
         });
         setEvents(transformedEvents);
@@ -307,7 +307,7 @@ const CalendarComponent = ({ clientId, key: calendarKey }) => {
               eventType: event.eventType,
               notes: event.notes,
               link: event.link,
-              assignedTeamMember: event.assignedTeamMember
+              assignedTeamMembers: event.assignedTeamMembers
             };
           });
           setEvents(transformedEvents);
@@ -523,16 +523,16 @@ const CalendarComponent = ({ clientId, key: calendarKey }) => {
             <div className="modal-body">
               <div className="meeting-title">{selectedMeeting.title}</div>
               <div className="meeting-notes">{selectedMeeting.notes || 'No Notes Added'}</div>
-              {/* {selectedMeeting.link && (
+              {selectedMeeting.link && (
                 <div className="meeting-link">
                   <a href={selectedMeeting.link} target="_blank" rel="noopener noreferrer">
                     {selectedMeeting.link}
                   </a>
                 </div>
-              )} */}
-              {selectedMeeting.assignedTeamMember && (
-                <div className="meeting-member">Assigned to: {selectedMeeting.assignedTeamMember}</div>
               )}
+              {/* {selectedMeeting.assignedTeamMembers && (
+                <div className="meeting-member">Assigned to: {selectedMeeting.assignedTeamMembers}</div>
+              )} */}
             </div>
             <div className="color-selector">
               <div className="color-option active" style={{ backgroundColor: '#FF9500' }} />

@@ -45,7 +45,8 @@ export const exportClientBasicInfo = (clientData) => {
   
   const data = [{
     'Company Name': clientData.companyName || 'Not provided',
-    'Client Type': clientData.type || 'Not provided',
+    'Client Type': clientData.clientType || 'Not provided',
+    'Lead Type': clientData.leadType || 'Not provided',
     'Email': clientData.email || 'Not provided',
     'Phone': clientData.phone || 'Not provided',
     'Primary Contact': clientData.primaryContactName || 'Not provided',
