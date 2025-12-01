@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import styles from "./SalesLeadsDualGraph.module.css";
 import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import smile_emoji from "../../assets/dashboard/bxs_smile.svg";
@@ -125,6 +125,11 @@ export default function SalesLeadsDualGraph({ clients = [], isLoading = false })
   const [selectedUser, setSelectedUser] = useState("");
   const [userRole, setUserRole] = useState("");
 
+  // Dynamic Width State
+  const containerRef = useRef(null);
+  const [chartWidth, setChartWidth] = useState(821); // Default desktop width
+  const [containerWidth, setContainerWidth] = useState(1017);
+
   useEffect(() => {
     const role = localStorage.getItem("role");
     setUserRole(role);
@@ -133,6 +138,39 @@ export default function SalesLeadsDualGraph({ clients = [], isLoading = false })
         .then(setUsers)
         .catch(err => console.error("Failed to fetch users for filter:", err));
     }
+  }, []);
+
+  // Resize Observer to handle dynamic width
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.offsetWidth;
+        setContainerWidth(width);
+        // Calculate chart width based on container padding/layout
+        // Desktop: left padding ~129px, right padding ~67px -> total ~196px
+        // Mobile: smaller margins
+        const isMobile = width < 768;
+        const leftMargin = isMobile ? 40 : 129;
+        const rightMargin = isMobile ? 20 : 67;
+        const availableWidth = Math.max(100, width - leftMargin - rightMargin);
+        setChartWidth(availableWidth);
+      }
+    };
+
+    // Initial calculation
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    window.addEventListener('resize', updateWidth);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
   }, []);
 
   // Filter clients based on selected employee
@@ -169,16 +207,16 @@ export default function SalesLeadsDualGraph({ clients = [], isLoading = false })
   const percentageB = calculatePercentageChange(data.b);
 
   // Chart dimensions
-  // Increased height and adjusted top position
-  const chartWidth = 821;
   const chartHeight = 300; 
   const chartTop = 200;
-  const chartLeft = 129;
+  // Dynamic left position based on width
+  const isMobile = containerWidth < 768;
+  const chartLeft = isMobile ? 40 : 129;
   
   const maxVal = Math.max(...data.a, ...data.b, 1);
   
-  const pathA = useMemo(() => generateSmoothPath(data.a, chartWidth, chartHeight, maxVal), [data.a, maxVal, chartHeight]);
-  const pathB = useMemo(() => generateSmoothPath(data.b, chartWidth, chartHeight, maxVal), [data.b, maxVal, chartHeight]);
+  const pathA = useMemo(() => generateSmoothPath(data.a, chartWidth, chartHeight, maxVal), [data.a, maxVal, chartHeight, chartWidth]);
+  const pathB = useMemo(() => generateSmoothPath(data.b, chartWidth, chartHeight, maxVal), [data.b, maxVal, chartHeight, chartWidth]);
 
   const currentTooltipData = useMemo(() => {
     const index = hoverIndex !== null ? hoverIndex : data.a.length - 1;
@@ -202,10 +240,10 @@ export default function SalesLeadsDualGraph({ clients = [], isLoading = false })
   };
 
   return (
-    <div className={styles.conversionDataContainer}>
+    <div className={styles.conversionDataContainer} ref={containerRef}>
       {/* Background glow effect */}
       <div className={styles.backgroundGlow}>
-        <svg width="492" height="242" viewBox="0 0 860 484" fill="none">
+        <svg width="100%" height="100%" viewBox="0 0 860 484" fill="none" preserveAspectRatio="none">
           <g opacity="0.4">
             <g opacity="0.45" filter="url(#filter0_f_bg)">
               <ellipse cx="617" cy="134.488" rx="246" ry="121" fill="#FDE8AE" />
@@ -266,9 +304,9 @@ export default function SalesLeadsDualGraph({ clients = [], isLoading = false })
             <option>Sales/Revenue</option>
             <option>Leads Pipeline</option>
           </select>
-          <button className={styles.actionButton}>
+          {/* <button className={styles.actionButton}>
             <img src={arrowupright} alt="arrow up right" />
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -302,98 +340,98 @@ export default function SalesLeadsDualGraph({ clients = [], isLoading = false })
         </div>
       </div>
 
-      {/* Y-axis labels */}
-      <div className={styles.yAxisLabels} style={{ height: chartHeight, top: chartTop }}>
-        <span className={styles.yAxisLabel}>{Math.round(maxVal)}</span>
-        <span className={styles.yAxisLabel}>{Math.round(maxVal / 2)}</span>
-        <span className={styles.yAxisLabel}>0</span>
-      </div>
-
-      {/* Horizontal grid lines */}
-      <div className={styles.gridLine} style={{ top: `${chartTop}px` }}></div>
-      <div className={styles.gridLine} style={{ top: `${chartTop + (chartHeight/2)}px` }}></div>
-      <div className={styles.gridLine} style={{ top: `${chartTop + chartHeight}px` }}></div>
-
-      {/* Chart Area */}
-      <div 
-        className={styles.chartContainer} 
-        style={{ 
-          position: 'absolute', 
-          top: `${chartTop}px`, 
-          left: `${chartLeft}px`, 
-          width: `${chartWidth}px`, 
-          height: `${chartHeight}px`, 
-          zIndex: 10 
-        }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-      >
-        {/* Chart background */}
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-          <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" fill="none">
-            <path
-              d={`${pathA.d} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`}
-              fill="url(#paint0_linear_chart)"
-              opacity="0.5"
-            />
-            <defs>
-              <linearGradient
-                id="paint0_linear_chart"
-                x1={chartWidth / 2}
-                y1="0"
-                x2={chartWidth / 2}
-                y2={chartHeight}
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stopColor="#CFD5FF" />
-                <stop offset="1" stopColor="#CFD5FF" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-          </svg>
+      {/* Chart Section Wrapper */}
+      <div className={styles.chartSectionWrapper}>
+        {/* Y-axis labels */}
+        <div className={styles.yAxisLabels} style={{ height: chartHeight }}>
+          <span className={styles.yAxisLabel}>{Math.round(maxVal)}</span>
+          <span className={styles.yAxisLabel}>{Math.round(maxVal / 2)}</span>
+          <span className={styles.yAxisLabel}>0</span>
         </div>
 
-        {/* Chart lines */}
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-          <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" fill="none">
-            <path d={pathA.d} stroke="#334AFA" strokeWidth="3" strokeLinecap="round" fill="none" />
-          </svg>
-        </div>
+        {/* Chart Area */}
+        <div 
+          className={styles.chartContainer} 
+          style={{ 
+            width: `${chartWidth}px`, 
+            height: `${chartHeight}px`,
+            marginLeft: isMobile ? '40px' : '129px'
+          }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
+          {/* Horizontal grid lines */}
+          <div className={styles.gridLine} style={{ top: 0, width: '100%' }}></div>
+          <div className={styles.gridLine} style={{ top: '50%', width: '100%' }}></div>
+          <div className={styles.gridLine} style={{ top: '100%', width: '100%' }}></div>
 
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-          <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" fill="none">
-            <path d={pathB.d} stroke="#06b6d4" strokeWidth="3" strokeLinecap="round" fill="none" />
-          </svg>
-        </div>
-
-        {/* Data Points A */}
-        {pathA.coords && pathA.coords.map((coord, i) => (
-          <div key={`a-${i}`} style={{ position: 'absolute', left: `${(coord.x / chartWidth) * 100}%`, top: `${(coord.y / chartHeight) * 100}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-              <circle cx="4" cy="4" r="4" fill="#334AFA" />
+          {/* Chart background */}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+            <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" fill="none">
+              <path
+                d={`${pathA.d} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`}
+                fill="url(#paint0_linear_chart)"
+                opacity="0.5"
+              />
+              <defs>
+                <linearGradient
+                  id="paint0_linear_chart"
+                  x1={chartWidth / 2}
+                  y1="0"
+                  x2={chartWidth / 2}
+                  y2={chartHeight}
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop stopColor="#CFD5FF" />
+                  <stop offset="1" stopColor="#CFD5FF" stopOpacity="0" />
+                </linearGradient>
+              </defs>
             </svg>
           </div>
-        ))}
 
-        {/* Data Points B */}
-        {pathB.coords && pathB.coords.map((coord, i) => (
-          <div key={`b-${i}`} style={{ position: 'absolute', left: `${(coord.x / chartWidth) * 100}%`, top: `${(coord.y / chartHeight) * 100}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-              <circle cx="4" cy="4" r="4" fill="#06b6d4" />
+          {/* Chart lines */}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+            <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" fill="none">
+              <path d={pathA.d} stroke="#334AFA" strokeWidth="3" strokeLinecap="round" fill="none" />
             </svg>
           </div>
-        ))}
 
-        {/* Hover Indicator */}
-        {hoverIndex !== null && pathA.coords && pathA.coords[hoverIndex] && (
-           <div style={{ position: 'absolute', left: `${(pathA.coords[hoverIndex].x / chartWidth) * 100}%`, top: 0, height: '100%', width: '2px', backgroundColor: 'rgba(0,0,0,0.1)', pointerEvents: 'none' }} />
-        )}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+            <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" fill="none">
+              <path d={pathB.d} stroke="#06b6d4" strokeWidth="3" strokeLinecap="round" fill="none" />
+            </svg>
+          </div>
+
+          {/* Data Points A */}
+          {pathA.coords && pathA.coords.map((coord, i) => (
+            <div key={`a-${i}`} style={{ position: 'absolute', left: `${(coord.x / chartWidth) * 100}%`, top: `${(coord.y / chartHeight) * 100}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                <circle cx="4" cy="4" r="4" fill="#334AFA" />
+              </svg>
+            </div>
+          ))}
+
+          {/* Data Points B */}
+          {pathB.coords && pathB.coords.map((coord, i) => (
+            <div key={`b-${i}`} style={{ position: 'absolute', left: `${(coord.x / chartWidth) * 100}%`, top: `${(coord.y / chartHeight) * 100}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                <circle cx="4" cy="4" r="4" fill="#06b6d4" />
+              </svg>
+            </div>
+          ))}
+
+          {/* Hover Indicator */}
+          {hoverIndex !== null && pathA.coords && pathA.coords[hoverIndex] && (
+             <div style={{ position: 'absolute', left: `${(pathA.coords[hoverIndex].x / chartWidth) * 100}%`, top: 0, height: '100%', width: '2px', backgroundColor: 'rgba(0,0,0,0.1)', pointerEvents: 'none' }} />
+          )}
+        </div>
       </div>
 
       {/* Fade gradient overlay */}
       <div className={styles.fadeOverlay}></div>
 
       {/* Legend - Moved to bottom */}
-      <div className={styles.legend}>
+      <div className={styles.legend} style={{ marginLeft: isMobile ? '40px' : '129px' }}>
         <div className={styles.legendItem}>
           <div className={styles.legendDotA}></div>
           <span>{data.legendA}</span>

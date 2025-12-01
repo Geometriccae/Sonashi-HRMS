@@ -276,6 +276,11 @@ function ImportCsvModal({ isOpen, onClose, onComplete }) {
     onClose && onClose();
   };
 
+  const downloadTemplateOption = () => {
+  const fileUrl = `${process.env.REACT_APP_API_URL}/uploads/template/client_import_template.xlsx`;
+  window.open(fileUrl, "_blank");
+};
+
   const downloadTemplate = () => {
     const headers = [...requiredColumns, ...optionalColumns];
     const exampleRow = headers.map(header => {
@@ -428,13 +433,23 @@ function ImportCsvModal({ isOpen, onClose, onComplete }) {
 
         {/* Footer Actions */}
         <div className="import-modal-footer">
-          <button 
+          {/* <button 
             type="button" 
             onClick={downloadTemplate} 
             className="btn btn-outline"
           >
             Download Template
+          </button> */}
+
+          <button 
+              type="button" 
+              onClick={downloadTemplateOption} 
+              className="btn btn-outline"
+              style={{ borderColor: '#10b981', color: '#059669' }}
+            >
+              Download Template
           </button>
+
           <div className="action-buttons">
             <button 
               type="button" 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 const Attendance = require('../models/Attendance');
+const Employee = require('../models/Employee');
 
 function toStartOfDay(d) {
   const x = new Date(d);
@@ -20,6 +21,12 @@ router.post('/', authMiddleware, async (req, res) => {
       update,
       { upsert: true, new: true, runValidators: true }
     );
+
+    // Sync with Employee model
+    console.log(`[Attendance] Syncing Employee ${employeeId} status to ${status}`);
+    const updatedEmp = await Employee.findByIdAndUpdate(employeeId, { attendance: status }, { new: true });
+    console.log(`[Attendance] Employee ${employeeId} updated. New status: ${updatedEmp?.attendance}`);
+
     res.status(201).json(record);
   } catch (e) {
     res.status(400).json({ message: e.message });

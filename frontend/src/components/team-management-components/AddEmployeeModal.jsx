@@ -178,32 +178,38 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     { value: "InActive", label: "InActive" },
   ];
 
-  const departmentOptions = [
+ const departmentOptions = [
     { value: "", label: "-Select-" },
-    { value: "Operations", label: "Operations" },
-    { value: "Sales", label: "Sales" },
-    { value: "Marketing", label: "Marketing" },
+    { value: "Bulk Sales", label: "Bulk Sales" },
+    { value: "Bulk Operations", label: "Bulk Operations" },
+    { value: "Project Sales", label: "Project Sales" },
+    { value: "Project Operations", label: "Project Operations" },
     { value: "HR", label: "HR" },
     { value: "Finance", label: "Finance" },
     { value: "IT", label: "IT" },
     { value: "Logistics", label: "Logistics" },
     { value: "Customer Service", label: "Customer Service" },
-  ];
+];
 
   const roleOptions = [
     { value: "", label: "-Select-" },
-    { value: "Operations Manager", label: "Operations Manager" },
+    { value: "Managing Director", label: "Managing Director" },
+    { value: "Director", label: "Director" },
+    { value: "Business Development Manager", label: "Business Development Manager" },
     { value: "Sales Executive", label: "Sales Executive" },
+    { value: "Operations Manager", label: "Operations Manager" },
+    { value: "Operations Executive", label: "Operations Executive" },
+    { value: "Pricing Manager", label: "Pricing Manager" },
+    { value: "Pricing Executive", label: "Pricing Executive" },
     { value: "Logistics Coordinator", label: "Logistics Coordinator" },
     { value: "Account Manager", label: "Account Manager" },
     { value: "HR Manager", label: "HR Manager" },
-    { value: "Finance Analyst", label: "Finance Analyst" },
     { value: "IT Specialist", label: "IT Specialist" },
     {
       value: "Customer Service Representative",
       label: "Customer Service Representative",
     },
-  ];
+];
 
   const clientOptions = clients.map((client) => ({
     value: client._id,

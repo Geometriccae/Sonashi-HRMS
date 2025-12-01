@@ -14,6 +14,7 @@ class EmployeeService {
     }
 
     this.baseURL = `${baseURL}/employees`;
+    this.attendanceURL = `${baseURL}/attendance`;
     console.log('EmployeeService initialized with baseURL:', this.baseURL);
   }
 
@@ -54,7 +55,7 @@ class EmployeeService {
   // Get single employee by ID
   async getEmployee(id) {
     try {
-       console.log('get one employee', this.baseURL);
+      console.log('get one employee', this.baseURL);
       const response = await fetch(`${this.baseURL}/${id}`, {
         method: 'GET',
         headers: this.getAuthHeaders(),
@@ -134,9 +135,41 @@ class EmployeeService {
   // Delete employee
   async deleteEmployee(id) {
     try {
+      console.log(`[EmployeeService] Deleting employee ${id}...`);
       const response = await fetch(`${this.baseURL}/${id}`, {
         method: 'DELETE',
         headers: this.getAuthHeaders(),
+      });
+
+      console.log(`[EmployeeService] Delete response status: ${response.status}`);
+
+      if (!response.ok) {
+        const text = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(text);
+        } catch (e) {
+          console.error(`[EmployeeService] Failed to parse error JSON. Body:`, text.substring(0, 200));
+          errorData = { message: `HTTP error! status: ${response.status}. Response is not JSON.` };
+        }
+        console.error(`[EmployeeService] Delete failed:`, errorData);
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      throw error;
+    }
+  }
+
+  // Bulk delete employees
+  async bulkDeleteEmployees(ids) {
+    try {
+      const response = await fetch(`${this.baseURL}/bulk-delete`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ ids }),
       });
 
       if (!response.ok) {
@@ -146,7 +179,7 @@ class EmployeeService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error deleting employee:', error);
+      console.error('Error bulk deleting employees:', error);
       throw error;
     }
   }
@@ -264,10 +297,15 @@ class EmployeeService {
 
   async updateEmployeeAttendance(id, attendanceStatus) {
     try {
-      const response = await fetch(`${this.baseURL}/${id}/attendance`, {
-        method: 'PATCH',
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(this.attendanceURL, {
+        method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify({ attendance: attendanceStatus }),
+        body: JSON.stringify({
+          employeeId: id,
+          date: today,
+          status: attendanceStatus
+        }),
       });
 
       if (!response.ok) {
@@ -275,7 +313,14 @@ class EmployeeService {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      return {
+        ...data,
+        employee: {
+          _id: id,
+          attendance: attendanceStatus
+        }
+      };
     } catch (error) {
       console.error('Error updating employee attendance:', error);
       throw error;

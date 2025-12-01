@@ -9,6 +9,7 @@ import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
 import config from "../../config/config";
 import { io as ioClient } from "socket.io-client";
+import { useToast } from "../../context/ToastContext";
 
 // SVG Components (reusing from ClientsTable)
 const UserPlusIcon = () => (
@@ -124,6 +125,7 @@ const DeleteIcon = () => (
 );
 
 function TeamMembersTable() {
+  const { showToast } = useToast();
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -131,6 +133,7 @@ function TeamMembersTable() {
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
   const [employeeToEdit, setEmployeeToEdit] = useState(null);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [employees, setEmployees] = useState([]);
@@ -197,6 +200,25 @@ function TeamMembersTable() {
     }
   };
 
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allIds = paginatedData.map(e => e._id || e.id);
+      setSelectedEmployeeIds(allIds);
+    } else {
+      setSelectedEmployeeIds([]);
+    }
+  };
+
+  const handleSelectEmployee = (id) => {
+    setSelectedEmployeeIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(eId => eId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
   const handleEdit = (employee) => {
     setEmployeeToEdit(employee);
     setIsEditEmployeeModalOpen(true);
@@ -210,13 +232,23 @@ function TeamMembersTable() {
   const handleDeleteConfirm = async () => {
     try {
       if (memberToDelete) {
+        // Single delete
         await employeeService.deleteEmployee(memberToDelete._id || memberToDelete.id);
-        // Refresh the employees list
-        await fetchEmployees();
+        showToast(`${memberToDelete.employeeName} has been deleted.`, 'success');
+      } else if (selectedEmployeeIds.length > 0) {
+        // Bulk delete
+        await employeeService.bulkDeleteEmployees(selectedEmployeeIds);
+        showToast(`${selectedEmployeeIds.length} employees have been deleted.`, 'success');
+        setSelectedEmployeeIds([]);
       }
+      
+      // Refresh the employees list
+      await fetchEmployees();
     } catch (err) {
-      console.error("Error deleting employee:", err);
-      setError("Failed to delete employee. Please try again.");
+      console.error("Error deleting employee(s):", err);
+      const errorMsg = err.message || "Unknown error";
+      setError(`Failed to delete: ${errorMsg}`);
+      showToast(`Failed to delete: ${errorMsg}`, 'error');
     } finally {
       setIsDeleteModalOpen(false);
       setMemberToDelete(null);
@@ -253,17 +285,12 @@ function TeamMembersTable() {
       await fetchEmployees();
 
       // Show success notification
-      if (window.appNotifications) {
-        window.appNotifications.push({
-          type: 'success',
-          title: 'Employee Added',
-          message: `${formData.employeeName} has been successfully added.`
-        });
-      }
+      showToast(`${formData.employeeName} has been successfully added.`, 'success');
     } catch (err) {
       console.error("Error refreshing employees after add:", err);
       // Re-fetch to ensure consistency on error
       fetchEmployees();
+      showToast("Employee added, but failed to refresh list.", 'warning');
     }
   };
 
@@ -271,8 +298,10 @@ function TeamMembersTable() {
     try {
       // Refresh the employees list after editing
       await fetchEmployees();
+      showToast("Employee details updated successfully.", 'success');
     } catch (err) {
       console.error("Error refreshing employees after edit:", err);
+      showToast("Employee updated, but failed to refresh list.", 'warning');
     }
   };
 
@@ -420,6 +449,15 @@ function TeamMembersTable() {
         <div className="table-title-section">
           <h2 className="table-title">Team Members</h2>
           <div className="action-buttons">
+            {selectedEmployeeIds.length > 0 && (
+              <button 
+                className="secondary-button delete-btn" 
+                onClick={() => setIsDeleteModalOpen(true)}
+                style={{ marginRight: '10px', backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' }}
+              >
+                Delete Selected ({selectedEmployeeIds.length})
+              </button>
+            )}
             <button className="primary-button" onClick={handleAddEmployee}>
               Add Employee
               <UserPlusIcon />
@@ -483,6 +521,54 @@ function TeamMembersTable() {
           <div className="table-section">
             <div className="table-wrapper">
               <div className="table-columns" style={{ maxHeight: 480, width: '100%' }}>
+                {/* Checkbox Column */}
+                <div className="table-column checkbox-column" style={{ width: '50px', minWidth: '50px', flex: '0 0 50px' }}>
+                  <div className="table-header">
+                    <div className="table-header-cell">
+                      <div className="header-content" style={{ justifyContent: 'center' }}>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            className="hidden-checkbox"
+                            onChange={handleSelectAll}
+                            checked={paginatedData.length > 0 && selectedEmployeeIds.length === paginatedData.length}
+                          />
+                          <span className="custom-checkbox"></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  {paginatedData.map((member) => (
+                    <div key={member._id || member.id} className="table-cell checkbox-cell" style={{ justifyContent: 'center' }}>
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          className="hidden-checkbox"
+                          checked={selectedEmployeeIds.includes(member._id || member.id)}
+                          onChange={() => handleSelectEmployee(member._id || member.id)}
+                        />
+                        <span className="custom-checkbox"></span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {/* S.No Column */}
+                <div className="table-column s-no-column">
+                  <div className="table-header">
+                    <div className="table-header-cell">
+                      <div className="header-content" style={{ justifyContent: 'center' }}>
+                        <span className="header-text">S.No</span>
+                      </div>
+                    </div>
+                  </div>
+                  {paginatedData.map((member, index) => (
+                    <div key={member._id || member.id} className="table-cell s-no-cell">
+                      {(currentPageSafe - 1) * itemsPerPage + index + 1}
+                    </div>
+                  ))}
+                </div>
+
                 {/* Employee Name Column */}
                 <div className="table-column company-column">
                   <div className="table-header">
@@ -669,8 +755,10 @@ function TeamMembersTable() {
         isOpen={isDeleteModalOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
-        title={`Delete ${memberToDelete?.employeeName}?`}
-        description={`Are you sure you want to delete ${memberToDelete?.employeeName}? This action cannot be undone.`}
+        title={memberToDelete ? `Delete ${memberToDelete.employeeName}?` : `Delete ${selectedEmployeeIds.length} employees?`}
+        description={memberToDelete 
+          ? `Are you sure you want to delete ${memberToDelete.employeeName}? This action cannot be undone.` 
+          : `Are you sure you want to delete these ${selectedEmployeeIds.length} employees? This action cannot be undone.`}
       />
       
       <AddEmployeeModal

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate  } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -22,59 +22,63 @@ import AttendanceManagement from "./pages/team-management/AttendanceManagement";
 
 
 
+import { ToastProvider } from "./context/ToastContext";
+
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={
-          <Login />} />
+    <ToastProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={
+            <Login />} />
 
-        <Route path="/forgotpassword" element={<ForgotPassword/>} />
+          <Route path="/forgotpassword" element={<ForgotPassword />} />
 
-        <Route path="/dashboard" element={
-          <ProtectedRoute><Dashboard /></ProtectedRoute>
+          <Route path="/dashboard" element={
+            <ProtectedRoute><Dashboard /></ProtectedRoute>
 
-        } />
+          } />
 
-        <Route path="/salesandleadsclient/:id" element={
-          <ProtectedRoute><SalesAndLeadsClient /></ProtectedRoute>
-        } />
-        <Route path="/salesandleads" element={
-          <ProtectedRoute><SalesAndLeads /></ProtectedRoute>
-        } />
+          <Route path="/salesandleadsclient/:id" element={
+            <ProtectedRoute><SalesAndLeadsClient /></ProtectedRoute>
+          } />
+          <Route path="/salesandleads" element={
+            <ProtectedRoute><SalesAndLeads /></ProtectedRoute>
+          } />
 
-      
 
-        <Route path="/reports" element={
-          <ProtectedRoute><Reports /></ProtectedRoute>
-        } />
 
-        <Route path="/profile" element={
-          <ProtectedRoute><Profile /></ProtectedRoute>
-        } />
+          <Route path="/reports" element={
+            <ProtectedRoute><Reports /></ProtectedRoute>
+          } />
 
-        <Route path="/yourcalendar" element={
-          <ProtectedRoute><YourCalendar /></ProtectedRoute>
-        } />
+          <Route path="/profile" element={
+            <ProtectedRoute><Profile /></ProtectedRoute>
+          } />
 
-        <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
-        {/* <Route path="/addclient" element={<ProtectedRoute><AddClient /></ProtectedRoute>} /> */}
+          <Route path="/yourcalendar" element={
+            <ProtectedRoute><YourCalendar /></ProtectedRoute>
+          } />
 
-        <Route path="/teammanagement" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
-        <Route path="/teammanagement_salesleads/:id" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />
+          <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
+          {/* <Route path="/addclient" element={<ProtectedRoute><AddClient /></ProtectedRoute>} /> */}
 
-        <Route path="/attendance-management" element={<ProtectedRoute><AttendanceManagement /></ProtectedRoute>} />
+          <Route path="/teammanagement" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
+          <Route path="/teammanagement_salesleads/:id" element={<ProtectedRoute><TeamManagementSalesAndLeads /></ProtectedRoute>} />
 
-        <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+          <Route path="/attendance-management" element={<ProtectedRoute><AttendanceManagement /></ProtectedRoute>} />
 
-        <Route path="/checkin-history" element={<ProtectedRoute><CheckInHistory /></ProtectedRoute>} />
+          <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
 
-        <Route path="/venkat" element={<ProtectedRoute><Venkat /></ProtectedRoute>} />
-        <Route path="/example" element={<Example />} />
+          <Route path="/checkin-history" element={<ProtectedRoute><CheckInHistory /></ProtectedRoute>} />
 
-      </Routes>
-    </Router>
+          <Route path="/venkat" element={<ProtectedRoute><Venkat /></ProtectedRoute>} />
+          <Route path="/example" element={<Example />} />
+
+        </Routes>
+      </Router>
+    </ToastProvider>
   );
 }
 

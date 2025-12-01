@@ -139,6 +139,43 @@ async function sendClientEventEmail(to, eventData, assignedBy, clientName) {
   }
 }
 
+
+
+// Bulk delete clients (Placed before /:id routes to avoid conflict)
+router.post('/bulk-delete', authMiddleware, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'No client IDs provided' });
+    }
+
+    console.log(`Bulk deleting clients: ${ids.length} IDs provided`);
+
+    // 1. Delete related Documents
+    // We need to require the Document model if not already imported
+    const Document = require('../models/Documents');
+    const docResult = await Document.deleteMany({ clientId: { $in: ids } });
+    console.log(`Deleted ${docResult.deletedCount} related documents`);
+
+    // 2. Delete Clients (Events are embedded in Client, so they are deleted automatically)
+    const result = await Client.deleteMany({ _id: { $in: ids } });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'No clients found to delete' });
+    }
+
+    res.json({
+      message: 'Clients and related data deleted successfully',
+      deletedCount: result.deletedCount,
+      deletedDocuments: docResult.deletedCount
+    });
+  } catch (error) {
+    console.error('Error bulk deleting clients:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Get all clients
 // router.get('/', authMiddleware, async (req, res) => {
 //   try {
@@ -399,11 +436,19 @@ router.put('/:id', authMiddleware, // keep sales_executive also admin separately
 // Delete client
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    const deletedClient = await Client.findByIdAndDelete(req.params.id);
+    const clientId = req.params.id;
+
+    // 1. Delete related Documents
+    const Document = require('../models/Documents');
+    await Document.deleteMany({ clientId: clientId });
+
+    // 2. Delete Client (Events are embedded, so they go with it)
+    const deletedClient = await Client.findByIdAndDelete(clientId);
+
     if (!deletedClient) {
       return res.status(404).json({ message: 'Client not found' });
     }
-    res.json({ message: 'Client deleted successfully' });
+    res.json({ message: 'Client and related data deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting client', error: error.message });
   }
@@ -411,6 +456,198 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
 // **************************************** CreateEvent Related routes *******************
 // Add event to a client
+// router.post('/:id/events', authMiddleware, async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const eventData = req.body;
+//     const assignedBy = req.user?.username || "Admin";
+//     console.log(`?? Adding event to client ${id}`, eventData);
+
+//     const client = await Client.findById(id);
+//     if (!client) {
+//       return res.status(404).json({ message: 'Client not found' });
+//     }
+
+//     // Add assignedBy to event data
+//     const eventWithAssignedBy = { ...eventData, assignedBy };
+//     client.events.push(eventWithAssignedBy);
+
+//     // Save immediately without waiting for emails
+//     await client.save();
+//     console.log("Event saved to database");
+
+//     // Schedule reminders if any
+//     // Schedule reminders if any
+//     if (eventWithAssignedBy.reminders && eventWithAssignedBy.reminders.length > 0) {
+//       console.log('? [REMINDER DEBUG] Starting reminder scheduling...');
+//       console.log('? [REMINDER DEBUG] Reminders array:', eventWithAssignedBy.reminders);
+
+//       const deriveEventDateTime = () => {
+//         if (!eventWithAssignedBy.date) {
+//           console.log('? [REMINDER DEBUG] No event date provided');
+//           return null;
+//         }
+
+//         const normalizeDateString = (value) => {
+//           if (!value) return null;
+//           if (typeof value === 'string') {
+//             return value.split('T')[0];
+//           }
+//           if (value instanceof Date && !isNaN(value.getTime())) {
+//             return value.toISOString().split('T')[0];
+//           }
+//           return null;
+//         };
+
+//         const baseDateStr = normalizeDateString(eventWithAssignedBy.date);
+//         if (!baseDateStr) {
+//           console.log('? [REMINDER DEBUG] Could not normalize date string');
+//           return null;
+//         }
+
+//         if (eventWithAssignedBy.time) {
+//           const dateTimeStr = `${baseDateStr}T${eventWithAssignedBy.time}:00`;
+//           const result = new Date(dateTimeStr);
+//           console.log('?? [REMINDER DEBUG] Event datetime:', {
+//             inputDate: eventWithAssignedBy.date,
+//             inputTime: eventWithAssignedBy.time,
+//             constructed: dateTimeStr,
+//             parsed: result,
+//             isValid: !isNaN(result.getTime())
+//           });
+//           return result;
+//         }
+
+//         const result = new Date(baseDateStr);
+//         console.log('?? [REMINDER DEBUG] Event date only:', {
+//           inputDate: eventWithAssignedBy.date,
+//           parsed: result,
+//           isValid: !isNaN(result.getTime())
+//         });
+//         return result;
+//       };
+
+//       const eventDateTime = deriveEventDateTime();
+//       console.log('?? [REMINDER DEBUG] Final eventDateTime:', eventDateTime);
+
+//       if (!eventDateTime || isNaN(eventDateTime.getTime())) {
+//         console.log('? [REMINDER DEBUG] Invalid event datetime - skipping reminders');
+//       } else {
+//         console.log('? [REMINDER DEBUG] Valid event datetime found');
+
+//         eventWithAssignedBy.reminders.forEach(reminderMinutes => {
+//           const reminderTime = new Date(eventDateTime.getTime() - reminderMinutes * 60000);
+//           const delay = reminderTime.getTime() - Date.now();
+
+//           console.log(`? [REMINDER DEBUG] ${reminderMinutes}min reminder calculation:`, {
+//             eventTime: eventDateTime.toISOString(),
+//             reminderTime: reminderTime.toISOString(),
+//             currentTime: new Date().toISOString(),
+//             delayMs: delay,
+//             delayMinutes: Math.round(delay / 60000),
+//             willSchedule: delay > 0 ? 'YES' : 'NO'
+//           });
+
+//           if (delay > 0) {
+//             console.log(`? [REMINDER DEBUG] Scheduling ${reminderMinutes}min reminder with ${delay}ms delay`);
+//             setTimeout(() => {
+//               console.log(`?? [REMINDER DEBUG] TIMEOUT FIRED for ${reminderMinutes}min reminder!`);
+
+//               const io = req.app.get('io');
+//               if (io) {
+//                 const eventId = client.events[client.events.length - 1]._id;
+//                 const reminderPayload = {
+//                   id: `event-reminder-${eventId}-${reminderMinutes}`,
+//                   type: 'event-reminder',
+//                   title: `Reminder: ${eventWithAssignedBy.eventName}`,
+//                   body: `Event in ${reminderMinutes} minutes`,
+//                   meta: { eventId: eventId, event: eventWithAssignedBy, reminderMinutes },
+//                   url: `/clients/${client._id}/events`,
+//                   timestamp: new Date()
+//                 };
+
+//                 console.log('?? [REMINDER DEBUG] Emitting reminder payload:', reminderPayload);
+
+//                 // Emit to assigned members and creator
+//                 const recipients = [...(eventWithAssignedBy.assignedTeamMembers || []), req.user.id].filter((v, i, a) => a.indexOf(v) === i);
+//                 console.log('?? [REMINDER DEBUG] Sending to recipients:', recipients);
+
+//                 // Broadcast first
+//                 io.emit('event-reminder', reminderPayload);
+
+//                 // Then target specific users
+//                 recipients.forEach(userId => {
+//                   console.log(`?? [REMINDER DEBUG] Sending to user-${userId}`);
+//                   io.to(`user-${userId}`).emit('notification', reminderPayload);
+//                   io.to(`user-${userId}`).emit('event-reminder', reminderPayload);
+//                 });
+//               } else {
+//                 console.log('? [REMINDER DEBUG] Socket.io not available');
+//               }
+//             }, delay);
+//           } else {
+//             console.log(`? [REMINDER DEBUG] ${reminderMinutes}min reminder SKIPPED - negative delay`);
+//           }
+//         });
+//       }
+//     } else {
+//       console.log('?? [REMINDER DEBUG] No reminders to schedule');
+//     }
+
+//     // Send response first for better UX
+//     res.status(201).json({
+//       message: 'Event added successfully',
+//       client
+//     });
+
+//     // Emit socket notification to connected clients
+//     try {
+//       const io = req.app.get('io');
+//       if (io) {
+//         const payload = {
+//           id: `client-event-${client._id}-${Date.now()}`,
+//           type: 'client-event',
+//           title: 'New Client Event',
+//           body: `${eventData.eventName || 'An event'} was added for ${client.companyName || 'a client'}`,
+//           meta: { clientId: client._id, eventId: client.events[client.events.length - 1]._id, event: eventWithAssignedBy },
+//           timestamp: new Date()
+//         };
+
+//         // Broadcast (existing)
+//         io.emit('notification', payload);
+//         console.log('Emitted client event notification to all (broadcast)');
+
+//         // Targeted emit to sockets that joined this specific client page
+//         try {
+//           io.to(`client-${client._id}`).emit('client-event', payload);
+//           console.log(`Emitted client-event to room client-${client._id}`);
+//         } catch (roomErr) {
+//           console.warn(`Failed to emit client-event to room client-${client._id}:`, roomErr);
+//         }
+
+//         // persist broadcast for sales_executive role so offline users get it
+//         const eventNotice = new Notification({
+//           title: payload.title,
+//           body: payload.body,
+//           payload,
+//           role: 'sales_executive'
+//         });
+//         await eventNotice.save();
+//       }
+//     } catch (emitErr) {
+//       console.error('Error emitting socket notification for client event:', emitErr);
+//     }
+
+//     // Send emails in background (non-blocking)
+//     sendEventEmailsInBackground(eventData, assignedBy, client)
+//       .then(() => console.log("Background email process completed"))
+//       .catch(err => console.error("Background email process failed:", err));
+//   } catch (error) {
+//     console.error("Error adding event:", error);
+//     res.status(400).json({ message: 'Error adding event', error: error.message });
+//   }
+// });
+
 router.post('/:id/events', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -433,18 +670,33 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
 
     // Schedule reminders if any
     if (eventWithAssignedBy.reminders && eventWithAssignedBy.reminders.length > 0) {
-      // Handle date properly - it might be a string or Date object
-      let eventDateTime;
-      if (eventWithAssignedBy.time) {
-        // If time is provided, combine date and time
-        const dateStr = typeof eventWithAssignedBy.date === 'string' ? eventWithAssignedBy.date : eventWithAssignedBy.date.toISOString().split('T')[0];
-        eventDateTime = new Date(`${dateStr}T${eventWithAssignedBy.time}:00`);
-      } else {
-        // Use date directly
-        eventDateTime = typeof eventWithAssignedBy.date === 'string' ? new Date(eventWithAssignedBy.date) : eventWithAssignedBy.date;
-      }
+      const deriveEventDateTime = () => {
+        if (!eventWithAssignedBy.date) return null;
+
+        const normalizeDateString = (value) => {
+          if (!value) return null;
+          if (typeof value === 'string') {
+            return value.split('T')[0];
+          }
+          if (value instanceof Date && !isNaN(value.getTime())) {
+            return value.toISOString().split('T')[0];
+          }
+          return null;
+        };
+
+        const baseDateStr = normalizeDateString(eventWithAssignedBy.date);
+        if (!baseDateStr) return null;
+
+        if (eventWithAssignedBy.time) {
+          return new Date(`${baseDateStr}T${eventWithAssignedBy.time}:00`);
+        }
+        return new Date(baseDateStr);
+      };
+
+      const eventDateTime = deriveEventDateTime();
 
       eventWithAssignedBy.reminders.forEach(reminderMinutes => {
+        if (!eventDateTime || isNaN(eventDateTime.getTime())) return;
         const reminderTime = new Date(eventDateTime.getTime() - reminderMinutes * 60000);
         const delay = reminderTime.getTime() - Date.now();
         if (delay > 0) {
@@ -577,6 +829,56 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
     sendEventEmailsInBackground(updatedData, assignedBy, client)
       .then(() => console.log("Background email process completed"))
       .catch(err => console.error("Background email process failed:", err));
+
+    // ? Reschedule Reminders (Add new setTimeouts)
+    if (updatedData.reminders && updatedData.reminders.length > 0) {
+      const deriveEventDateTime = () => {
+        if (!updatedData.date) return null;
+        const normalizeDateString = (value) => {
+          if (!value) return null;
+          if (typeof value === 'string') return value.split('T')[0];
+          if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString().split('T')[0];
+          return null;
+        };
+        const baseDateStr = normalizeDateString(updatedData.date);
+        if (!baseDateStr) return null;
+        if (updatedData.time) return new Date(`${baseDateStr}T${updatedData.time}:00`);
+        return new Date(baseDateStr);
+      };
+
+      const eventDateTime = deriveEventDateTime();
+
+      updatedData.reminders.forEach(reminderMinutes => {
+        if (!eventDateTime || isNaN(eventDateTime.getTime())) return;
+        const reminderTime = new Date(eventDateTime.getTime() - reminderMinutes * 60000);
+        const delay = reminderTime.getTime() - Date.now();
+
+        if (delay > 0) {
+          setTimeout(() => {
+            const io = req.app.get('io');
+            if (io) {
+              const reminderPayload = {
+                id: `event-reminder-${eventId}-${reminderMinutes}-${Date.now()}`,
+                type: 'event-reminder',
+                title: `Reminder: ${updatedData.eventName}`,
+                body: `Event in ${reminderMinutes} minutes`,
+                meta: { eventId: eventId, event: updatedData, reminderMinutes },
+                url: `/clients/${client._id}/events`,
+                timestamp: new Date()
+              };
+              io.emit('event-reminder', reminderPayload);
+              // Emit to assigned members and creator
+              const recipients = [...(updatedData.assignedTeamMembers || []), req.user.id].filter((v, i, a) => a.indexOf(v) === i);
+              recipients.forEach(userId => {
+                io.to(`user-${userId}`).emit('notification', reminderPayload);
+                io.to(`user-${userId}`).emit('event-reminder', reminderPayload);
+              });
+            }
+          }, delay);
+        }
+      });
+    }
+
   } catch (error) {
     console.error("Error updating event:", error);
     res.status(500).json({ message: 'Error updating event', error: error.message });
@@ -598,7 +900,7 @@ router.delete('/:id/events/:eventId', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all events across all clients
+
 router.get('/events', authMiddleware, async (req, res) => {
   try {
     const clients = await Client.find({}, { companyName: 1, events: 1 }).lean();

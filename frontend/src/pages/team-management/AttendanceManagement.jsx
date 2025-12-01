@@ -28,6 +28,11 @@ function AttendanceManagement() {
   const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
   const [summaryData, setSummaryData] = useState([]);
 
+  // Pagination State
+  const [empPage, setEmpPage] = useState(1);
+  const [reportPage, setReportPage] = useState(1);
+  const itemsPerPage = 10;
+
   useEffect(() => {
     const loadEmployees = async () => {
       setLoadingEmployees(true);
@@ -111,6 +116,7 @@ function AttendanceManagement() {
   const fetchReport = async () => {
     setReportLoading(true);
     setReportError("");
+    setReportPage(1); // Reset to first page on new fetch
     try {
       if (!startDate || !endDate) {
         throw new Error("Please select start and end dates");
@@ -216,6 +222,15 @@ function AttendanceManagement() {
     document.body.removeChild(link);
   };
 
+  // Pagination Logic
+  const empStartIndex = (empPage - 1) * itemsPerPage;
+  const currentEmployees = employees.slice(empStartIndex, empStartIndex + itemsPerPage);
+  const empTotalPages = Math.ceil(employees.length / itemsPerPage);
+
+  const reportStartIndex = (reportPage - 1) * itemsPerPage;
+  const currentReportData = reportData.slice(reportStartIndex, reportStartIndex + itemsPerPage);
+  const reportTotalPages = Math.ceil(reportData.length / itemsPerPage);
+
   return (
     <div className={styles["dashboard-layout"]}>
       <Side />
@@ -268,6 +283,7 @@ function AttendanceManagement() {
             <table className={styles["table"]}>
               <thead>
                 <tr>
+                  <th>S.No</th>
                   <th>Name</th>
                   <th>Department</th>
                   <th>Role</th>
@@ -279,15 +295,16 @@ function AttendanceManagement() {
               <tbody>
                 {loadingEmployees ? (
                   <tr>
-                    <td colSpan="6" className={styles["center"]}>Loading employees...</td>
+                    <td colSpan="7" className={styles["center"]}>Loading employees...</td>
                   </tr>
                 ) : employees.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className={styles["center"]}>No employees found</td>
+                    <td colSpan="7" className={styles["center"]}>No employees found</td>
                   </tr>
                 ) : (
-                  employees.map((emp) => (
+                  currentEmployees.map((emp, index) => (
                     <tr key={emp._id}>
+                      <td>{empStartIndex + index + 1}</td>
                       <td style={{ fontWeight: 500 }}>{emp.employeeName}</td>
                       <td>{emp.department}</td>
                       <td>{emp.role}</td>
@@ -333,6 +350,26 @@ function AttendanceManagement() {
               </tbody>
             </table>
           </div>
+          {/* Pagination Controls for Employees */}
+          {empTotalPages > 1 && (
+            <div className={styles["pagination"]}>
+              <button 
+                disabled={empPage === 1} 
+                onClick={() => setEmpPage(p => p - 1)}
+                className={styles["page-btn"]}
+              >
+                Previous
+              </button>
+              <span>Page {empPage} of {empTotalPages}</span>
+              <button 
+                disabled={empPage === empTotalPages} 
+                onClick={() => setEmpPage(p => p + 1)}
+                className={styles["page-btn"]}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Attendance Report */}
@@ -401,6 +438,7 @@ function AttendanceManagement() {
             <table className={styles["table"]}>
               <thead>
                 <tr>
+                  <th>S.No</th>
                   <th>Employee</th>
                   <th>Date</th>
                   <th>Status</th>
@@ -411,15 +449,16 @@ function AttendanceManagement() {
               <tbody>
                 {reportLoading ? (
                   <tr>
-                    <td colSpan="5" className={styles["center"]}>Loading report...</td>
+                    <td colSpan="6" className={styles["center"]}>Loading report...</td>
                   </tr>
                 ) : reportData.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className={styles["center"]}>No data found for this range</td>
+                    <td colSpan="6" className={styles["center"]}>No data found for this range</td>
                   </tr>
                 ) : (
-                  reportData.map((item) => (
+                  currentReportData.map((item, index) => (
                     <tr key={item._id}>
+                      <td>{reportStartIndex + index + 1}</td>
                       <td style={{ fontWeight: 500 }}>{item.employee?.employeeName || item.employeeName || '-'}</td>
                       <td>{formatDate(item.date)}</td>
                       <td>
@@ -435,6 +474,26 @@ function AttendanceManagement() {
               </tbody>
             </table>
           </div>
+          {/* Pagination Controls for Report */}
+          {reportTotalPages > 1 && (
+            <div className={styles["pagination"]}>
+              <button 
+                disabled={reportPage === 1} 
+                onClick={() => setReportPage(p => p - 1)}
+                className={styles["page-btn"]}
+              >
+                Previous
+              </button>
+              <span>Page {reportPage} of {reportTotalPages}</span>
+              <button 
+                disabled={reportPage === reportTotalPages} 
+                onClick={() => setReportPage(p => p + 1)}
+                className={styles["page-btn"]}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </section>
 
         <section className={styles["section"]}>

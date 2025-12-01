@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 const path = require('path');
 const http = require('http');
+const frontendPath = path.join(__dirname, '../frontend/build');
 
 console.log('=== ENVIRONMENT VARIABLES ===');
 console.log('MONGO_URI:', process.env.MONGO_URI ? 'SET' : 'NOT SET');
@@ -27,16 +28,31 @@ const PORT = process.env.PORT || 5000;
 
 // ====== SOCKET.IO CONFIGURATION ======
 const { Server } = require("socket.io");
-const allowedOrigins = [
+// allow configuring frontend origin from env (useful for live VPS deploys)
+const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim(); // set this to your live frontend origin (eg https://app.example.com)
+let allowedOrigins = [
   "https://auxin-mern-app-front.onrender.com",
   "http://72.60.202.115:5000",
   "https://auxincrm.cloud",
   "http://localhost:3000"
 ];
+if (FRONTEND_URL && !allowedOrigins.includes(FRONTEND_URL)) {
+  allowedOrigins.unshift(FRONTEND_URL);
+}
+const ALLOW_ALL = process.env.ALLOW_ALL_ORIGINS === 'true';
+console.log('Socket allowed origins:', allowedOrigins, 'ALLOW_ALL:', ALLOW_ALL);
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // allow undefined origin (tools / server-to-server) or explicit matches, or all if allowed
+      if (!origin || allowedOrigins.indexOf(origin) !== -1 || ALLOW_ALL) {
+        callback(null, true);
+      } else {
+        console.warn('Socket.io blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
   }
@@ -179,13 +195,42 @@ app.set('io', io);
 
 // ====== CORS CONFIG ======
 app.use(cors({
-  origin: true,
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || ALLOW_ALL) return cb(null, true);
+    console.warn('HTTP CORS blocked origin:', origin);
+    return cb(new Error('Not allowed by CORS'), false);
+  },
   credentials: true
 }));
 
 // ====== MIDDLEWARE ======
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+
+// ====== UTF-8 ENCODING MIDDLEWARE ======
+app.use((req, res, next) => {
+  // Set UTF-8 for all responses
+  if (req.path.endsWith('.html') || req.path === '/') {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  }
+  next();
+});
+
+// Serve static files with proper UTF-8 headers
+app.use(express.static(frontendPath, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    }
+    if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    }
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    }
+  }
+}));
 
 // ====== API ROUTES ======
 app.use('/api/employees', employeeRoutes);
@@ -204,7 +249,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // ====== SERVE FRONTEND ======
-const frontendPath = path.join(__dirname, '../frontend/build');
+
 app.use(express.static(frontendPath));
 
 // ====== REACT ROUTES CONFIG ======

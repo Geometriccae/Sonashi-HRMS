@@ -6,9 +6,12 @@ import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { createEvent } from "../../services/AssignEventService"; // We'll create this
 import employeeService from "../../services/EmployeeService";
 import Select from "react-select";
+import { useToast } from "../../context/ToastContext";
 
+const DEFAULT_REMINDERS = Object.freeze([1, 15, 60, 180, 1440]); // minutes -> 1m,15m,1h,3h,1d
 
 function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     eventName: "",
     eventType: "",
@@ -18,7 +21,7 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
     notes: "",
     link: "",
     color: "#FF9500",
-      reminders: [60, 15, 3, 2, 1], // Default reminders: 1 hour, 15 min, 1 min before
+    reminders: [...DEFAULT_REMINDERS],
   });
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -62,25 +65,17 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
       !formData.date ||
       !formData.time
     ) {
-      alert("Please fill in all required fields");
+      showToast("Please fill in all required fields", 'warning');
       return;
     }
 
     setIsLoading(true);
     try {
-      // Parse yyyy-mm-dd as local date to avoid timezone shifting
-      let eventDate = null;
-      if (formData.date) {
-        const [y, m, d] = formData.date.split("-").map((v) => parseInt(v, 10));
-        eventDate = new Date(y, (m || 1) - 1, d || 1);
-      }
-
       const eventData = {
         ...formData,
         employeeId,
-        date: eventDate,
         time: formData.time,
-        reminders: formData.reminders || [],
+        reminders: [...DEFAULT_REMINDERS],
       };
 
       const createdEvent = await createEvent(employeeId, eventData);
@@ -90,10 +85,11 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
         onEventCreated(createdEvent);
       }
 
+      showToast("Task assigned successfully.", 'success');
       onClose();
     } catch (error) {
       console.error("Error creating event:", error);
-      alert("Failed to create event. Please try again.");
+      showToast("Failed to create event. Please try again.", 'error');
     } finally {
       setIsLoading(false);
     }

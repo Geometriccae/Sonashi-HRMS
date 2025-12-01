@@ -29,8 +29,10 @@ import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
 import NotificationBell from "../../components/NotificationBell";
 import MobileBottomNavigation from "../../components/MobileBottomNavigation";
+import { useToast } from "../../context/ToastContext";
 
 function TeamManagementSalesLeads() {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("basicInfo");
   const basicInfoRef = useRef(null);
   const meetingsRef = useRef(null);
@@ -171,16 +173,18 @@ function TeamManagementSalesLeads() {
       try {
         if (deleteType === "entry") {
           await employeeService.deleteEmployee(employeeId);
+          showToast("Employee deleted successfully.", 'success');
           navigate("/teammanagement");
           return; // no further cleanup needed, leaving page
         } else if (deleteType === "data") {
           // Optional: implement bulk document delete for this client in backend later
           // For now, simply refresh documents list key
           setDocumentsKey(prev => prev + 1);
+          showToast("Data deleted successfully.", 'success');
         }
       } catch (e) {
         console.error("Delete failed", e);
-        alert(e.message || "Delete failed");
+        showToast(e.message || "Delete failed", 'error');
       } finally {
         setIsDeleteModalOpen(false);
         setDeleteType("");
@@ -217,9 +221,11 @@ function TeamManagementSalesLeads() {
       // Update the client data in local state
       setEmployee(updatedEmployee);
       setIsEditEmployeeModalOpen(false);
+      showToast("Employee details updated successfully.", 'success');
     } catch (err) {
       console.error("Error updating employee:", err);
       setError(err.message || "Failed to update employee");
+      showToast("Failed to update employee.", 'error');
     }
   };
 
@@ -243,9 +249,10 @@ function TeamManagementSalesLeads() {
       }
       // Refresh documents tab
       setDocumentsKey(prev => prev + 1);
+      showToast("Files uploaded successfully.", 'success');
     } catch (e) {
       console.error("Upload failed", e);
-      alert(e.message || "Upload failed");
+      showToast(e.message || "Upload failed", 'error');
     } finally {
       setIsFileUploadModalOpen(false);
     }
@@ -303,7 +310,7 @@ function TeamManagementSalesLeads() {
       }
     } catch (e) {
       console.error('Export failed:', e);
-      alert(e.message || 'Export failed');
+      showToast(e.message || 'Export failed', 'error');
     } finally {
       setIsDropdownOpen(false);
     }

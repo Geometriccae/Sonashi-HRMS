@@ -134,7 +134,7 @@
   cursor: pointer;
   transition: all 0.2s;
   background: #fafafa;
-  margin-bottom: 24px;
+  /* margin-bottom: 24px; */
   position: relative;
 }
 

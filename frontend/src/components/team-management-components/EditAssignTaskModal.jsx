@@ -22,7 +22,7 @@ function EditAssignTaskModal({
     notes: "",
     link: "",
     color: "#FF9500",
-    reminders: [60, 15, 1], // Default reminders: 1 hour, 15 min, 1 min before
+    reminders: [1, 15, 60, 180, 1440], // Default reminders: 1m, 15m, 1h, 3h, 1d
   });
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -165,7 +165,7 @@ function EditAssignTaskModal({
         notes: eventData.notes || src?.notes || "",
         link: eventData.link || src?.link || "",
         color: eventData.color || src?.color || "#FF9500",
-        reminders: src?.reminders || [60, 15, 1], // Load existing reminders or default
+        reminders: src?.reminders || [1, 15, 60, 180, 1440], // Load existing reminders or default
       });
       console.log("=== END INITIAL DEBUG ===");
     }
@@ -280,6 +280,7 @@ function EditAssignTaskModal({
         employeeId,
         date: new Date(formData.date),
         time: formData.time,
+        reminders: formData.reminders,
       };
 
       const updatedEvent = await updateEvent(

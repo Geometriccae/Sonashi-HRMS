@@ -2,14 +2,16 @@
 .conversionDataContainer {
   width: 100%;
   max-width: 1017px;
-  height: 600px; /* Increased height */
+  /* height: auto; Remove fixed height */
+  min-height: 600px;
   border-radius: 18px;
   border: 1.513px solid #E4E4E4;
   position: relative;
-  /* margin: 0 auto; */
   background-color: #FFF;
   overflow: hidden;
   font-family: 'Inter', sans-serif;
+  display: flex;
+  flex-direction: column;
 }
 
 .backgroundGlow {
@@ -83,9 +85,9 @@
 .percentageIndicators {
   display: flex;
   gap: 40px;
-  position: absolute;
-  top: 110px;
-  left: 43px;
+  padding: 0 43px;
+  margin-bottom: 20px;
+  position: relative;
   z-index: 20;
 }
 
@@ -132,9 +134,17 @@
   font-weight: 600;
 }
 
+.chartSectionWrapper {
+  position: relative;
+  flex: 1;
+  min-height: 300px; /* Ensure space for chart */
+  width: 100%;
+}
+
 .yAxisLabels {
   position: absolute;
   left: 43px;
+  top: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -146,16 +156,14 @@
 
 .gridLine {
   position: absolute;
-  left: 129px;
-  width: 821px;
   height: 1px;
   background: #F3F3F3;
   z-index: 5;
 }
 
 .chartContainer {
-  /* Position is handled inline for dynamic values */
-  display: block;
+  position: relative;
+  z-index: 10;
 }
 
 .fadeOverlay {
@@ -172,9 +180,8 @@
 .legend {
   display: flex;
   gap: 24px;
-  position: absolute;
-  bottom: 60px; /* Moved to bottom */
-  left: 129px;
+  padding: 20px 0;
+  position: relative;
   z-index: 20;
 }
 
@@ -203,7 +210,7 @@
 
 .conversionTooltip {
   position: absolute;
-  top: 120px; /* Adjusted position */
+  top: 20%;
   right: 43px;
   display: flex;
   padding: 10px;
@@ -246,12 +253,10 @@
 }
 
 .footer {
-  position: absolute;
-  bottom: 20px;
-  left: 0;
-  width: 100%;
+  padding: 20px;
   text-align: center;
   z-index: 20;
+  margin-top: auto;
 }
 
 .footerText {
@@ -262,86 +267,67 @@
 
 /* Responsive styles */
 @media (max-width: 991px) {
-  .conversionDataContainer {
-    width: 100%;
-    max-width: 800px;
-    height: 500px;
-  }
-  
   .header {
-    width: calc(100% - 58px);
     flex-direction: column;
     gap: 20px;
-    height: auto;
+    padding: 24px;
+  }
+  
+  .headerRight {
+    width: 100%;
+    flex-wrap: wrap;
   }
   
   .percentageIndicators {
-    flex-direction: column;
-    gap: 16px;
-    top: 140px;
-  }
-  
-  .yAxisLabels {
-    height: 200px;
-    top: 200px;
-  }
-  
-  .gridLine {
-    width: calc(100% - 120px);
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0 24px;
   }
   
   .conversionTooltip {
-    right: 20px;
-    left: auto;
+    right: 24px;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .conversionDataContainer {
-    height: 450px;
-    border-radius: 12px;
+    min-height: auto;
   }
-  
+
   .header {
-    left: 20px;
-    top: 20px;
-    width: calc(100% - 40px);
-    flex-direction: row;
+    padding: 20px;
   }
-  
+
   .title {
     font-size: 18px;
   }
-  
-  .subtitle {
-    width: 100%;
+
+  .percentageIndicators {
+    flex-direction: column;
+    gap: 16px;
+    padding: 0 20px;
   }
-  
+
   .yAxisLabels {
-    height: 150px;
-    top: 180px;
-    left: 20px;
+    left: 10px;
+    font-size: 10px;
   }
-  
-  .gridLine {
-    width: calc(100% - 80px);
-    left: 60px;
+
+  .legend {
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 10px 0;
   }
-  
+
   .conversionTooltip {
-    width: 200px;
-    height: 55px;
-    right: 10px;
-    top: 150px;
+    position: relative;
+    top: 0;
+    right: 0;
+    margin: 10px 20px;
+    width: calc(100% - 40px);
   }
   
-  .tooltipPercentage {
-    font-size: 16px;
-  }
-  
-  .fadeOverlay {
-    width: 250px;
-    left: calc(100% - 260px);
-    top: 200px;
+  .chartSectionWrapper {
+    margin-top: 20px;
   }
 }

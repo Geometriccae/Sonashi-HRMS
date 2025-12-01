@@ -507,6 +507,10 @@ const CalendarComponent = ({ clientId, key: calendarKey }) => {
             <div className="modal-header">
               <div className="meeting-chip">
                 <span>Meeting</span>
+                <span style={{ margin: '0 8px', opacity: 0.7 }}>|</span>
+                <span>
+                  {format(selectedMeeting.start, 'h:mm a')}
+                </span>
               </div>
               <div className="modal-actions-event">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" onClick={handleEditEvent} style={{cursor: 'pointer'}}>

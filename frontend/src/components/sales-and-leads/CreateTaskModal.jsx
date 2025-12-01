@@ -6,8 +6,10 @@ import { createTask } from "../../services/TaskService";
 import employeeService from "../../services/EmployeeService";
 import clientService from "../../services/ClientService";
 import Select from "react-select";
+import { useToast } from "../../context/ToastContext";
 
 function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     eventName: "",
     project: "",
@@ -65,7 +67,7 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
 
   const handleSubmit = async () => {
     if (!formData.eventName || !formData.date) {
-      alert("Please fill in all required fields");
+      showToast("Please fill in all required fields", 'warning');
       return;
     }
 
@@ -99,10 +101,11 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
         onTaskCreated(createdTask);
       }
 
+      showToast("Task created successfully.", 'success');
       onClose();
     } catch (error) {
       console.error("Error creating task:", error);
-      alert("Failed to create task. Please try again.");
+      showToast("Failed to create task. Please try again.", 'error');
     } finally {
       setIsLoading(false);
     }

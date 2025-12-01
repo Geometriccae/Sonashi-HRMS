@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./TeamManagement.module.css";
 import Side from "../sidebar/Sidebar";
-
+import NotificationBell from "../../components/NotificationBell";
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import chevrondown from "../../assets/dashboard/chevron-down.svg";
 import chevrondright from "../../assets/dashboard/chevron-right.svg";
@@ -11,6 +11,7 @@ import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import TeamMembersTable from "../../components/team-management-components/TeamMembersTable";
 import ProfileAvatar from "../../components/ProfileAvatar";
 import EmployeeService from "../../services/EmployeeService";
+import AttendanceService from "../../services/AttendanceService";
 
 function TeamManagement() {
   const navigate = useNavigate();
@@ -38,7 +39,20 @@ function TeamManagement() {
       const totalEmployees = employees.length;
 
       // 2. Today's Attendance (Percentage of 'Onsite' employees)
-      const presentCount = employees.filter(emp => emp.attendance === 'Onsite').length;
+      // We fetch today's attendance records to be accurate
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let presentCount = 0;
+      try {
+        const todayRecords = await AttendanceService.getByRange(todayStr, todayStr);
+        if (Array.isArray(todayRecords)) {
+          presentCount = todayRecords.filter(r => r.status === 'Onsite').length;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch today's attendance for stats:", err);
+        // Fallback to employee profile status if report fails
+        presentCount = employees.filter(emp => emp.attendance === 'Onsite').length;
+      }
+
       const attendancePercentage = totalEmployees > 0 
         ? Math.round((presentCount / totalEmployees) * 100) 
         : 0;
@@ -76,11 +90,7 @@ function TeamManagement() {
             <div className={styles["dashboard-title"]}>Team Management</div>
 
             <div className={styles["dashboard-profile"]}>
-              <img
-                src={belldot}
-                alt="belldot"
-                className={styles["belldot-icon"]}
-              />
+              <NotificationBell/>
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                   

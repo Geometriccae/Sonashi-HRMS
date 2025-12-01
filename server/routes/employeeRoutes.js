@@ -8,6 +8,40 @@ const nodemailer = require("nodemailer");
 const Notification = require('../models/Notification');
 const Attendance = require('../models/Attendance');
 
+const DEFAULT_TASK_REMINDERS = [1, 15, 60, 180, 1440];
+
+const normalizeReminderList = (reminders) => {
+  if (!Array.isArray(reminders)) return [...DEFAULT_TASK_REMINDERS];
+  const sanitized = reminders
+    .map((minutes) => Number(minutes))
+    .filter((minutes) => Number.isFinite(minutes) && minutes >= 0);
+  return sanitized.length > 0 ? sanitized : [...DEFAULT_TASK_REMINDERS];
+};
+
+const deriveEventDateTime = (dateValue, timeValue) => {
+  if (!dateValue) return null;
+
+  const normalizeDateString = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      // if ISO string, split at T to ensure date-only portion
+      return value.split('T')[0];
+    }
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      return value.toISOString().split('T')[0];
+    }
+    return null;
+  };
+
+  const baseDateStr = normalizeDateString(dateValue);
+  if (!baseDateStr) return null;
+
+  if (timeValue) {
+    return new Date(`${baseDateStr}T${timeValue}:00`);
+  }
+  return new Date(baseDateStr);
+};
+
 // Storage config for employee profile photos
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -169,6 +203,40 @@ router.post('/', authMiddleware,
   }
 );
 
+// Bulk delete employees
+router.post('/bulk-delete', authMiddleware, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'No employee IDs provided' });
+    }
+
+    console.log(`Bulk deleting employees: ${ids.length} IDs provided`);
+
+    // 1. Delete related EmployeeDocuments
+    const EmployeeDocument = require('../models/EmployeeDocuments');
+    const docResult = await EmployeeDocument.deleteMany({ employeeId: { $in: ids } });
+    console.log(`Deleted ${docResult.deletedCount} related employee documents`);
+
+    // 2. Delete Employees
+    const result = await Employee.deleteMany({ _id: { $in: ids } });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'No employees found to delete' });
+    }
+
+    res.json({
+      message: 'Employees and related data deleted successfully',
+      deletedCount: result.deletedCount,
+      deletedDocuments: docResult.deletedCount
+    });
+  } catch (error) {
+    console.error('Error bulk deleting employees:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // ====== PARAMETERIZED ROUTES (With :id or other parameters) ======
 
 // Get single employee by ID
@@ -205,120 +273,50 @@ router.put('/:id',
         console.log("Update - Profile photo path:", updateData.profilePhoto);
       }
 
-      const updatedEmployee = await Employee.findByIdAndUpdate(
-        req.params.id,
-        updateData,
-        { new: true, runValidators: true }
-      );
+      if (!project) {
+        return res.status(400).json({ message: 'Project name is required' });
+      }
 
-      if (!updatedEmployee) {
+      const employee = await Employee.findById(req.params.id);
+      if (!employee) {
         return res.status(404).json({ message: 'Employee not found' });
       }
 
-      res.json(updatedEmployee);
-    } catch (error) {
-      console.error("Update employee error:", error);
-      res.status(400).json({
-        message: 'Error updating employee',
-        error: error.message,
-      });
-    }
-  }
-);
+      // Check if project already exists to avoid duplicates
+      if (!employee.assignedProjects.includes(project)) {
+        employee.assignedProjects.push(project);
+        await employee.save();
+      }
 
-// Delete employee
+      res.status(201).json({
+        message: 'Project added successfully',
+        employee
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Error adding project', error: error.message });
+    }
+  });
+
+// Delete single employee
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    const deletedEmployee = await Employee.findByIdAndDelete(req.params.id);
-    if (!deletedEmployee) {
+    const { id } = req.params;
+
+    // 1. Delete related EmployeeDocuments
+    const EmployeeDocument = require('../models/EmployeeDocuments');
+    await EmployeeDocument.deleteMany({ employeeId: id });
+
+    // 2. Delete Employee
+    const result = await Employee.findByIdAndDelete(id);
+
+    if (!result) {
       return res.status(404).json({ message: 'Employee not found' });
     }
+
     res.json({ message: 'Employee deleted successfully' });
   } catch (error) {
+    console.error('Error deleting employee:', error);
     res.status(500).json({ message: 'Error deleting employee', error: error.message });
-  }
-});
-
-// Get employees by department
-router.get('/department/:department', authMiddleware, async (req, res) => {
-  try {
-    const employees = await Employee.find({
-      department: req.params.department
-    }).sort({ employeeName: 1 });
-
-    res.json(employees);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching employees by department', error: error.message });
-  }
-});
-
-// Update employee attendance
-router.patch('/:id/attendance', authMiddleware, async (req, res) => {
-  try {
-    const { attendance } = req.body;
-
-    if (!attendance || !['Onsite', 'Leave'].includes(attendance)) {
-      return res.status(400).json({ message: 'Valid attendance status required (Onsite/Leave)' });
-    }
-
-    const updatedEmployee = await Employee.findByIdAndUpdate(
-      req.params.id,
-      { attendance },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedEmployee) {
-      return res.status(404).json({ message: 'Employee not found' });
-    }
-
-    // Also record daily attendance (upsert) for reporting
-    try {
-      const now = new Date();
-      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      await Attendance.findOneAndUpdate(
-        { employee: updatedEmployee._id, date: day },
-        { employee: updatedEmployee._id, date: day, status: attendance, updatedBy: req.user?._id },
-        { upsert: true, new: true }
-      );
-    } catch (logErr) {
-      console.warn('Failed to upsert attendance record:', logErr?.message);
-    }
-
-    res.json({
-      message: 'Attendance updated successfully',
-      employee: updatedEmployee
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating attendance', error: error.message });
-  }
-});
-
-// Add project to employee
-router.post('/:id/projects', authMiddleware, async (req, res) => {
-  try {
-    const { project } = req.body;
-
-    if (!project) {
-      return res.status(400).json({ message: 'Project name is required' });
-    }
-
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
-    }
-
-    // Check if project already exists to avoid duplicates
-    if (!employee.assignedProjects.includes(project)) {
-      employee.assignedProjects.push(project);
-      await employee.save();
-    }
-
-    res.status(201).json({
-      message: 'Project added successfully',
-      employee
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error adding project', error: error.message });
   }
 });
 
@@ -407,6 +405,7 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date()
     };
+    eventWithAssignedBy.reminders = normalizeReminderList(eventWithAssignedBy.reminders);
 
     // Push and save
     employee.events.push(eventWithAssignedBy);
@@ -414,6 +413,9 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
 
     // Get the saved event (the last pushed)
     const savedEvent = employee.events[employee.events.length - 1];
+    const savedEventSnapshot = typeof savedEvent.toObject === 'function'
+      ? savedEvent.toObject({ depopulate: true })
+      : JSON.parse(JSON.stringify(savedEvent));
 
     // Respond immediately with the persisted event and employee snapshot
     res.status(201).json({
@@ -497,6 +499,52 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
       }
     })();
 
+    // Schedule reminders for the assigned task/event
+    if (savedEventSnapshot.reminders && savedEventSnapshot.reminders.length > 0) {
+      const eventDateTime = deriveEventDateTime(savedEventSnapshot.date, savedEventSnapshot.time);
+
+      savedEventSnapshot.reminders.forEach((reminderMinutes) => {
+        if (!eventDateTime || isNaN(eventDateTime.getTime())) return;
+        const reminderTime = new Date(eventDateTime.getTime() - reminderMinutes * 60000);
+        const delay = reminderTime.getTime() - Date.now();
+        if (delay <= 0) return;
+
+        setTimeout(() => {
+          const io = req.app.get('io');
+          if (!io) return;
+
+          const reminderPayload = {
+            id: `task-reminder-${savedEventSnapshot._id}-${reminderMinutes}`,
+            type: 'task-reminder',
+            title: `Reminder: ${savedEventSnapshot.eventName || 'Task'}`,
+            body: `Task in ${reminderMinutes} minutes`,
+            meta: {
+              employeeId: employee._id,
+              eventId: savedEventSnapshot._id,
+              event: savedEventSnapshot,
+              reminderMinutes,
+            },
+            url: `/teammanagement_salesleads/${employee._id}`,
+            timestamp: new Date(),
+          };
+
+          io.emit('task-reminder', reminderPayload);
+
+          const recipientUserIds = new Set();
+          if (req.user?.id) recipientUserIds.add(String(req.user.id));
+          if (employee?._id) recipientUserIds.add(String(employee._id));
+          (savedEventSnapshot.assignedTeamMembers || []).forEach((memberId) => {
+            if (memberId) recipientUserIds.add(String(memberId));
+          });
+
+          recipientUserIds.forEach((userId) => {
+            io.to(`user-${userId}`).emit('notification', reminderPayload);
+            io.to(`user-${userId}`).emit('task-reminder', reminderPayload);
+          });
+        }, delay);
+      });
+    }
+
   } catch (error) {
     console.error("Error adding event:", error);
     // Provide helpful error message while avoiding leaking internals
@@ -548,8 +596,12 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
 
     if (Array.isArray(updatedData.assignedTeamMembers)) {
       for (const memberId of updatedData.assignedTeamMembers) {
-        const member = await Employee.findById(memberId);
-        if (member?.emailId) recipients.push(member.emailId);
+        try {
+          const member = await Employee.findById(memberId);
+          if (member?.emailId) recipients.push(member.emailId);
+        } catch (e) {
+          console.warn(`Failed to lookup team member ${memberId}:`, e);
+        }
       }
     }
 
@@ -557,7 +609,7 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
 
     // ✅ Send update notification emails
     for (const email of uniqueRecipients) {
-      await sendTaskAssignedEmail(email, updatedData, assignedBy);
+      await sendTaskAssignedEmail(email, updatedData, assignedBy).catch(err => console.error("Email error:", err));
     }
 
     // Browser notification + persist
@@ -586,6 +638,53 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
       console.error('Error emitting/persisting notification for employee event update:', notifyErr);
     }
 
+    // ✅ Reschedule Reminders (Add new setTimeouts)
+    if (updatedData.reminders && updatedData.reminders.length > 0) {
+      const eventDateTime = deriveEventDateTime(updatedData.date, updatedData.time);
+
+      updatedData.reminders.forEach((reminderMinutes) => {
+        if (!eventDateTime || isNaN(eventDateTime.getTime())) return;
+        const reminderTime = new Date(eventDateTime.getTime() - reminderMinutes * 60000);
+        const delay = reminderTime.getTime() - Date.now();
+
+        if (delay > 0) {
+          setTimeout(() => {
+            const io = req.app.get('io');
+            if (!io) return;
+
+            const reminderPayload = {
+              id: `task-reminder-${eventId}-${reminderMinutes}-${Date.now()}`,
+              type: 'task-reminder',
+              title: `Reminder: ${updatedData.eventName || 'Task'}`,
+              body: `Task in ${reminderMinutes} minutes`,
+              meta: {
+                employeeId: employee._id,
+                eventId: eventId,
+                event: updatedData,
+                reminderMinutes,
+              },
+              url: `/teammanagement_salesleads/${employee._id}`,
+              timestamp: new Date(),
+            };
+
+            io.emit('task-reminder', reminderPayload);
+
+            const recipientUserIds = new Set();
+            if (req.user?.id) recipientUserIds.add(String(req.user.id));
+            if (employee?._id) recipientUserIds.add(String(employee._id));
+            (updatedData.assignedTeamMembers || []).forEach((memberId) => {
+              if (memberId) recipientUserIds.add(String(memberId));
+            });
+
+            recipientUserIds.forEach((userId) => {
+              io.to(`user-${userId}`).emit('notification', reminderPayload);
+              io.to(`user-${userId}`).emit('task-reminder', reminderPayload);
+            });
+          }, delay);
+        }
+      });
+    }
+
     res.json({
       message: 'Event updated and email(s) sent successfully',
       event,
@@ -595,7 +694,6 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Error updating event', error: error.message });
   }
 });
-
 
 // Delete an event
 router.delete('/:id/events/:eventId', authMiddleware, async (req, res) => {

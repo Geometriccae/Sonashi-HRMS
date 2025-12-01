@@ -159,35 +159,35 @@ class ClientService {
   }
 
   async createClient(clientData) {
-  try {
-    console.log('Creating client at:', this.baseURL);
+    try {
+      console.log('Creating client at:', this.baseURL);
 
-    const payload = this.sanitizePayload(clientData);
-    
-    // Add notification control - check if it's a bulk operation
-    if (clientData.disableNotifications || clientData.isBulkImport) {
-      payload.disableNotifications = true;
+      const payload = this.sanitizePayload(clientData);
+
+      // Add notification control - check if it's a bulk operation
+      if (clientData.disableNotifications || clientData.isBulkImport) {
+        payload.disableNotifications = true;
+      }
+
+      const response = await fetch(this.baseURL, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating client:', error);
+      throw error;
     }
-
-    const response = await fetch(this.baseURL, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(payload),
-    });
-
-    console.log('Response status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error creating client:', error);
-    throw error;
   }
-}
 
   // Update client
   async updateClient(id, clientData) {
@@ -199,15 +199,15 @@ class ClientService {
       console.log('Client data:', clientData); // Debug log
 
       if (clientData.profilePictureFile) {
-    formData.append('profilePicture', clientData.profilePictureFile);
-  }
+        formData.append('profilePicture', clientData.profilePictureFile);
+      }
 
       const response = await fetch(`${this.baseURL}/${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}` // no Content-Type! fetch sets it automatically
         },
-       body: formData,
+        body: formData,
       });
 
       if (!response.ok) {
@@ -242,37 +242,58 @@ class ClientService {
     }
   }
 
-  // Add this to your clientService
-// Updated bulkCreateClients method
-async bulkCreateClients(clientsData) {
-  try {
-    const payload = {
-      clients: clientsData.map(client => this.sanitizePayload(client)),
-      options: {
-        disableNotifications: true,
-        isBulkImport: true
+  // Bulk delete clients
+  async bulkDeleteClients(ids) {
+    try {
+      const response = await fetch(`${this.baseURL}/bulk-delete`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ ids }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
-    };
 
-    console.log('Bulk creating clients:', payload.clients.length, 'clients');
-    
-    const response = await fetch(`${this.baseURL}/bulk-import`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error bulk deleting clients:', error);
+      throw error;
     }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error bulk creating clients:', error);
-    throw error;
   }
-}
+
+  // Add this to your clientService
+  // Updated bulkCreateClients method
+  async bulkCreateClients(clientsData) {
+    try {
+      const payload = {
+        clients: clientsData.map(client => this.sanitizePayload(client)),
+        options: {
+          disableNotifications: true,
+          isBulkImport: true
+        }
+      };
+
+      console.log('Bulk creating clients:', payload.clients.length, 'clients');
+
+      const response = await fetch(`${this.baseURL}/bulk-import`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error bulk creating clients:', error);
+      throw error;
+    }
+  }
 
   async createClientWithFile(clientData, profileImage) {
     try {

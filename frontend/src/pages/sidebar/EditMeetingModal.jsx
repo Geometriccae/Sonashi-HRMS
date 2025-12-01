@@ -26,7 +26,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
     notes: "",
     link: "",
     color: "#FF9500",
-    reminders: []
+    reminders: [1, 15]
   });
   const [employees, setEmployees] = useState([]);
   const [clients, setClients] = useState([]);
@@ -61,7 +61,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
         notes: "",
         link: "",
         color: "#FF9500",
-        reminders: []
+        reminders: [1, 15]
       });
       setError("");
       return;
@@ -97,7 +97,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
       notes: src?.notes || meeting.notes || "",
       link: src?.link || meeting.link || "",
       color: src?.color || meeting.color || "#FF9500",
-      reminders: src?.reminders || meeting.reminders || []
+      reminders: src?.reminders || meeting.reminders || [1, 15]
     });
     setError("");
   }, [meeting, isOpen]);
@@ -223,6 +223,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
               <label className="field-label">Reminders</label>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {[
+                  { label: "1 min before", value: 1 },
                   { label: "15 min before", value: 15 },
                   { label: "30 min before", value: 30 },
                   { label: "1 hour before", value: 60 },

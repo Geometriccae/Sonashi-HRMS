@@ -407,6 +407,10 @@ const YourCalendarMeetings = ({ events: externalEvents, onEdit, onDelete }) => {
             <div className={styles["modal-header"]}>
               <div className={styles["meeting-chip"]}>
                 <span>Meeting</span>
+                <span style={{ margin: '0 8px', opacity: 0.7 }}>|</span>
+                <span>
+                                  {format(selectedMeeting.start, 'h:mm a')}
+                                </span>
               </div>
               <div className={styles["modal-actions"]}>
                 {/* Edit: close small popup first, then ask parent to open edit modal */}

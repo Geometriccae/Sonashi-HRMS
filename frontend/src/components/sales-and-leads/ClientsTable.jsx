@@ -9,6 +9,7 @@ import clientService from "../../services/ClientService";
 import config from "../../config/config";
 import plus from "../../assets/dashboard/plus.svg";
 import ImportCsvModal from "./ImportCsvModal";
+import { useToast } from "../../context/ToastContext";
 
 // SVG Components
 const UserPlusIcon = () => (
@@ -147,6 +148,7 @@ const DeleteIcon = () => (
 );
 
 function ClientsTable() {
+  const { showToast } = useToast();
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   // Which field the search term applies to, set via FilterDropdown
@@ -165,6 +167,7 @@ function ClientsTable() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  const [selectedClientIds, setSelectedClientIds] = useState([]);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -206,16 +209,54 @@ function ClientsTable() {
 
   const handleDeleteConfirm = async () => {
     try {
-      await clientService.deleteClient(clientToDelete._id);
-      setClientsData((prevClients) =>
-        prevClients.filter((client) => client._id !== clientToDelete._id)
-      );
+      if (clientToDelete) {
+        await clientService.deleteClient(clientToDelete._id);
+        setClientsData((prevClients) =>
+          prevClients.filter((client) => client._id !== clientToDelete._id)
+        );
+        showToast("Client deleted successfully.", 'success');
+      } else if (selectedClientIds.length > 0) {
+        await clientService.bulkDeleteClients(selectedClientIds);
+        setClientsData((prevClients) =>
+          prevClients.filter((client) => !selectedClientIds.includes(client._id))
+        );
+        setSelectedClientIds([]);
+        showToast(`${selectedClientIds.length} clients deleted successfully.`, 'success');
+      }
       setIsDeleteModalOpen(false);
       setClientToDelete(null);
     } catch (err) {
       console.error("Error deleting client:", err);
       setError(err.message || "Failed to delete client");
+      showToast("Failed to delete client.", 'error');
     }
+  };
+
+  const handleBulkDelete = () => {
+    setClientToDelete(null);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allIds = pagedData.map((c) => c._id);
+      // Add current page IDs to selection (avoiding duplicates)
+      setSelectedClientIds((prev) => [...new Set([...prev, ...allIds])]);
+    } else {
+      // Remove current page IDs from selection
+      const pageIds = new Set(pagedData.map((c) => c._id));
+      setSelectedClientIds((prev) => prev.filter((id) => !pageIds.has(id)));
+    }
+  };
+
+  const handleSelectRow = (id) => {
+    setSelectedClientIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
   };
 
   const handleDeleteCancel = () => {
@@ -242,18 +283,13 @@ function ClientsTable() {
       await fetchClients();
 
       // Show success notification
-      if (window.appNotifications) {
-        window.appNotifications.push({
-          type: 'success',
-          title: 'Client Added',
-          message: `${formData.companyName} has been successfully added.`
-        });
-      }
+      showToast(`${formData.companyName} has been successfully added.`, 'success');
     } catch (err) {
       console.error("Error creating client:", err);
       setError(err.message || "Failed to create client");
       // if the add fails, we should probably re-fetch to get back to a consistent state
       fetchClients();
+      showToast("Client added, but failed to refresh list.", 'warning');
     }
   };
 
@@ -271,9 +307,11 @@ function ClientsTable() {
       );
       setIsEditClientModalOpen(false);
       setClientToEdit(null);
+      showToast("Client updated successfully.", 'success');
     } catch (err) {
       console.error("Error updating client:", err);
       setError(err.message || "Failed to update client");
+      showToast("Failed to update client.", 'error');
     }
   };
 
@@ -438,6 +476,27 @@ function ClientsTable() {
         <div className={styles.tableTitleSection}>
           <h2 className={styles.tableTitle}>Clients and Leads</h2>
           <div className={styles.actionButtons}>
+            {selectedClientIds.length > 0 && (
+              <button 
+                className={styles.deleteButton} 
+                onClick={handleBulkDelete}
+                style={{ 
+                  backgroundColor: '#fee2e2', 
+                  color: '#dc2626', 
+                  border: '1px solid #fecaca',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                <DeleteIcon />
+                <span>Delete ({selectedClientIds.length})</span>
+              </button>
+            )}
             <button className={styles.primaryButton} onClick={triggerImport} disabled={isImporting}>
               <div className={styles.addClientButtonText}>Import</div>
               <img src={plus} className={styles.image3} alt="plus" />
@@ -509,6 +568,54 @@ function ClientsTable() {
         )}
         <div className={styles.tableWrapper}>
           <div className={styles.tableColumns}>
+            {/* Checkbox Column */}
+            <div className={`${styles.tableColumn} ${styles.checkboxColumn}`} style={{ width: '50px', minWidth: '50px', flex: '0 0 50px' }}>
+              <div className={styles.tableHeader}>
+                <div className={styles.tableHeaderCell}>
+                  <div className={styles.headerContent} style={{ justifyContent: 'center' }}>
+                    <label className={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        className={styles.hiddenCheckbox}
+                        onChange={handleSelectAll}
+                        checked={pagedData.length > 0 && pagedData.every((c) => selectedClientIds.includes(c._id))}
+                      />
+                      <span className={styles.customCheckbox}></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              {pagedData.map((client) => (
+                <div key={client._id} className={`${styles.tableCell} ${styles.checkboxCell}`} style={{ justifyContent: 'center' }}>
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      className={styles.hiddenCheckbox}
+                      checked={selectedClientIds.includes(client._id)}
+                      onChange={() => handleSelectRow(client._id)}
+                    />
+                    <span className={styles.customCheckbox}></span>
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            {/* S.No Column */}
+            <div className={`${styles.tableColumn} ${styles.sNoColumn}`}>
+              <div className={styles.tableHeader}>
+                <div className={styles.tableHeaderCell}>
+                  <div className={styles.headerContent} style={{ justifyContent: 'center' }}>
+                    <span className={styles.headerText}>S.No</span>
+                  </div>
+                </div>
+              </div>
+              {pagedData.map((client, index) => (
+                <div key={client._id} className={`${styles.tableCell} ${styles.sNoCell}`}>
+                  {(currentPageSafe - 1) * pageSize + index + 1}
+                </div>
+              ))}
+            </div>
+
             {/* Company Name Column */}
             <div className={`${styles.tableColumn} ${styles.companyColumn}`}>
               <div className={styles.tableHeader}>
@@ -698,8 +805,8 @@ function ClientsTable() {
         isOpen={isDeleteModalOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
-        title={`Delete ${clientToDelete?.companyName}?`}
-        description={`Are you sure you want to delete ${clientToDelete?.companyName}? This action cannot be undone.`}
+        title={clientToDelete ? `Delete ${clientToDelete?.companyName}?` : `Delete ${selectedClientIds.length} Clients?`}
+        description={clientToDelete ? `Are you sure you want to delete ${clientToDelete?.companyName}? This action cannot be undone.` : `Are you sure you want to delete these ${selectedClientIds.length} clients? This action cannot be undone.`}
       />
 
       <AddClientModal

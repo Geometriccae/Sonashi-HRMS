@@ -3,10 +3,11 @@ import ReactDOM from "react-dom";
 import "../../components/sales-and-leads/CreateEventModal.css";
 import DatePickerModal from "../../components/DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
-import config from "../../config/config";
+import MeetingService from "../../services/MeetingService";
 import employeeService from "../../services/EmployeeService";
 import clientService from "../../services/ClientService";
 import Select from "react-select";
+import { useToast } from "../../context/ToastContext";
 
 /*
  Props:
@@ -16,6 +17,7 @@ import Select from "react-select";
   - initial (optional) for edit (not required now)
 */
 function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null }) {
+  const { showToast } = useToast();
   const todayYMD = new Date().toISOString().split("T")[0];
   const [formData, setFormData] = useState({
     eventName: "",
@@ -27,7 +29,7 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
     link: "",
     color: "#FF9500",
     clientId: "",
-    reminders: []
+    reminders: [1, 15] // Default reminders: 1 min and 15 min
   });
 
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -82,12 +84,12 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
         link: src?.link || initial.link || f.link,
         color: src?.color || initial.color || f.color,
         clientId: src?.clientId || initial.clientId || f.clientId,
-        reminders: src?.reminders || initial.reminders || []
+        reminders: src?.reminders || initial.reminders || [1, 15]
       }));
       setError("");
     } else if (isOpen) {
       // reset for new create
-      setFormData(f => ({ ...f, eventName: "", type: "", date: todayYMD, time: "09:00", assignedTeamMembers: [], notes: "", link: "", color: "#FF9500", clientId: "", reminders: [] }));
+      setFormData(f => ({ ...f, eventName: "", type: "", date: todayYMD, time: "09:00", assignedTeamMembers: [], notes: "", link: "", color: "#FF9500", clientId: "", reminders: [1, 15] }));
       setError("");
     }
   }, [initial, isOpen]);
@@ -126,7 +128,11 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
 
   const handleSubmit = async () => {
     const v = validate();
-    if (v) { setError(v); return; }
+    if (v) { 
+      setError(v); 
+      showToast(v, 'warning');
+      return; 
+    }
     setIsLoading(true);
     setError("");
     try {
@@ -147,38 +153,16 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
         reminders: formData.reminders || []
       };
 
-      const token = localStorage.getItem("token");
-      if (!token) {
-        // clear loading and show explicit auth error
-        setIsLoading(false);
-        setError("Authentication required. Please login and try again.");
-        return;
-      }
-      const base = (config.API_BASE_URL || '').replace(/\/api\/?$/,'') + '/api/meetings';
-
-      const resp = await fetch(base, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const text = await resp.text();
-      let data;
-      try { data = text ? JSON.parse(text) : null; } catch(e) { data = text; }
-
-      if (!resp.ok) {
-        const serverMsg = data && data.message ? data.message : (typeof data === 'string' ? data : JSON.stringify(data));
-        throw new Error(serverMsg || `HTTP ${resp.status}`);
-      }
+      const data = await MeetingService.createMeeting(payload);
 
       onEventCreated && onEventCreated(data);
+      showToast("Meeting created successfully.", 'success');
       onClose && onClose();
     } catch (err) {
       console.error("CreateMeetingModal submit error:", err);
-      setError(err.message || "Failed to create event. Please try again.");
+      const msg = err.message || "Failed to create event. Please try again.";
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -273,6 +257,7 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
               <label className="field-label">Reminders</label>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {[
+                  { label: "1 min before", value: 1 },
                   { label: "15 min before", value: 15 },
                   { label: "30 min before", value: 30 },
                   { label: "1 hour before", value: 60 },

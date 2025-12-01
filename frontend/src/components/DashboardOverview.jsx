@@ -22,6 +22,9 @@ import threedot from "../assets/dashboard/3dot.svg";
 import smile_emoji from "../assets/dashboard/bxs_smile.svg";
 import quote_solid from "../assets/dashboard/quote-solid.svg";
 import Ellipse_dot from "../assets/dashboard/Ellipse27.svg";
+// In your frontend components, this should work:
+import { Container, Row, Col, Card } from 'react-bootstrap';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 function DashboardOverview() {
   const navigate = useNavigate();
