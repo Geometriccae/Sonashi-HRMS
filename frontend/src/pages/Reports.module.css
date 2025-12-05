@@ -1,9 +1,9 @@
 /* Base layout matching SalesAndLeads structure */
 .dashboard-layout {
-  width: 120rem;
-  height: 67.5rem;
+  width: 100%;
+  min-height: 100vh;
   display: flex;
-  overflow: hidden;
+  /* overflow-x: hidden; */
   position: relative;
   background-color: #FAFBFB;
 }
@@ -12,17 +12,20 @@ main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .dashboard-header {
   display: flex;
-  width: 99.25rem;
-  padding: 1.5rem 2rem;
+  width: 100%;
+  padding: clamp(1rem, 1.5vw, 1.5rem) clamp(1.5rem, 2vw, 2rem);
   flex-direction: column;
   align-items: flex-start;
   gap: 0.625rem;
-  border-bottom: 1.2px solid #e4e4e4;
+  border-bottom: 0.075rem solid #e4e4e4;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .dashboard-row {
@@ -30,12 +33,13 @@ main {
   justify-content: space-between;
   align-items: center;
   align-self: stretch;
+  width: 100%;
 }
 
 .dashboard-title {
   color: #161616;
-  font-family: Inter;
-  font-size: 1.875rem;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: clamp(1.5rem, 1.8vw, 1.875rem);
   font-style: normal;
   font-weight: 600;
   line-height: normal;
@@ -45,19 +49,19 @@ main {
 .dashboard-profile {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: clamp(1rem, 2vw, 2rem);
 }
 
 .belldot-icon {
   display: flex;
-  width: 3.125rem;
-  height: 3.125rem;
+  width: clamp(2.5rem, 3.125vw, 3.125rem);
+  height: clamp(2.5rem, 3.125vw, 3.125rem);
   padding: 0rem 0.89288rem;
   justify-content: center;
   align-items: center;
   gap: 0.89288rem;
   border-radius: 0.5rem;
-  border: 1.429px solid #e4e4e4;
+  border: 0.089rem solid #e4e4e4;
   background: #fff;
 }
 
@@ -65,7 +69,7 @@ main {
   display: flex;
   height: 3.125rem;
   align-items: center;
-  gap: 2rem;
+  gap: clamp(1rem, 2vw, 2rem);
 }
 
 .profile-row {
@@ -76,8 +80,8 @@ main {
 
 .profile-picture {
   border-radius: 3.90625rem;
-  width: 3.125rem;
-  height: 3.125rem;
+  width: clamp(2.5rem, 3.125vw, 3.125rem);
+  height: clamp(2.5rem, 3.125vw, 3.125rem);
 }
 
 .profile-column {
@@ -86,36 +90,39 @@ main {
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.25rem;
 }
 
 .profile-name {
   color: #161616;
-  font-family: "Inter Tight";
-  font-size: 1.125rem;
+  font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: clamp(0.9rem, 1.125vw, 1.125rem);
   font-style: normal;
   font-weight: 550;
   line-height: 116%;
   letter-spacing: 0.00888rem;
+  white-space: nowrap;
 }
 
 .profile-type {
   color: rgba(22, 22, 22, 0.8);
-  font-family: "Inter Tight";
-  font-size: 0.875rem;
+  font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: clamp(0.75rem, 0.875vw, 0.875rem);
   font-style: normal;
   font-weight: 400;
   line-height: 116%;
   letter-spacing: 0.00888rem;
+  white-space: nowrap;
 }
 
 .breadcrumb-section {
   display: flex;
-  width: 99.25rem;
-  padding: 0.625rem 84.5rem 0.625rem 1.5rem;
+  width: 100%;
+  padding: 0.625rem clamp(1.5rem, 2vw, 2rem);
   align-items: center;
-  border-bottom: 1px solid #E4E4E4;
+  border-bottom: 0.0625rem solid #E4E4E4;
   background: #FFF;
+  box-sizing: border-box;
 }
 
 .breadcrumb {
@@ -126,7 +133,7 @@ main {
 
 .breadcrumb-one {
   color: var(--Foundation-Neutral-N100, #7a8699);
-  font-family: Inter;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 1rem;
   font-style: normal;
   font-weight: 550;
@@ -136,7 +143,7 @@ main {
 
 .breadcrumb-two {
   color: var(--Button-normal, #007aff);
-  font-family: Inter;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
   font-size: 1rem;
   font-style: normal;
   font-weight: 550;
@@ -145,64 +152,46 @@ main {
 }
 
 .main-content {
-  /* flex: 1;
-  padding: 2rem 0 27.125rem 0;
-  background-color: #FFF;
-  overflow-x: auto;
   display: flex;
+  width: 100%;
+  max-width: 96.25rem;
+  padding: clamp(1.5rem, 2vw, 2rem);
   flex-direction: column;
   align-items: center;
-  gap: 4.5rem;
+  gap: clamp(2rem, 4.5vw, 4.5rem);
   border-radius: 0.75rem 0.75rem 0 0;
-  margin: 0 auto;
-  min-height: 57.375rem; */
-  display: flex;
-width: 96.25rem;
-padding: 2rem 0 27.125rem 0;
-flex-direction: column;
-align-items: center;
-gap: 4.5rem;
-border-radius: 0.75rem 0.75rem 0 0;
-background: #FFF;
-margin: 1.5rem;
+  background: #FFF;
+  margin: 1.5rem auto;
+  box-sizing: border-box;
 }
 
 /* Report specific styles */
 .report-container {
   display: flex;
   width: 100%;
-  max-width: 96.25rem;
   flex-direction: column;
   align-items: flex-start;
   gap: 2rem;
-  border-bottom: 1px solid #E4E4E4;
-  /* padding-bottom: 2rem; */
+  border-bottom: 0.0625rem solid #E4E4E4;
 }
 
 .report-header {
-  /* display: flex;
-  padding: 0 2rem;
+  display: flex;
+  padding: 0 0 2rem 0;
   justify-content: space-between;
   align-items: center;
+  align-self: stretch;
   width: 100%;
-  box-sizing: border-box; */
-  display: flex;
-padding: 0 2rem 2rem 2rem;
-justify-content: space-between;
-align-items: center;
-align-self: stretch;
 }
 
-.report-title{
+.report-title {
   color: var(--Foreground-primary, #000);
-
-/* Headings/Heading 5 */
-font-family: Inter;
-font-size: 1.5rem;
-font-style: normal;
-font-weight: 600;
-line-height: normal;
-letter-spacing: -0.06rem;
+  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-size: clamp(1.25rem, 1.5vw, 1.5rem);
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  letter-spacing: -0.06rem;
 }
 
 .report-actions {
@@ -218,7 +207,7 @@ letter-spacing: -0.06rem;
   align-items: center;
   gap: 0.75rem;
   border-radius: 0.5rem;
-  border: 1px solid #B3B9C4;
+  border: 0.0625rem solid #B3B9C4;
   cursor: pointer;
   background: transparent;
   color: #007AFF;
@@ -236,7 +225,7 @@ letter-spacing: -0.06rem;
   align-items: center;
   gap: 0.75rem;
   border-radius: 0.5rem;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(0.625rem);
   cursor: pointer;
   background-color: #007AFF;
   border: none;
@@ -256,7 +245,7 @@ letter-spacing: -0.06rem;
   gap: 1.5rem;
   width: 100%;
   max-width: 66.5rem;
-  padding: 0 2rem;
+  padding: 0;
   box-sizing: border-box;
 }
 
@@ -280,16 +269,17 @@ letter-spacing: -0.06rem;
   width: 16.25rem;
   flex-shrink: 0;
   color: #1E293B;
-  letter-spacing: -0.08px;
+  letter-spacing: -0.005rem;
   font: 700 1rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
   line-height: 1.375rem;
 }
 
 .form-field {
   display: flex;
-  width: 32rem;
+  flex: 1;
+  width: auto;
   min-width: 15.75rem;
-  flex-shrink: 0;
+  max-width: 32rem;
 }
 
 .dropdown-field,
@@ -298,11 +288,11 @@ letter-spacing: -0.06rem;
   width: 100%;
   height: 2.5rem;
   min-height: 2.5rem;
-  padding: 1rem;
+  padding: 0 1rem;
   align-items: center;
   justify-content: space-between;
   border-radius: 0.25rem;
-  border: 1px solid #C2C7D0;
+  border: 0.0625rem solid #C2C7D0;
   box-sizing: border-box;
   position: relative;
   background-color: #FFF;
@@ -338,10 +328,10 @@ letter-spacing: -0.06rem;
   left: 0;
   right: 0;
   background: #FFF;
-  border: 1px solid #C2C7D0;
+  border: 0.0625rem solid #C2C7D0;
   border-radius: 0.25rem;
   margin-top: 0.25rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0.25rem 0.375rem rgba(0, 0, 0, 0.1);
   z-index: 10;
   max-height: 12rem;
   overflow-y: auto;
@@ -361,7 +351,7 @@ letter-spacing: -0.06rem;
 
 .divider-line {
   width: 100%;
-  height: 1px;
+  height: 0.0625rem;
   background-color: #E2E8F0;
 }
 
@@ -369,7 +359,8 @@ letter-spacing: -0.06rem;
   display: flex;
   align-items: flex-start;
   gap: 0.625rem;
-  width: 32.5rem;
+  width: 100%;
+  max-width: 32.5rem;
   flex-shrink: 0;
 }
 
@@ -383,7 +374,7 @@ letter-spacing: -0.06rem;
   border-radius: 0.5rem;
   position: relative;
   background-color: #f8f9fa;
-  border: 1px solid #C2C7D0;
+  border: 0.0625rem solid #C2C7D0;
   cursor: pointer;
   margin-top: 0.125rem;
   transition: all 0.2s ease;
@@ -410,7 +401,7 @@ letter-spacing: -0.06rem;
 .checkbox-title {
   align-self: stretch;
   color: #1E293B;
-  letter-spacing: -0.112px;
+  letter-spacing: -0.007rem;
   font: 700 1rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
   line-height: 1.375rem;
 }
@@ -422,14 +413,141 @@ letter-spacing: -0.06rem;
   line-height: 160%;
 }
 
+/* ========================================
+   LAPTOP RESPONSIVE STYLES (Aggressive Scaling)
+   ======================================== */
+
+/* 1536px Breakpoint */
+@media (max-width: 1536px) {
+  .dashboard-header {
+    padding: 1rem 1.5rem;
+  }
+  
+  .dashboard-title {
+    font-size: 1.5rem;
+  }
+  
+  .main-content {
+    padding: 1.5rem;
+    gap: 3rem;
+  }
+  
+  .form-label {
+    width: 14rem;
+    font-size: 0.95rem;
+  }
+  
+  .form-field {
+    max-width: 28rem;
+  }
+}
+
+/* 1440px Breakpoint */
+@media (max-width: 1440px) {
+  .dashboard-header {
+    padding: 0.875rem 1.25rem;
+  }
+  
+  .dashboard-title {
+    font-size: 1.35rem;
+  }
+  
+  .main-content {
+    padding: 1.25rem;
+    gap: 2.5rem;
+  }
+  
+  .report-title {
+    font-size: 1.35rem;
+  }
+  
+  .form-label {
+    width: 13rem;
+    font-size: 0.9rem;
+  }
+  
+  .form-field {
+    max-width: 26rem;
+  }
+  
+  .field-text, .field-placeholder, .dropdown-item {
+    font-size: 0.9rem;
+  }
+}
+
+/* 1366px Breakpoint */
+@media (max-width: 1366px) {
+  .main-content {
+    padding: 1rem;
+    gap: 2rem;
+    margin: 1rem auto;
+  }
+  
+  .report-container {
+    gap: 1.5rem;
+  }
+  
+  .report-header {
+    padding-bottom: 1.5rem;
+  }
+  
+  .form-label {
+    width: 12rem;
+  }
+  
+  .form-field {
+    max-width: 24rem;
+  }
+}
+
+/* 1280px Breakpoint */
+@media (max-width: 1280px) {
+  .dashboard-header {
+    padding: 0.75rem 1rem;
+  }
+  
+  .dashboard-title {
+    font-size: 1.25rem;
+  }
+  
+  .main-content {
+    padding: 1rem;
+    gap: 1.5rem;
+  }
+  
+  .report-title {
+    font-size: 1.25rem;
+  }
+  
+  .form-row {
+    gap: 1.5rem;
+  }
+  
+  .form-label {
+    width: 11rem;
+    font-size: 0.875rem;
+  }
+  
+  .form-field {
+    max-width: 22rem;
+  }
+  
+  .field-text, .field-placeholder, .dropdown-item {
+    font-size: 0.875rem;
+  }
+}
+
+/* Tablet and Mobile */
 @media (max-width: 991px) {
   .main-content {
     padding: 1rem;
+    margin: 0;
+    border-radius: 0;
   }
 
   .form-row {
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.5rem;
   }
 
   .form-label {
@@ -438,19 +556,32 @@ letter-spacing: -0.06rem;
 
   .form-field {
     width: 100%;
+    max-width: 100%;
+  }
+  
+  .checkbox-container {
+    max-width: 100%;
   }
 }
 
 @media (max-width: 640px) {
-  .main-content {
-    padding: 0.75rem;
-  }
-
   .dashboard-header {
     padding: 1rem;
   }
 
   .breadcrumb-section {
     padding: 0.5rem 1rem;
+  }
+  
+  .report-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .report-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
   }
 }

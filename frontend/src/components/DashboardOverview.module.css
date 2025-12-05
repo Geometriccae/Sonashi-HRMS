@@ -560,13 +560,13 @@
 .bottomRow {
   display: flex;
   width: 100%;
-  align-items: center;
+  align-items: flex-start;      /* align start so items line up */
   gap: 24px;
-  justify-content: flex-start;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  flex-wrap: nowrap;            /* keep calendar + tasks on same row by default */
 }
 
-/* Calendar Card */
+/* Make the calendar card flexible and the tasks card a narrower fixed column */
 .calendarCard {
   border-radius: 18px;
   background-color: #fff;
@@ -575,170 +575,13 @@
   overflow: hidden;
   flex-grow: 1;
   flex-shrink: 1;
-  width: 920px;
-  margin: auto 0;
+  flex: 1 1 66%;               /* grow/shrink; target ~66% of row */
+  min-width: 420px;            /* allow layout to wrap only when space is too small */
+  max-width: calc(100% - 280px);
   border: 2px solid #e4e4e4;
 }
 
-.calendarControls {
-  display: flex;
-  padding: 0 29px;
-  margin: 21px 0;
-}
-
-.viewToggle {
-  border-radius: 99px;
-  background-color: rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.toggleButton {
-  justify-content: center;
-  align-items: center;
-  border-radius: 99px;
-  display: flex;
-  gap: 8px;
-  overflow: hidden;
-  padding: 4px 12px;
-  background: none;
-  border: none;
-  font: 500 13px/2 Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  cursor: pointer;
-}
-
-.toggleButton.active {
-  background-color: #007aff;
-  color: #fff;
-  box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.05), 0 4px 4px 0 rgba(0, 0, 0, 0.05),
-    0 10px 10px 0 rgba(0, 0, 0, 0.1);
-}
-
-.calendarContent {
-  padding: 0 29px;
-}
-
-.timeHeader {
-  display: flex;
-  width: 648px;
-  max-width: 100%;
-  align-items: stretch;
-  font-family: "Inter Tight";
-  gap: 20px;
-  color: #161616;
-  letter-spacing: 0.3px;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  font: 500 15px/1 Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  margin-bottom: 31px;
-}
-
-.timeGrid {
-  display: flex;
-  align-items: center;
-  gap: 30px;
-  color: #9ca1a0;
-  letter-spacing: 0.3px;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  font: 400 15px/1 Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  margin-bottom: 37px;
-}
-
-.timeSlot {
-  display: flex;
-  align-items: stretch;
-  gap: 9px;
-}
-
-.timeLine {
-  width: 0px;
-  flex-shrink: 0;
-  height: 14px;
-  border: 1px solid #9ca1a0;
-}
-
-.events {
-  position: relative;
-  min-height: 200px;
-  margin-bottom: 40px;
-}
-
-.event {
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  font-weight: 500;
-  justify-content: flex-start;
-  padding: 16px 24px;
-  position: absolute;
-  width: 313px;
-  max-width: 100%;
-}
-
-.orangeEvent {
-  background-color: #ff9500;
-  color: #fff;
-  top: 0;
-  left: 52px;
-}
-
-.blueEvent {
-  background-color: #007aff;
-  color: #fff;
-  top: 80px;
-  right: 78px;
-}
-
-.eventBadge {
-  border-radius: 16px;
-  background-color: #fff;
-  align-self: flex-start;
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  color: #258d3f;
-  text-align: center;
-  justify-content: center;
-  padding: 6px 8px;
-  font: 12px/1 Inter, -apple-system, Roboto, Helvetica, sans-serif;
-}
-
-.eventTitle {
-  color: #fff;
-  font-size: 18px;
-  line-height: 27px;
-  letter-spacing: -0.36px;
-  margin-top: 10px;
-}
-
-.eventLink {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1;
-  margin-top: 10px;
-}
-
-.loadingMessage,
-.noMeetings {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #9ca1a0;
-  font-family: "Inter Tight", -apple-system, Roboto, Helvetica, sans-serif;
-  font-size: 15px;
-  font-weight: 500;
-  text-align: center;
-}
-
-/* Tasks Card */
+/* Tasks column stays a narrower column, but allowed to shrink on smaller laptops */
 .tasksCard {
   border-radius: 18px;
   background-color: #fff;
@@ -746,7 +589,8 @@
   overflow: hidden;
   flex-grow: 1;
   flex-shrink: 1;
-  width: 385px;
+  flex: 0 0 320px;             /* keep a narrow column */
+  min-width: 280px;
   margin: auto 0;
   padding: 21px 28px 0;
   border: 2px solid #e4e4e4;
@@ -877,7 +721,312 @@ background: #FFF; */
   font-weight: 400;
 }
 
+
 /* Responsive Design */
+
+/* Large Laptops (1366px - 1440px) */
+@media (max-width: 1440px) {
+  .dashboardOverview {
+    padding: 20px;
+    gap: 20px;
+  }
+
+
+  .headerRow {
+    gap: 20px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .welcomeCard {
+    width: 19rem !important;
+    min-width: 19rem !important;
+    flex-shrink: 0 !important;
+  }
+
+  .metricsRow {
+    display: flex !important;
+    gap: 16px !important;
+    width: auto !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+
+  .metricCard {
+    width: auto !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+
+  .greeting {
+    font-size: 1.05rem !important;
+  }
+
+  .date {
+    font-size: 0.9rem;
+  }
+
+  
+
+  
+
+  .metricLabel {
+    font-size: 1rem;
+  }
+
+  .metricValue {
+    font-size: 34px;
+    margin-top: 10px;
+  }
+
+  .cardHeader h3,
+  .cardHeaderCalendar h3 {
+    font-size: 1.35rem;
+  }
+
+  .actionButton {
+    min-height: 55px;
+    width: 55px;
+    height: 55px;
+  }
+
+  .actionButton img {
+    width: 32px;
+  }
+
+  .conversionCard {
+    width: 100%;
+    height: auto;
+    min-height: 28rem;
+    padding: 2rem;
+  }
+
+  .calendarCard {
+    width: 100%;
+  }
+
+  .tasksCard {
+    width: 100%;
+  }
+}
+
+/* Standard Laptops (1200px - 1366px) */
+@media (max-width: 1366px) {
+  .dashboardOverview {
+    padding: 18px;
+    gap: 18px;
+  }
+
+  .headerRow {
+    gap: 18px;
+  }
+
+  .welcomeCard {
+    width: 26rem;
+    padding: 12px 10px 14px 18px;
+  }
+
+  .greeting {
+    font-size: 1.2rem;
+  }
+
+  .date {
+    font-size: 0.85rem;
+  }
+
+  .imagePlaceholder {
+    width: 150px;
+  }
+
+  .metricsRow {
+    gap: 14px;
+  }
+
+  .metricCard {
+    padding: 18px;
+    gap: 25px 45px;
+  }
+
+  .metricLabel {
+    font-size: 0.95rem;
+  }
+
+  .metricValue {
+    font-size: 32px;
+  }
+
+  .changeChip {
+    margin-top: 25px;
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+
+  .conversionCard {
+    padding: 1.8rem;
+  }
+
+  .cardTitle {
+    font-size: 1.3rem;
+  }
+
+  .cardSubtitle {
+    font-size: 1.1rem;
+  }
+
+  .percentageLabel {
+    font-size: 1.05rem;
+  }
+
+  .conversionRate {
+    width: 14rem;
+    height: 3.8rem;
+  }
+}
+
+/* Slightly smaller laptops / large tablets */
+@media (max-width: 1200px) {
+  .dashboardOverview {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .headerRow {
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .welcomeCard {
+    width: 100%;
+    max-width: 100%;
+    padding: 14px 16px;
+  }
+
+  .welcomeContent {
+    gap: 16px;
+  }
+
+  .greeting {
+    font-size: 1.15rem;
+  }
+
+  .date {
+    font-size: 0.85rem;
+  }
+
+  .imagePlaceholder {
+    width: 130px;
+  }
+
+  .metricsRow {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .metricCard {
+    flex: 1 1 calc(33.333% - 12px);
+    min-width: 220px;
+    padding: 16px;
+    gap: 20px 40px;
+  }
+
+  .metricContent {
+    width: 120px;
+  }
+
+  .metricLabel {
+    font-size: 0.9rem;
+  }
+
+  .metricValue {
+    font-size: 30px;
+    margin-top: 8px;
+  }
+
+  .metricDetails {
+    width: 70px;
+  }
+
+  .changeChip {
+    margin-top: 20px;
+    padding: 4px 7px;
+    font-size: 13px;
+  }
+
+  .contentRow {
+    gap: 16px;
+  }
+
+  .leadConversionCard {
+    width: 100%;
+    padding: 18px 20px;
+  }
+
+  .conversionCard {
+    width: 100%;
+    height: auto;
+    padding: 1.5rem;
+  }
+
+  .cardHeader h3,
+  .cardHeaderCalendar h3 {
+    font-size: 1.25rem;
+  }
+
+  .actionButton {
+    min-height: 50px;
+    width: 50px;
+    height: 50px;
+    padding: 0 10px;
+  }
+
+  .actionButton img {
+    width: 30px;
+  }
+
+  .percentageValue {
+    font-size: 38px;
+  }
+
+  .description {
+    font-size: 14px;
+    margin-top: 20px;
+  }
+
+  .bottomRow {
+    gap: 16px;
+  }
+  
+  .calendarCard {
+    width: 100%;
+    padding: 18px 24px;
+  }
+
+  .tasksCard {
+    width: 100%;
+    padding: 18px 24px 0;
+  }
+
+  .taskInfo h4 {
+    font-size: 1.15rem;
+  }
+
+  .taskInfo p {
+    font-size: 1rem;
+  }
+
+  .taskAvatar,
+  .taskAvatar1 {
+    width: 38px;
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .taskMeta {
+    font-size: 16px;
+    margin-bottom: 28px;
+  }
+}
+
 @media (max-width: 991px) {
   .dashboardOverview {
     padding: 20px;

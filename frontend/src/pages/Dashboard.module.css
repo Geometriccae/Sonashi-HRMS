@@ -2,7 +2,7 @@
   width: 100vw;
   height: 100vh;
   display: flex;
-  overflow: hidden;
+  /* overflow: hidden; */
   position: relative;
   background-color: #FAFBFB;
 }
@@ -277,6 +277,147 @@
 }
 
 /* Responsive Design */
+
+/* Large Laptops (1366px - 1440px) */
+@media (max-width: 1440px) {
+  .desktop-header {
+    padding: 1.25rem 1.75rem;
+   
+  }
+
+  .breadcrumb-section {
+    padding: 0.5rem 1.75rem;
+  }
+  
+
+  .dashboard-title {
+    font-size: 1.75rem;
+    letter-spacing: -0.07rem;
+  }
+
+  .dashboard-profile {
+    gap: 1.75rem;
+  }
+
+  .profile-picture {
+    width: 2.875rem;
+    height: 2.875rem;
+  }
+
+  .profile-name {
+    font-size: 1.05rem;
+  }
+
+  .profile-type {
+    font-size: 0.825rem;
+  }
+}
+
+/* Standard Laptops (1200px - 1366px) */
+@media (max-width: 1366px) {
+  .dashboard-layout {
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .desktop-header {
+    padding: 1.2rem 1.5rem;
+  }
+
+  .breadcrumb-section {
+    padding: 0.5rem 1.5rem;
+  }
+
+  .dashboard-title {
+    font-size: 1.65rem;
+    letter-spacing: -0.065rem;
+  }
+
+  .dashboard-profile {
+    gap: 1.5rem;
+  }
+
+  .belldot-icon {
+    width: 2.875rem;
+    height: 2.875rem;
+  }
+
+  .profile-picture {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .profile-column {
+    gap: 0.65rem;
+  }
+
+  .profile-name {
+    font-size: 1rem;
+  }
+
+  .profile-type {
+    font-size: 0.8rem;
+  }
+
+  .breadcrumb-one,
+  .breadcrumb-two {
+    font-size: 0.95rem;
+  }
+}
+
+/* Smaller Laptops (1024px - 1200px) */
+@media (max-width: 1200px) {
+  .desktop-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .breadcrumb-section {
+    padding: 0.5rem 1.25rem;
+  }
+
+  .dashboard-title {
+    font-size: 1.5rem;
+    letter-spacing: -0.06rem;
+  }
+
+  .dashboard-profile {
+    gap: 1.25rem;
+  }
+
+  .belldot-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0rem 0.75rem;
+  }
+
+  .profile-info {
+    gap: 1.5rem;
+  }
+
+  .profile-picture {
+    width: 2.625rem;
+    height: 2.625rem;
+  }
+
+  .profile-column {
+    gap: 0.6rem;
+  }
+
+  .profile-name {
+    font-size: 0.95rem;
+  }
+
+  .profile-type {
+    font-size: 0.75rem;
+  }
+
+  .breadcrumb-one,
+  .breadcrumb-two {
+    font-size: 0.9rem;
+    line-height: 1.1rem;
+  }
+}
+
 @media (max-width: 1366px) {
   .dashboard-layout {
     width: 100vw;

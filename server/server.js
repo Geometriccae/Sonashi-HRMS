@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 const path = require('path');
 const http = require('http');
-const frontendPath = path.join(__dirname, '../frontend/build');
 
 console.log('=== ENVIRONMENT VARIABLES ===');
 console.log('MONGO_URI:', process.env.MONGO_URI ? 'SET' : 'NOT SET');
@@ -207,31 +206,6 @@ app.use(cors({
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-
-// ====== UTF-8 ENCODING MIDDLEWARE ======
-app.use((req, res, next) => {
-  // Set UTF-8 for all responses
-  if (req.path.endsWith('.html') || req.path === '/') {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  }
-  next();
-});
-
-// Serve static files with proper UTF-8 headers
-app.use(express.static(frontendPath, {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.html')) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    }
-    if (path.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css; charset=utf-8');
-    }
-    if (path.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    }
-  }
-}));
-
 // ====== API ROUTES ======
 app.use('/api/employees', employeeRoutes);
 app.use('/api/employeedocuments', employeeDocumentRoutes);
@@ -249,7 +223,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // ====== SERVE FRONTEND ======
-
+const frontendPath = path.join(__dirname, '../frontend/build');
 app.use(express.static(frontendPath));
 
 // ====== REACT ROUTES CONFIG ======

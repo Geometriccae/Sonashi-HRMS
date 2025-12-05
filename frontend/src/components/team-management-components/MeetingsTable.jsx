@@ -627,7 +627,7 @@ const MeetingsTable = ({ employeeId, key: calendarKey }) => {
                 {selectedMeeting.notes || "No Notes Added"}
               </div>
               {selectedMeeting.link && (
-                <div className="meeting-link">
+                <div className={styles["meeting-link"]}>
                   <a
                     href={selectedMeeting.link}
                     target="_blank"

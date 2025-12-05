@@ -449,7 +449,7 @@ const normalizedMeetings = (meetingsList || []).map(m => {
     <div className={styles.dashboardOverview}>
 
        {/* Temporary debug info */}
-      <div style={{ 
+      {/* <div style={{ 
         background: '#f0f0f0', 
         padding: '10px', 
         margin: '10px', 
@@ -459,7 +459,7 @@ const normalizedMeetings = (meetingsList || []).map(m => {
       }}>
         <strong>Debug Info:</strong> {debugInfo}<br/>
         <strong>Last Check-in Time:</strong> {lastCheckInTime ? new Date(lastCheckInTime).toString() : 'null'}
-      </div>
+      </div> */}
       {/* Header Section */}
       <div className={styles.headerRow}>
         <div className={styles.welcomeCard}>

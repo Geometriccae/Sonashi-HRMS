@@ -12,13 +12,7 @@ root.render(
   </React.StrictMode>
 );
 
-// root.render(
-//   <React.StrictMode>
-//     <div className="responsive-wrapper">
-//       <App />
-//     </div>
-//   </React.StrictMode>
-// );
+
 
 
 // If you want to start measuring performance in your app, pass a function

@@ -334,19 +334,13 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
             </div> */}
 
 <div className="color-selector">
- 
-  <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+  <div className="color-options-container">
     {["#FF9500", "#007AFF", "#34C759", "#30B0C7"].map((color) => (
       <label
         key={color}
+        className="color-option-label"
         style={{
-          display: "inline-block",
-          width: "24px",
-          height: "24px",
-          borderRadius: "50%",
           border: `3px solid ${formData.color === color ? "#000" : color}`,
-          cursor: "pointer",
-          position: "relative",
         }}
       >
         <input
@@ -358,12 +352,9 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
           onChange={() => handleColorSelect(color)}
         />
         <div
+          className="color-option-circle"
           style={{
-            width: "100%",
-            height: "100%",
-            borderRadius: "50%",
             backgroundColor: formData.color === color ? color : "transparent",
-            transition: "0.2s",
           }}
         />
       </label>

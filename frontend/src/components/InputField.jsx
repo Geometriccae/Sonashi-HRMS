@@ -17,7 +17,7 @@ function InputField({
     <div className="input-field">
       <div className="input-label-container">
         <label className="input-label">
-          {label} {required && "*"}
+          {label} {required && <span style={{ color: "red", marginLeft: "4px" }}>*</span>}
         </label>
       </div>
       <div className={`input-container ${hasError ? "input-error" : ""}`}>

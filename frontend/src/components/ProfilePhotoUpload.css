@@ -144,7 +144,10 @@
 }
 
 /* Keep this responsive-friendly by capping width */
-.profile-upload-container { max-width: 100%; }
+.profile-upload-container { 
+  max-width: 100%;
+  
+}
 
 /* Profile info area */
 .profile-info {
@@ -228,11 +231,84 @@
   object-fit: cover;
 }
 
-/* Default responsive breakpoint consolidation:
-   - Laptop / small-desktop: max-width 62.9375rem (991px)
-   - Tablet: max-width 48rem (768px)
-   - Mobile: max-width 40rem (640px)
-*/
+@media (max-width: 1536px) { 
+ .profile-upload-container {
+    width: 40.625rem; /* 714px */
+    padding: 1rem; /* 19.2px */
+    border-radius: 0.6rem; /* 9.6px */
+    margin-top: 1rem; /* 40px */
+    gap: 0.7rem; /* 11.2px */
+  }
+
+  .avatar-container {
+    width: 3.6rem; /* 57.6px */
+    height: 3.6rem;
+    border-radius: 50%; /* 80px */
+    
+  }
+
+  .profile-text {
+    font-size: 0.9rem; /* 14.4px */
+  }
+
+  .profile-upload-button {
+    padding: 0.2rem 0.6rem; /* 3.2px 9.6px */
+    gap: 0.6rem; /* 9.6px */
+    border-radius: 0.4rem; /* 6.4px */
+    font-size: 0.65rem; /* 10.4px */
+  }
+
+   .avatar-bg {
+    width: 3.6rem;  /* 57.6px */
+    height: 3.6rem;
+  }
+
+  .user-icon {
+    width: 1.6rem; /* 25.6px */
+    height: 1.6rem;
+    left: 1rem;  /* 16px */
+    top: 1rem;   /* 16px */
+  }
+}
+
+@media (max-width: 1440px) { 
+.profile-upload-container {
+    width: 41.8125rem; /* 669px */
+    padding: 1.125rem; /* 18px */
+    border-radius: 0.5625rem; /* 9px */
+    margin-top: 1rem; /* 37.5px */
+    gap: 0.65625rem; /* 10.5px */
+  }
+
+  
+
+  .profile-text {
+    font-size: 0.84375rem; /* 13.5px */
+  }
+
+  .profile-upload-button {
+    padding: 0.1875rem 0.5625rem; /* 3px 9px */
+    gap: 0.5625rem; /* 9px */
+    border-radius: 0.375rem; /* 6px */
+    font-size: 0.609375rem; /* 9.75px */
+  }
+   .avatar-container {
+    width: 3.375rem; /* 54px */
+    height: 3.375rem;
+    border-radius: 4.6875rem; /* 75px */
+  }
+ .avatar-bg {
+    width: 3.375rem; /* 54px */
+    height: 3.375rem;
+  }
+
+  .user-icon {
+    width: 1.5rem;  /* 24px */
+    height: 1.5rem;
+    left: 0.9375rem; /* 15px */
+    top: 0.9375rem;  /* 15px */
+  }
+}
 
 /* Laptop / small-desktop adjustments */
 @media (max-width: 62.9375rem) { /* 991px */

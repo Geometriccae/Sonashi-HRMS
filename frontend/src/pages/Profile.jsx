@@ -314,9 +314,9 @@ function Profile() {
             </div>
 
             <div className={styles["divider"]}></div>
-            <div className={styles["divider"]}></div>
+            {/* <div className={styles["divider"]}></div> */}
 
-            <div className={styles["form-row"]}>
+            {/* <div className={styles["form-row"]}>
               <div className={styles["form-label"]}>Notifications</div>
               <div className={styles["notifications-section"]}>
                 <div className={styles["notification-item"]}>
@@ -405,7 +405,7 @@ function Profile() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
           </div>
         </section>
       </main>

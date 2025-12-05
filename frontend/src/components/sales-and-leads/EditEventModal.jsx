@@ -386,7 +386,7 @@ function EditEventModal({
             </div> */}
 
             <div className="color-selector">
-              <label className="field-label">Event Color</label>
+              {/* <label className="field-label">Event Color</label> */}
               <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
                 {["#FF9500", "#007AFF", "#34C759", "#30B0C7"].map((color) => (
                   <label

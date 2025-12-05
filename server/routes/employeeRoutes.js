@@ -7,6 +7,7 @@ const path = require('path');
 const nodemailer = require("nodemailer");
 const Notification = require('../models/Notification');
 const Attendance = require('../models/Attendance');
+const fs = require('fs'); // Add this import
 
 const DEFAULT_TASK_REMINDERS = [1, 15, 60, 180, 1440];
 
@@ -61,9 +62,15 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// ========== CREATE UPLOAD MIDDLEWARE ==========
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+// =============================================
 
-
-// 📧 Email sending helper
+// ?? Email sending helper
 async function sendTaskAssignedEmail(to, eventData, assignedBy) {
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -156,52 +163,180 @@ router.get('/events', authMiddleware, async (req, res) => {
 });
 
 // Create new employee with profile photo support
-router.post('/', authMiddleware,
-  multer({ storage, fileFilter }).single('profilePhoto'),
-  async (req, res) => {
+router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res) => {
+  try {
+    console.log("Incoming employee body:", req.body);
+    console.log("Incoming employee file:", req.file);
+
+    let employeeData = req.body.data
+      ? JSON.parse(req.body.data)
+      : {};
+
+    // Defensive: strip any incoming id fields to avoid duplicate _id insertion
+    delete employeeData._id;
+    delete employeeData.id;
+    delete employeeData.__v;
+
+    // Check for duplicate email BEFORE creating
+    if (employeeData.emailId) {
+      const existingEmployee = await Employee.findOne({ 
+        emailId: employeeData.emailId.toLowerCase().trim() 
+      });
+      
+      if (existingEmployee) {
+        return res.status(400).json({ 
+          message: `Employee with email "${employeeData.emailId}" already exists` 
+        });
+      }
+    }
+
+    // Check for duplicate employeeId (optional but good practice)
+    if (employeeData.employeeId) {
+      const existingEmployeeById = await Employee.findOne({ 
+        employeeId: employeeData.employeeId 
+      });
+      
+      if (existingEmployeeById) {
+        return res.status(400).json({ 
+          message: `Employee with ID "${employeeData.employeeId}" already exists` 
+        });
+      }
+    }
+
+    if (req.file) {
+      employeeData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+    }
+
+    const employee = new Employee(employeeData);
+    const savedEmployee = await employee.save();
+
+    // Emit lightweight event so frontends can update lists in real-time
     try {
-      // Debugging logs
-      console.log("Incoming employee body:", req.body);
-      console.log("Incoming employee file:", req.file);
-
-      const employeeData = req.body.data
-        ? JSON.parse(req.body.data)
-        : {};
-
-      // Defensive: strip any incoming id fields to avoid duplicate _id insertion
-      delete employeeData._id;
-      delete employeeData.id;
-      delete employeeData.__v;
-
-      if (req.file) {
-        employeeData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('employee-created', savedEmployee);
+        if (savedEmployee.emailId) io.to(`email-${savedEmployee.emailId}`).emit('employee-created', savedEmployee);
+        io.to('role-admin').emit('employee-created', savedEmployee);
       }
+    } catch (emitErr) {
+      console.warn('Failed to emit employee-created event:', emitErr);
+    }
 
-      const employee = new Employee(employeeData);
-      const savedEmployee = await employee.save();
-
-      // Emit lightweight event so frontends can update lists in real-time
-      try {
-        const io = req.app.get('io');
-        if (io) {
-          io.emit('employee-created', savedEmployee);
-          if (savedEmployee.emailId) io.to(`email-${savedEmployee.emailId}`).emit('employee-created', savedEmployee);
-          io.to('role-admin').emit('employee-created', savedEmployee);
-        }
-      } catch (emitErr) {
-        console.warn('Failed to emit employee-created event:', emitErr);
-      }
-
-      res.status(201).json(savedEmployee);
-    } catch (error) {
-      console.error("Create employee error:", error);
-      res.status(400).json({
-        message: "Error creating employee",
-        error: error.message,
+    res.status(201).json(savedEmployee);
+  } catch (error) {
+    console.error("Create employee error:", error);
+    
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      const value = error.keyValue[field];
+      return res.status(400).json({
+        message: `Employee with ${field} "${value}" already exists`,
+        error: `Duplicate ${field}`
       });
     }
+    
+    res.status(400).json({
+      message: "Error creating employee",
+      error: error.message,
+    });
   }
-);
+});
+// Update employee
+router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, res) => {
+  try {
+    console.log('🔧 UPDATE EMPLOYEE - START');
+    console.log('Employee ID:', req.params.id);
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file);
+
+    let updateData = {};
+    if (req.body.data) {
+      try {
+        updateData = JSON.parse(req.body.data);
+        console.log('Parsed updateData:', updateData);
+        console.log('assignedProjects:', updateData.assignedProjects);
+        console.log('Type of assignedProjects:', typeof updateData.assignedProjects);
+        
+        // Ensure assignedProjects is an array
+        if (updateData.assignedProjects && !Array.isArray(updateData.assignedProjects)) {
+          console.error('assignedProjects is not an array:', updateData.assignedProjects);
+          return res.status(400).json({ 
+            message: 'assignedProjects must be an array' 
+          });
+        }
+      } catch (parseErr) {
+        console.error('JSON parse error:', parseErr);
+        return res.status(400).json({ message: 'Invalid JSON data' });
+      }
+    } else {
+      updateData = req.body;
+    }
+
+    // Check for duplicate email (only if email is being updated)
+    if (updateData.emailId) {
+      const existingEmployee = await Employee.findOne({ 
+        emailId: updateData.emailId.toLowerCase().trim(),
+        _id: { $ne: req.params.id } // Exclude current employee
+      });
+      
+      if (existingEmployee) {
+        return res.status(400).json({ 
+          message: `Another employee with email "${updateData.emailId}" already exists` 
+        });
+      }
+    }
+
+    // Handle profile photo
+    if (req.file) {
+      // Delete old photo if exists
+      const currentEmployee = await Employee.findById(req.params.id);
+      if (currentEmployee && currentEmployee.profilePhoto) {
+        const oldPhotoPath = path.join(__dirname, '..', currentEmployee.profilePhoto);
+        if (fs.existsSync(oldPhotoPath)) {
+          fs.unlinkSync(oldPhotoPath);
+        }
+      }
+      updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+    }
+
+    // Update employee
+    const updatedEmployee = await Employee.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedEmployee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    console.log('✅ Employee updated successfully:', updatedEmployee._id);
+    res.json({
+      message: 'Employee updated successfully',
+      employee: updatedEmployee
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating employee:', error);
+    
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      const value = error.keyValue[field];
+      return res.status(400).json({ 
+        message: `Another employee with ${field} "${value}" already exists`,
+        error: `Duplicate ${field}`
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Error updating employee', 
+      error: error.message,
+      details: error.toString()
+    });
+  }
+});
 
 // Bulk delete employees
 router.post('/bulk-delete', authMiddleware, async (req, res) => {
@@ -252,50 +387,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Update employee with profile photo support
-router.put('/:id',
-  authMiddleware,
-  multer({ storage, fileFilter }).single('profilePhoto'),
-  async (req, res) => {
-    try {
-      // Debugging logs
-      console.log("Update - Incoming employee body:", req.body);
-      console.log("Update - Incoming employee file:", req.file);
-      console.log("Update - Employee ID:", req.params.id);
 
-      let updateData = req.body.data
-        ? JSON.parse(req.body.data)
-        : {};
-
-      // Add profile photo path if file was uploaded
-      if (req.file) {
-        updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
-        console.log("Update - Profile photo path:", updateData.profilePhoto);
-      }
-
-      if (!project) {
-        return res.status(400).json({ message: 'Project name is required' });
-      }
-
-      const employee = await Employee.findById(req.params.id);
-      if (!employee) {
-        return res.status(404).json({ message: 'Employee not found' });
-      }
-
-      // Check if project already exists to avoid duplicates
-      if (!employee.assignedProjects.includes(project)) {
-        employee.assignedProjects.push(project);
-        await employee.save();
-      }
-
-      res.status(201).json({
-        message: 'Project added successfully',
-        employee
-      });
-    } catch (error) {
-      res.status(500).json({ message: 'Error adding project', error: error.message });
-    }
-  });
 
 // Delete single employee
 router.delete('/:id', authMiddleware, async (req, res) => {
@@ -589,7 +681,7 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
 
     await employee.save();
 
-    // ✅ Collect recipients (employee + assigned team members)
+    // ? Collect recipients (employee + assigned team members)
     const recipients = [];
 
     if (employee.emailId) recipients.push(employee.emailId);
@@ -607,7 +699,7 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
 
     const uniqueRecipients = [...new Set(recipients)];
 
-    // ✅ Send update notification emails
+    // ? Send update notification emails
     for (const email of uniqueRecipients) {
       await sendTaskAssignedEmail(email, updatedData, assignedBy).catch(err => console.error("Email error:", err));
     }
@@ -638,7 +730,7 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
       console.error('Error emitting/persisting notification for employee event update:', notifyErr);
     }
 
-    // ✅ Reschedule Reminders (Add new setTimeouts)
+    // ? Reschedule Reminders (Add new setTimeouts)
     if (updatedData.reminders && updatedData.reminders.length > 0) {
       const eventDateTime = deriveEventDateTime(updatedData.date, updatedData.time);
 

@@ -266,6 +266,240 @@
 }
 
 /* Responsive styles */
+
+/* Large Laptops (1366px - 1440px) */
+@media (max-width: 1440px) {
+  .conversionDataContainer {
+    max-width: 950px;
+    min-height: 550px;
+  }
+
+  .header {
+    padding: 30px 38px;
+  }
+
+  .title {
+    font-size: 19px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+  }
+
+  .percentageIndicators {
+    gap: 35px;
+    padding: 0 38px;
+    margin-bottom: 18px;
+  }
+
+  .indicatorValue {
+    font-size: 30px;
+  }
+
+  .indicatorTitle {
+    font-size: 13px;
+  }
+
+  .indicatorSubtitle {
+    font-size: 11px;
+  }
+
+  .yAxisLabels {
+    left: 38px;
+    font-size: 13px;
+  }
+
+  .conversionTooltip {
+    right: 38px;
+    min-width: 150px;
+  }
+
+  .footer {
+    padding: 18px;
+  }
+}
+
+/* Standard Laptops (1200px - 1366px) */
+@media (max-width: 1366px) {
+  .conversionDataContainer {
+    /* max-width: 900px; */
+    max-width: 700px;
+    min-height: 520px;
+  }
+
+  .header {
+    padding: 28px 35px;
+  }
+
+  .title {
+    font-size: 18px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+  }
+
+  .select {
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+
+  .actionButton {
+    width: 38px;
+    height: 38px;
+  }
+
+  .percentageIndicators {
+    gap: 32px;
+    padding: 0 35px;
+    margin-bottom: 16px;
+  }
+
+  .indicatorValue {
+    font-size: 28px;
+  }
+
+  .indicatorTitle {
+    font-size: 13px;
+  }
+
+  .indicatorSubtitle {
+    font-size: 11px;
+  }
+
+  .yAxisLabels {
+    left: 35px;
+    font-size: 13px;
+  }
+
+  .conversionTooltip {
+    right: 35px;
+    padding: 9px;
+    min-width: 145px;
+  }
+
+  .tooltipPercentage {
+    font-size: 13px;
+  }
+
+  .tooltipDate {
+    font-size: 11px;
+  }
+
+  .footer {
+    padding: 16px;
+  }
+
+  .footerText {
+    font-size: 11px;
+  }
+}
+
+/* Smaller Laptops (1024px - 1200px) */
+@media (max-width: 1200px) {
+  .conversionDataContainer {
+    max-width: 100%;
+    min-height: 500px;
+  }
+
+  .header {
+    padding: 24px 30px;
+    gap: 16px;
+  }
+
+  .title {
+    font-size: 17px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .headerRight {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .select {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .actionButton {
+    width: 36px;
+    height: 36px;
+  }
+
+  .percentageIndicators {
+    gap: 28px;
+    padding: 0 30px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .percentageItem {
+    gap: 10px;
+  }
+
+  .indicatorValue {
+    font-size: 26px;
+  }
+
+  .indicatorTitle {
+    font-size: 12px;
+  }
+
+  .indicatorSubtitle {
+    font-size: 10px;
+  }
+
+  .chartSectionWrapper {
+    min-height: 280px;
+  }
+
+  .yAxisLabels {
+    left: 30px;
+    font-size: 12px;
+  }
+
+  .legend {
+    gap: 20px;
+    padding: 16px 0;
+  }
+
+  .legendItem {
+    font-size: 13px;
+  }
+
+  .conversionTooltip {
+    top: 18%;
+    right: 30px;
+    padding: 8px;
+    min-width: 140px;
+  }
+
+  .tooltipIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tooltipPercentage {
+    font-size: 12px;
+  }
+
+  .tooltipDate {
+    font-size: 10px;
+  }
+
+  .footer {
+    padding: 14px;
+  }
+
+  .footerText {
+    font-size: 11px;
+  }
+}
+
 @media (max-width: 991px) {
   .header {
     flex-direction: column;

@@ -31,6 +31,7 @@ import scaneye from "../../assets/dashboard/scan-eye.svg";
 import settings2 from "../../assets/dashboard/settings-2.svg";
 import settings from "../../assets/dashboard/settings.svg";
 import userplus from "../../assets/dashboard/user-plus.svg";
+import addcontact from "../../assets/dashboard/add-contact.png";
 import logout from "../../assets/dashboard/log-out.svg";
 import offbutton from "../../assets/dashboard/off-button.png";
 
@@ -178,7 +179,7 @@ function Sidebar() {
                 <li className={isActive("/user-management") ? styles.active : ""}>
                   <Link to="/user-management" className={styles["sidebar-link"]}>
                     <img
-                      src={userplus}
+                      src={addcontact}
                       alt="User Management"
                       className={styles.icon}
                     />{" "}
@@ -199,20 +200,26 @@ function Sidebar() {
                 </Link>
               </li>
               <li>
+                <Link to="" className={styles["sidebar-link"]}>
                 <img src={cloud} alt="My Files" className={styles.icon} /> My
                 Files
+               </Link>
               </li>
               <li>
+                <Link to="" className={styles["sidebar-link"]}>
                 <img
                   src={circlehelp}
                   alt="Help & Support"
                   className={styles.icon}
                 />{" "}
                 Help & Support
+                </Link>
               </li>
               <li className={styles["logout"]} onClick={handleLogout}>
+                 <Link to="" className={styles["sidebar-link"]}>
                 <img src={logout} alt="Log Out" className={styles.icon} /> Log
                 Out
+                </Link>
               </li>
             </ul>
           </div>

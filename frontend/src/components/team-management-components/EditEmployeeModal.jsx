@@ -8,6 +8,47 @@ import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
 import Dropdown from "../DropDown";
 import Select from "react-select";
+import ToastContainer from "../Toast";
+
+// Options for dropdowns
+  const activeOptions = [
+    { value: "", label: "-Select-" },
+    { value: "Active", label: "Active" },
+    { value: "InActive", label: "InActive" },
+  ];
+
+ const departmentOptions = [
+    { value: "", label: "-Select-" },
+    { value: "Bulk Sales", label: "Bulk Sales" },
+    { value: "Bulk Operations", label: "Bulk Operations" },
+    { value: "Project Sales", label: "Project Sales" },
+    { value: "Project Operations", label: "Project Operations" },
+    { value: "HR", label: "HR" },
+    { value: "Finance", label: "Finance" },
+    { value: "IT", label: "IT" },
+    { value: "Logistics", label: "Logistics" },
+    { value: "Customer Service", label: "Customer Service" },
+];
+
+  const roleOptions = [
+    { value: "", label: "-Select-" },
+    { value: "Managing Director", label: "Managing Director" },
+    { value: "Director", label: "Director" },
+    { value: "Business Development Manager", label: "Business Development Manager" },
+    { value: "Sales Executive", label: "Sales Executive" },
+    { value: "Operations Manager", label: "Operations Manager" },
+    { value: "Operations Executive", label: "Operations Executive" },
+    { value: "Pricing Manager", label: "Pricing Manager" },
+    { value: "Pricing Executive", label: "Pricing Executive" },
+    { value: "Logistics Coordinator", label: "Logistics Coordinator" },
+    { value: "Account Manager", label: "Account Manager" },
+    { value: "HR Manager", label: "HR Manager" },
+    { value: "IT Specialist", label: "IT Specialist" },
+    {
+      value: "Customer Service Representative",
+      label: "Customer Service Representative",
+    },
+];
 
 function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -33,7 +74,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   });
 
   const [clients, setClients] = useState([]);
-  const [error, setError] = useState("");
+  const [toasts, setToasts] = useState([]);
+  const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -56,14 +98,37 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   // Populate form data when employee prop changes
   useEffect(() => {
     if (employee && isOpen) {
+      console.log("EditEmployeeModal - Employee Data:", employee);
+      console.log("EditEmployeeModal - Role Options:", roleOptions);
+      console.log("EditEmployeeModal - Department Options:", departmentOptions);
+
+      // Helper to find matching option value
+      const findMatchingValue = (value, options) => {
+        if (!value) return "";
+        const valStr = value.toString().toLowerCase();
+        const match = options.find(
+          (opt) =>
+            opt.value.toLowerCase() === valStr ||
+            opt.label.toLowerCase() === valStr
+        );
+        console.log(`findMatchingValue - Value: ${value}, Match:`, match);
+        return match ? match.value : value;
+      };
+
+      const normalizedRole = findMatchingValue(employee.role, roleOptions);
+      const normalizedDepartment = findMatchingValue(employee.department, departmentOptions);
+
+      console.log("Normalized Role:", normalizedRole);
+      console.log("Normalized Department:", normalizedDepartment);
+
       setFormData({
         employeeId: employee.employeeId || "",
         employeeName: employee.employeeName || "",
         mobile: employee.mobile || "",
         emailId: employee.emailId || "",
-        role: employee.role || "",
+        role: normalizedRole,
         designation: employee.designation || "",
-        department: employee.department || "",
+        department: normalizedDepartment,
         employeeStatus: employee.employeeStatus || "Active",
         attendance: employee.attendance || "Onsite",
         assignedProjects: Array.isArray(employee.assignedProjects)
@@ -81,7 +146,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       // Reset form state
       setCurrentStep(1);
       setProfileImage(null);
-      setError("");
+      setValidationErrors({});
     }
   }, [employee, isOpen]);
 
@@ -91,7 +156,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setCurrentStep(1);
       setProfileImage(null);
       setCurrentProfileImageUrl(null);
-      setError("");
+      setValidationErrors({});
       setFormData({
         employeeId: "",
         employeeName: "",
@@ -112,7 +177,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
       onClose();
-      setError("");
+      setValidationErrors({});
     }
   };
 
@@ -121,6 +186,10 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       ...prev,
       [field]: value,
     }));
+    // Clear error for this field if it exists
+    if (validationErrors[field]) {
+      setValidationErrors((prev) => ({ ...prev, [field]: false }));
+    }
   };
 
   const handleProjectSelection = (selectedOptions) => {
@@ -133,45 +202,86 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     }));
   };
 
+  const addToast = (message, type = "error") => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
-      setError("");
+      setValidationErrors({});
     }
   };
 
+  const validateStep = (step) => {
+    const errors = {};
+    const missingFields = [];
+
+    if (step === 1) {
+      if (!formData.employeeId) { errors.employeeId = true; missingFields.push("Employee ID"); }
+      if (!formData.employeeName) { errors.employeeName = true; missingFields.push("Employee Name"); }
+      if (!formData.mobile) { errors.mobile = true; missingFields.push("Mobile Number"); }
+      if (!formData.emailId) { errors.emailId = true; missingFields.push("Email ID"); }
+      if (!formData.role) { errors.role = true; missingFields.push("Role"); }
+    } else if (step === 2) {
+      if (!formData.department) { errors.department = true; missingFields.push("Department"); }
+    }
+
+    setValidationErrors(errors);
+
+    if (missingFields.length > 0) {
+      addToast(
+        `Please fill in the following required fields: ${missingFields.join(", ")}`,
+        "error"
+      );
+      return false;
+    }
+    return true;
+  };
+
   const handleNext = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-      setError("");
+    if (validateStep(currentStep)) {
+      if (currentStep < 3) {
+        setCurrentStep(currentStep + 1);
+      }
     }
   };
 
   const handleStepClick = (stepId) => {
     if (stepId <= currentStep) {
       setCurrentStep(stepId);
-      setError("");
+      setValidationErrors({});
     }
   };
 
   const handleFinish = async () => {
     // Validate required fields
-    if (
-      !formData.employeeId ||
-      !formData.employeeName ||
-      !formData.mobile ||
-      !formData.emailId ||
-      !formData.role ||
-      !formData.department
-    ) {
-      setError(
-        "Employee ID, Name, Mobile, Email, Role, and Department are required fields"
+    const errors = {};
+    const missingFields = [];
+
+    if (!formData.employeeId) { errors.employeeId = true; missingFields.push("Employee ID"); }
+    if (!formData.employeeName) { errors.employeeName = true; missingFields.push("Employee Name"); }
+    if (!formData.mobile) { errors.mobile = true; missingFields.push("Mobile Number"); }
+    if (!formData.emailId) { errors.emailId = true; missingFields.push("Email ID"); }
+    if (!formData.role) { errors.role = true; missingFields.push("Role"); }
+    if (!formData.department) { errors.department = true; missingFields.push("Department"); }
+
+    if (missingFields.length > 0) {
+      setValidationErrors(errors);
+      addToast(
+        `Please fill in the following required fields: ${missingFields.join(", ")}`,
+        "error"
       );
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
+    setValidationErrors({});
 
     try {
       // Filter out empty fields
@@ -195,11 +305,34 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       onClose();
     } catch (err) {
       console.error("Error updating employee:", err);
-      setError(err.message || "Failed to update employee. Please try again.");
+
+      let errorMessage =
+        err.message || "Failed to create employee. Please try again.";
+
+      // Handle duplicate email error
+      if (
+        err.message.includes("email") &&
+        err.message.includes("already exists")
+      ) {
+        errorMessage =
+          "An employee with this email already exists. Please use a different email.";
+      } else if (
+        err.message.includes("employeeId") &&
+        err.message.includes("already exists")
+      ) {
+        errorMessage =
+          "An employee with this ID already exists. Please use a different Employee ID.";
+      } else if (err.message.includes("Duplicate")) {
+        errorMessage =
+          "Duplicate entry found. Please check the information and try again.";
+      }
+      
+      addToast(err.message || "Failed to update employee. Please try again.", "error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   const handlePhotoUpload = (file) => {
     setProfileImage(file);
@@ -220,39 +353,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     fileInput.click();
   };
 
-  // Options for dropdowns
-  const activeOptions = [
-    { value: "", label: "-Select-" },
-    { value: "Active", label: "Active" },
-    { value: "InActive", label: "InActive" },
-  ];
 
-  const departmentOptions = [
-    { value: "", label: "-Select-" },
-    { value: "Operations", label: "Operations" },
-    { value: "Sales", label: "Sales" },
-    { value: "Marketing", label: "Marketing" },
-    { value: "HR", label: "HR" },
-    { value: "Finance", label: "Finance" },
-    { value: "IT", label: "IT" },
-    { value: "Logistics", label: "Logistics" },
-    { value: "Customer Service", label: "Customer Service" },
-  ];
-
-  const roleOptions = [
-    { value: "", label: "-Select-" },
-    { value: "Operations Manager", label: "Operations Manager" },
-    { value: "Sales Executive", label: "Sales Executive" },
-    { value: "Logistics Coordinator", label: "Logistics Coordinator" },
-    { value: "Account Manager", label: "Account Manager" },
-    { value: "HR Manager", label: "HR Manager" },
-    { value: "Finance Analyst", label: "Finance Analyst" },
-    { value: "IT Specialist", label: "IT Specialist" },
-    {
-      value: "Customer Service Representative",
-      label: "Customer Service Representative",
-    },
-  ];
 
   const clientOptions = clients.map((client) => ({
     value: client._id,
@@ -271,49 +372,55 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             />
             <div className="form-fields-grid">
               <InputField
-                label="Employee ID *"
+                label="Employee ID"
                 placeholder="EMP-001"
                 required
                 value={formData.employeeId}
                 onChange={(e) =>
                   handleInputChange("employeeId", e.target.value)
                 }
+                hasError={validationErrors.employeeId}
               />
 
               <InputField
-                label="Employee Name *"
+                label="Employee Name"
                 placeholder="Full Name"
                 required
                 value={formData.employeeName}
                 onChange={(e) =>
                   handleInputChange("employeeName", e.target.value)
                 }
+                hasError={validationErrors.employeeName}
               />
 
               <InputField
-                label="Mobile Number *"
+                label="Mobile Number"
                 placeholder="+91 1234567890"
                 required
                 type="tel"
                 value={formData.mobile}
                 onChange={(e) => handleInputChange("mobile", e.target.value)}
+                hasError={validationErrors.mobile}
               />
 
               <InputField
-                label="Email ID *"
+                label="Email ID"
                 placeholder="employee@company.com"
                 required
                 type="email"
                 value={formData.emailId}
                 onChange={(e) => handleInputChange("emailId", e.target.value)}
+                hasError={validationErrors.emailId}
               />
 
               <Dropdown
-                label="Role *"
+                label="Role"
                 placeholder="Select role"
+                required
                 options={roleOptions}
                 value={formData.role}
                 onChange={(e) => handleInputChange("role", e.target.value)}
+                hasError={validationErrors.role}
               />
 
               <InputField
@@ -333,13 +440,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
           <div className="billing-content">
             <div className="form-fields-grid">
               <Dropdown
-                label="Department *"
+                label="Department"
                 placeholder="Select department"
+                required
                 options={departmentOptions}
                 value={formData.department}
                 onChange={(e) =>
                   handleInputChange("department", e.target.value)
                 }
+                hasError={validationErrors.department}
               />
 
               <Dropdown
@@ -530,8 +639,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
           steps={["Basic Info", "Employment Details", "Review"]}
         />
 
-        {error && <div className="error-message">{error}</div>}
-
         {renderStepContent()}
 
         <div className="form-actions">
@@ -554,6 +661,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             </button>
           )}
         </div>
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
       </div>
     </div>
   );

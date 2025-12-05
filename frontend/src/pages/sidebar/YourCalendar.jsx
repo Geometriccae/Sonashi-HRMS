@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-// import styles from "../pages/SalesAndLeads.module.css";
+// import styles from "../../pages/SalesAndLeads.module.css";
 import styles from "../SalesAndLeadsClient.module.css";
 import Side from "../sidebar/Sidebar";
 

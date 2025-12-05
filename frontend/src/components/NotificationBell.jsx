@@ -4,9 +4,11 @@ import belldot from "../assets/dashboard/bell-dot.svg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
 import config from '../config/config';
 import { io as ioClient } from "socket.io-client";
-import { FiCalendar, FiCheckSquare, FiBell } from "react-icons/fi";
+
+
 
 const REMINDER_NOTIFICATION_TYPES = new Set([
+  
   "meeting-reminder",
   "event-reminder",
   "task-reminder",
@@ -14,80 +16,19 @@ const REMINDER_NOTIFICATION_TYPES = new Set([
 
 function NotificationBell({ small = true }) {
   const [isOpen, setIsOpen] = useState(false);
-  // Initialize from localStorage if available
-  const [notifications, setNotifications] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('auxin_notifications');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          return parsed.map(n => ({
-            ...n,
-            timestamp: n.timestamp ? new Date(n.timestamp) : new Date()
-          }));
-        }
-        return [];
-      } catch (e) {
-        console.warn('Failed to parse notifications from localStorage', e);
-        return [];
-      }
-    }
-    return [];
-  });
+  const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationSupported, setNotificationSupported] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState("default");
-  const [inAppReminders, setInAppReminders] = useState([]);
+  const [inAppReminders, setInAppReminders] = useState([]); // hold transient in-app reminder cards
   const [showPermissionBanner, setShowPermissionBanner] = useState(false);
   const [permissionBannerMsg, setPermissionBannerMsg] = useState("");
   const dropdownRef = useRef();
   const socketRef = useRef(null);
   const receivedIdsRef = useRef(new Set());
-  const isOpenRef = useRef(false);
+  const isOpenRef = useRef(false); // mirror isOpen to avoid stale closure issues
   const scheduledTimersRef = useRef(new Map());
   const meRef = useRef(null);
-
-  // === MODIFIED REGION START ===
-  // FIXED: Proper URL detection for live environment
-  const getSocketUrl = useCallback(() => {
-    // For production (auxincrm.cloud)
-    if (window.location.hostname === 'auxincrm.cloud') {
-      return 'https://auxincrm.cloud';
-    }
-    // For local development
-    return (config.API_BASE_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
-  }, []);
-
-  const socketUrl = getSocketUrl();
-  // === MODIFIED REGION END ===
-
-  // Helper to add notification to list (avoiding duplicates)
-  const addNotification = useCallback((payload) => {
-    setNotifications(prev => {
-      if (prev.some(n => n.id === payload.id)) return prev;
-      
-      const newNotification = {
-        id: payload.id || `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        title: payload.title || "Notification",
-        body: payload.body || payload.message || "",
-        type: payload.type || "general",
-        timestamp: new Date(),
-        read: false,
-        meta: payload.meta || payload
-      };
-      
-      return [newNotification, ...prev];
-    });
-  }, []);
-
-  // Persist notifications to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('auxin_notifications', JSON.stringify(notifications));
-    } catch (e) {
-      console.warn('Failed to save notifications to localStorage', e);
-    }
-  }, [notifications]);
 
   const playBeep = useCallback(() => {
     try {
@@ -99,6 +40,7 @@ function NotificationBell({ small = true }) {
       g.gain.setValueAtTime(0.001, ctx.currentTime);
       o.connect(g);
       g.connect(ctx.destination);
+      // quick fade-in and fade-out
       g.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.01);
       o.start();
       g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
@@ -106,15 +48,18 @@ function NotificationBell({ small = true }) {
         try { o.stop(); ctx.close(); } catch (_) {}
       }, 700);
     } catch (e) {
+      // audio API may be blocked on some browsers — ignore
       console.warn("Audio beep failed:", e);
     }
   }, []);
 
+  // updated triggerBrowserReminder: only show notification if permission === 'granted'
   const triggerBrowserReminder = useCallback((payload) => {
-    if (typeof window === "undefined") return false;
-    if (!payload || !REMINDER_NOTIFICATION_TYPES.has(payload.type)) return false;
-    if (!("Notification" in window)) return false;
+    if (typeof window === "undefined") return;
+    if (!payload || !REMINDER_NOTIFICATION_TYPES.has(payload.type)) return;
+    if (!("Notification" in window)) return;
 
+    // Only show native notification if already granted — requesting permission here is not allowed reliably
     try {
       if (window.Notification && window.Notification.permission === "granted") {
         const opts = {
@@ -139,10 +84,12 @@ function NotificationBell({ small = true }) {
     return false;
   }, []);
 
+  // keep ref in sync with state
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
 
+  // initialize Notification API state once
   useEffect(() => {
     const supported = typeof window !== "undefined" && "Notification" in window;
     setNotificationSupported(supported && window.isSecureContext);
@@ -153,6 +100,7 @@ function NotificationBell({ small = true }) {
     }
   }, []);
 
+  // request permission in a user-initiated way
   const requestNotificationPermission = useCallback(async () => {
     if (!notificationSupported) {
       console.warn("Browser notifications not supported or not on secure context.");
@@ -165,6 +113,7 @@ function NotificationBell({ small = true }) {
         console.log("Notification permission result:", result);
         return result;
       }
+      // return current state if already granted/denied
       return window.Notification.permission;
     } catch (err) {
       console.error("Error requesting notification permission:", err);
@@ -172,11 +121,16 @@ function NotificationBell({ small = true }) {
     }
   }, [notificationSupported]);
 
+  const raw = config.API_BASE_URL || '';
+  const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
+  
+  // Helper: parse event date/time to a Date object (handles different shapes)
   const parseEventDateTime = (ev) => {
     const src = ev.meta?.event || ev.meta?.meeting || ev;
     const dt = ev.date || ev.start || src?.date || null;
     if (!dt) return null;
     try {
+      // if time is provided separately
       if (ev.time || src?.time) {
         const time = ev.time || src?.time;
         const dateOnly = (typeof dt === 'string') ? dt.split('T')[0] : (dt instanceof Date ? dt.toISOString().split('T')[0] : dt);
@@ -188,14 +142,20 @@ function NotificationBell({ small = true }) {
     }
   };
 
+  // Schedule local reminders for an event if the current user is a recipient
   const scheduleLocalReminders = useCallback((event) => {
     try {
       if (!event) return;
       const currentUserId = meRef.current?._id || localStorage.getItem('userId');
+
+      // gather assigned IDs from multiple shapes
       const assigned = (event.assignedTeamMembers || event.meta?.event?.assignedTeamMembers || event.assignedTo || []);
       const assignedIds = Array.isArray(assigned) ? assigned.map(String) : [String(assigned)];
+
+      // include creator/assignedBy and client owner as recipients
       const creators = [event.createdBy, event.assignedBy, event.meta?.event?.assignedBy].filter(Boolean).map(String);
 
+      // if current user not in recipients, skip scheduling
       if (currentUserId && !assignedIds.includes(String(currentUserId)) && !creators.includes(String(currentUserId))) {
         return;
       }
@@ -215,6 +175,7 @@ function NotificationBell({ small = true }) {
         if (delay <= 0) return;
 
         const timer = setTimeout(() => {
+          // dedupe so server and client don't duplicate
           if (receivedIdsRef.current.has(key)) return;
           receivedIdsRef.current.add(key);
 
@@ -226,7 +187,7 @@ function NotificationBell({ small = true }) {
             meta: { ...event, reminderMinutes: mins }
           };
 
-          addNotification(payload);
+          // Push into in-app list and try native notification
           window.appNotifications?.push?.({ title: payload.title, body: payload.body, meta: payload.meta });
           const shown = (typeof window !== 'undefined' && window.Notification && window.Notification.permission === 'granted');
           if (shown) {
@@ -236,6 +197,7 @@ function NotificationBell({ small = true }) {
               console.warn('Local reminder native Notification failed:', err);
             }
           } else {
+            // show transient in-app reminder + sound
             setInAppReminders(prev => {
               const next = [{ id: payload.id, title: payload.title, body: payload.body, meta: payload.meta }, ...prev].slice(0, 6);
               setTimeout(() => setInAppReminders(cur => cur.filter(r => r.id !== payload.id)), 10000);
@@ -243,15 +205,18 @@ function NotificationBell({ small = true }) {
             });
             playBeep();
           }
+
           scheduledTimersRef.current.delete(key);
         }, delay);
+
         scheduledTimersRef.current.set(key, timer);
       });
     } catch (e) {
       console.warn('scheduleLocalReminders error', e);
     }
-  }, [playBeep, addNotification]);
+  }, [playBeep]);
 
+  // Cancel all scheduled timers on unmount
   useEffect(() => {
     return () => {
       for (const t of scheduledTimersRef.current.values()) {
@@ -262,10 +227,9 @@ function NotificationBell({ small = true }) {
   }, []);
 
   useEffect(() => {
-    // === MODIFIED REGION START ===
-    const socketUrl = getSocketUrl();
-    console.log('🔌 Initializing socket with URL:', socketUrl);
-    // === MODIFIED REGION END ===
+    // derive socket url from API_BASE_URL, strip '/api' if present
+    const raw = config.API_BASE_URL || '';
+    const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
 
     const socket = ioClient(socketUrl, {
       path: '/socket.io',
@@ -276,32 +240,29 @@ function NotificationBell({ small = true }) {
     });
     socketRef.current = socket;
 
+    // single socket with logs and handlers (helps debugging on live)
     socket.on('connect', async () => {
+      // fetch current user and store locally for scheduling checks
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          // === MODIFIED REGION START ===
-          const apiBase = getSocketUrl();
-          const resp = await fetch(`${apiBase}/api/auth/me`, {
-          // === MODIFIED REGION END ===
+          const resp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/auth/me`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (resp.ok) {
             const me = await resp.json();
             meRef.current = me;
+            // fetch aggregated events to schedule any upcoming reminders for this user
             try {
-              // === MODIFIED REGION START ===
-              const eventsResp = await fetch(`${apiBase}/api/clients/events`, {
-              // === MODIFIED REGION END ===
+              const eventsResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/clients/events`, {
                 headers: { Authorization: `Bearer ${token}` }
               });
               if (eventsResp.ok) {
                 const list = await eventsResp.json();
                 (list || []).forEach(ev => scheduleLocalReminders(ev));
               }
-              // === MODIFIED REGION START ===
-              const empEventsResp = await fetch(`${apiBase}/api/employees/events`, {
-              // === MODIFIED REGION END ===
+              // try employee-level events as well
+              const empEventsResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/employees/events`, {
                 headers: { Authorization: `Bearer ${token}` }
               });
               if (empEventsResp.ok) {
@@ -318,15 +279,15 @@ function NotificationBell({ small = true }) {
       }
 
       console.log('🔌 Notification socket connected', socket.id);
-      console.log('🔌 Full socket URL:', socketUrl);
-
+      try { console.log('🔌 Socket transport:', socket.io.engine.transport.name); } catch(e){}
+      console.log('🔌 Full socket URL:', socketUrl, 'window.location.origin:', window.location.origin);
+      console.log('🔒 Secure context?', typeof window !== 'undefined' ? window.isSecureContext : 'unknown', 'protocol:', typeof window !== 'undefined' ? window.location.protocol : 'unknown');
+      
+      // Fetch current user from server (safer than relying only on localStorage)
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          // === MODIFIED REGION START ===
-          const apiBase = getSocketUrl();
-          const resp = await fetch(`${apiBase}/api/auth/me`, {
-          // === MODIFIED REGION END ===
+          const resp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/auth/me`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (resp.ok) {
@@ -346,6 +307,7 @@ function NotificationBell({ small = true }) {
             console.warn('Failed to fetch /api/auth/me after socket connect');
           }
         } else {
+          // fallback to localStorage joins if token missing
           const userIdLS = localStorage.getItem('userId');
           const roleLS = localStorage.getItem('role');
           const emailLS = localStorage.getItem('email');
@@ -370,17 +332,16 @@ function NotificationBell({ small = true }) {
       console.log('Notification socket disconnected:', reason);
     });
 
+    // preserve existing handlers (notification + specific events)
     socket.on('notification', (payload) => {
       console.log('📨 [LIVE] Received socket notification:', payload);
       try {
         const id = payload?.id || `${payload?.type || 'n'}-${payload?.taskId || payload?.clientId || Date.now()}`;
         if (receivedIdsRef.current.has(id)) return;
         receivedIdsRef.current.add(id);
-        
-        addNotification({ ...payload, id });
-
         const item = { title: payload.title || 'Notification', body: payload.body || payload.message || '', meta: payload.meta || payload };
         window.appNotifications?.push?.(item);
+        // if permission already granted, show a browser notification for anything that looks important
         if (notificationSupported && permissionStatus === 'granted') {
           try {
             new window.Notification(payload.title || 'Notification', { body: payload.body || '', tag: payload.id, icon: '/auxin_logo.png' });
@@ -391,35 +352,40 @@ function NotificationBell({ small = true }) {
       } catch (e) { console.error('Error handling socket notification', e); }
     });
 
+    // when receiving client/employee events schedule local reminders
     socket.on('client-event', (payload) => {
       try {
-        console.log('client-event received:', payload);
-        // const ev = payload.event || payload;
-        // scheduleLocalReminders(ev); // Rely on backend event-reminder to avoid duplicates/race conditions
+        console.log('client-event received (client side scheduling):', payload);
+        const ev = payload.event || payload;
+        scheduleLocalReminders(ev);
+        // push immediate in-app notification
         window.appNotifications?.push?.({ title: payload.title || 'Client Event', body: payload.body || '', meta: payload.meta || payload });
       } catch (err) {
-        console.warn('client-event error:', err);
+        console.warn('client-event error scheduling local reminders:', err);
       }
     });
     
     socket.on('employee-event', (payload) => {
       try {
-        console.log('employee-event received:', payload);
-        // const ev = payload.event || payload;
-        // scheduleLocalReminders(ev); // Rely on backend event-reminder
+        console.log('employee-event received (client side scheduling):', payload);
+        const ev = payload.event || payload;
+        scheduleLocalReminders(ev);
         window.appNotifications?.push?.({ title: payload.title || 'Employee Event', body: payload.body || '', meta: payload.meta || payload });
       } catch (err) {
-        console.warn('employee-event error:', err);
+        console.warn('employee-event error scheduling local reminders:', err);
       }
     });
 
     socket.on('event-reminder', (payload) => {
       try {
         console.log('🎯 [LIVE] Received event-reminder:', payload);
+        // Diagnostics: report permission and secure context at receipt time
         const perm = (typeof window !== 'undefined' && window.Notification) ? window.Notification.permission : 'unsupported';
-        console.log('🔍 reminder diagnostics: permissionStatus=', perm);
+        console.log('🔍 reminder diagnostics: permissionStatus=', perm, 'isSecureContext=', typeof window !== 'undefined' ? window.isSecureContext : undefined);
 
+        // If native notification shown we are done
         const shown = triggerBrowserReminder(payload);
+        // Always push to in-app notifications (so bell shows it), then ensure user sees it:
         const item = {
           title: payload.title || 'Reminder',
           body: payload.body || '',
@@ -427,19 +393,20 @@ function NotificationBell({ small = true }) {
           read: false,
           id: payload.id || `reminder-${Date.now()}`
         };
-        
-        addNotification(payload);
         window.appNotifications?.push?.(item);
 
         if (!shown) {
+          // Show persistent permission banner for live debugging / user action
           const reason = (typeof window !== 'undefined' && window.Notification)
             ? (window.Notification.permission === 'denied' ? 'blocked (denied by browser)' : (window.isSecureContext ? 'permission not granted' : 'insecure context (requires HTTPS)'))
             : 'notifications API unavailable';
           setPermissionBannerMsg(`Reminder received, but native notifications are ${reason}. Click "Enable" to request permission or open browser settings.`);
           setShowPermissionBanner(true);
 
+          // show brief in-app reminder banner for visibility and play sound
           setInAppReminders(prev => {
-            const next = [item, ...prev].slice(0, 6);
+            const next = [item, ...prev].slice(0, 6); // keep up to 6 visible
+            // auto-dismiss after 10s
             setTimeout(() => {
               setInAppReminders(cur => cur.filter(r => r.id !== item.id));
             }, 10000);
@@ -452,6 +419,7 @@ function NotificationBell({ small = true }) {
       }
     });
 
+    // ensure we remove any scheduled timers if server emits same id (avoid duplicates)
     socket.on('task-reminder', (payload) => {
       try {
         const id = payload?.id;
@@ -459,13 +427,14 @@ function NotificationBell({ small = true }) {
           try { clearTimeout(scheduledTimersRef.current.get(id)); } catch (err) {}
           scheduledTimersRef.current.delete(id);
         }
-        addNotification(payload);
+        // push and show as needed (similar to event-reminder)
         window.appNotifications?.push?.({ title: payload.title || 'Reminder', body: payload.body || '', meta: payload.meta || payload });
         const shown = (typeof window !== 'undefined' && window.Notification && window.Notification.permission === 'granted');
         if (!shown) { setInAppReminders(prev => { const next = [{ id: payload.id, title: payload.title, body: payload.body, meta: payload.meta }, ...prev].slice(0,6); setTimeout(()=> setInAppReminders(cur => cur.filter(r=>r.id !== payload.id)),10000); return next; }); playBeep(); }
       } catch (e) { console.warn('task-reminder handler error', e); }
     });
 
+    // click outside closes dropdown — use ref to avoid stale closure of isOpen
     const onDocClick = (e) => {
       try {
         if (isOpenRef.current && dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -482,9 +451,7 @@ function NotificationBell({ small = true }) {
       document.removeEventListener("click", onDocClick);
       try { socket.disconnect(); } catch (e) { /* ignore */ }
     };
-  }, [notificationSupported, permissionStatus, requestNotificationPermission, triggerBrowserReminder, playBeep, scheduleLocalReminders, addNotification, getSocketUrl]); // === MODIFIED: Added getSocketUrl ===
-
-  // ... rest of your component remains unchanged ...
+  }, [notificationSupported, permissionStatus, requestNotificationPermission, triggerBrowserReminder, playBeep, scheduleLocalReminders]);
 
   useEffect(() => {
     setUnreadCount(notifications.filter(n => !n.read).length);
@@ -638,7 +605,7 @@ function NotificationBell({ small = true }) {
               {/* Permission hint / CTA */}
               <PermissionHint />
               <button className={styles.actionBtn} onClick={() => { window.appNotifications?.markAllRead?.(); }}>
-                {/* Mark all read */}
+                Mark all read
               </button>
               <button className={styles.actionBtn} onClick={clearAll}>Clear</button>
               {/* Close button */}
@@ -665,18 +632,12 @@ function NotificationBell({ small = true }) {
             {notifications.length === 0 && <div className={styles.empty}>No notifications</div>}
             {notifications.map((n) => (
               <div key={n.id} className={`${styles.item} ${n.read ? styles.read : styles.unread}`}>
-                <div className={`${styles.itemIcon} ${styles[n.type] || styles.general}`}>
-                   {/* Icon based on type */}
-                   {(n.type === 'meeting-reminder' || n.type === 'event-reminder') && <FiCalendar size={20} />}
-                   {n.type === 'task-reminder' && <FiCheckSquare size={20} />}
-                   {(!['meeting-reminder', 'event-reminder', 'task-reminder'].includes(n.type)) && <FiBell size={20} />}
-                </div>
                 <div className={styles.itemContent}>
                   <div className={styles.itemTitle}>{n.title || "Notification"}</div>
                   <div className={styles.itemBody}>{n.body}</div>
-                  <div className={styles.itemTime}>
-                    {n.timestamp ? n.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </div>
+                </div>
+                <div className={styles.itemTime}>
+                  {n.meta?.time ? n.meta.time : new Date(n.id).toLocaleTimeString()}
                 </div>
               </div>
             ))}

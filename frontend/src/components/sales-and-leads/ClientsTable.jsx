@@ -478,20 +478,8 @@ function ClientsTable() {
           <div className={styles.actionButtons}>
             {selectedClientIds.length > 0 && (
               <button 
-                className={styles.deleteButton} 
+                className={`${styles.deleteButton} ${styles.bulkDeleteButton}`} 
                 onClick={handleBulkDelete}
-                style={{ 
-                  backgroundColor: '#fee2e2', 
-                  color: '#dc2626', 
-                  border: '1px solid #fecaca',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 500
-                }}
               >
                 <DeleteIcon />
                 <span>Delete ({selectedClientIds.length})</span>
@@ -505,10 +493,10 @@ function ClientsTable() {
               <div className={styles.addClientButtonText}>Add Client/Lead</div>
               <UserPlusIcon />
             </button>
-            <button className={styles.secondaryButton}>
+            {/* <button className={styles.secondaryButton}>
               <div className={styles.addClientButtonText}>Manage Categories</div>
               <SettingsIcon />
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -556,7 +544,7 @@ function ClientsTable() {
               className={styles.filterButton}
               onClick={handleFilterClick}
             >
-              <FilterIcon />
+                  {/* <FilterIcon /> */}
             </button>
           </div>
         </div>
@@ -569,10 +557,10 @@ function ClientsTable() {
         <div className={styles.tableWrapper}>
           <div className={styles.tableColumns}>
             {/* Checkbox Column */}
-            <div className={`${styles.tableColumn} ${styles.checkboxColumn}`} style={{ width: '50px', minWidth: '50px', flex: '0 0 50px' }}>
+            <div className={`${styles.tableColumn} ${styles.checkboxColumn}`}>
               <div className={styles.tableHeader}>
                 <div className={styles.tableHeaderCell}>
-                  <div className={styles.headerContent} style={{ justifyContent: 'center' }}>
+                  <div className={`${styles.headerContent} ${styles.headerContentCenter}`}>
                     <label className={styles.checkboxLabel}>
                       <input
                         type="checkbox"
@@ -586,7 +574,7 @@ function ClientsTable() {
                 </div>
               </div>
               {pagedData.map((client) => (
-                <div key={client._id} className={`${styles.tableCell} ${styles.checkboxCell}`} style={{ justifyContent: 'center' }}>
+                <div key={client._id} className={`${styles.tableCell} ${styles.checkboxCell}`}>
                   <label className={styles.checkboxLabel}>
                     <input
                       type="checkbox"
@@ -604,7 +592,7 @@ function ClientsTable() {
             <div className={`${styles.tableColumn} ${styles.sNoColumn}`}>
               <div className={styles.tableHeader}>
                 <div className={styles.tableHeaderCell}>
-                  <div className={styles.headerContent} style={{ justifyContent: 'center' }}>
+                  <div className={`${styles.headerContent} ${styles.headerContentCenter}`}>
                     <span className={styles.headerText}>S.No</span>
                   </div>
                 </div>

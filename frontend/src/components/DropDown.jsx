@@ -148,7 +148,7 @@ function Dropdown({
         <div className={styles.labelContainer}>
           <label className={styles.label}>
             {label}
-            {required && <span style={{ color: "red" }}> *</span>}
+            {required && <span style={{ color: "red", marginLeft: "4px" }}>*</span>}
           </label>
         </div>
       )}

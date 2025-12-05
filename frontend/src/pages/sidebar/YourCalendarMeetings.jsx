@@ -389,6 +389,8 @@ const YourCalendarMeetings = ({ events: externalEvents, onEdit, onDelete }) => {
         view={view}
         onView={handleView}
         date={date}
+         min={new Date(0, 0, 0, 9, 0, 0)} // Set minimum time to 9:00 AM
+         max={new Date(0, 0, 0, 23, 0, 0)} // Set maximum time to 8:00 PM
         onNavigate={handleNavigate}
         onSelectEvent={handleSelectEvent}
         eventPropGetter={eventStyleGetter}

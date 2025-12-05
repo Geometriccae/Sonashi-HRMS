@@ -410,7 +410,7 @@ function TeamManagementSalesLeads() {
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Sales & Leads</div>
+            <div className={styles["dashboard-title"]}>Team Management</div>
 
             <div className={styles["dashboard-profile"]}>
                 <NotificationBell/>
