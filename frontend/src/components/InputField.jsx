@@ -12,6 +12,7 @@ function InputField({
   options = [],
   hasError = false,
   disabled = false,
+  name,
 }) {
   return (
     <div className="input-field">
@@ -28,6 +29,7 @@ function InputField({
               value={value}
               onChange={onChange}
               disabled={disabled}
+              name={name}
             >
               <option value="">{placeholder}</option>
               {options.map((option, index) => (
@@ -56,6 +58,7 @@ function InputField({
             value={value}
             onChange={onChange}
             disabled={disabled}
+            name={name}
           />
         )}
       </div>

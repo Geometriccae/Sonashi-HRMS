@@ -526,28 +526,13 @@ function NotificationBell({ small = true }) {
     <div className={styles.notificationWrapper} ref={dropdownRef}>
       {/* Persistent permission banner shown when server reminder arrives but native notification can't be shown */}
       {showPermissionBanner && (
-        <div style={{
-          position: 'absolute',
-          right: 44,
-          top: 6,
-          zIndex: 1300,
-          background: '#fffbeb',
-          border: '1px solid #facc15',
-          color: '#92400e',
-          padding: '8px 10px',
-          borderRadius: 8,
-          display: 'flex',
-          gap: 8,
-          alignItems: 'center',
-          maxWidth: 360,
-          boxShadow: '0 6px 18px rgba(0,0,0,0.10)'
-        }}>
-          <div style={{ flex: 1, fontSize: 13 }}>{permissionBannerMsg}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div className={styles.permissionBanner}>
+          <div className={styles.permissionBannerText}>{permissionBannerMsg}</div>
+          <div className={styles.permissionBannerActions}>
             <button onClick={() => requestNotificationPermission().then(res => {
               if (res === 'granted') setShowPermissionBanner(false);
-            })} style={{ background: '#007aff', color: '#fff', borderRadius: 6, padding: '6px 8px', border: 'none', cursor: 'pointer' }}>Enable</button>
-            <button onClick={() => setShowPermissionBanner(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280' }}>Dismiss</button>
+            })} className={styles.permissionBannerEnable}>Enable</button>
+            <button onClick={() => setShowPermissionBanner(false)} className={styles.permissionBannerDismiss}>Dismiss</button>
           </div>
         </div>
       )}
@@ -559,36 +544,17 @@ function NotificationBell({ small = true }) {
 
       {/* In-app transient reminder toasts (appear bottom-right of bell) */}
       {inAppReminders.length > 0 && (
-        <div style={{
-          position: 'absolute',
-          right: 0,
-          top: '48px',
-          zIndex: 1200,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8
-        }}>
+        <div className={styles.inAppRemindersWrapper}>
           {inAppReminders.map(r => (
-            <div key={r.id} style={{
-              minWidth: 260,
-              background: '#111827',
-              color: '#fff',
-              padding: '10px 12px',
-              borderRadius: 8,
-              boxShadow: '0 6px 16px rgba(0,0,0,0.2)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: 13
-            }}>
-              <div style={{ flex: 1, paddingRight: 8 }}>
-                <div style={{ fontWeight: 600 }}>{r.title}</div>
-                <div style={{ opacity: 0.85, fontSize: 12 }}>{r.body}</div>
+            <div key={r.id} className={styles.inAppReminderItem}>
+              <div className={styles.inAppReminderContent}>
+                <div className={styles.inAppReminderTitle}>{r.title}</div>
+                <div className={styles.inAppReminderBody}>{r.body}</div>
               </div>
-              <div style={{ marginLeft: 8 }}>
+              <div className={styles.inAppReminderAction}>
                 <button onClick={() => {
                   try { window.open(r.meta?.url || r.meta?.link || '/', '_blank'); } catch (e) {}
-                }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', padding: '6px 8px', borderRadius: 6 }}>
+                }} className={styles.inAppReminderButton}>
                   Open
                 </button>
               </div>
@@ -604,9 +570,9 @@ function NotificationBell({ small = true }) {
             <div className={styles.actions}>
               {/* Permission hint / CTA */}
               <PermissionHint />
-              <button className={styles.actionBtn} onClick={() => { window.appNotifications?.markAllRead?.(); }}>
+              {/* <button className={styles.actionBtn} onClick={() => { window.appNotifications?.markAllRead?.(); }}>
                 Mark all read
-              </button>
+              </button> */}
               <button className={styles.actionBtn} onClick={clearAll}>Clear</button>
               {/* Close button */}
               <button

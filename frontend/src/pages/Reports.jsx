@@ -298,7 +298,7 @@ function Reports() {
                     <div className={styles["profile-type"]}>{userRole?.toUpperCase()}</div>
                   </div>
                 </div>
-                <img src={chevrondown} alt="" />
+                {/* <img src={chevrondown} alt="" /> */}
               </div>
             </div>
           </div>

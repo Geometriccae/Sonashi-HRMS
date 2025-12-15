@@ -20,6 +20,7 @@ const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
 const meetingsRoutes = require('./routes/meetings');
 const attendanceRoutes = require('./routes/attendanceRoutes');
+const supportRoutes = require('./routes/supportRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -64,7 +65,7 @@ const User = require('./models/User');
 // Socket.io connection handling
 io.on("connection", (socket) => {
   console.log("✅ Socket connected:", socket.id);
-  
+
   // Store user information in socket for later use
   let currentUserId = null;
   let currentUserRole = null;
@@ -86,7 +87,7 @@ io.on("connection", (socket) => {
         if (userData) socket.join(`user-${userData}`);
         console.log(`User ${userData} joined room: user-${userData}`);
       }
-      
+
       // Send confirmation to client
       socket.emit('join-confirmation', { success: true, userId: currentUserId, role: currentUserRole });
 
@@ -216,6 +217,7 @@ app.use('/api/meetings', meetingsRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/checkins', require('./routes/checkInRoutes'));
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/support', supportRoutes);
 
 // ====== DATABASE CONNECTION ======
 mongoose.connect(process.env.MONGO_URI)

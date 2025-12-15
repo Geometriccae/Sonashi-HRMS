@@ -63,7 +63,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 // ========== CREATE UPLOAD MIDDLEWARE ==========
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
@@ -146,15 +146,15 @@ router.get('/events', authMiddleware, async (req, res) => {
     const io = req.app.get('io');
 
     // If socket.io is configured, emit a notification about events fetch
-    if (io) {
-      io.to('role-admin').emit('notification', {
-        id: `events-fetch-${Date.now()}`,
-        type: 'system',
-        title: 'Events Data Accessed',
-        message: `All events data was accessed by ${req.user?.username || 'a user'}`,
-        timestamp: new Date()
-      });
-    }
+    // if (io) {
+    //   io.to('role-admin').emit('notification', {
+    //     id: `events-fetch-${Date.now()}`,
+    //     type: 'system',
+    //     title: 'Events Data Accessed',
+    //     message: `All events data was accessed by ${req.user?.username || 'a user'}`,
+    //     timestamp: new Date()
+    //   });
+    // }
 
     res.json(allEvents);
   } catch (error) {
@@ -179,26 +179,26 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
 
     // Check for duplicate email BEFORE creating
     if (employeeData.emailId) {
-      const existingEmployee = await Employee.findOne({ 
-        emailId: employeeData.emailId.toLowerCase().trim() 
+      const existingEmployee = await Employee.findOne({
+        emailId: employeeData.emailId.toLowerCase().trim()
       });
-      
+
       if (existingEmployee) {
-        return res.status(400).json({ 
-          message: `Employee with email "${employeeData.emailId}" already exists` 
+        return res.status(400).json({
+          message: `Employee with email "${employeeData.emailId}" already exists`
         });
       }
     }
 
     // Check for duplicate employeeId (optional but good practice)
     if (employeeData.employeeId) {
-      const existingEmployeeById = await Employee.findOne({ 
-        employeeId: employeeData.employeeId 
+      const existingEmployeeById = await Employee.findOne({
+        employeeId: employeeData.employeeId
       });
-      
+
       if (existingEmployeeById) {
-        return res.status(400).json({ 
-          message: `Employee with ID "${employeeData.employeeId}" already exists` 
+        return res.status(400).json({
+          message: `Employee with ID "${employeeData.employeeId}" already exists`
         });
       }
     }
@@ -225,7 +225,7 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
     res.status(201).json(savedEmployee);
   } catch (error) {
     console.error("Create employee error:", error);
-    
+
     // Handle duplicate key error specifically
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
@@ -235,7 +235,7 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
         error: `Duplicate ${field}`
       });
     }
-    
+
     res.status(400).json({
       message: "Error creating employee",
       error: error.message,
@@ -257,12 +257,12 @@ router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, re
         console.log('Parsed updateData:', updateData);
         console.log('assignedProjects:', updateData.assignedProjects);
         console.log('Type of assignedProjects:', typeof updateData.assignedProjects);
-        
+
         // Ensure assignedProjects is an array
         if (updateData.assignedProjects && !Array.isArray(updateData.assignedProjects)) {
           console.error('assignedProjects is not an array:', updateData.assignedProjects);
-          return res.status(400).json({ 
-            message: 'assignedProjects must be an array' 
+          return res.status(400).json({
+            message: 'assignedProjects must be an array'
           });
         }
       } catch (parseErr) {
@@ -275,14 +275,14 @@ router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, re
 
     // Check for duplicate email (only if email is being updated)
     if (updateData.emailId) {
-      const existingEmployee = await Employee.findOne({ 
+      const existingEmployee = await Employee.findOne({
         emailId: updateData.emailId.toLowerCase().trim(),
         _id: { $ne: req.params.id } // Exclude current employee
       });
-      
+
       if (existingEmployee) {
-        return res.status(400).json({ 
-          message: `Another employee with email "${updateData.emailId}" already exists` 
+        return res.status(400).json({
+          message: `Another employee with email "${updateData.emailId}" already exists`
         });
       }
     }
@@ -319,19 +319,19 @@ router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, re
 
   } catch (error) {
     console.error('❌ Error updating employee:', error);
-    
+
     // Handle duplicate key error specifically
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       const value = error.keyValue[field];
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: `Another employee with ${field} "${value}" already exists`,
         error: `Duplicate ${field}`
       });
     }
-    
-    res.status(500).json({ 
-      message: 'Error updating employee', 
+
+    res.status(500).json({
+      message: 'Error updating employee',
       error: error.message,
       details: error.toString()
     });

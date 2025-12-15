@@ -205,8 +205,8 @@ function Sidebar() {
                 Files
                </Link>
               </li>
-              <li>
-                <Link to="" className={styles["sidebar-link"]}>
+              <li className={isActive("/help-support") ? styles.active : ""}>
+                <Link to="/help-support" className={styles["sidebar-link"]}>
                 <img
                   src={circlehelp}
                   alt="Help & Support"

@@ -486,7 +486,7 @@ const normalizedMeetings = (meetingsList || []).map(m => {
               <div className={styles.metricValue}>{isLoadingClients ? '--' : dashboardMetrics.totalClients}</div>
             </div>
             <div className={styles.metricDetails}>
-              <img src={threedot} alt="trend" className={styles.trendIcon} />
+              {/* <img src={threedot} alt="trend" className={styles.trendIcon} /> */}
               <div className={styles.changeIndicator}>
                 <div className={styles.changeChip}>
                   <span className={styles.changeIcon}>&#8599;</span>
@@ -503,7 +503,7 @@ const normalizedMeetings = (meetingsList || []).map(m => {
               <div className={styles.metricValue}>{isLoadingClients ? '--' : dashboardMetrics.totalLeads}</div>
             </div>
             <div className={styles.metricDetails}>
-              <img src={threedot} alt="trend" className={styles.trendIcon} />
+              {/* <img src={threedot} alt="trend" className={styles.trendIcon} /> */}
               <div className={styles.changeIndicator}>
                 <div className={styles.changeChip}>
                   <span className={styles.changeIcon}>&#8599;</span>
@@ -520,7 +520,7 @@ const normalizedMeetings = (meetingsList || []).map(m => {
               <div className={styles.metricValue}>{isLoadingMeetings ? '--' : dashboardMetrics.todaysMeetings}</div>
             </div>
             <div className={styles.metricDetails}>
-              <img src={threedot} alt="trend" className={styles.trendIcon} />
+              {/* <img src={threedot} alt="trend" className={styles.trendIcon} /> */}
               <div className={styles.changeIndicator}>
                 <div className={styles.changeChip}>
                   <span

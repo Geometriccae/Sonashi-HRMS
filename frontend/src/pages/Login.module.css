@@ -25,9 +25,9 @@ body, html {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 40px;
+  padding: clamp(1.5rem, 2vw, 2.5rem);
   overflow: hidden;
-  min-height: 300px;
+  min-height: 18.75rem;
 }
 
 .circle::before,
@@ -35,52 +35,49 @@ body, html {
 .circleExtra::before {
   content: "";
   position: absolute;
-  border: 18px solid rgba(255, 255, 255, 0.1);
+  border: clamp(0.8rem, 1vw, 1.125rem) solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
 }
 
 .circle::before {
-  width: 568px;
-  height: 574px;
+  width: clamp(25rem, 30vw, 35.5rem);
+  height: clamp(25rem, 30vw, 35.875rem);
   opacity: 1;
-  top: -201px;
-  left: 584px;
-  border-width: 18px;
+  top: clamp(-15rem, -10vw, -12.56rem);
+  left: clamp(25rem, 30vw, 36.5rem);
 }
 
 .circle::after {
-  width: 686px;
-  height: 686px;
+  width: clamp(30rem, 35vw, 42.875rem);
+  height: clamp(30rem, 35vw, 42.875rem);
   opacity: 1;
-  top: -201px;
-  left: 466px;
-  border-width: 15px;
+  top: clamp(-15rem, -10vw, -12.56rem);
+  left: clamp(20rem, 25vw, 29.125rem);
 }
 
 .circleExtra::before {
-  width: 852px;
-  height: 852px;
+  width: clamp(40rem, 45vw, 53.25rem);
+  height: clamp(40rem, 45vw, 53.25rem);
   opacity: 1;
-  top: -251px;
-  left: 350px;
-  border-width: 13px;
+  top: clamp(-18rem, -12vw, -15.68rem);
+  left: clamp(15rem, 18vw, 21.875rem);
 }
 
 .welcomeBox {
   z-index: 1;
   text-align: center;
-  padding: 20px;
+  padding: clamp(1rem, 1.5vw, 1.25rem);
 }
 
 .welcomeBox h1 {
-  font-size: 60px;
+  font-size: clamp(2.5rem, 3.125vw, 3.75rem);
   font-weight: bold;
-  margin-bottom: 15px;
+  margin-bottom: clamp(0.75rem, 1vw, 0.9375rem);
 }
 
 .welcomeBox p {
-  font-size: 18px;
-  line-height: 27px;
+  font-size: clamp(1rem, 1.125vw, 1.125rem);
+  line-height: 1.5;
 }
 
 .rightPanel {
@@ -89,22 +86,22 @@ body, html {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
+  padding: clamp(1rem, 1.5vw, 1.25rem);
   box-sizing: border-box;
 }
 
 .loginBox {
   display: flex;
   width: 100%;
-  max-width: 520px;
+  max-width: clamp(28rem, 30vw, 32.5rem);
   flex-direction: column;
   align-items: center;
-  gap: 100px;
+  gap: clamp(3rem, 5vw, 6.25rem);
 }
 
 .logo {
-  width: 249px;
-  height: 64px;
+  width: clamp(12rem, 13vw, 15.56rem);
+  height: auto;
   aspect-ratio: 248.77/64.12;
 }
 
@@ -112,22 +109,24 @@ body, html {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 40px;
+  gap: clamp(1.5rem, 2vw, 2.5rem);
   width: 100%;
 }
 
 .loginTitle {
   width: 100%;
   color: #414651;
-  letter-spacing: -0.96px;
-  font: 700 24px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  letter-spacing: -0.06rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.25rem, 1.5vw, 1.5rem);
 }
 
 .formContent {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 32px;
+  gap: clamp(1.5rem, 2vw, 2rem);
   width: 100%;
 }
 
@@ -135,7 +134,7 @@ body, html {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 20px;
+  gap: clamp(1rem, 1.25vw, 1.25rem);
   width: 100%;
 }
 
@@ -150,7 +149,7 @@ body, html {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 7.642px;
+  gap: 0.5rem;
   width: 100%;
 }
 
@@ -158,28 +157,39 @@ body, html {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 7.642px;
+  gap: 0.5rem;
   width: 100%;
 }
 
 .label {
   color: #414651;
-  font: 400 16px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: clamp(0.875rem, 1vw, 1rem);
+}
+
+.inputWrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .input {
   display: flex;
-  padding: 12.736px 17.83px;
+  padding: clamp(0.6rem, 0.75vw, 0.8rem) clamp(0.8rem, 1vw, 1.1rem);
   align-items: center;
-  gap: 10.189px;
+  gap: 0.625rem;
   width: 100%;
-  border-radius: 10.189px;
-  border: 1.274px solid #D5D7DA;
-  box-shadow: 0 1.274px 2.547px 0 rgba(10, 13, 18, 0.05);
+  border-radius: 0.625rem;
+  border: 0.08rem solid #D5D7DA;
+  box-shadow: 0 0.08rem 0.16rem 0 rgba(10, 13, 18, 0.05);
   box-sizing: border-box;
   background-color: #FFF;
   color: #181D27;
-  font: 400 18px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: clamp(1rem, 1.125vw, 1.125rem);
 }
 
 .input:focus {
@@ -187,27 +197,44 @@ body, html {
   border-color: #007AFF;
 }
 
+.passwordToggle {
+  position: absolute;
+  right: 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
 .errorText {
   width: 100%;
   color: #DC3545;
-  font: 400 16px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: clamp(0.875rem, 1vw, 1rem);
 }
 
 .loginButton {
   display: flex;
-  height: 56px;
-  padding: 11px 17.6px;
+  height: clamp(3rem, 3.5vw, 3.5rem);
+  padding: 0.6875rem 1.1rem;
   justify-content: center;
   align-items: center;
-  gap: 8.8px;
+  gap: 0.55rem;
   width: 100%;
-  border-radius: 8.8px;
-  box-shadow: 0 1px 2px 0 rgba(10, 13, 18, 0.05);
+  border-radius: 0.55rem;
+  box-shadow: 0 0.0625rem 0.125rem 0 rgba(10, 13, 18, 0.05);
   border: none;
   cursor: pointer;
   background-color: #007AFF;
   color: #FFF;
-  font: 700 14px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: clamp(0.875rem, 0.9vw, 0.875rem);
   transition: background-color 0.3s;
 }
 
@@ -218,18 +245,22 @@ body, html {
 .forgotPasswordContainer {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .forgotPasswordText {
   color: #7A8699;
-  font: 400 16px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: clamp(0.875rem, 1vw, 1rem);
 }
 
 .forgotPasswordLink {
   color: #000;
   cursor: pointer;
-  font: 400 16px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: clamp(0.875rem, 1vw, 1rem);
   text-decoration: none;
 }
 
@@ -240,101 +271,155 @@ body, html {
 /* OTP Input Styles */
 .otpContainer {
   display: flex;
-  gap: 12px;
+  gap: 0.75rem;
   justify-content: start;
   align-items: center;
   width: 100%;
-  margin: 16px 0;
+  margin: 1rem 0;
 }
 
 .otpInput {
   width: 100%;
-  height: 6rem;
-  border: 1.274px solid #D5D7DA;
-  border-radius: 10.189px;
+  height: clamp(4rem, 5vw, 6rem);
+  border: 0.08rem solid #D5D7DA;
+  border-radius: 0.625rem;
   text-align: center;
-  font: 500 3.75rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  /* font-size: ; */
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-size: clamp(2.5rem, 3.5vw, 3.75rem);
   color: #181D27;
   background-color: #FFF;
-  box-shadow: 0 1.274px 2.547px 0 rgba(10, 13, 18, 0.05);
+  box-shadow: 0 0.08rem 0.16rem 0 rgba(10, 13, 18, 0.05);
   outline: none;
   transition: border-color 0.3s;
- 
-  line-height: 4.5rem;
+  line-height: 1.2;
   padding: 0.5rem;
 }
 
 .otpInput::placeholder {
-  color:  var(--Gray-300, #D5D7DA);;  /* change this to any color you want */
-  opacity: 1;   /* ensures the color is visible */
+  color: var(--Gray-300, #D5D7DA);
+  opacity: 1;
 }
 
 .otpInput:focus {
   border-color: #007AFF;
-  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+  box-shadow: 0 0 0 0.125rem rgba(0, 122, 255, 0.1);
+}
+/* Laptop Breakpoints */
+
+/* 1536px */
+@media (max-width: 1536px) {
+  .loginBox {
+    max-width: 30rem;
+    gap: 5rem;
+  }
+  .welcomeBox h1 {
+    font-size: 3.25rem;
+  }
 }
 
+/* 1440px */
+@media (max-width: 1440px) {
+  .loginBox {
+    max-width: 28rem;
+    gap: 4.5rem;
+  }
+  .welcomeBox h1 {
+    font-size: 3rem;
+  }
+  
+}
+
+/* 1366px */
+@media (max-width: 1366px) {
+  .loginBox {
+    max-width: 26rem;
+    gap: 4rem;
+  }
+  .welcomeBox h1 {
+    font-size: 2.75rem;
+  }
+  .input {
+    padding: 0.75rem 1rem;
+  }
+  .loginButton {
+    height: 3rem;
+  }
+}
+
+/* 1280px */
+@media (max-width: 1280px) {
+  .loginBox {
+    max-width: 24rem;
+    gap: 3.5rem;
+  }
+  .welcomeBox h1 {
+    font-size: 2.5rem;
+  }
+  .logo {
+    width: 12rem;
+  }
+}
 /* Media Queries for Responsiveness */
 @media (max-width: 991px) {
   .loginBox {
-    gap: 60px;
-    max-width: 480px;
+    gap: 3.75rem;
+    max-width: 30rem;
   }
   
   .loginTitle {
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 }
 
 @media (max-width: 640px) {
   .loginBox {
-    gap: 40px;
+    gap: 2.5rem;
     max-width: 100%;
-    padding: 0 16px;
+    padding: 0 1rem;
   }
   
   .formContainer {
-    gap: 24px;
+    gap: 1.5rem;
   }
   
   .formContent {
-    gap: 24px;
+    gap: 1.5rem;
   }
   
   .inputContainer {
-    gap: 16px;
+    gap: 1rem;
   }
   
   .loginTitle {
-    font-size: 20px;
+    font-size: 1.25rem;
   }
   
   .label {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
   
   .input {
-    font-size: 16px;
+    font-size: 1rem;
   }
   
   .errorText {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
   
   .forgotPasswordText,
   .forgotPasswordLink {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
   
   .otpInput {
-    width: 48px;
-    height: 48px;
-    font-size: 20px;
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.25rem;
   }
   
   .otpContainer {
-    gap: 8px;
+    gap: 0.5rem;
   }
 }
 
@@ -351,51 +436,8 @@ body, html {
 
   .welcomeBox {
     text-align: left;
-    padding: 40px;
-  }
-
-  .welcomeBox h1 {
-    font-size: 2.2rem;
-  }
-
-  .welcomeBox p {
-    font-size: 0.8rem;
-  }
-
-  .circle::before {
-    width: 568px;
-    height: 574px;
-    opacity: 1;
-    top: -201px;
-    left: 584px;
-    border-width: 18px;
-  }
-
-  .circle::after {
-    width: 686px;
-    height: 686px;
-    opacity: 1;
-    top: -201px;
-    left: 466px;
-    border-width: 15px;
-  }
-
-  .circleExtra::before {
-    width: 852px;
-    height: 852px;
-    opacity: 1;
-    top: -251px;
-    left: 350px;
-    border-width: 13px;
+    padding: clamp(1.5rem, 2vw, 2.5rem);
   }
 }
 
-@media (min-width: 992px) {
-  .welcomeBox h1 {
-    font-size: 2.5rem;
-  }
 
-  .welcomeBox p {
-    font-size: 0.9rem;
-  }
-}

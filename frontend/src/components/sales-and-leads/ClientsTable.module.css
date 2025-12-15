@@ -725,6 +725,9 @@
   .actionButtons { flex-wrap: wrap; }
   .controlsSection { flex-direction: column; align-items: stretch; gap: 1rem; }
   .searchAndFilter { justify-content: space-between; }
+  .segmentedControl{
+    width: fit-content;
+  }
 }
 
 @media (max-width: 768px) {

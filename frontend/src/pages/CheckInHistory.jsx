@@ -222,7 +222,7 @@ function CheckInHistory() {
                     </div>
                   </div>
                 </div>
-                <img src={chevrondown} alt="" />
+                {/* <img src={chevrondown} alt="" /> */}
               </div>
             </div>
           </div>

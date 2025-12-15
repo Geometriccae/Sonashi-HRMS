@@ -429,6 +429,7 @@
 @media (max-width: 991px) {
   .calendarWidget {
     width: 100%;
+    min-width: 100%;
     padding: 20px;
   }
 

@@ -8,6 +8,7 @@ function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -36,6 +37,10 @@ function Login() {
       console.error(err);
       setError('Your Username/Password is incorrect!');
     }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
   };
 
   return (
@@ -71,15 +76,17 @@ function Login() {
                       <div className={styles.label}>
                         Username
                       </div>
-                      <input
-                        className={styles.input}
-                        id="username"
-                        type="text"
-                        placeholder="EX. John Doe"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        required
-                      />
+                      <div className={styles.inputWrapper}>
+                        <input
+                          className={styles.input}
+                          id="username"
+                          type="text"
+                          placeholder="EX. John Doe"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          required
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -89,15 +96,34 @@ function Login() {
                       <div className={styles.label}>
                         Password
                       </div>
-                      <input
-                        className={styles.input}
-                        id="password"
-                        type="password"
-                        placeholder="**********"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
+                      <div className={styles.inputWrapper}>
+                        <input
+                          className={styles.input}
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="**********"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          className={styles.passwordToggle}
+                          onClick={togglePasswordVisibility}
+                        >
+                          {showPassword ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20C5 20 1 12 1 12C1 12 2.33 8.36 5.18 6.06M9.9 4.24A9.12 9.12 0 0 1 12 4C19 4 23 12 23 12C23 12 21.76 15.53 19.1 17.77M1 1L23 23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </div>
                     {error && (
                       <div className={styles.errorText}>

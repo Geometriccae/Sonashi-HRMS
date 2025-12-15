@@ -1129,7 +1129,7 @@ background: #FFF; */
     display: flex;
     min-width: 240px;
     align-items: center;
-    gap: 40px 65px;
+    /* gap: 40px 65px; */
     justify-content: space-between;
     margin: auto 0;
     padding: 25px;
@@ -1137,6 +1137,7 @@ background: #FFF; */
 
     flex: 0 0 auto; /* Prevent cards from shrinking */
     scroll-snap-align: start; /* Snap to start of each card */
+    flex-direction: column;
   }
 
   .metricsRow {

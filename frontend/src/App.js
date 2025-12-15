@@ -19,6 +19,7 @@ import CheckInHistory from "./pages/CheckInHistory";
 import UserManagement from "./pages/UserManagement";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AttendanceManagement from "./pages/team-management/AttendanceManagement";
+import HelpSupport from "./pages/HelpSupport";
 
 
 
@@ -72,6 +73,8 @@ function App() {
           <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
 
           <Route path="/checkin-history" element={<ProtectedRoute><CheckInHistory /></ProtectedRoute>} />
+
+          <Route path="/help-support" element={<ProtectedRoute><HelpSupport /></ProtectedRoute>} />
 
           <Route path="/venkat" element={<ProtectedRoute><Venkat /></ProtectedRoute>} />
           <Route path="/example" element={<Example />} />
