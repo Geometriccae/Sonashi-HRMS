@@ -9,7 +9,7 @@ const createEventSchema = new mongoose.Schema({
   link: { type: String },
   // assignedTo: { type: String },
   assignedTeamMembers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
-    color: { type: String },
+  color: { type: String },
   color: { type: String },
   reminders: [{ type: Number, default: [] }],
   createdAt: { type: Date, default: Date.now },

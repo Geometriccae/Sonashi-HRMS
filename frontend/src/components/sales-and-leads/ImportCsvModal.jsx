@@ -277,7 +277,7 @@ function ImportCsvModal({ isOpen, onClose, onComplete }) {
   };
 
   const downloadTemplateOption = () => {
-  const fileUrl = `${process.env.REACT_APP_API_URL}/uploads/template/client_import_template.xlsx`;
+  const fileUrl = `${process.env.REACT_APP_API_URL}/uploads/template/Auxin_CRM_Client_Import_Template.xlsx`;
   window.open(fileUrl, "_blank");
 };
 

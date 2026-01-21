@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useToast } from "../../context/ToastContext";
 import "./AddClientModal.css";
 import ProgressSteps from "../ProgressSteps";
 import InputField from "../InputField";
@@ -11,6 +12,7 @@ import Dropdown from "../DropDown";
 function AddClientModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
+  const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
     // 1. Company & Contact Details
@@ -73,7 +75,6 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
     category: "",
   });
 
-  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
@@ -81,7 +82,6 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
       onClose();
-      setError("");
     }
   };
 
@@ -97,33 +97,29 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
-      setError("");
     }
   };
 
   const handleNext = () => {
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
-      setError("");
     }
   };
 
   const handleStepClick = (stepId) => {
     if (stepId <= currentStep) {
       setCurrentStep(stepId);
-      setError("");
     }
   };
 
   const handleFinish = async () => {
     // Validate required fields
     if (!formData.companyName || !formData.email) {
-      setError("Company Name and Email are required fields");
+      showToast("Company Name and Email are required fields.", "error");
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       // Filter out empty fields and convert date strings to Date objects
@@ -166,6 +162,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
 
       onClose();
       setCurrentStep(1);
+      showToast("Client created successfully!", "success");
 
       // Reset form data
       setFormData({
@@ -214,7 +211,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
       });
     } catch (err) {
       console.error("Error creating client1:", err);
-      setError(err.message || "Failed to create client. Please try again.");
+      showToast(err.message || "Failed to create client. Please try again.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -961,8 +958,6 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
           onStepClick={handleStepClick}
           steps={["Corporate Details", "Billing Details", "Review"]}
         />
-
-        {error && <div className="error-message">{error}</div>}
 
         {renderStepContent()}
 

@@ -172,7 +172,7 @@ function YourCalendar() {
              return false;
            });
            
-           console.log('Filtered events for sales_executive:', filtered.length);
+           console.log('Filtered events for @:', filtered.length);
            setMeetings(filtered);
          } else {
           // Other roles - use the same logic as before

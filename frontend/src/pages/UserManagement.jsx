@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styles from './UserManagement.module.css';
 import UserService from '../services/UserService';
 import AddUserModal from '../components/AddUserModal';
+import EditUserModal from '../components/EditUserModal';
 import Side from "./sidebar/Sidebar";
 import ProfileAvatar from "../components/ProfileAvatar";
 import belldot from "../assets/dashboard/bell-dot.svg";
@@ -15,8 +16,10 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false); // New state for Edit Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [userToEdit, setUserToEdit] = useState(null); // New state for User to Edit
   const [username, setUsername] = useState("");
 
    useEffect(() => {
@@ -50,6 +53,24 @@ const UserManagement = () => {
       console.error('Error creating user:', err);
       throw err; // Re-throw to let the modal handle the error
     }
+  };
+
+  const handleEditUser = async (userId, userData) => {
+    try {
+      await UserService.updateUser(userId, userData);
+      await fetchUsers();
+      setIsEditUserModalOpen(false);
+      setUserToEdit(null);
+      alert("User updated successfully!");
+    } catch (err) {
+      console.error('Error updating user:', err);
+      throw err;
+    }
+  };
+
+  const openEditModal = (user) => {
+    setUserToEdit(user);
+    setIsEditUserModalOpen(true);
   };
 
   // Open delete confirmation modal
@@ -175,6 +196,13 @@ const UserManagement = () => {
                   <td>{formatDate(user.createdAt)}</td>
                   <td>
                     <button 
+                      className={styles.editButton}
+                      onClick={() => openEditModal(user)}
+                      
+                    >
+                      Edit
+                    </button>
+                    <button 
                       className={styles.deleteButton}
                       onClick={() => handleDeleteUserClick(user)}
                     >
@@ -201,6 +229,13 @@ const UserManagement = () => {
         isOpen={isAddUserModalOpen}
         onClose={() => setIsAddUserModalOpen(false)}
         onSubmit={handleAddUser}
+      />
+
+      <EditUserModal
+        isOpen={isEditUserModalOpen}
+        onClose={() => setIsEditUserModalOpen(false)}
+        onSubmit={handleEditUser}
+        userToEdit={userToEdit}
       />
     </div>
       

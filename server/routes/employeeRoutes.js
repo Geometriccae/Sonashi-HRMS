@@ -71,7 +71,7 @@ const upload = multer({
 // =============================================
 
 // ?? Email sending helper
-async function sendTaskAssignedEmail(to, eventData, assignedBy) {
+async function sendTaskAssignedEmail(to, eventData, assignedBy, employeeName, actionType = 'created') {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -88,14 +88,17 @@ async function sendTaskAssignedEmail(to, eventData, assignedBy) {
     })
     : "N/A";
 
+  const subjectPrefix = actionType === 'reminder' ? 'Reminder: ' : 'New Task Assigned: ';
+  const titlePrefix = actionType === 'reminder' ? 'Task Reminder' : 'New Task Assigned';
+
   const mailOptions = {
     from: `"Auxin Task Manager" <${process.env.EMAIL_USER}>`,
     to,
-    subject: `New Event Assigned: ${eventData.eventName}`,
+    subject: `${subjectPrefix}${eventData.eventName} - ${employeeName}`,
     html: `
       <div style="font-family: Arial, sans-serif; padding:20px; background:#f9f9f9;">
         <div style="max-width:600px; margin:auto; background:#fff; border-radius:8px; padding:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-          <h2 style="color:#007bff; margin-bottom:10px;">New Event Assigned</h2>
+          <h2 style="color:#007bff; margin-bottom:10px;">${titlePrefix}</h2>
           <p><b>Event Name:</b> ${eventData.eventName}</p>
           <p><b>Event Type:</b> ${eventData.eventType || "N/A"}</p>
           <p><b>Date:</b> ${formattedDate}</p>
@@ -110,6 +113,35 @@ async function sendTaskAssignedEmail(to, eventData, assignedBy) {
   };
 
   await transporter.sendMail(mailOptions);
+}
+
+// Helper for background emails
+async function sendTaskEmailsInBackground(employee, eventData, assignedBy, actionType = 'created') {
+  try {
+    const recipients = [];
+    if (employee.emailId) recipients.push(employee.emailId);
+
+    if (Array.isArray(eventData.assignedTeamMembers)) {
+      for (const memberId of eventData.assignedTeamMembers) {
+        try {
+          const member = await Employee.findById(memberId).limit(1).lean(); // optimized
+          if (member?.emailId) recipients.push(member.emailId);
+        } catch (e) {
+          console.warn(`Failed to lookup team member ${memberId}:`, e);
+        }
+      }
+    }
+    const uniqueRecipients = [...new Set(recipients)];
+
+    const emailPromises = uniqueRecipients.map(email =>
+      sendTaskAssignedEmail(email, eventData, assignedBy, employee.employeeName || 'Employee', actionType).catch(err => {
+        console.error(`Failed to send task email to ${email}:`, err);
+      })
+    );
+    await Promise.allSettled(emailPromises);
+  } catch (err) {
+    console.error("Background email error:", err);
+  }
 }
 
 
@@ -219,7 +251,7 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
         io.to('role-admin').emit('employee-created', savedEmployee);
       }
     } catch (emitErr) {
-      console.warn('Failed to emit employee-created event:', emitErr);
+      console.warn('Failed to emit employee-created task:', emitErr);
     }
 
     res.status(201).json(savedEmployee);
@@ -511,7 +543,7 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
 
     // Respond immediately with the persisted event and employee snapshot
     res.status(201).json({
-      message: 'Event added successfully',
+      message: 'Task added successfully',
       event: savedEvent,
       employeeId: employee._id
     });
@@ -520,35 +552,14 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
     (async () => {
       try {
         // Collect recipients (employee + team members)
-        const recipients = [];
-        if (employee.emailId) recipients.push(employee.emailId);
-
-        if (Array.isArray(eventData.assignedTeamMembers)) {
-          for (const memberId of eventData.assignedTeamMembers) {
-            try {
-              const member = await Employee.findById(memberId).lean();
-              if (member?.emailId) recipients.push(member.emailId);
-            } catch (e) {
-              console.warn(`Failed to lookup team member ${memberId}:`, e);
-            }
-          }
-        }
-        const uniqueRecipients = [...new Set(recipients)];
-
-        // Send emails in parallel but don't fail the API if they fail
-        const emailPromises = uniqueRecipients.map(email =>
-          sendTaskAssignedEmail(email, eventWithAssignedBy, assignedBy).catch(err => {
-            console.error(`Failed to send event email to ${email}:`, err);
-            return { error: String(err) };
-          })
-        );
-        await Promise.allSettled(emailPromises);
+        // Send emails in background
+        await sendTaskEmailsInBackground(employee, eventWithAssignedBy, assignedBy);
 
         // Build a single notification payload with stable id
         const payload = {
           id: `employee-event-${employee._id}-${savedEvent._id}`,
           type: 'employee-event',
-          title: `New Event for ${employee.employeeName || 'Employee'}`,
+          title: `New Task for ${employee.employeeName || 'Employee'}`,
           body: `${eventWithAssignedBy.eventName} was added`,
           meta: { employeeId: employee._id, eventId: savedEvent._id, event: eventWithAssignedBy },
           url: `/teammanagement_salesleads/${employee._id}`,
@@ -584,10 +595,10 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
             email: employee.emailId || null
           });
         } catch (noteErr) {
-          console.error('Failed to persist notification for employee event:', noteErr);
+          console.error('Failed to persist notification for employee task:', noteErr);
         }
       } catch (bgErr) {
-        console.error('Background processing error for employee event:', bgErr);
+        console.error('Background processing error for employee task:', bgErr);
       }
     })();
 
@@ -633,6 +644,10 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
             io.to(`user-${userId}`).emit('notification', reminderPayload);
             io.to(`user-${userId}`).emit('task-reminder', reminderPayload);
           });
+
+          // Send reminder email
+          sendTaskEmailsInBackground(employee, savedEventSnapshot, assignedBy, 'reminder')
+            .catch(e => console.error("Error sending task reminder email:", e));
         }, delay);
       });
     }
@@ -640,7 +655,7 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Error adding event:", error);
     // Provide helpful error message while avoiding leaking internals
-    res.status(400).json({ message: 'Error adding event', error: error.message });
+    res.status(400).json({ message: 'Error adding task', error: error.message });
   }
 });
 
@@ -658,6 +673,7 @@ router.get('/:id/events', authMiddleware, async (req, res) => {
 });
 
 // Update an event
+// Update an event
 router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
   try {
     const { id, eventId } = req.params;
@@ -672,7 +688,7 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
     // Find event by ID
     const event = employee.events.id(eventId);
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({ message: 'Task not found' });
     }
 
     // Update event details
@@ -681,28 +697,9 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
 
     await employee.save();
 
-    // ? Collect recipients (employee + assigned team members)
-    const recipients = [];
-
-    if (employee.emailId) recipients.push(employee.emailId);
-
-    if (Array.isArray(updatedData.assignedTeamMembers)) {
-      for (const memberId of updatedData.assignedTeamMembers) {
-        try {
-          const member = await Employee.findById(memberId);
-          if (member?.emailId) recipients.push(member.emailId);
-        } catch (e) {
-          console.warn(`Failed to lookup team member ${memberId}:`, e);
-        }
-      }
-    }
-
-    const uniqueRecipients = [...new Set(recipients)];
-
-    // ? Send update notification emails
-    for (const email of uniqueRecipients) {
-      await sendTaskAssignedEmail(email, updatedData, assignedBy).catch(err => console.error("Email error:", err));
-    }
+    // Send update notification emails in background
+    sendTaskEmailsInBackground(employee, updatedData, assignedBy, 'updated')
+      .catch(err => console.error("Email error:", err));
 
     // Browser notification + persist
     try {
@@ -711,13 +708,21 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
         const payload = {
           id: `employee-event-update-${employee._id}-${Date.now()}`,
           type: 'employee-event-update',
-          title: `Event updated for ${employee.employeeName || 'Employee'}`,
+          title: `Task updated for ${employee.employeeName || 'Employee'}`,
           body: `${updatedData.eventName || 'An event'} was updated`,
           meta: { employeeId: employee._id, eventId, event: updatedData },
           timestamp: new Date()
         };
         io.to(`user-${employee._id}`).emit('notification', payload);
         if (employee.emailId) io.to(`email-${employee.emailId}`).emit('notification', payload);
+
+        // Targeted emit to assigned members
+        if (Array.isArray(updatedData.assignedTeamMembers)) {
+          updatedData.assignedTeamMembers.forEach(memberId => {
+            io.to(`user-${memberId}`).emit('notification', payload);
+          });
+        }
+
         await Notification.create({
           title: payload.title,
           body: payload.body,
@@ -732,6 +737,13 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
 
     // ? Reschedule Reminders (Add new setTimeouts)
     if (updatedData.reminders && updatedData.reminders.length > 0) {
+      const deriveEventDateTime = (d, t) => {
+        if (!d) return null;
+        let dateStr = typeof d === 'string' ? d.split('T')[0] : d.toISOString().split('T')[0];
+        if (t) return new Date(`${dateStr}T${t}:00`);
+        return new Date(dateStr);
+      };
+
       const eventDateTime = deriveEventDateTime(updatedData.date, updatedData.time);
 
       updatedData.reminders.forEach((reminderMinutes) => {
@@ -772,18 +784,170 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
               io.to(`user-${userId}`).emit('notification', reminderPayload);
               io.to(`user-${userId}`).emit('task-reminder', reminderPayload);
             });
+
+            // Send reminder email
+            sendTaskEmailsInBackground(employee, updatedData, assignedBy, 'reminder')
+              .catch(e => console.error("Error sending task reminder email:", e));
+
           }, delay);
         }
       });
     }
 
     res.json({
-      message: 'Event updated and email(s) sent successfully',
+      message: 'Task updated and email(s) sent successfully',
       event,
     });
   } catch (error) {
     console.error("Error updating event:", error);
-    res.status(500).json({ message: 'Error updating event', error: error.message });
+    res.status(500).json({ message: 'Error updating task', error: error.message });
+  }
+});
+
+// Update meeting (with email notifications)
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    const update = req.body;
+    const meeting = await Meeting.findById(req.params.id);
+    if (!meeting) return res.status(404).json({ message: 'Meeting not found' });
+
+    // Store old meeting data for comparison
+    const oldMeetingData = meeting.toObject();
+
+    // Clear existing reminders before updating
+    if (global.scheduledMeetingReminders && global.scheduledMeetingReminders[meeting._id]) {
+      console.log(`?? Clearing existing reminders for meeting ${meeting._id}`);
+      global.scheduledMeetingReminders[meeting._id].forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      delete global.scheduledMeetingReminders[meeting._id];
+    }
+
+    Object.assign(meeting, {
+      title: update.title ?? meeting.title,
+      type: update.type ?? meeting.type,
+      date: update.date ? new Date(update.date) : meeting.date,
+      time: update.time ?? meeting.time,
+      clientId: update.clientId ?? meeting.clientId,
+      assignedTeamMembers: Array.isArray(update.assignedTeamMembers) ? update.assignedTeamMembers : meeting.assignedTeamMembers,
+      notes: update.notes ?? meeting.notes,
+      link: update.link ?? meeting.link,
+      color: update.color ?? meeting.color,
+      reminders: Array.isArray(update.reminders) ? update.reminders : meeting.reminders
+    });
+
+    const saved = await meeting.save();
+    const assignedBy = req.user?.username || "Admin";
+
+    res.json(saved);
+
+    // Send email notifications in background
+    sendMeetingEmailsInBackground(saved, 'updated', assignedBy)
+      .then(() => console.log("Meeting update email process completed"))
+      .catch(err => console.error("Meeting update email process failed:", err));
+
+    // ? RESCHEDULE REMINDERS WITH NEW TIME
+    if (saved.reminders && saved.reminders.length > 0) {
+      const meetingDateTime = saved.time ?
+        new Date(`${saved.date.toISOString().split('T')[0]}T${saved.time}:00`) :
+        saved.date;
+
+      // Initialize global tracking if not exists
+      if (!global.scheduledMeetingReminders) {
+        global.scheduledMeetingReminders = {};
+      }
+      global.scheduledMeetingReminders[saved._id] = [];
+
+      saved.reminders.forEach(reminderMinutes => {
+        const reminderTime = new Date(meetingDateTime.getTime() - reminderMinutes * 60000);
+        const delay = reminderTime.getTime() - Date.now();
+
+        if (delay > 0) {
+          const timeoutId = setTimeout(() => {
+            try {
+              const io = req.app.get('io');
+              if (io) {
+                // Send reminder email
+                sendMeetingReminderEmail(saved, reminderMinutes, assignedBy)
+                  .then(() => console.log(`Meeting reminder email sent for ${reminderMinutes} minutes before`))
+                  .catch(err => console.error('Meeting reminder email failed:', err));
+
+                const reminderPayload = {
+                  id: `meeting-reminder-${saved._id}-${reminderMinutes}`,
+                  type: 'meeting-reminder',
+                  title: `Reminder: ${saved.title}`,
+                  body: `Meeting in ${reminderMinutes} minutes`,
+                  meta: {
+                    meetingId: saved._id,
+                    meeting: saved,
+                    reminderMinutes,
+                    clientId: saved.clientId
+                  },
+                  url: `/meetings/${saved._id}`,
+                  timestamp: new Date()
+                };
+
+                // Emit to all
+                io.emit('meeting-reminder', reminderPayload);
+
+                // Emit to assigned members and creator
+                const recipients = [
+                  ...(saved.assignedTeamMembers || []),
+                  saved.createdBy
+                ].filter((v, i, a) => a.indexOf(v) === i);
+
+                recipients.forEach(userId => {
+                  io.to(`user-${userId}`).emit('notification', reminderPayload);
+                  io.to(`user-${userId}`).emit('meeting-reminder', reminderPayload);
+                });
+              }
+            } catch (error) {
+              console.error('Error in meeting reminder timeout:', error);
+            }
+
+            // Clean up after firing
+            if (global.scheduledMeetingReminders && global.scheduledMeetingReminders[saved._id]) {
+              const index = global.scheduledMeetingReminders[saved._id].indexOf(timeoutId);
+              if (index > -1) {
+                global.scheduledMeetingReminders[saved._id].splice(index, 1);
+              }
+            }
+          }, delay);
+
+          global.scheduledMeetingReminders[saved._id].push(timeoutId);
+          console.log(`?? Scheduled reminder for meeting ${saved._id}: ${reminderMinutes} minutes before (delay: ${delay}ms)`);
+        }
+      });
+    }
+
+    // Socket notification for the update
+    try {
+      const io = req.app.get('io');
+      const payload = {
+        id: `meeting-updated-${saved._id}`,
+        type: 'meeting-updated',
+        title: `Meeting updated: ${saved.title}`,
+        body: `${saved.title} updated`,
+        meta: { meetingId: saved._id, meeting: saved },
+        url: `/meetings/${saved._id}`,
+        timestamp: new Date()
+      };
+      if (io) {
+        io.emit('notification', payload);
+        io.emit('meeting-updated', saved);
+        if (saved.clientId) io.to(`client-${saved.clientId}`).emit('meeting-updated', payload);
+        for (const memberId of saved.assignedTeamMembers || []) {
+          io.to(`user-${memberId}`).emit('notification', payload);
+          io.to(`user-${memberId}`).emit('meeting-updated', payload);
+        }
+      }
+      await Notification.create({ title: payload.title, body: payload.body, payload, role: null, userId: null });
+    } catch (emitErr) {
+      console.error('Meeting update emit/persist error:', emitErr);
+    }
+  } catch (err) {
+    console.error('Update meeting error:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -798,9 +962,9 @@ router.delete('/:id/events/:eventId', authMiddleware, async (req, res) => {
     employee.events = employee.events.filter(e => e._id.toString() !== req.params.eventId);
     await employee.save();
 
-    res.json({ message: 'Event deleted successfully', employee });
+    res.json({ message: 'Task deleted successfully', employee });
   } catch (error) {
-    res.status(500).json({ message: 'Error deleting event', error: error.message });
+    res.status(500).json({ message: 'Error deleting task', error: error.message });
   }
 });
 

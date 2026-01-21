@@ -255,6 +255,23 @@ main {
   background-color: #28a745;
   color: white;
 }
+.roleBadge {
+  background-color: #0EA5E9;
+  color: white;
+}
+
+
+.editButton {
+  background-color: rgba(0, 157, 255, 0.792);
+  color: white;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background-color 0.3s;
+  margin-right: 10px;
+}
 
 .deleteButton {
   background-color: #dc3545;

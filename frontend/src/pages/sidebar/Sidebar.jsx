@@ -111,7 +111,7 @@ function Sidebar() {
 
               {/* */}
                 {/* Fixed: Compare userRole directly, not userRole.role */}
-              {userRole !== "sales_executive" && (
+              
                 <li className={isActive("/teammanagement") ? styles.active : ""}>
                   <Link to="/teammanagement" className={styles["sidebar-link"]}>
                     <img
@@ -122,7 +122,7 @@ function Sidebar() {
                     Team Management
                   </Link>
                 </li>
-              )}
+             
 
              
 

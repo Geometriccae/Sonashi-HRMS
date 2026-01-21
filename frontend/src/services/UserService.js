@@ -28,7 +28,7 @@ async function parseResponse(response) {
       }
     } else {
       // Likely HTML (index.html) or plain text -> provide clearer error
-      throw new Error(`Request failed: ${response.status} ${response.statusText} - ${text.substring(0,200)}`);
+      throw new Error(`Request failed: ${response.status} ${response.statusText} - ${text.substring(0, 200)}`);
     }
   }
 
@@ -106,7 +106,19 @@ const deleteUser = async (userId) => {
   return parseResponse(response);
 };
 
-const UserService = { getMe, updateMe, uploadProfilePicture, getAllUsers, createUser, deleteUser };
+const updateUser = async (userId, userData) => {
+  const response = await fetch(`${baseUrl}/users/${userId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${getAuthToken()}`
+    },
+    body: JSON.stringify(userData)
+  });
+  return parseResponse(response);
+};
+
+const UserService = { getMe, updateMe, uploadProfilePicture, getAllUsers, createUser, deleteUser, updateUser };
 export default UserService;
 
 

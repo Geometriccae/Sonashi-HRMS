@@ -11,13 +11,13 @@ const nodemailer = require('nodemailer');
 async function sendMeetingEmailsInBackground(meetingData, actionType, assignedBy) {
   try {
     console.log(`?? Starting meeting email background process for ${actionType}...`);
-    
+
     const recipients = new Set();
 
     // Add assigned team members
     if (Array.isArray(meetingData.assignedTeamMembers) && meetingData.assignedTeamMembers.length > 0) {
       console.log(`?? Processing ${meetingData.assignedTeamMembers.length} team members`);
-      
+
       for (const memberId of meetingData.assignedTeamMembers) {
         try {
           const member = await Employee.findById(memberId);
@@ -63,11 +63,11 @@ async function sendMeetingEmailsInBackground(meetingData, actionType, assignedBy
     // Send emails in parallel
     if (uniqueRecipients.length > 0) {
       const emailResults = await Promise.allSettled(
-        uniqueRecipients.map(email => 
+        uniqueRecipients.map(email =>
           sendMeetingEmail(email, meetingData, actionType, assignedBy)
         )
       );
-      
+
       // Log email results
       emailResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {
@@ -100,14 +100,21 @@ async function sendMeetingEmail(to, meetingData, actionType, assignedBy) {
 
     const formattedDate = meetingData.date
       ? new Date(meetingData.date).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
       : "N/A";
 
-    const actionText = actionType === 'created' ? 'scheduled' : 'updated';
-    const subject = `Meeting ${actionText}: ${meetingData.title}`;
+    let actionText;
+    if (actionType === 'created') actionText = 'scheduled';
+    else if (actionType === 'updated') actionText = 'updated';
+    else if (actionType === 'reminder') actionText = 'reminder';
+    else actionText = actionType;
+
+    const subject = actionType === 'reminder'
+      ? `Reminder: ${meetingData.title}`
+      : `Meeting ${actionText}: ${meetingData.title}`;
 
     // Get client name if available
     let clientName = "N/A";
@@ -203,6 +210,12 @@ router.post('/', authMiddleware, async (req, res) => {
                 io.to(`user-${userId}`).emit('notification', reminderPayload);
                 io.to(`user-${userId}`).emit('meeting-reminder', reminderPayload);
               });
+
+              // Helper to find assignedBy name is tricky here as we only have ID in createdBy usually, 
+              // but we can pass a generic string or try to use saved data if populated (it's not).
+              // For now, we'll pass "system" or reuse the assignments.
+              sendMeetingEmailsInBackground(saved, 'reminder', "System Reminder")
+                .catch(e => console.error("Error sending reminder email:", e));
             }
           }, delay);
         }
@@ -280,6 +293,53 @@ router.put('/:id', authMiddleware, async (req, res) => {
     sendMeetingEmailsInBackground(saved, 'updated', assignedBy)
       .then(() => console.log("Meeting update email process completed"))
       .catch(err => console.error("Meeting update email process failed:", err));
+
+    // Schedule reminders for updated meeting
+    if (saved.reminders && saved.reminders.length > 0) {
+      console.log(`Scheduling reminders for updated meeting: ${saved.title}`);
+      const meetingDateTime = saved.time
+        ? new Date(`${saved.date.toISOString().split('T')[0]}T${saved.time}:00`)
+        : new Date(saved.date);
+
+      const io = req.app.get('io'); // Hoist io
+
+      saved.reminders.forEach(reminderMinutes => {
+        const reminderTime = new Date(meetingDateTime.getTime() - reminderMinutes * 60000);
+        const delay = reminderTime.getTime() - Date.now();
+
+        if (delay > 0) {
+          console.log(`Setting timeout for ${reminderMinutes}m reminder in ${delay}ms`);
+          setTimeout(() => {
+            if (io) {
+              const reminderPayload = {
+                id: `meeting-reminder-${saved._id}-${reminderMinutes}`,
+                type: 'meeting-reminder',
+                title: `Reminder: ${saved.title}`,
+                body: `Meeting in ${reminderMinutes} minutes`,
+                meta: { meetingId: saved._id, meeting: saved, reminderMinutes },
+                url: `/meetings/${saved._id}`,
+                timestamp: new Date()
+              };
+
+              console.log(`Firing reminder for updated meeting ${saved._id} (${reminderMinutes}m)`);
+              io.emit('meeting-reminder', reminderPayload);
+
+              const recipients = [...(saved.assignedTeamMembers || []), saved.createdBy]
+                .filter(Boolean)
+                .filter((v, i, a) => a.indexOf(v) === i);
+
+              recipients.forEach(userId => {
+                io.to(`user-${userId}`).emit('notification', reminderPayload);
+                io.to(`user-${userId}`).emit('meeting-reminder', reminderPayload);
+              });
+
+              sendMeetingEmailsInBackground(saved, 'reminder', "System Reminder")
+                .catch(e => console.error("Error sending reminder email:", e));
+            }
+          }, delay);
+        }
+      });
+    }
 
     try {
       const io = req.app.get('io');

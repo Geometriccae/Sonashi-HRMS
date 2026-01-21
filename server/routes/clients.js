@@ -28,9 +28,9 @@ const fileFilter = (req, file, cb) => {
 };
 
 // ?? Background email sender (non-blocking)
-async function sendEventEmailsInBackground(eventData, assignedBy, client) {
+async function sendEventEmailsInBackground(eventData, assignedBy, client, actionType = 'created') {
   try {
-    console.log("?? Starting email background process...");
+    console.log(`?? Starting email background process for ${actionType}...`);
 
     // Collect recipients from event data
     const recipients = [];
@@ -65,7 +65,7 @@ async function sendEventEmailsInBackground(eventData, assignedBy, client) {
     if (uniqueRecipients.length > 0) {
       const emailResults = await Promise.allSettled(
         uniqueRecipients.map(email =>
-          sendClientEventEmail(email, eventData, assignedBy, client.clientName || client.companyName)
+          sendClientEventEmail(email, eventData, assignedBy, client.clientName || client.companyName, actionType)
         )
       );
 
@@ -86,7 +86,7 @@ async function sendEventEmailsInBackground(eventData, assignedBy, client) {
 }
 
 // ?? Client Event Email Template
-async function sendClientEventEmail(to, eventData, assignedBy, clientName) {
+async function sendClientEventEmail(to, eventData, assignedBy, clientName, actionType = 'created') {
   try {
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -108,10 +108,13 @@ async function sendClientEventEmail(to, eventData, assignedBy, clientName) {
       })
       : "N/A";
 
+    const subjectPrefix = actionType === 'reminder' ? 'Reminder: ' : 'New Client Event: ';
+    const subject = `${subjectPrefix}${eventData.eventName} - ${clientName}`;
+
     const mailOptions = {
       from: `"Auxin Task Manager" <${process.env.EMAIL_USER}>`,
       to,
-      subject: `New Client Event: ${eventData.eventName} - ${clientName}`,
+      subject,
       html: `
         <div style="font-family: Arial, sans-serif; padding:20px; background:#f9f9f9;">
           <div style="max-width:600px; margin:auto; background:#fff; border-radius:8px; padding:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
@@ -291,12 +294,11 @@ router.post('/', authMiddleware,
       // Check for duplicate email
       if (clientData.email) {
         const existingEmail = await Client.findOne({
-          email: clientData.email.toLowerCase().trim(),
-          createdBy: req.user.id // Only check within user's clients
+          email: clientData.email.toLowerCase().trim()
         });
         if (existingEmail) {
           return res.status(400).json({
-            message: `Client with email "${clientData.email}" already exists`
+            message: `This email address is already in use.`
           });
         }
       }
@@ -332,12 +334,13 @@ router.post('/', authMiddleware,
       // Add ownership information
       clientData.createdBy = req.user.id;
 
-      // If sales executive is creating ? assign to self
-      if (req.user.role === 'sales_executive') {
-        clientData.assignedTo = req.user.id;
-      }
-      // If admin creating ? can assign manually, else assign to self
-      else if (req.user.role === 'admin' && !clientData.assignedTo) {
+      // If admin creating ? can assign manually. For everyone else (or if admin didn't assign), assign to self.
+      if (req.user.role === 'admin') {
+        if (!clientData.assignedTo) {
+          clientData.assignedTo = req.user.id;
+        }
+      } else {
+        // Non-admins always assign to self to ensure validity and prevent unauthorized assignment
         clientData.assignedTo = req.user.id;
       }
 
@@ -388,6 +391,19 @@ router.put('/:id', authMiddleware, // keep sales_executive also admin separately
       let updateData = req.body.data
         ? JSON.parse(req.body.data)
         : req.body;
+
+      // Check for duplicate email
+      if (updateData.email) {
+        const existingEmail = await Client.findOne({
+          email: updateData.email.toLowerCase().trim(),
+          _id: { $ne: req.params.id }
+        });
+        if (existingEmail) {
+          return res.status(400).json({
+            message: `This email address is already in use.`
+          });
+        }
+      }
 
       // Add profile picture path if file was uploaded
       if (req.file) {
@@ -529,6 +545,10 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
                 io.to(`user-${userId}`).emit('notification', reminderPayload);
                 io.to(`user-${userId}`).emit('event-reminder', reminderPayload);
               });
+
+              // Send reminder email
+              sendEventEmailsInBackground(eventWithAssignedBy, assignedBy, client, 'reminder')
+                .catch(e => console.error("Error sending client event reminder email:", e));
             }
           }, delay);
         }
@@ -683,6 +703,10 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
                 io.to(`user-${userId}`).emit('notification', reminderPayload);
                 io.to(`user-${userId}`).emit('event-reminder', reminderPayload);
               });
+
+              // Send reminder email
+              sendEventEmailsInBackground(updatedData, assignedBy, client, 'reminder')
+                .catch(e => console.error("Error sending client event reminder email:", e));
             }
           }, delay);
         }

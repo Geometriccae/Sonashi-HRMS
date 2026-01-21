@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useToast } from "../../context/ToastContext";
 import "./AddClientModal.css";
 import ProgressSteps from "../ProgressSteps";
 import InputField from "../InputField";
@@ -11,6 +12,7 @@ import Dropdown from "../DropDown";
 function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     // 1. Company & Contact Details
     companyName: "",
@@ -72,7 +74,6 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
     category: "",
   });
 
-  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Effect to populate form data when clientData is provided
@@ -142,7 +143,6 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
       onClose();
-      setError("");
     }
   };
 
@@ -163,38 +163,34 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
-      setError("");
     }
   };
 
   const handleNext = () => {
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
-      setError("");
     }
   };
 
   const handleStepClick = (stepId) => {
     if (stepId <= currentStep) {
       setCurrentStep(stepId);
-      setError("");
     }
   };
 
   const handleFinish = async () => {
-    // Validate required fields - only companyName is required according to server model
-    if (!formData.companyName) {
-      setError("Company Name is a required field");
+    // Validate required fields
+    if (!formData.companyName || !formData.email) {
+      showToast("Company Name and Email are required fields.", "error");
       return;
     }
 
     if (!clientData || !clientData._id) {
-      setError("Client ID is required for updating");
+      showToast("Client ID is required for updating", "error");
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
 
     // Debug logging
     console.log("Starting client update process...");
@@ -269,6 +265,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
 
       onClose();
       setCurrentStep(1);
+      showToast("Client updated successfully!", "success");
 
       // Reset profile image state after successful update
       setProfileImage(null);
@@ -312,7 +309,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
         errorMessage = err.message;
       }
 
-      setError(errorMessage);
+      showToast(errorMessage, "error");
 
       // Additional debug information
       console.log("Error details:", {
@@ -1100,23 +1097,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
           steps={["Corporate Details", "Billing Details", "Review"]}
         />
 
-        {error && (
-          <div
-            className="error-message"
-            style={{
-              color: "#E8362C",
-              backgroundColor: "#FEF2F2",
-              border: "1px solid #FECACA",
-              borderRadius: "8px",
-              padding: "12px",
-              margin: "16px 0",
-              fontSize: "14px",
-              fontWeight: "500",
-            }}
-          >
-            {error}
-          </div>
-        )}
+
 
         {renderStepContent()}
 

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useToast } from "../context/ToastContext";
 import { useNavigate, useParams } from "react-router-dom";
 import styles from "./SalesAndLeadsClient.module.css";
 import Side from "./sidebar/Sidebar";
@@ -58,6 +59,7 @@ function SalesAndLeadsClient(clientId ) {
   const [calendarKey, setCalendarKey] = useState(0); // Force calendar refresh
   const [documentsKey, setDocumentsKey] = useState(0); // Force documents refresh
   const taskBoardRefreshRef = useRef(null); // Reference to TaskBoard refresh function
+  const { showToast } = useToast();
 
    const [username, setUsername] = useState("");
    const [userRole, setUserRole] = useState("");
@@ -252,7 +254,7 @@ function SalesAndLeadsClient(clientId ) {
       }
     } catch (e) {
       console.error("Delete failed", e);
-      alert(e.message || "Delete failed");
+      showToast(e.message || "Delete failed", "error");
     } finally {
       setIsDeleteModalOpen(false);
       setDeleteType("");
@@ -347,7 +349,7 @@ const handleTaskCreated = (newTask) => {
       setDocumentsKey(prev => prev + 1);
     } catch (e) {
       console.error("Upload failed", e);
-      alert(e.message || "Upload failed");
+      showToast(e.message || "Upload failed", "error");
     } finally {
       setIsFileUploadModalOpen(false);
     }
@@ -415,7 +417,7 @@ const handleTaskCreated = (newTask) => {
       }
     } catch (e) {
       console.error('Export failed:', e);
-      alert(e.message || 'Export failed');
+      showToast(e.message || 'Export failed', "error");
     } finally {
       setIsDropdownOpen(false);
     }

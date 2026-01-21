@@ -334,6 +334,105 @@ router.post('/users', requireAdmin, async (req, res) => {
   }
 });
 
+// Update user (Admin only)
+router.put('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { username, password, emailId, phoneNumber, role, employeeId } = req.body;
+
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check username uniqueness if changed
+    if (username && username !== user.username) {
+      const existingUser = await User.findOne({ username });
+      if (existingUser) {
+        return res.status(400).json({ message: 'Username already exists' });
+      }
+      user.username = username;
+    }
+
+    // Check email uniqueness if changed
+    if (emailId && emailId !== user.emailId) {
+      const existingEmail = await User.findOne({ emailId });
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+      user.emailId = emailId;
+    }
+
+    if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+    if (role) user.role = role;
+    if (employeeId !== undefined) user.employeeId = employeeId;
+
+    let passwordUpdated = false;
+    // Update password if provided
+    if (password && password.trim() !== '') {
+      if (password.length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+      }
+      if (process.env.HASH_PASSWORDS === 'true') {
+        user.password = await bcrypt.hash(password, 10);
+      } else {
+        user.password = password;
+      }
+      passwordUpdated = true;
+    }
+
+    await user.save();
+
+    // Send email with updated credentials if password was changed or if it's a general update demand
+    // The user requested: "after update updated credential goes to email that email id"
+    // We will send email if password is updated OR if other critical info changed, but primarily for credentials.
+    // If password is NOT updated, we should probably not send it in plain text if it's hashed. 
+    // However, the request implies sending credentials. If we don't have the plain password (because it was not updated), we cannot send it if it's hashed.
+    // So we will only send the email if the password was updated OR if we are using plain text passwords.
+
+    if (user.emailId && passwordUpdated) {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+        });
+
+        const mailHtml = `
+            <div style="font-family: Arial, sans-serif; padding:20px;">
+              <h2>Account Details Updated</h2>
+              <p>Your account details have been updated by an administrator.</p>
+              <p><strong>Username:</strong> ${user.username}</p>
+              <p><strong>New Password:</strong> ${password}</p> 
+              <p>Please login at <a href="${process.env.FRONTEND_URL || 'https://your-app.example.com'}">the website</a>.</p>
+            </div>
+          `;
+
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: user.emailId,
+          subject: 'Your account details have been updated',
+          html: mailHtml
+        });
+        console.log(`Sent update email to ${user.emailId}`);
+      } catch (mailErr) {
+        console.error('Failed to send update email:', mailErr);
+      }
+    }
+
+
+    // Return user without password
+    const updatedUser = await User.findById(userId).select('-password');
+    res.json(updatedUser);
+  } catch (e) {
+    if (e.code === 11000) {
+      res.status(400).json({ message: 'Username or email already exists' });
+    } else {
+      res.status(500).json({ message: e.message });
+    }
+  }
+});
+
 // Delete user (Admin only)
 router.delete('/users/:userId', requireAdmin, async (req, res) => {
   try {
