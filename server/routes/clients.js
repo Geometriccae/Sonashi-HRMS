@@ -224,7 +224,7 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 
     let clients;
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'hod') {
       clients = await Client.find(baseFilter).sort({ createdAt: -1 });
     } else if (userRole === 'sales_executive') {
       const orConditions = [
@@ -335,7 +335,7 @@ router.post('/', authMiddleware,
       clientData.createdBy = req.user.id;
 
       // If admin creating ? can assign manually. For everyone else (or if admin didn't assign), assign to self.
-      if (req.user.role === 'admin') {
+      if (req.user.role === 'admin' || req.user.role === 'hod') {
         if (!clientData.assignedTo) {
           clientData.assignedTo = req.user.id;
         }

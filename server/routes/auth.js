@@ -35,7 +35,7 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, username: user.username },
+      { id: user._id, username: user.username, emailId: user.emailId || "" },
       process.env.JWT_SECRET,
       { expiresIn: '3h' }
     );
@@ -54,16 +54,23 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Helpers
+// Helpers - Bulletproof version
 function getUserIdFromReq(req) {
+  if (!req) return null;
   try {
-    if (req.headers.authorization?.startsWith('Bearer ')) {
-      const token = req.headers.authorization.split(' ')[1];
+    const authHeader = (req.headers && req.headers.authorization);
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      if (token === 'null' || token === 'undefined') return null;
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      return decoded.id;
+      return decoded ? String(decoded.id) : null;
     }
   } catch (e) { }
-  return req.body.userId || req.query.userId;
+
+  const body = req.body || {};
+  const query = req.query || {};
+  const userId = body.userId || query.userId;
+  return userId ? String(userId) : null;
 }
 
 // Storage for profile pictures
@@ -80,7 +87,102 @@ router.get('/me', async (req, res) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     const user = await User.findById(userId).select('-password');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+
+    // Calculate leave balance dynamically based on monthly accrual
+    const LeaveRequest = require('../models/LeaveRequest');
+    const { calculateWorkingDays } = require('./leaveRequestRoutes').utils || {};
+
+    // Official Holidays for 2026
+    const OFFICIAL_HOLIDAYS_2026 = new Set([
+      '2026-01-01', '2026-01-26', '2026-02-19', '2026-03-03', '2026-03-19',
+      '2026-03-21', '2026-04-26', '2026-04-03', '2026-04-14', '2026-05-01',
+      '2026-06-26', '2026-08-15', '2026-08-26', '2026-08-28', '2026-09-14',
+      '2026-10-02', '2026-10-20', '2026-11-06', '2026-11-10', '2026-11-11',
+      '2026-11-24', '2026-12-25'
+    ]);
+
+    // Helper function to calculate working days
+    const calcWorkingDays = (startDate, endDate) => {
+      let workingDays = 0;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+
+      const currentDate = new Date(start);
+      while (currentDate <= end) {
+        const day = currentDate.getDay();
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const dayOfMonth = String(currentDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${dayOfMonth}`;
+
+        if (day !== 0 && day !== 6 && !OFFICIAL_HOLIDAYS_2026.has(dateStr)) {
+          workingDays++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      return workingDays;
+    };
+
+    // Get current date and determine financial year (April - March)
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0 = Jan, 3 = April
+    const currentYear = now.getFullYear();
+
+    // Financial year starts in April (month index 3)
+    // If current month is Jan-Mar (0-2), FY started previous year
+    // If current month is Apr-Dec (3-11), FY started this year
+    let fyStartYear, fyStartDate, fyEndDate;
+    if (currentMonth < 3) {
+      // Jan-Mar: FY is previous year's April to this year's March
+      fyStartYear = currentYear - 1;
+    } else {
+      // Apr-Dec: FY is this year's April to next year's March
+      fyStartYear = currentYear;
+    }
+    fyStartDate = new Date(fyStartYear, 3, 1); // April 1
+    fyEndDate = new Date(fyStartYear + 1, 2, 31); // March 31
+
+    // Calculate months completed in the current financial year
+    // From April to current month (inclusive)
+    let monthsCompleted;
+    if (currentMonth >= 3) {
+      // Apr-Dec: months from April (index 3) to current month
+      monthsCompleted = currentMonth - 3 + 1; // +1 to include current month
+    } else {
+      // Jan-Mar: 9 months (Apr-Dec) + months in current year
+      monthsCompleted = 9 + currentMonth + 1; // +1 to include current month
+    }
+
+    // Monthly accrual rate as per policy: 1.75 days per month
+    // User requested YEAR WISE calculation so we give full annual credit upfront
+    const entitlement = 21;
+
+    // Get all approved leave requests for this user in the current financial year
+    const approvedLeaves = await LeaveRequest.find({
+      employee: userId,
+      status: 'Approved',
+      startDate: { $gte: fyStartDate, $lte: fyEndDate }
+    });
+
+    // Calculate total working days taken
+    let leaveDaysTaken = 0;
+    for (const leave of approvedLeaves) {
+      leaveDaysTaken += calcWorkingDays(leave.startDate, leave.endDate);
+    }
+
+    // Calculate leave balance: entitlement - days taken
+    const calculatedLeaveBalance = Math.max(0, parseFloat((entitlement - leaveDaysTaken).toFixed(2)));
+
+    // Return user with calculated leave balance
+    const userResponse = user.toObject();
+    userResponse.leaveBalance = calculatedLeaveBalance;
+    userResponse.leaveEntitlement = parseFloat(entitlement.toFixed(2));
+    userResponse.leaveDaysTaken = leaveDaysTaken;
+    userResponse.monthsCompleted = monthsCompleted;
+
+    res.json(userResponse);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -203,7 +305,7 @@ const requireAdmin = async (req, res, next) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
     const user = await User.findById(userId);
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'hod')) {
       return res.status(403).json({ message: 'Admin access required' });
     }
 

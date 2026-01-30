@@ -1,0 +1,286 @@
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const xlsx = require('xlsx');
+const SalarySlip = require('../models/SalarySlip');
+const User = require('../models/User');
+const jwt = require("jsonwebtoken");
+const mongoose = require('mongoose');
+
+// One-time cleanup to remove stale database indexes that cause import failures
+SalarySlip.on('index', (err) => {
+    if (err) console.error('SalarySlip Index Error:', err);
+});
+
+// Helper to remove the stale legacy index if it exists in the user's DB
+const cleanupLegacyIndex = async () => {
+    try {
+        const collection = mongoose.connection.db.collection('salaryslips');
+        const indexes = await collection.indexes();
+        if (indexes.some(idx => idx.name === 'employeeId_1_month_1_year_1')) {
+            await collection.dropIndex('employeeId_1_month_1_year_1');
+            console.log('Successfully dropped stale legacy index: employeeId_1_month_1_year_1');
+        }
+    } catch (e) {
+        // Index might not exist or connection not ready yet, which is fine
+    }
+};
+
+// Monitor connection to perform cleanup
+mongoose.connection.on('open', cleanupLegacyIndex);
+
+// Enhanced helper to get user data from request
+function getUserDataFromReq(req) {
+    const defaultData = { userId: null, emailId: null };
+    if (!req) return defaultData;
+
+    try {
+        const authHeader = req.headers && req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            if (token === 'null' || token === 'undefined') return defaultData;
+
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            if (decoded && decoded.id) {
+                return {
+                    userId: String(decoded.id),
+                    emailId: decoded.emailId ? String(decoded.emailId).toLowerCase() : ""
+                };
+            }
+        }
+    } catch (e) { }
+
+    const body = req.body || {};
+    const query = req.query || {};
+    const userId = body.userId || query.userId || null;
+    const emailId = body.emailId || query.emailId || null;
+
+    return {
+        userId: userId ? String(userId) : null,
+        emailId: emailId ? String(emailId).toLowerCase() : null
+    };
+}
+
+// Middleware to check admin role
+const requireAdmin = async (req, res, next) => {
+    try {
+        const userData = getUserDataFromReq(req);
+        if (!userData || !userData.userId) return res.status(401).json({ message: 'Unauthorized' });
+
+        const user = await User.findById(userData.userId);
+        if (!user || (user.role !== 'admin' && user.role !== 'hod')) return res.status(403).json({ message: 'Admin access required' });
+
+        req.user = user;
+        next();
+    } catch (e) {
+        res.status(500).json({ message: "Authentication internal error" });
+    }
+};
+
+// Multer setup
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
+    filename: (req, file, cb) => cb(null, `salary-import-${Date.now()}${path.extname(file.originalname)}`)
+});
+const upload = multer({ storage });
+
+// Manual Create
+router.post('/create', requireAdmin, async (req, res) => {
+    try {
+        const slipData = { ...req.body, uploadedBy: req.user._id };
+        if (!slipData.emailId) return res.status(400).json({ message: 'Email ID is required' });
+
+        const slip = await SalarySlip.findOneAndUpdate(
+            { emailId: slipData.emailId.trim().toLowerCase(), month: slipData.month, year: slipData.year },
+            { ...slipData, emailId: slipData.emailId.trim().toLowerCase() },
+            { upsert: true, new: true }
+        );
+        res.status(201).json(slip);
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+// Admin: Bulk Import Salary Slips
+router.post('/import', requireAdmin, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+
+        const workbook = xlsx.readFile(req.file.path);
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const data = xlsx.utils.sheet_to_json(sheet, { header: 0, defval: '' });
+
+        const monthValue = String(req.body.month || '').trim();
+        const yearValue = String(req.body.year || '').trim();
+
+        if (!monthValue || !yearValue) return res.status(400).json({ message: 'Month and Year are required' });
+
+        const results = [];
+        const errors = [];
+
+        // Exact match mapping based on user error logs
+        const fieldMappings = {
+            employeeName: ['Employee Name', 'Name', 'FullName', 'EmployeeName'],
+            emailId: ['Employee Email ID', 'Email ID', 'Email', 'User Email', 'EmailId', 'Mail', 'id'],
+            designation: ['Designation', 'Project Manager', 'Designation Name', 'DesignationName'],
+            basicPay: ['Basic Pay (₹)', 'Basic Pay', 'Basic Salary', 'BasicPay', 'Basic'],
+            hra: ['HRA (₹)', 'HRA', 'House Rent Allowance', 'HRA Amount'],
+            deductionsPFTax: ['Deductions (₹)', 'Deductions', 'Deduction', 'PF / Tax', 'PF', 'Tax', 'PF/Tax'],
+            netSalary: ['Net Salary (₹)', 'Net Salary', 'Total Salary', 'Total Payable', 'NetSalary']
+        };
+
+        const parseNum = (val) => {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            const cleaned = String(val).replace(/[^0-9.-]/g, '');
+            const parsed = parseFloat(cleaned);
+            return isNaN(parsed) ? 0 : parsed;
+        };
+
+        for (const row of data) {
+            try {
+                if (!row) continue;
+                const rowKeys = Object.keys(row);
+
+                const getRowVal = (possibleKeys) => {
+                    const foundKey = rowKeys.find(k => {
+                        const cleanK = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+                        return possibleKeys.some(pk => {
+                            const cleanPk = pk.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            return cleanK === cleanPk || cleanK.includes(cleanPk);
+                        });
+                    });
+                    return foundKey ? row[foundKey] : undefined;
+                };
+
+                const rawEmail = getRowVal(fieldMappings.emailId);
+                if (!rawEmail && !getRowVal(fieldMappings.employeeName)) continue;
+                if (!rawEmail) {
+                    errors.push({ row, error: "Email ID not found in row" });
+                    continue;
+                }
+
+                const slipData = {
+                    employeeName: String(getRowVal(fieldMappings.employeeName) || 'Unknown').trim(),
+                    emailId: String(rawEmail).trim().toLowerCase(),
+                    designation: String(getRowVal(fieldMappings.designation) || 'N/A').trim(),
+                    month: monthValue,
+                    year: yearValue,
+                    basicPay: parseNum(getRowVal(fieldMappings.basicPay)),
+                    hra: parseNum(getRowVal(fieldMappings.hra)),
+                    deductionsPFTax: parseNum(getRowVal(fieldMappings.deductionsPFTax)),
+                    netSalary: parseNum(getRowVal(fieldMappings.netSalary)),
+                    uploadedBy: req.user._id
+                };
+
+                // Clear any legacy keys that might trigger stale unique indexes
+                await SalarySlip.findOneAndUpdate(
+                    { emailId: slipData.emailId, month: { $regex: new RegExp(`^${slipData.month}$`, 'i') }, year: slipData.year },
+                    { $set: slipData, $unset: { employeeId: "" } }, // Unset legacy key to avoid null collisions
+                    { upsert: true, new: true, runValidators: true }
+                );
+
+                results.push(slipData.emailId);
+            } catch (err) {
+                errors.push({ row, error: err.message });
+            }
+        }
+
+        res.json({
+            message: `Successfully processed ${results.length} salary slips.`,
+            count: results.length,
+            errors: errors.length > 0 ? errors : undefined
+        });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+// Admin: Get all
+router.get('/all', requireAdmin, async (req, res) => {
+    try {
+        const { month, year } = req.query;
+        const filter = {};
+        if (month && month !== 'All' && month !== '') filter.month = { $regex: new RegExp(`^${String(month).trim()}$`, 'i') };
+        if (year && year !== 'All' && year !== '') filter.year = String(year).trim();
+        const slips = await SalarySlip.find(filter).sort({ createdAt: -1 });
+        res.json(slips);
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+// Employee: Get mine
+router.get('/my-slips', async (req, res) => {
+    try {
+        const userData = getUserDataFromReq(req);
+        if (!userData || (!userData.userId && !userData.emailId)) return res.status(401).json({ message: 'Unauthorized' });
+        let userEmail = userData.emailId;
+        if (!userEmail && userData.userId) {
+            const user = await User.findById(userData.userId);
+            if (user) userEmail = user.emailId;
+        }
+        if (!userEmail) return res.status(400).json({ message: 'No linked email found' });
+
+        const slips = await SalarySlip.find({ emailId: String(userEmail).trim().toLowerCase() }).sort({ year: -1, month: -1 });
+        res.json(slips);
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+// Bulk Delete
+router.post('/bulk-delete', requireAdmin, async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: 'No IDs provided' });
+        }
+
+        await SalarySlip.deleteMany({ _id: { $in: ids } });
+        res.json({ message: `Successfully deleted ${ids.length} salary slips` });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Update salary slip
+router.put('/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updateData = { ...req.body };
+
+        // Normalize email if provided
+        if (updateData.emailId) {
+            updateData.emailId = String(updateData.emailId).trim().toLowerCase();
+        }
+
+        const updatedSlip = await SalarySlip.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedSlip) {
+            return res.status(404).json({ message: 'Salary slip not found' });
+        }
+
+        res.json(updatedSlip);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Delete
+router.delete('/:id', requireAdmin, async (req, res) => {
+    try {
+        await SalarySlip.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Salary slip deleted' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+module.exports = router;

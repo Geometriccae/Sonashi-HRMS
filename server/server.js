@@ -21,6 +21,10 @@ const clientRoutes = require('./routes/clients');
 const meetingsRoutes = require('./routes/meetings');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const supportRoutes = require('./routes/supportRoutes');
+const leaveRequestRoutes = require('./routes/leaveRequestRoutes');
+const salarySlipRoutes = require('./routes/salarySlipRoutes');
+const expenseRoutes = require('./routes/expenseRoutes');
+
 
 const app = express();
 const server = http.createServer(app);
@@ -74,8 +78,9 @@ io.on("connection", (socket) => {
   socket.on('join-user', async (userData) => {
     try {
       // Handle both object format and simple userId format for backward compatibility
-      if (typeof userData === 'object') {
-        const { userId, role } = userData;
+      if (typeof userData === 'object' && userData !== null) {
+        const userId = userData.userId;
+        const role = userData.role;
         currentUserId = userId;
         currentUserRole = role;
         if (userId) socket.join(`user-${userId}`);
@@ -208,6 +213,7 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ====== API ROUTES ======
+app.use('/api/salary-slips', salarySlipRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/employeedocuments', employeeDocumentRoutes);
 app.use('/api', taskRoutes);
@@ -218,6 +224,10 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/checkins', require('./routes/checkInRoutes'));
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/leave-requests', leaveRequestRoutes);
+app.use('/api/leave-requests', leaveRequestRoutes);
+app.use('/api/expenses', expenseRoutes);
+
 
 // ====== DATABASE CONNECTION ======
 mongoose.connect(process.env.MONGO_URI)
@@ -242,8 +252,10 @@ const reactRoutes = [
   '/documents',
   '/teammanagement',
   '/venkat',
+  '/leave-requests',
   '/example'
 ];
+
 
 // Serve index.html for basic React routes
 reactRoutes.forEach(route => {

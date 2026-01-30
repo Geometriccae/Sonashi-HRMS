@@ -55,7 +55,7 @@ function DashboardOverview() {
   useEffect(() => {
     const storedUsername = localStorage.getItem("username") || "User";
     const storedUserId = localStorage.getItem("userId");
-    
+
     setUsername(storedUsername);
     console.log("Dashboard mounted - User ID:", storedUserId);
 
@@ -76,8 +76,8 @@ function DashboardOverview() {
   }, []);
 
   useEffect(() => {
-  calculateDashboardMetrics();
-}, [clients, meetings]);
+    calculateDashboardMetrics();
+  }, [clients, meetings]);
 
   const fetchLastCheckIn = async () => {
     try {
@@ -85,9 +85,9 @@ function DashboardOverview() {
       const role = localStorage.getItem("role") || "";
       console.log("Fetching check-ins for user:", userId, "role:", role);
       setDebugInfo(`User ID: ${userId || 'NOT FOUND'} | Role: ${role || 'NOT FOUND'}`);
-      
+
       // Don't return early if userId missing — service can use /user/me
-      if (role === 'admin') {
+      if (role === 'admin' || role === 'hod') {
         // Admin: fetch global latest check-ins (page 1, limit 1)
         const resp = await checkInService.getCheckIns(1, 1);
         console.log('Admin getCheckIns response:', resp);
@@ -131,7 +131,7 @@ function DashboardOverview() {
       const token = localStorage.getItem("token");
       let me = null;
       try {
-        const resp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/,'')}/api/auth/me`, {
+        const resp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (resp.ok) me = await resp.json();
@@ -144,7 +144,7 @@ function DashboardOverview() {
       // fetch aggregated client events
       let clientEvents = [];
       try {
-        const allEventsResp = await fetch(`${clientService.baseURL.replace(/\/clients\/?$/,'')}/clients/events`, {
+        const allEventsResp = await fetch(`${clientService.baseURL.replace(/\/clients\/?$/, '')}/clients/events`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (allEventsResp.ok) clientEvents = await allEventsResp.json();
@@ -184,34 +184,34 @@ function DashboardOverview() {
       // });
 
       // fetch standalone meetings
-let meetingsList = [];
-try {
-  const raw = await MeetingService.getMeetings();
-  meetingsList = Array.isArray(raw) ? raw : (raw.meetings || []);
-} catch (e) {
-  console.warn('Failed to fetch meetings', e);
-  meetingsList = [];
-}
+      let meetingsList = [];
+      try {
+        const raw = await MeetingService.getMeetings();
+        meetingsList = Array.isArray(raw) ? raw : (raw.meetings || []);
+      } catch (e) {
+        console.warn('Failed to fetch meetings', e);
+        meetingsList = [];
+      }
 
-// Normalize meetings - FIXED VERSION
-const normalizedMeetings = (meetingsList || []).map(m => {
-  const date = m.date ? new Date(m.date) : null;
-  return {
-    _id: m._id || m.id,
-    eventId: m._id || m.id,
-    eventName: m.title || m.eventName || '',
-    title: m.title || m.eventName || '',
-    date: date ? date.toISOString().split('T')[0] : null,
-    time: m.time || '',
-    clientId: m.clientId || null,
-    clientName: m.clientName || null,
-    assignedTeamMembers: m.assignedTeamMembers || [],
-    createdBy: m.createdBy || null,
-    color: m.color || (m.meta && m.meta.meeting && m.meta.meeting.color) || '#FF9500',
-    link: m.link || m.meetingLink || '', // Make sure this line includes both possible field names
-    meta: { meeting: m }
-  };
-});
+      // Normalize meetings - FIXED VERSION
+      const normalizedMeetings = (meetingsList || []).map(m => {
+        const date = m.date ? new Date(m.date) : null;
+        return {
+          _id: m._id || m.id,
+          eventId: m._id || m.id,
+          eventName: m.title || m.eventName || '',
+          title: m.title || m.eventName || '',
+          date: date ? date.toISOString().split('T')[0] : null,
+          time: m.time || '',
+          clientId: m.clientId || null,
+          clientName: m.clientName || null,
+          assignedTeamMembers: m.assignedTeamMembers || [],
+          createdBy: m.createdBy || null,
+          color: m.color || (m.meta && m.meta.meeting && m.meta.meeting.color) || '#FF9500',
+          link: m.link || m.meetingLink || '', // Make sure this line includes both possible field names
+          meta: { meeting: m }
+        };
+      });
 
 
       const events = [
@@ -221,7 +221,7 @@ const normalizedMeetings = (meetingsList || []).map(m => {
 
       // Filter based on role
       let filteredEvents = [];
-      if (role === 'admin') {
+      if (role === 'admin' || role === 'hod') {
         filteredEvents = events;
       } else {
         let employee = null;
@@ -241,9 +241,9 @@ const normalizedMeetings = (meetingsList || []).map(m => {
 
         filteredEvents = (events || []).filter(ev => {
           if (ev.createdBy && (
-              (userId && String(ev.createdBy) === userId) ||
-              (usernameKey && ev.createdBy.toLowerCase && String(ev.createdBy).toLowerCase() === usernameKey)
-            )) {
+            (userId && String(ev.createdBy) === userId) ||
+            (usernameKey && ev.createdBy.toLowerCase && String(ev.createdBy).toLowerCase() === usernameKey)
+          )) {
             return true;
           }
 
@@ -448,7 +448,7 @@ const normalizedMeetings = (meetingsList || []).map(m => {
   return (
     <div className={styles.dashboardOverview}>
 
-       {/* Temporary debug info */}
+      {/* Temporary debug info */}
       {/* <div style={{ 
         background: '#f0f0f0', 
         padding: '10px', 
@@ -539,9 +539,9 @@ const normalizedMeetings = (meetingsList || []).map(m => {
 
       <div className={styles["mobile-checkin"]}>
         <CheckIn
-         
+
           lastCheckInTime={lastCheckInTime}
-   onCheckInLogged={handleCheckInLogged}
+          onCheckInLogged={handleCheckInLogged}
         />
       </div>
 
