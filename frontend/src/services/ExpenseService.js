@@ -19,20 +19,26 @@ class ExpenseService {
         return localStorage.getItem('token');
     }
 
-    getAuthHeaders() {
+    getAuthHeaders(includeContentType = true) {
         const token = this.getAuthToken();
-        return {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+        const headers = {
+            'Authorization': `Bearer ${token}`
         };
+        if (includeContentType) {
+            headers['Content-Type'] = 'application/json';
+        }
+        return headers;
     }
 
     async createExpense(expenseData) {
         try {
+            // Check if expenseData is FormData (for file uploads)
+            const isFormData = expenseData instanceof FormData;
+            
             const response = await fetch(`${this.baseURL}/create`, {
                 method: 'POST',
-                headers: this.getAuthHeaders(),
-                body: JSON.stringify(expenseData),
+                headers: isFormData ? { 'Authorization': `Bearer ${this.getAuthToken()}` } : this.getAuthHeaders(),
+                body: isFormData ? expenseData : JSON.stringify(expenseData),
             });
 
             if (!response.ok) {
@@ -143,6 +149,45 @@ class ExpenseService {
             return await response.json();
         } catch (error) {
             console.error('Error deleting expense:', error);
+            throw error;
+        }
+    }
+
+    async downloadDocument(expenseId, expenseTitle) {
+        try {
+            const response = await fetch(`${this.baseURL}/document/${expenseId}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${this.getAuthToken()}` },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to download document');
+            }
+
+            // Get filename from Content-Disposition header or use default
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `expense-document-${expenseTitle}.pdf`;
+            
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+                if (filenameMatch && filenameMatch[1]) {
+                    filename = filenameMatch[1];
+                }
+            }
+
+            // Create blob and download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error downloading document:', error);
             throw error;
         }
     }

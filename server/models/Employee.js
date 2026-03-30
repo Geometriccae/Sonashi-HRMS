@@ -2,6 +2,22 @@ const mongoose = require("mongoose");
 const assignEventSchema = require('./AssignEvent');
 
 const employeeSchema = new mongoose.Schema({
+  // HR / Compliance fields
+  workPermitNo: { type: String, default: "" },
+  office: { type: String, default: "" },
+  emiratesId: { type: String, default: "" },
+  nationality: { type: String, default: "" },
+  reportingManager: { type: String, default: "" },
+  gender: { type: String, default: "" },
+  doj: { type: Date, default: null },
+  totalYearsExperience: { type: Number, default: null },
+  dateOfBirth: { type: Date, default: null },
+  passportNo: { type: String, default: "" },
+  passportExpiryDate: { type: Date, default: null },
+  labourCardExpiryDate: { type: Date, default: null },
+  visaExpiryDate: { type: Date, default: null },
+  remarks: { type: String, default: "" },
+
   employeeId: { type: String, required: true, unique: true }, // unique employee code/ID
   employeeName: { type: String, required: true },
 

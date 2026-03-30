@@ -4,6 +4,9 @@ import leaveRequestService from "../../services/LeaveRequestService";
 import EmployeeService from "../../services/EmployeeService";
 import InputField from "../InputField";
 import Dropdown from "../DropDown";
+import DatePickerModal from "../DatePickerModal";
+import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
+import calendarIcon from "../../assets/dashboard/calendar.svg";
 import "../sales-and-leads/AddClientModal.css";
 
 function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
@@ -21,6 +24,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
         reason: "",
         status: "Pending"
     });
+    const [datePickerOpen, setDatePickerOpen] = useState(false);
+    const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
+
+    const handleDateSelect = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        const value = `${y}-${m}-${d}`;
+        setFormData((prev) => ({ ...prev, [datePickerField === "start" ? "startDate" : "endDate"]: value }));
+        setDatePickerOpen(false);
+    };
 
     useEffect(() => {
         setUserRole(localStorage.getItem("role") || "");
@@ -168,23 +182,43 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
                                 disabled={!isEditable}
                             />
 
-                            <InputField
-                                label="Start Date *"
-                                type="date"
-                                required
-                                value={formData.startDate}
-                                onChange={(e) => handleInputChange("startDate", e.target.value)}
-                                disabled={!isEditable}
-                            />
-
-                            <InputField
-                                label="End Date *"
-                                type="date"
-                                required
-                                value={formData.endDate}
-                                onChange={(e) => handleInputChange("endDate", e.target.value)}
-                                disabled={!isEditable}
-                            />
+                            {isEditable ? (
+                                <>
+                                    <div className="input-field">
+                                        <div className="input-label-container">
+                                            <label className="input-label">Start Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
+                                        </div>
+                                        <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
+                                            <input type="text" className="input-field-input" readOnly value={formData.startDate || ""} placeholder="Select date" />
+                                            <img src={calendarIcon} alt="" width="16" height="16" style={{ flexShrink: 0 }} />
+                                        </div>
+                                    </div>
+                                    <div className="input-field">
+                                        <div className="input-label-container">
+                                            <label className="input-label">End Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
+                                        </div>
+                                        <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
+                                            <input type="text" className="input-field-input" readOnly value={formData.endDate || ""} placeholder="Select date" />
+                                            <img src={calendarIcon} alt="" width="16" height="16" style={{ flexShrink: 0 }} />
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <InputField
+                                        label="Start Date *"
+                                        type="date"
+                                        value={formData.startDate}
+                                        disabled={true}
+                                    />
+                                    <InputField
+                                        label="End Date *"
+                                        type="date"
+                                        value={formData.endDate}
+                                        disabled={true}
+                                    />
+                                </>
+                            )}
 
                             {isAdmin && (
                                 <Dropdown
@@ -216,6 +250,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
                     </div>
                 </form>
             </div>
+            {isEditable && (
+                <DatePickerModal
+                    isOpen={datePickerOpen}
+                    onClose={() => setDatePickerOpen(false)}
+                    onSelectDate={handleDateSelect}
+                    selectedDate={datePickerField === "start" ? formData.startDate : formData.endDate}
+                    disabledDates={OFFICIAL_HOLIDAYS_2026}
+                />
+            )}
         </div>
     );
 }

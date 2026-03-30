@@ -4,6 +4,43 @@ const Expense = require('../models/Expense');
 const User = require('../models/User');
 const SalarySlip = require('../models/SalarySlip');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for file uploads
+const uploadDir = path.join(__dirname, '../uploads/expense-documents');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'expense-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|pdf/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+        return cb(null, true);
+    } else {
+        cb(new Error('Only JPG, PNG, and PDF files are allowed'));
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: fileFilter
+});
 
 // Helper to get user data from request
 function getUserDataFromReq(req) {
@@ -71,15 +108,31 @@ const requireHODOrAdmin = async (req, res, next) => {
 };
 
 // Employee: Create expense request
-router.post('/create', requireAuth, async (req, res) => {
+router.post('/create', requireAuth, upload.single('document'), async (req, res) => {
     try {
+        // Debug log to check if req.body is populated
+        console.log('Request body:', req.body);
+        console.log('Request file:', req.file);
+        console.log('Request headers:', req.headers);
+
         const { expenseTitle, expenseDescription, expenseAmount, expenseDate, expenseCategory } = req.body;
 
+        // Validate required fields
         if (!expenseTitle || !expenseDescription || !expenseAmount || !expenseDate) {
-            return res.status(400).json({ message: 'All fields are required' });
+            // Clean up uploaded file if validation fails
+            if (req.file) {
+                fs.unlink(req.file.path, (unlinkErr) => {
+                    if (unlinkErr) console.error('Error deleting uploaded file:', unlinkErr);
+                });
+            }
+            return res.status(400).json({ 
+                message: 'All fields are required',
+                receivedFields: { expenseTitle, expenseDescription, expenseAmount, expenseDate },
+                bodyKeys: Object.keys(req.body || {})
+            });
         }
 
-        const expense = new Expense({
+        const expenseData = {
             employeeName: req.user.username || req.user.name || 'Unknown',
             employeeEmail: req.user.emailId || req.user.email,
             designation: req.user.designation || 'N/A',
@@ -90,12 +143,24 @@ router.post('/create', requireAuth, async (req, res) => {
             expenseCategory: expenseCategory || 'Other',
             status: 'Pending',
             createdBy: req.user._id
-        });
+        };
 
+        // Add document path if file was uploaded
+        if (req.file) {
+            expenseData.receiptUrl = req.file.filename;
+        }
+
+        const expense = new Expense(expenseData);
         await expense.save();
         res.status(201).json({ message: 'Expense request submitted successfully', expense });
     } catch (error) {
         console.error('Error creating expense:', error);
+        // Clean up uploaded file if expense creation failed
+        if (req.file) {
+            fs.unlink(req.file.path, (unlinkErr) => {
+                if (unlinkErr) console.error('Error deleting uploaded file:', unlinkErr);
+            });
+        }
         res.status(500).json({ message: error.message });
     }
 });
@@ -221,6 +286,69 @@ router.put('/hr-action/:id', requireHODOrAdmin, async (req, res) => {
     }
 });
 
+// Download expense document (must be before /:id route)
+router.get('/document/:id', requireAuth, async (req, res) => {
+    try {
+        const expense = await Expense.findById(req.params.id);
+
+        if (!expense) {
+            return res.status(404).json({ message: 'Expense not found' });
+        }
+
+        // Check access rights
+        const isOwner = expense.createdBy.toString() === req.user._id.toString();
+        const isHODOrAdmin = req.user.role === 'hod' || req.user.role === 'admin';
+
+        if (!isOwner && !isHODOrAdmin) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        if (!expense.receiptUrl) {
+            return res.status(404).json({ message: 'No document found for this expense' });
+        }
+
+        const filePath = path.join(uploadDir, expense.receiptUrl);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ message: 'Document file not found' });
+        }
+
+        // Get file extension to set proper content type
+        const fileExt = path.extname(expense.receiptUrl).toLowerCase();
+        let contentType = 'application/octet-stream';
+        
+        switch (fileExt) {
+            case '.pdf':
+                contentType = 'application/pdf';
+                break;
+            case '.jpg':
+            case '.jpeg':
+                contentType = 'image/jpeg';
+                break;
+            case '.png':
+                contentType = 'image/png';
+                break;
+        }
+
+        // Set proper headers
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${expense.receiptUrl}"`);
+        
+        // Send file
+        res.sendFile(filePath, (err) => {
+            if (err) {
+                console.error('Error sending file:', err);
+                if (!res.headersSent) {
+                    res.status(500).json({ message: 'Error downloading file' });
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error downloading document:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // Get expense by ID
 router.get('/:id', requireAuth, async (req, res) => {
     try {
@@ -265,6 +393,14 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
         if (isOwner && expense.status !== 'Pending') {
             return res.status(400).json({ message: 'Cannot delete processed expense' });
+        }
+
+        // Delete associated document file if exists
+        if (expense.receiptUrl) {
+            const filePath = path.join(uploadDir, expense.receiptUrl);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
         }
 
         await Expense.findByIdAndDelete(req.params.id);

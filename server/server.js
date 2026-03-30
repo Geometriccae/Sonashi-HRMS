@@ -213,12 +213,55 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ====== API ROUTES ======
+// Client remarks: explicit routes registered first so POST/GET always match
+const authMiddleware = require('./middleware/authMiddleware');
+const ClientRemark = require('./models/ClientRemark');
+const Client = require('./models/Client');
+
+app.get('/api/client-remarks/:clientId', authMiddleware, async (req, res) => {
+  try {
+    const remarks = await ClientRemark.find({ clientId: req.params.clientId })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(remarks);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching remarks', error: error.message });
+  }
+});
+
+app.post('/api/client-remarks/:clientId', authMiddleware, async (req, res) => {
+  try {
+    const text = (req.body?.remark != null ? String(req.body.remark) : req.body?.text != null ? String(req.body.text) : '').trim();
+    if (!text) {
+      return res.status(400).json({ message: 'Remark text cannot be empty' });
+    }
+    const client = await Client.findById(req.params.clientId);
+    if (!client) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+    const user = await User.findById(req.user._id);
+    const remark = new ClientRemark({
+      clientId: req.params.clientId,
+      text,
+      createdBy: {
+        userId: req.user._id,
+        username: (user && user.username) || req.user.username || 'Unknown',
+        role: (user && user.role) || req.user.role || ''
+      }
+    });
+    await remark.save();
+    res.status(201).json(remark);
+  } catch (error) {
+    res.status(500).json({ message: 'Error adding remark', error: error.message });
+  }
+});
+
 app.use('/api/salary-slips', salarySlipRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/employeedocuments', employeeDocumentRoutes);
+app.use('/api/clients', clientRoutes);
 app.use('/api', taskRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/clients', clientRoutes);
 app.use('/api/meetings', meetingsRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/checkins', require('./routes/checkInRoutes'));

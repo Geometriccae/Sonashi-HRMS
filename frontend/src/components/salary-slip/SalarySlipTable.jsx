@@ -4,6 +4,8 @@ import plus from "../../assets/dashboard/plus.svg";
 import { useToast } from "../../context/ToastContext";
 import salarySlipService from "../../services/SalarySlipService";
 import expenseService from "../../services/ExpenseService";
+import employeeService from "../../services/EmployeeService";
+import config from "../../config/config";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import SalarySlipBulkImportModal from "./SalarySlipBulkImportModal";
@@ -83,6 +85,8 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [filePreview, setFilePreview] = useState('');
 
     const categories = ['Travel', 'Food', 'Office Supplies', 'Equipment', 'Communication', 'Other'];
 
@@ -100,6 +104,25 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
                 return { ...prev, expenseCategory: [...currentCategories, category] };
             }
         });
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            // Validate file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('File size should not exceed 5MB', 'error');
+                return;
+            }
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+            if (!allowedTypes.includes(file.type)) {
+                showToast('Only JPG, PNG, and PDF files are allowed', 'error');
+                return;
+            }
+            setSelectedFile(file);
+            setFilePreview(file.name);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -122,12 +145,20 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
 
         setIsSubmitting(true);
         try {
-            // Join categories as comma-separated string for backend
-            const submitData = {
-                ...formData,
-                expenseCategory: formData.expenseCategory.join(', ')
-            };
-            await expenseService.createExpense(submitData);
+            // Create FormData for file upload
+            const submitFormData = new FormData();
+            submitFormData.append('expenseTitle', formData.expenseTitle);
+            submitFormData.append('expenseDescription', formData.expenseDescription);
+            submitFormData.append('expenseAmount', formData.expenseAmount);
+            submitFormData.append('expenseDate', formData.expenseDate);
+            submitFormData.append('expenseCategory', formData.expenseCategory.join(', '));
+            
+            // Append file if selected
+            if (selectedFile) {
+                submitFormData.append('document', selectedFile);
+            }
+
+            await expenseService.createExpense(submitFormData);
             showToast('Expense request submitted successfully! It will be reviewed by HOD and HR.', 'success');
             setFormData({
                 expenseTitle: '',
@@ -136,6 +167,8 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
                 expenseDate: new Date().toISOString().split('T')[0],
                 expenseCategory: []
             });
+            setSelectedFile(null);
+            setFilePreview('');
             onSuccess && onSuccess();
             onClose();
         } catch (error) {
@@ -255,6 +288,27 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label className={styles.formLabel}>Upload Document</label>
+                        <div className={styles.fileUploadWrapper}>
+                            <input
+                                type="file"
+                                id="expense-document"
+                                accept=".jpg,.jpeg,.png,.pdf"
+                                onChange={handleFileChange}
+                                className={styles.fileInput}
+                            />
+                            <label htmlFor="expense-document" className={styles.fileUploadLabel}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <span>{filePreview || 'Choose file (JPG, PNG, PDF - Max 5MB)'}</span>
+                            </label>
                         </div>
                     </div>
 
@@ -408,125 +462,228 @@ function SalarySlipTable({ userRole }) {
         }
     };
 
-    const handleDownload = (slip) => {
+    const handleDownload = async (slip) => {
         try {
             const doc = new jsPDF();
             const pageWidth = doc.internal.pageSize.getWidth();
             const margin = 15;
 
-            // 1. Header (Company Info)
+            // Calculate values with fallbacks for legacy data
+            const basicPay = slip.basicPay || 0;
+            const hra = slip.hra || 0;
+            const conveyanceAllowance = slip.conveyanceAllowance || 0;
+            const otherAllowance = slip.otherAllowance || 0;
+            const advance = slip.advance || 0;
+            const leave = slip.leave || 0;
+            const staffLoan = slip.staffLoan || 0;
+            const profTax = slip.profTax || 0;
+            const incomeTaxTDS = slip.incomeTaxTDS || 0;
+
+            // Calculate gross salary and total deduction
+            const grossSalary = slip.grossSalary || (basicPay + hra + conveyanceAllowance + otherAllowance);
+            const totalDeduction = slip.totalDeduction || (advance + leave + staffLoan + profTax + incomeTaxTDS) || slip.deductionsPFTax || 0;
+            const netSalary = slip.netSalary || (grossSalary - totalDeduction);
+
+            // Load and add company logo
+            try {
+                const logoImg = new Image();
+                logoImg.src = '/sonashi_logo.png';
+                await new Promise((resolve, reject) => {
+                    logoImg.onload = () => resolve();
+                    logoImg.onerror = () => reject();
+                });
+                // Add logo (top left) - adjusted for better proportions
+                doc.addImage(logoImg, 'PNG', margin, 10, 35, 12);
+            } catch (error) {
+                console.log('Logo not loaded, continuing without it');
+            }
+
+            // 1. Header (Company Info) - positioned below logo
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(18);
+            doc.setFontSize(16);
             doc.setTextColor(30, 41, 59);
-            doc.text("AUXIN", margin, 20);
+            doc.text("SONASHI", margin, 28);
 
             doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.setTextColor(30, 41, 59);
+            doc.text("Sonashi", margin, 34);
+
             doc.setFontSize(9);
             doc.setTextColor(100, 116, 139);
-            doc.text("Dindigul, Tamil Nadu, India", margin, 26);
+            doc.text("Dindigul, Tamil Nadu, India", margin, 39);
 
-            // 2. Bar: Payslip for the month
+            // Month on right side
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(12);
+            doc.setTextColor(30, 41, 59);
+            doc.text(`Month: ${slip.month}-${slip.year?.toString().slice(-2) || ''}`, pageWidth - margin, 20, { align: "right" });
+
+            // Employee profile photo below Month (from Team Management or Settings, loaded via API)
+            // Perfect dimensions: 20mm × 20mm square (profile photo standard aspect ratio 1:1)
+            // Positioned 5mm below Month text, right-aligned, with proper spacing
+            const photoSize = 20; // 20mm × 20mm square for perfect profile photo display
+            const photoX = pageWidth - margin - photoSize; // Right-aligned
+            const photoY = 25; // 5mm below Month text (y=20) for optimal spacing
+            if (slip.emailId) {
+                try {
+                    // Ensure API_BASE_URL ends with /api, then construct the image endpoint URL
+                    let apiBase = config.API_BASE_URL || 'http://localhost:5000/api';
+                    if (!apiBase.endsWith('/api')) {
+                        apiBase = apiBase.endsWith('/') ? apiBase + 'api' : apiBase + '/api';
+                    }
+                    const imageUrl = `${apiBase}/employees/profile-photo-image?email=${encodeURIComponent(slip.emailId)}`;
+                    const token = employeeService.getAuthToken();
+                    const resp = await fetch(imageUrl, {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'image/*'
+                        }
+                    });
+                    if (resp.ok && resp.status === 200) {
+                        const blob = await resp.blob();
+                        if (blob && blob.size > 0) {
+                            const dataUrl = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => resolve(reader.result);
+                                reader.onerror = (e) => {
+                                    console.error('FileReader error:', e);
+                                    reject(e);
+                                };
+                                reader.readAsDataURL(blob);
+                            });
+                            const imgFormat = (blob.type || '').includes('png') ? 'PNG' : (blob.type || '').includes('gif') ? 'GIF' : 'JPEG';
+                            doc.addImage(dataUrl, imgFormat, photoX, photoY, photoSize, photoSize);
+                            console.log(`Profile photo successfully added to PDF for ${slip.emailId}`);
+                        } else {
+                            console.log(`Profile photo blob is empty for ${slip.emailId}`);
+                        }
+                    } else {
+                        console.log(`Profile photo fetch failed: ${resp.status} ${resp.statusText} for ${slip.emailId}`);
+                    }
+                } catch (err) {
+                    console.error('Profile photo not loaded for payslip:', err.message || err);
+                }
+            }
+
+            // 2. Employee Info Section
+            let currentY = 46;
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(0.5);
+            doc.rect(margin, currentY, pageWidth - margin * 2, 14);
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.setTextColor(30, 41, 59);
+            doc.text(`Employee Name  :  ${slip.employeeName || ''}`, margin + 5, currentY + 5);
+            doc.text(`Designation  :  ${slip.designation || ''}`, margin + 5, currentY + 11);
+
+            // 3. Earnings & Deductions Headers
+            currentY = 60;
             doc.setFillColor(248, 250, 252);
-            doc.rect(margin, 35, pageWidth - (margin * 2), 10, 'F');
-            doc.setDrawColor(226, 232, 240);
-            doc.rect(margin, 35, pageWidth - (margin * 2), 10, 'S');
+            const halfWidth = (pageWidth - margin * 2) / 2;
+
+            // Draw table border
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(0.3);
+            doc.rect(margin, currentY, halfWidth, 10);
+            doc.rect(margin + halfWidth, currentY, halfWidth, 10);
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(10);
-            doc.setTextColor(30, 41, 59);
-            doc.text(`Payslip for the month of ${slip.month} ${slip.year}`, pageWidth / 2, 41.5, { align: "center" });
+            doc.text("Earnings", margin + 5, currentY + 7);
+            doc.text("Deductions", margin + halfWidth + 5, currentY + 7);
 
-            // 3. Employee Pay Summary Section
-            let currentY = 55;
-            doc.setFontSize(9);
-            doc.setTextColor(100, 116, 139);
-            doc.text("EMPLOYEE PAY SUMMARY", margin, currentY);
-
-            doc.setDrawColor(226, 232, 240);
-            doc.line(margin, currentY + 2, pageWidth - margin, currentY + 2);
-
+            // 4. Column Headers
             currentY += 10;
+            doc.rect(margin, currentY, halfWidth / 2, 8);
+            doc.rect(margin + halfWidth / 2, currentY, halfWidth / 2, 8);
+            doc.rect(margin + halfWidth, currentY, halfWidth / 2, 8);
+            doc.rect(margin + halfWidth + halfWidth / 2, currentY, halfWidth / 2, 8);
+
+            doc.setFontSize(9);
+            doc.text("Description", margin + 5, currentY + 5.5);
+            doc.text("Amount", margin + halfWidth / 2 + 5, currentY + 5.5);
+            doc.text("Description", margin + halfWidth + 5, currentY + 5.5);
+            doc.text("Amount", margin + halfWidth + halfWidth / 2 + 5, currentY + 5.5);
+
+            // 5. Earnings & Deductions Data
+            const earningsData = [
+                ['Basic Pay', basicPay.toFixed(2)],
+                ['HRA (House Rent Allowance)', hra.toFixed(2)],
+                ['Conveyance Allowance', conveyanceAllowance.toFixed(2)],
+                ['Other Allowance', otherAllowance.toFixed(2)]
+            ];
+
+            const deductionsData = [
+                ['-Advance', advance.toFixed(2)],
+                ['-Leave', leave.toFixed(2)],
+                ['-Staff Loan', staffLoan.toFixed(2)],
+                ['-Prof. Tax', profTax.toFixed(2)],
+                ['-Income Tax/TDS', incomeTaxTDS.toFixed(2)]
+            ];
+
+            const maxRows = Math.max(earningsData.length, deductionsData.length);
+            const rowHeight = 8;
+            currentY += 8;
+
             doc.setFont("helvetica", "normal");
-            doc.setTextColor(71, 85, 105);
+            for (let i = 0; i < maxRows; i++) {
+                // Earnings columns
+                doc.rect(margin, currentY, halfWidth / 2, rowHeight);
+                doc.rect(margin + halfWidth / 2, currentY, halfWidth / 2, rowHeight);
+                // Deductions columns
+                doc.rect(margin + halfWidth, currentY, halfWidth / 2, rowHeight);
+                doc.rect(margin + halfWidth + halfWidth / 2, currentY, halfWidth / 2, rowHeight);
 
-            // Left Column
-            doc.text(`Employee Name  : ${slip.employeeName}`, margin, currentY);
-            doc.text(`Designation           : ${slip.designation}`, margin, currentY + 7);
-            doc.text(`Email ID                : ${slip.emailId}`, margin, currentY + 14);
-
-            // Right Column
-            const rightColX = pageWidth / 2 + 10;
-            doc.text(`Pay Date               : ${new Date().toLocaleDateString()}`, rightColX, currentY);
-            doc.text(`Location                : Dindigul`, rightColX, currentY + 7);
-            doc.text(`Pay Period            : ${slip.month} ${slip.year}`, rightColX, currentY + 14);
-
-            currentY += 25;
-
-            // 4. Earnings & Deductions Table (Combined Design)
-            autoTable(doc, {
-                startY: currentY,
-                margin: { left: margin, right: margin },
-                theme: 'plain',
-                head: [['EARNINGS', 'AMOUNT', 'DEDUCTIONS', 'AMOUNT']],
-                body: [
-                    ['Basic Salary', `Rs. ${slip.basicPay.toLocaleString()}`, 'PF / Tax', `Rs. ${slip.deductionsPFTax.toLocaleString()}`],
-                    ['HRA', `Rs. ${slip.hra.toLocaleString()}`, '', ''],
-                    ['', '', '', ''],
-                ],
-                headStyles: {
-                    fillColor: [248, 250, 252],
-                    textColor: [30, 41, 59],
-                    fontStyle: 'bold',
-                    lineWidth: 0.1,
-                    lineColor: [226, 232, 240]
-                },
-                styles: {
-                    fontSize: 9,
-                    cellPadding: 4,
-                    textColor: [71, 85, 105],
-                    lineWidth: 0.1,
-                    lineColor: [226, 232, 240]
-                },
-                columnStyles: {
-                    1: { halign: 'right' },
-                    3: { halign: 'right' }
+                if (earningsData[i]) {
+                    doc.text(earningsData[i][0], margin + 3, currentY + 5.5);
+                    doc.text(earningsData[i][1], margin + halfWidth - 5, currentY + 5.5, { align: 'right' });
                 }
-            });
 
-            currentY = doc.lastAutoTable.finalY;
+                if (deductionsData[i]) {
+                    doc.text(deductionsData[i][0], margin + halfWidth + 3, currentY + 5.5);
+                    doc.text(deductionsData[i][1], margin + halfWidth + halfWidth - 5, currentY + 5.5, { align: 'right' });
+                }
 
-            // 5. Totals Bar
-            const grossEarnings = slip.basicPay + slip.hra;
-            doc.setFillColor(248, 250, 252);
-            doc.rect(margin, currentY, (pageWidth - margin * 2) / 2, 10, 'F');
-            doc.rect(pageWidth / 2, currentY, (pageWidth - margin * 2) / 2, 10, 'F');
-            doc.rect(margin, currentY, pageWidth - margin * 2, 10, 'S');
+                currentY += rowHeight;
+            }
+
+            // Add empty row for spacing
+            currentY += 5;
+
+            // 6. Gross Salary & Total Deduction Row
+            doc.setLineWidth(0.5);
+            doc.rect(margin, currentY, halfWidth / 2, 10);
+            doc.rect(margin + halfWidth / 2, currentY, halfWidth / 2, 10);
+            doc.rect(margin + halfWidth, currentY, halfWidth / 2, 10);
+            doc.rect(margin + halfWidth + halfWidth / 2, currentY, halfWidth / 2, 10);
 
             doc.setFont("helvetica", "bold");
-            doc.text("Gross Earnings", margin + 2, currentY + 6.5);
-            doc.text(`Rs. ${grossEarnings.toLocaleString()}`, pageWidth / 2 - 5, currentY + 6.5, { align: "right" });
+            doc.setFontSize(10);
+            doc.text("Gross Salary", margin + 5, currentY + 7);
+            doc.text(grossSalary.toFixed(2), margin + halfWidth - 5, currentY + 7, { align: 'right' });
+            doc.text("Total Deduction", margin + halfWidth + 5, currentY + 7);
+            doc.text(totalDeduction.toFixed(2), margin + halfWidth + halfWidth - 5, currentY + 7, { align: 'right' });
 
-            doc.text("Total Deductions", pageWidth / 2 + 2, currentY + 6.5);
-            doc.text(`Rs. ${slip.deductionsPFTax.toLocaleString()}`, pageWidth - margin - 2, currentY + 6.5, { align: "right" });
-
-            // 6. Total Net Payable Box
+            // 7. Net Payable Row
             currentY += 15;
             doc.setFillColor(241, 245, 249);
-            doc.rect(margin, currentY, pageWidth - margin * 2, 20, 'F');
-            doc.setDrawColor(226, 232, 240);
-            doc.rect(margin, currentY, pageWidth - margin * 2, 20, 'S');
+            doc.rect(margin, currentY, pageWidth - margin * 2, 12, 'F');
+            doc.setDrawColor(0, 0, 0);
+            doc.rect(margin, currentY, pageWidth - margin * 2, 12);
 
-            doc.setFontSize(12);
-            doc.text(`Total Net Payable   Rs. ${slip.netSalary.toLocaleString()}`, pageWidth / 2, currentY + 10, { align: "center" });
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "bold");
+            doc.text("Net Payable", margin + halfWidth + 5, currentY + 8);
+            doc.text(netSalary.toFixed(2), pageWidth - margin - 5, currentY + 8, { align: 'right' });
 
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(148, 163, 184);
-            doc.text("**Total Net Payable = Gross Earnings - Total Deductions", pageWidth / 2, currentY + 16, { align: "center" });
-
-            // 7. Signatures
-            currentY += 50;
+            // 8. Signatures
+            currentY += 45;
             doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
             doc.setTextColor(71, 85, 105);
 
             doc.line(margin + 5, currentY, margin + 65, currentY);
@@ -535,13 +692,13 @@ function SalarySlipTable({ userRole }) {
             doc.line(pageWidth - margin - 65, currentY, pageWidth - margin - 5, currentY);
             doc.text("HR Signature", pageWidth - margin - 35, currentY + 5, { align: "center" });
 
-            // 8. Footer
+            // 9. Footer
             doc.setFontSize(8);
             doc.setTextColor(148, 163, 184);
             doc.text("System Generated Payslip", pageWidth / 2, 285, { align: "center" });
 
             // Output
-            doc.save(`Payslip_${slip.emailId}_${slip.month}_${slip.year}.pdf`);
+            doc.save(`Payslip_${slip.employeeName}_${slip.month}_${slip.year}.pdf`);
             showToast("Payslip downloaded successfully.", "success");
         } catch (error) {
             console.error("PDF generation failed:", error);
@@ -704,9 +861,11 @@ function SalarySlipTable({ userRole }) {
                                 {isAdmin && <th>Month</th>}
                                 {isAdmin && <th>Year</th>}
                                 {!isAdmin && <th>Month & Year</th>}
-                                <th>Basic Pay (₹)</th>
-                                <th>HRA (₹)</th>
-                                <th>Deductions (PF/Tax)</th>
+                                <th>BASIC (₹)</th>
+                                <th>HOUSE RENT (₹)</th>
+                                <th>TRAVEL EXP (₹)</th>
+                                <th>OTHER (₹)</th>
+                                <th>DEDUCTION (₹)</th>
                                 <th>Net Salary (₹)</th>
                                 <th className={styles.actionsColumn}>Actions</th>
                             </tr>
@@ -721,10 +880,12 @@ function SalarySlipTable({ userRole }) {
                                         {isAdmin && <td>{slip.month}</td>}
                                         {isAdmin && <td>{slip.year}</td>}
                                         {!isAdmin && <td className={styles.monthYear}>{slip.month} {slip.year}</td>}
-                                        <td>{slip.basicPay.toLocaleString()}</td>
-                                        <td>{slip.hra.toLocaleString()}</td>
-                                        <td>{slip.deductionsPFTax.toLocaleString()}</td>
-                                        <td><span className={styles.netSal}>₹{slip.netSalary.toLocaleString()}</span></td>
+                                        <td>{Number(slip.basicPay ?? 0).toLocaleString()}</td>
+                                        <td>{Number(slip.hra ?? 0).toLocaleString()}</td>
+                                        <td>{Number(slip.conveyanceAllowance ?? 0).toLocaleString()}</td>
+                                        <td>{Number(slip.otherAllowance ?? 0).toLocaleString()}</td>
+                                        <td>{Number(slip.deductionsPFTax ?? slip.totalDeduction ?? 0).toLocaleString()}</td>
+                                        <td><span className={styles.netSal}>₹{Number(slip.netSalary ?? 0).toLocaleString()}</span></td>
                                         <td>
                                             <div className={styles.rowActions}>
                                                 <button
@@ -762,7 +923,7 @@ function SalarySlipTable({ userRole }) {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={isAdmin ? 11 : 7} className={styles.noData}>
+                                    <td colSpan={isAdmin ? 13 : 9} className={styles.noData}>
                                         No salary slips found {selectedMonth !== 'All' || selectedYear !== 'All' ? `for ${selectedMonth} ${selectedYear}` : 'in the system'}.
                                     </td>
                                 </tr>
@@ -817,6 +978,22 @@ function SalarySlipTable({ userRole }) {
                                                         <circle cx="12" cy="12" r="3"></circle>
                                                     </svg>
                                                 </button>
+                                                {expense.receiptUrl && (
+                                                    <button
+                                                        className={styles.downloadBtn}
+                                                        onClick={async () => {
+                                                            try {
+                                                                await expenseService.downloadDocument(expense._id, expense.expenseTitle);
+                                                                showToast('Document downloaded successfully', 'success');
+                                                            } catch (error) {
+                                                                showToast(error.message || 'Failed to download document', 'error');
+                                                            }
+                                                        }}
+                                                        title="Download Document"
+                                                    >
+                                                        <DownloadIcon />
+                                                    </button>
+                                                )}
                                                 {canApproveExpense(expense) ? (
                                                     <>
                                                         <button
@@ -865,6 +1042,7 @@ function SalarySlipTable({ userRole }) {
                                 <th>Date</th>
                                 <th>Description</th>
                                 <th>Status</th>
+                                <th>Document</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -883,11 +1061,31 @@ function SalarySlipTable({ userRole }) {
                                                 {expense.status}
                                             </span>
                                         </td>
+                                        <td>
+                                            {expense.receiptUrl ? (
+                                                <button
+                                                    className={styles.downloadBtn}
+                                                    onClick={async () => {
+                                                        try {
+                                                            await expenseService.downloadDocument(expense._id, expense.expenseTitle);
+                                                            showToast('Document downloaded successfully', 'success');
+                                                        } catch (error) {
+                                                            showToast(error.message || 'Failed to download document', 'error');
+                                                        }
+                                                    }}
+                                                    title="Download Document"
+                                                >
+                                                    <DownloadIcon />
+                                                </button>
+                                            ) : (
+                                                <span className={styles.noDocument}>—</span>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={6} className={styles.noData}>
+                                    <td colSpan={7} className={styles.noData}>
                                         No expense requests found.
                                     </td>
                                 </tr>

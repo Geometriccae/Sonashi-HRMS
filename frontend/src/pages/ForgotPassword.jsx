@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import auxin_logo from "../assets/auxin_logo.png";
+import sonashi_logo from "../assets/sonashi_logo.png";
 import { useNavigate } from "react-router-dom";
 import OtpInput from "../components/OtpInput";
 import styles from "./Login.module.css";
@@ -78,7 +78,7 @@ function ForgotPassword() {
       </div>
       <div className={styles.rightPanel}>
         <div className={styles.loginBox}>
-          <img src={auxin_logo} alt="Auxin Logo" className={styles.logo} />
+          <img src={sonashi_logo} alt="Sonashi Logo" className={styles.logo} />
           <div className={styles.formContainer}>
             <div className={styles.loginTitle}>
               Reset your Password

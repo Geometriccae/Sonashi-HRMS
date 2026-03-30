@@ -679,6 +679,52 @@
     gap: 16px;
 }
 
+.fileUploadWrapper {
+    position: relative;
+}
+
+.fileInput {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.fileUploadLabel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+    background: #f9fafb;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.fileUploadLabel:hover {
+    border-color: #16a34a;
+    background: #f0fdf4;
+    color: #16a34a;
+}
+
+.fileUploadLabel svg {
+    flex-shrink: 0;
+    stroke: currentColor;
+}
+
+.fileUploadLabel span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .expenseNote {
     display: flex;
     align-items: flex-start;
@@ -1014,6 +1060,13 @@
 .noAction {
     color: #9ca3af;
     font-size: 1.25rem;
+}
+
+/* No Document */
+.noDocument {
+    color: #9ca3af;
+    font-size: 0.875rem;
+    font-style: italic;
 }
 
 @media (max-width: 768px) {

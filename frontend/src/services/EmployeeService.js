@@ -52,6 +52,22 @@ class EmployeeService {
     }
   }
 
+  // Get profile photo URL by employee email (for salary slip; auth: admin or same user)
+  async getProfilePhotoByEmail(email) {
+    try {
+      if (!email || !String(email).trim()) return { profilePhoto: '' };
+      const params = new URLSearchParams({ email: String(email).trim() });
+      const response = await fetch(`${this.baseURL}/profile-photo?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) return { profilePhoto: '' };
+      return await response.json();
+    } catch (error) {
+      return { profilePhoto: '' };
+    }
+  }
+
   // Get single employee by ID
   async getEmployee(id) {
     try {
@@ -68,6 +84,45 @@ class EmployeeService {
       return await response.json();
     } catch (error) {
       console.error('Error fetching employee:', error);
+      throw error;
+    }
+  }
+
+  // Get remarks for an employee (latest first). Requires Admin/HOD.
+  async getEmployeeRemarks(employeeId) {
+    try {
+      const response = await fetch(`${this.baseURL}/${employeeId}/remarks`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching employee remarks:', error);
+      throw error;
+    }
+  }
+
+  // Add a remark for an employee. Requires Admin/HOD. text cannot be empty.
+  async addEmployeeRemark(employeeId, text) {
+    try {
+      const trimmed = (text || '').trim();
+      if (!trimmed) throw new Error('Remark text cannot be empty');
+      const response = await fetch(`${this.baseURL}/${employeeId}/remarks`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ text: trimmed }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding employee remark:', error);
       throw error;
     }
   }

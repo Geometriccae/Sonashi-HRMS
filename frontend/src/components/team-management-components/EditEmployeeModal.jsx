@@ -30,6 +30,13 @@ import ToastContainer from "../Toast";
     { value: "Customer Service", label: "Customer Service" },
 ];
 
+const genderOptions = [
+  { value: "", label: "-Select-" },
+  { value: "Male", label: "Male" },
+  { value: "Female", label: "Female" },
+  { value: "Other", label: "Other" },
+];
+
   const roleOptions = [
     { value: "", label: "-Select-" },
     { value: "Managing Director", label: "Managing Director" },
@@ -57,15 +64,29 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
   const [formData, setFormData] = useState({
     // 1. Basic Information
+    workPermitNo: "",
     employeeId: "",
+    office: "",
     employeeName: "",
+    reportingManager: "",
+    gender: "",
     mobile: "",
     emailId: "",
+    emiratesId: "",
+    nationality: "",
 
     // 2. Employment Details
     role: "",
     designation: "",
     department: "",
+    doj: "",
+    totalYearsExperience: "",
+    dateOfBirth: "",
+    passportNo: "",
+    passportExpiryDate: "",
+    labourCardExpiryDate: "",
+    visaExpiryDate: "",
+    remarks: "",
     employeeStatus: "Active",
     attendance: "Onsite",
 
@@ -122,13 +143,31 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       console.log("Normalized Department:", normalizedDepartment);
 
       setFormData({
+        workPermitNo: employee.workPermitNo || "",
         employeeId: employee.employeeId || "",
+        office: employee.office || "",
         employeeName: employee.employeeName || "",
+        reportingManager: employee.reportingManager || "",
+        gender: employee.gender || "",
         mobile: employee.mobile || "",
         emailId: employee.emailId || "",
+        emiratesId: employee.emiratesId || "",
+        nationality: employee.nationality || "",
         role: normalizedRole,
         designation: employee.designation || "",
         department: normalizedDepartment,
+        doj: employee.doj ? String(employee.doj).slice(0, 10) : "",
+        totalYearsExperience:
+          employee.totalYearsExperience !== undefined &&
+          employee.totalYearsExperience !== null
+            ? String(employee.totalYearsExperience)
+            : "",
+        dateOfBirth: employee.dateOfBirth ? String(employee.dateOfBirth).slice(0, 10) : "",
+        passportNo: employee.passportNo || "",
+        passportExpiryDate: employee.passportExpiryDate ? String(employee.passportExpiryDate).slice(0, 10) : "",
+        labourCardExpiryDate: employee.labourCardExpiryDate ? String(employee.labourCardExpiryDate).slice(0, 10) : "",
+        visaExpiryDate: employee.visaExpiryDate ? String(employee.visaExpiryDate).slice(0, 10) : "",
+        remarks: employee.remarks || "",
         employeeStatus: employee.employeeStatus || "Active",
         attendance: employee.attendance || "Onsite",
         assignedProjects: Array.isArray(employee.assignedProjects)
@@ -158,13 +197,27 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setCurrentProfileImageUrl(null);
       setValidationErrors({});
       setFormData({
+        workPermitNo: "",
         employeeId: "",
+        office: "",
         employeeName: "",
+        reportingManager: "",
+        gender: "",
         mobile: "",
         emailId: "",
+        emiratesId: "",
+        nationality: "",
         role: "",
         designation: "",
         department: "",
+        doj: "",
+        totalYearsExperience: "",
+        dateOfBirth: "",
+        passportNo: "",
+        passportExpiryDate: "",
+        labourCardExpiryDate: "",
+        visaExpiryDate: "",
+        remarks: "",
         employeeStatus: "Active",
         attendance: "Onsite",
         assignedProjects: [],
@@ -372,6 +425,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             />
             <div className="form-fields-grid">
               <InputField
+                label="Work Permit No."
+                placeholder="Work Permit No."
+                value={formData.workPermitNo}
+                onChange={(e) =>
+                  handleInputChange("workPermitNo", e.target.value)
+                }
+              />
+
+              <InputField
                 label="Employee ID"
                 placeholder="EMP-001"
                 required
@@ -383,6 +445,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               />
 
               <InputField
+                label="Office"
+                placeholder="Office"
+                value={formData.office}
+                onChange={(e) => handleInputChange("office", e.target.value)}
+              />
+
+              <InputField
                 label="Employee Name"
                 placeholder="Full Name"
                 required
@@ -391,6 +460,23 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   handleInputChange("employeeName", e.target.value)
                 }
                 hasError={validationErrors.employeeName}
+              />
+
+              <InputField
+                label="Reporting Manager"
+                placeholder="Reporting Manager"
+                value={formData.reportingManager}
+                onChange={(e) =>
+                  handleInputChange("reportingManager", e.target.value)
+                }
+              />
+
+              <Dropdown
+                label="Gender"
+                placeholder="Select gender"
+                options={genderOptions}
+                value={formData.gender}
+                onChange={(e) => handleInputChange("gender", e.target.value)}
               />
 
               <InputField
@@ -411,6 +497,24 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 value={formData.emailId}
                 onChange={(e) => handleInputChange("emailId", e.target.value)}
                 hasError={validationErrors.emailId}
+              />
+
+              <InputField
+                label="Emirates ID"
+                placeholder="Emirates ID"
+                value={formData.emiratesId}
+                onChange={(e) =>
+                  handleInputChange("emiratesId", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Nationality"
+                placeholder="Nationality"
+                value={formData.nationality}
+                onChange={(e) =>
+                  handleInputChange("nationality", e.target.value)
+                }
               />
 
               <Dropdown
@@ -439,6 +543,80 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         return (
           <div className="billing-content">
             <div className="form-fields-grid">
+              <InputField
+                label="DOJ"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.doj}
+                onChange={(e) => handleInputChange("doj", e.target.value)}
+              />
+
+              <InputField
+                label="Total Year of Experience"
+                placeholder="0"
+                type="number"
+                value={formData.totalYearsExperience}
+                onChange={(e) =>
+                  handleInputChange("totalYearsExperience", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Date of Birth"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.dateOfBirth}
+                onChange={(e) =>
+                  handleInputChange("dateOfBirth", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Passport No."
+                placeholder="Passport No."
+                value={formData.passportNo}
+                onChange={(e) =>
+                  handleInputChange("passportNo", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Passport Expiry Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.passportExpiryDate}
+                onChange={(e) =>
+                  handleInputChange("passportExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Labour Card Expiry Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.labourCardExpiryDate}
+                onChange={(e) =>
+                  handleInputChange("labourCardExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Visa Expiry Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.visaExpiryDate}
+                onChange={(e) =>
+                  handleInputChange("visaExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Remarks"
+                placeholder="Remarks"
+                value={formData.remarks}
+                onChange={(e) => handleInputChange("remarks", e.target.value)}
+              />
+
               <Dropdown
                 label="Department"
                 placeholder="Select department"

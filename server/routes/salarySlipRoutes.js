@@ -5,6 +5,7 @@ const path = require('path');
 const xlsx = require('xlsx');
 const SalarySlip = require('../models/SalarySlip');
 const User = require('../models/User');
+const Employee = require('../models/Employee');
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
 
@@ -39,7 +40,10 @@ function getUserDataFromReq(req) {
         const authHeader = req.headers && req.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.split(' ')[1];
-            if (token === 'null' || token === 'undefined') return defaultData;
+            if (token === 'null' || token === 'undefined') {
+                console.log('getUserDataFromReq - Token is null or undefined');
+                return defaultData;
+            }
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             if (decoded && decoded.id) {
@@ -48,8 +52,12 @@ function getUserDataFromReq(req) {
                     emailId: decoded.emailId ? String(decoded.emailId).toLowerCase() : ""
                 };
             }
+        } else {
+            console.log('getUserDataFromReq - No valid Authorization header found');
         }
-    } catch (e) { }
+    } catch (e) {
+        console.log('getUserDataFromReq - Token verification failed:', e.message);
+    }
 
     const body = req.body || {};
     const query = req.query || {};
@@ -66,15 +74,31 @@ function getUserDataFromReq(req) {
 const requireAdmin = async (req, res, next) => {
     try {
         const userData = getUserDataFromReq(req);
-        if (!userData || !userData.userId) return res.status(401).json({ message: 'Unauthorized' });
+        console.log('requireAdmin - userData:', userData);
+        
+        if (!userData || !userData.userId) {
+            console.log('requireAdmin - No userId found, returning 401');
+            return res.status(401).json({ message: 'Unauthorized - No valid token provided' });
+        }
 
         const user = await User.findById(userData.userId);
-        if (!user || (user.role !== 'admin' && user.role !== 'hod')) return res.status(403).json({ message: 'Admin access required' });
+        console.log('requireAdmin - User found:', user ? { id: user._id, role: user.role, username: user.username } : null);
+        
+        if (!user) {
+            console.log('requireAdmin - User not found in database');
+            return res.status(401).json({ message: 'Unauthorized - User not found' });
+        }
+        
+        if (user.role !== 'admin' && user.role !== 'hod') {
+            console.log('requireAdmin - User does not have admin/hod role:', user.role);
+            return res.status(403).json({ message: 'Admin access required' });
+        }
 
         req.user = user;
         next();
     } catch (e) {
-        res.status(500).json({ message: "Authentication internal error" });
+        console.error('requireAdmin - Error:', e.message);
+        res.status(500).json({ message: "Authentication internal error: " + e.message });
     }
 };
 
@@ -198,6 +222,39 @@ router.post('/import', requireAdmin, upload.single('file'), async (req, res) => 
     }
 });
 
+// Helper: enrich slips with profile photo by emailId (case-insensitive)
+// Uses Employee.profilePhoto first, then User.profilePicture (Settings profile) as fallback
+async function enrichSlipsWithProfilePhoto(slips) {
+    if (!slips || slips.length === 0) return slips;
+    const emails = [...new Set(slips.map((s) => String(s.emailId || '').trim().toLowerCase()).filter(Boolean))];
+    if (emails.length === 0) return slips.map((s) => ({ ...s.toObject(), profilePhoto: '' }));
+    const employees = await Employee.aggregate([
+        { $match: { $expr: { $in: [{ $toLower: { $ifNull: ["$emailId", ""] } }, emails] } } },
+        { $project: { emailId: 1, profilePhoto: 1 } }
+    ]);
+    const photoByEmail = {};
+    employees.forEach((e) => {
+        const key = String(e.emailId || '').trim().toLowerCase();
+        photoByEmail[key] = e.profilePhoto || '';
+    });
+    const missingEmails = emails.filter((e) => !photoByEmail[e]);
+    if (missingEmails.length > 0) {
+        const users = await User.aggregate([
+            { $match: { $expr: { $in: [{ $toLower: { $ifNull: ["$emailId", ""] } }, missingEmails] } } },
+            { $project: { emailId: 1, profilePicture: 1 } }
+        ]);
+        users.forEach((u) => {
+            const key = String(u.emailId || '').trim().toLowerCase();
+            if (u.profilePicture) photoByEmail[key] = u.profilePicture;
+        });
+    }
+    return slips.map((s) => {
+        const o = s.toObject();
+        o.profilePhoto = photoByEmail[String(s.emailId || '').trim().toLowerCase()] || '';
+        return o;
+    });
+}
+
 // Admin: Get all
 router.get('/all', requireAdmin, async (req, res) => {
     try {
@@ -206,7 +263,8 @@ router.get('/all', requireAdmin, async (req, res) => {
         if (month && month !== 'All' && month !== '') filter.month = { $regex: new RegExp(`^${String(month).trim()}$`, 'i') };
         if (year && year !== 'All' && year !== '') filter.year = String(year).trim();
         const slips = await SalarySlip.find(filter).sort({ createdAt: -1 });
-        res.json(slips);
+        const enriched = await enrichSlipsWithProfilePhoto(slips);
+        res.json(enriched);
     } catch (e) {
         res.status(500).json({ message: e.message });
     }
@@ -225,7 +283,8 @@ router.get('/my-slips', async (req, res) => {
         if (!userEmail) return res.status(400).json({ message: 'No linked email found' });
 
         const slips = await SalarySlip.find({ emailId: String(userEmail).trim().toLowerCase() }).sort({ year: -1, month: -1 });
-        res.json(slips);
+        const enriched = await enrichSlipsWithProfilePhoto(slips);
+        res.json(enriched);
     } catch (e) {
         res.status(500).json({ message: e.message });
     }

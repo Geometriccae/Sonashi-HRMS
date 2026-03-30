@@ -1,12 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const Client = require('../models/Client');
+const ClientRemark = require('../models/ClientRemark');
 const Employee = require('../models/Employee');
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
 const multer = require('multer');
 const path = require('path');
 const nodemailer = require("nodemailer");
+const { sendEventAssignedTemplate } = require('../services/interaktWhatsAppService');
 
 // Storage config
 const storage = multer.diskStorage({
@@ -82,6 +85,44 @@ async function sendEventEmailsInBackground(eventData, assignedBy, client, action
     }
   } catch (emailError) {
     console.error("? Background email error:", emailError);
+  }
+}
+
+// Send WhatsApp template to each assigned team member (one message per member).
+async function sendEventWhatsAppInBackground(eventData, assignedBy, client) {
+  const assignedUserIds = Array.isArray(eventData.assignedTeamMembers) ? eventData.assignedTeamMembers : [];
+  if (assignedUserIds.length === 0) return;
+  const clientName = client.clientName || client.companyName || 'Client';
+  try {
+    for (const userId of assignedUserIds) {
+      try {
+        const member = await Employee.findById(userId);
+        if (!member) {
+          console.warn('[WhatsApp] Skipped – no employee found for id:', userId);
+          continue;
+        }
+        if (!member.mobile) {
+          console.warn('[WhatsApp] Skipped – no mobile for', member.employeeName, '(id:', userId, ')');
+          continue;
+        }
+        const result = await sendEventAssignedTemplate(
+          member.mobile,
+          member.employeeName || 'Team Member',
+          eventData,
+          clientName,
+          assignedBy
+        );
+        if (result.success) {
+          console.log(`[WhatsApp] Event template sent to ${member.employeeName} (${member.mobile})`);
+        } else {
+          console.warn(`[WhatsApp] Failed for ${member.employeeName}:`, result.error);
+        }
+      } catch (err) {
+        console.error(`[WhatsApp] Error sending to member ${userId}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('[WhatsApp] Background send error:', err);
   }
 }
 
@@ -248,6 +289,69 @@ router.get('/', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('GET /clients error:', err);
     res.status(500).json({ message: 'Error fetching clients', error: err.message });
+  }
+});
+
+// Get all events from all clients (must be before /:id routes)
+router.get('/events', authMiddleware, async (req, res) => {
+  try {
+    const clients = await Client.find({}, { companyName: 1, events: 1 }).lean();
+    const all = [];
+    for (const c of clients) {
+      if (Array.isArray(c.events)) {
+        for (const e of c.events) {
+          all.push({
+            clientId: c._id,
+            clientName: c.companyName,
+            ...e,
+          });
+        }
+      }
+    }
+    res.json(all);
+  } catch (error) {
+    console.error('Error fetching all events:', error);
+    res.status(500).json({ message: 'Error fetching all events', error: error.message });
+  }
+});
+
+// Get remarks for a client/lead (latest first)
+router.get('/:id/remarks', authMiddleware, async (req, res) => {
+  try {
+    const remarks = await ClientRemark.find({ clientId: req.params.id })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(remarks);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching remarks', error: error.message });
+  }
+});
+
+// Add a remark for a client/lead (validation: text required)
+router.post('/:id/remarks', authMiddleware, async (req, res) => {
+  try {
+    const text = req.body?.text != null ? String(req.body.text).trim() : '';
+    if (!text) {
+      return res.status(400).json({ message: 'Remark text cannot be empty' });
+    }
+    const client = await Client.findById(req.params.id);
+    if (!client) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+    const user = await User.findById(req.user._id);
+    const remark = new ClientRemark({
+      clientId: req.params.id,
+      text,
+      createdBy: {
+        userId: req.user._id,
+        username: (user && user.username) || req.user.username || 'Unknown',
+        role: (user && user.role) || req.user.role || ''
+      }
+    });
+    await remark.save();
+    res.status(201).json(remark);
+  } catch (error) {
+    res.status(500).json({ message: 'Error adding remark', error: error.message });
   }
 });
 
@@ -603,6 +707,11 @@ router.post('/:id/events', authMiddleware, async (req, res) => {
     sendEventEmailsInBackground(eventData, assignedBy, client)
       .then(() => console.log("Background email process completed"))
       .catch(err => console.error("Background email process failed:", err));
+
+    // Send WhatsApp to each assigned team member (non-blocking)
+    sendEventWhatsAppInBackground(eventWithAssignedBy, assignedBy, client)
+      .then(() => console.log("Background WhatsApp process completed"))
+      .catch(err => console.error("Background WhatsApp process failed:", err));
   } catch (error) {
     console.error("Error adding event:", error);
     res.status(400).json({ message: 'Error adding event', error: error.message });
@@ -659,6 +768,20 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
     sendEventEmailsInBackground(updatedData, assignedBy, client)
       .then(() => console.log("Background email process completed"))
       .catch(err => console.error("Background email process failed:", err));
+
+    // Send WhatsApp template with updated event data to assigned team members
+    const eventPayloadForWhatsApp = {
+      eventName: event.eventName || updatedData.eventName || updatedData.title,
+      title: event.title || updatedData.title || updatedData.eventName,
+      date: event.date || updatedData.date,
+      time: event.time || updatedData.time,
+      assignedTeamMembers: Array.isArray(event.assignedTeamMembers) ? event.assignedTeamMembers : (updatedData.assignedTeamMembers || []),
+      notes: event.notes ?? updatedData.notes,
+      link: event.link ?? updatedData.link
+    };
+    sendEventWhatsAppInBackground(eventPayloadForWhatsApp, assignedBy, client)
+      .then(() => console.log("Background WhatsApp (update) process completed"))
+      .catch(err => console.error("Background WhatsApp (update) process failed:", err));
 
     // ? Reschedule Reminders (Add new setTimeouts)
     if (updatedData.reminders && updatedData.reminders.length > 0) {
@@ -731,29 +854,6 @@ router.delete('/:id/events/:eventId', authMiddleware, async (req, res) => {
     res.json({ message: 'Event deleted successfully', client });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting event', error: error.message });
-  }
-});
-
-
-router.get('/events', authMiddleware, async (req, res) => {
-  try {
-    const clients = await Client.find({}, { companyName: 1, events: 1 }).lean();
-    const all = [];
-    for (const c of clients) {
-      if (Array.isArray(c.events)) {
-        for (const e of c.events) {
-          all.push({
-            clientId: c._id,
-            clientName: c.companyName,
-            ...e,
-          });
-        }
-      }
-    }
-    res.json(all);
-  } catch (error) {
-    console.error('Error fetching all events:', error);
-    res.status(500).json({ message: 'Error fetching all events', error: error.message });
   }
 });
 

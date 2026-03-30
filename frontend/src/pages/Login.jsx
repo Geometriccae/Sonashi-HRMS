@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link  } from "react-router-dom";
-import auxin_logo from "../assets/auxin_logo.png";
+import sonashi_logo from "../assets/sonashi_logo.png";
 import styles from "./Login.module.css";
+import { getAuthApiUrl } from "../config/config";
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -15,7 +16,7 @@ function Login() {
     e.preventDefault();
 
     try {
-      const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/login`, { username, password }, { withCredentials: true });
+      const res = await axios.post(getAuthApiUrl('/login'), { username, password }, { withCredentials: true });
 
       // Store the token in localStorage
       localStorage.setItem("token", res.data.token);
@@ -35,7 +36,15 @@ function Login() {
       navigate('/dashboard');
     } catch (err) {
       console.error(err);
-      setError('Your Username/Password is incorrect!');
+      const status = err.response?.status;
+      const serverMessage = err.response?.data?.message;
+      if (err.response == null) {
+        setError('Cannot reach server. Ensure the backend is running on port 5000 and try again.');
+      } else if (status === 502 || (status >= 500 && status < 600)) {
+        setError(serverMessage || 'Server is temporarily unavailable. Please try again later.');
+      } else {
+        setError(serverMessage || 'Your Username/Password is incorrect!');
+      }
     }
   };
 
@@ -52,7 +61,7 @@ function Login() {
           <h1>
             Welcome back
             <br />
-            to Auxin!
+            to Sonashi!
           </h1>
           <p>
             Login and continue where you left off! You will be
@@ -63,7 +72,7 @@ function Login() {
       </div>
       <div className={styles.rightPanel}>
         <div className={styles.loginBox}>
-          <img src={auxin_logo} alt="Auxin Logo" className={styles.logo} />
+          <img src={sonashi_logo} alt="Sonashi Logo" className={styles.logo} />
           <div className={styles.formContainer}>
             <div className={styles.loginTitle}>
               Login to CRM

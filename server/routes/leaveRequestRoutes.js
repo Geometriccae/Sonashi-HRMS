@@ -1,9 +1,164 @@
 const express = require('express');
 const router = express.Router();
+const nodemailer = require('nodemailer');
 const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
-const { calculateWorkingDays } = require('../utils/leaveUtils');
+const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
+
+function getLeaveTransporter() {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        console.warn('[Leave] EMAIL_USER or EMAIL_PASS not set in .env – cannot send leave emails');
+        return null;
+    }
+    return nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+        },
+        tls: { rejectUnauthorized: false },
+    });
+}
+
+/** Flow: Employee submits leave → email to HOD and HR Admin (both receive). All emails FROM EMAIL_USER. */
+async function sendLeaveRequestToHodAndAdmin(leaveRequest) {
+    const transporter = getLeaveTransporter();
+    if (!transporter) return;
+    try {
+        const [hodUsers, adminUsers] = await Promise.all([
+            User.find({ role: 'hod' }, 'emailId username').lean(),
+            User.find({ role: 'admin' }, 'emailId username').lean(),
+        ]);
+        const toHod = hodUsers.map(u => (u.emailId && String(u.emailId).trim()) || null).filter(Boolean);
+        const toAdmin = adminUsers.map(u => (u.emailId && String(u.emailId).trim()) || null).filter(Boolean);
+        if (toHod.length === 0 && toAdmin.length === 0) {
+            console.warn('[Leave] No HOD or Admin with emailId. Set emailId for users with role "hod" and "admin".');
+            return;
+        }
+        if (toAdmin.length === 0) {
+            console.warn('[Leave] No Admin user with emailId. Add emailId for the user with role "admin" in User collection.');
+        }
+        const toList = [...new Set([...toHod, ...toAdmin])];
+        console.log('[Leave] Sending new leave request – HOD:', toHod.length, 'recipient(s), Admin:', toAdmin.length, 'recipient(s). To:', toList.join(', '));
+        const startStr = leaveRequest.startDate ? new Date(leaveRequest.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        const endStr = leaveRequest.endDate ? new Date(leaveRequest.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        const subject = `Leave Request from ${leaveRequest.employeeName || 'Employee'}`;
+        const html = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
+                <h2 style="color: #1a73e8;">New Leave Request</h2>
+                <p><strong>Employee:</strong> ${leaveRequest.employeeName || 'N/A'}</p>
+                <p><strong>Company:</strong> ${leaveRequest.company || 'N/A'}</p>
+                <p><strong>Leave Type:</strong> ${leaveRequest.leaveType || 'N/A'}</p>
+                <p><strong>Start Date:</strong> ${startStr}</p>
+                <p><strong>End Date:</strong> ${endStr}</p>
+                <p><strong>Reason:</strong> ${leaveRequest.reason || 'N/A'}</p>
+                <p><strong>Applied On:</strong> ${leaveRequest.appliedOn ? new Date(leaveRequest.appliedOn).toLocaleString('en-IN') : 'N/A'}</p>
+                <p style="margin-top: 20px; color: #555;">Please review and approve or reject in the leave request portal.</p>
+            </div>
+        `;
+        for (const to of toList) {
+            try {
+                await transporter.sendMail({
+                    from: `"Auxin Leave" <${process.env.EMAIL_USER}>`,
+                    to,
+                    subject,
+                    html,
+                });
+                console.log('[Leave] Sent new leave request to HOD/Admin:', to);
+            } catch (e) {
+                console.error('[Leave] Failed to send to HOD/Admin', to, e.message);
+            }
+        }
+    } catch (err) {
+        console.error('[Leave] Failed to email HOD/Admin:', err);
+    }
+}
+
+/** Flow: When HOD or Admin approve/reject → email to employee. All emails FROM EMAIL_USER. */
+async function sendLeaveStatusToEmployee(leaveRequest, newStatus) {
+    const transporter = getLeaveTransporter();
+    if (!transporter) return;
+    try {
+        let employeeEmail = null;
+        const emp = leaveRequest.employee;
+        if (emp && typeof emp === 'object' && emp.emailId) {
+            employeeEmail = String(emp.emailId).trim() || null;
+        }
+        if (!employeeEmail && leaveRequest.employee) {
+            const user = await User.findById(leaveRequest.employee).select('emailId').lean();
+            employeeEmail = (user && user.emailId && String(user.emailId).trim()) || null;
+        }
+        if (!employeeEmail) {
+            console.warn('[Leave] No employee email for leave request', leaveRequest._id);
+            return;
+        }
+        const startStr = leaveRequest.startDate ? new Date(leaveRequest.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        const endStr = leaveRequest.endDate ? new Date(leaveRequest.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        let statusLabel;
+        let messageLine;
+        if (newStatus === 'HOD Approved') {
+            statusLabel = 'Approved by HOD';
+            messageLine = 'Your leave request has been <strong>approved by HOD</strong> and is pending admin approval.';
+        } else if (newStatus === 'Approved') {
+            statusLabel = 'Approved';
+            messageLine = 'Your leave request has been <strong>approved</strong>.';
+        } else if (newStatus === 'Rejected') {
+            statusLabel = 'Rejected';
+            messageLine = 'Your leave request has been <strong>rejected</strong>.';
+        } else {
+            statusLabel = newStatus;
+            messageLine = `Your leave request status: <strong>${newStatus}</strong>.`;
+        }
+        const html = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
+                <h2 style="color: #1a73e8;">Leave Request – ${statusLabel}</h2>
+                <p>${messageLine}</p>
+                <p><strong>Leave Type:</strong> ${leaveRequest.leaveType || 'N/A'}</p>
+                <p><strong>Period:</strong> ${startStr} to ${endStr}</p>
+                <p><strong>Reason:</strong> ${leaveRequest.reason || 'N/A'}</p>
+                <p style="margin-top: 20px; color: #555;">Thank you.</p>
+            </div>
+        `;
+        await transporter.sendMail({
+            from: `"Auxin Leave" <${process.env.EMAIL_USER}>`,
+            to: employeeEmail,
+            subject: `Leave Request – ${statusLabel}`,
+            html,
+        });
+        console.log('[Leave] Sent status to employee:', employeeEmail);
+    } catch (err) {
+        console.error('[Leave] Failed to email employee:', err.message || err);
+    }
+}
+
+/** Check if any day in [startDate, endDate] (inclusive) is a government holiday. */
+function hasHolidayInRange(startDate, endDate) {
+    const start = parseLocalDate(startDate);
+    const end = parseLocalDate(endDate);
+    if (!start || !end || start > end) return false;
+    const current = new Date(start);
+    while (current <= end) {
+        if (isPublicHoliday(current)) return true;
+        current.setDate(current.getDate() + 1);
+    }
+    return false;
+}
+
+function parseLocalDate(dateStr) {
+    if (!dateStr) return null;
+    const s = String(dateStr).trim();
+    const match = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) {
+        const y = parseInt(match[1], 10), m = parseInt(match[2], 10) - 1, d = parseInt(match[3], 10);
+        const date = new Date(y, m, d);
+        return isNaN(date.getTime()) ? null : date;
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
 
 // Get all leave requests
 router.get('/', authMiddleware, async (req, res) => {
@@ -53,7 +208,7 @@ router.get('/', authMiddleware, async (req, res) => {
         }
 
         const leaveRequests = await LeaveRequest.find(filter)
-            .populate('employee', 'username email')
+            .populate('employee', 'username emailId')
             .populate('hodApprovedBy', 'username')
             .populate('adminApprovedBy', 'username')
             .sort({ appliedOn: -1 });
@@ -70,6 +225,10 @@ router.post('/', authMiddleware, async (req, res) => {
     try {
         const { employeeId, employeeName, company, leaveType, startDate, endDate, reason } = req.body;
 
+        if (hasHolidayInRange(startDate, endDate)) {
+            return res.status(400).json({ message: 'This is a government holiday. You should not apply for a leave request.' });
+        }
+
         const newLeaveRequest = new LeaveRequest({
             employee: employeeId || req.user.id,
             employeeName: employeeName || req.user.username,
@@ -83,6 +242,19 @@ router.post('/', authMiddleware, async (req, res) => {
 
         const savedRequest = await newLeaveRequest.save();
         res.status(201).json(savedRequest);
+
+        const leaveSnapshot = {
+            employeeName: savedRequest.employeeName,
+            company: savedRequest.company,
+            leaveType: savedRequest.leaveType,
+            startDate: savedRequest.startDate,
+            endDate: savedRequest.endDate,
+            reason: savedRequest.reason,
+            appliedOn: savedRequest.appliedOn,
+        };
+        sendLeaveRequestToHodAndAdmin(leaveSnapshot)
+            .then(() => console.log('[Leave] HOD/Admin email sent'))
+            .catch(e => console.error('[Leave] HOD/Admin email error:', e));
     } catch (error) {
         console.error('Error creating leave request:', error);
         res.status(400).json({ message: 'Error creating leave request', error: error.message });
@@ -172,16 +344,27 @@ router.put('/:id', authMiddleware, async (req, res) => {
         if (endDate) updateData.endDate = new Date(endDate);
         if (reason) updateData.reason = reason;
 
+        const effectiveStart = updateData.startDate || oldRequest.startDate;
+        const effectiveEnd = updateData.endDate || oldRequest.endDate;
+        const startStr = effectiveStart && (effectiveStart.toISOString ? effectiveStart.toISOString().split('T')[0] : effectiveStart);
+        const endStr = effectiveEnd && (effectiveEnd.toISOString ? effectiveEnd.toISOString().split('T')[0] : effectiveEnd);
+        if (startStr && endStr && hasHolidayInRange(startStr, endStr)) {
+            return res.status(400).json({ message: 'This is a government holiday. You should not apply for a leave request.' });
+        }
+
         const updatedRequest = await LeaveRequest.findByIdAndUpdate(
             req.params.id,
             updateData,
             { new: true, runValidators: true }
-        ).populate('employee', 'username email')
+        ).populate('employee', 'username emailId')
             .populate('hodApprovedBy', 'username')
             .populate('adminApprovedBy', 'username');
 
-        // Leave balance is now calculated dynamically in /me endpoint
-        // based on monthly accrual minus approved leave days
+        if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
+            sendLeaveStatusToEmployee(updatedRequest, updateData.status)
+                .then(() => console.log('[Leave] Employee status email sent'))
+                .catch(e => console.error('[Leave] Employee status email error:', e));
+        }
 
         res.json(updatedRequest);
     } catch (error) {

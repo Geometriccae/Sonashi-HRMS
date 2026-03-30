@@ -133,10 +133,10 @@ function YourCalendar() {
          } else if (role === 'sales_executive') {
           // Sales executive sees events they created or are assigned to
           // resolve employee linked to this user
-           let employee = null;
+           let linkedEmployee = null;
            try {
              const employees = await employeeService.getEmployees();
-             employee = (employees || []).find(emp =>
+             linkedEmployee = (employees || []).find(emp =>
                String(emp.user) === String(me._id) ||
                (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
              );
@@ -144,7 +144,7 @@ function YourCalendar() {
              console.warn('Failed to resolve employee:', e);
            }
    
-           const empId = employee?._id ? String(employee._id) : null;
+           const empId = linkedEmployee?._id ? String(linkedEmployee._id) : null;
            const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
            const userId = me._id ? String(me._id) : null;
    
@@ -172,14 +172,13 @@ function YourCalendar() {
              return false;
            });
            
-           console.log('Filtered events for @:', filtered.length);
            setMeetings(filtered);
          } else {
           // Other roles - use the same logic as before
-           let employee = null;
+           let linkedEmployee = null;
            try {
              const employees = await employeeService.getEmployees();
-             employee = (employees || []).find(emp =>
+             linkedEmployee = (employees || []).find(emp =>
                String(emp.user) === String(me._id) ||
                (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
              );
@@ -187,7 +186,7 @@ function YourCalendar() {
              console.warn('Failed to resolve employee:', e);
            }
    
-           const empId = employee?._id ? String(employee._id) : null;
+           const empId = linkedEmployee?._id ? String(linkedEmployee._id) : null;
            const usernameKey = (me.username || me.emailId || '').toString().toLowerCase();
    
           const filtered = (events || []).filter(ev => {
@@ -310,8 +309,22 @@ function YourCalendar() {
   const handleDeleteConfirm = async () => {
     try {
       if (selectedMeetingToDelete && (selectedMeetingToDelete._id || selectedMeetingToDelete.id || selectedMeetingToDelete.eventId)) {
-        const id = selectedMeetingToDelete._id || selectedMeetingToDelete.id || selectedMeetingToDelete.eventId;
-        await MeetingService.deleteMeeting(id);
+        // Check if this is a client event or a standalone meeting
+        const eventId = selectedMeetingToDelete._id || selectedMeetingToDelete.id || selectedMeetingToDelete.eventId;
+        const clientId = selectedMeetingToDelete.clientId || 
+                         selectedMeetingToDelete.extendedProps?.clientId || 
+                         selectedMeetingToDelete.extendedProps?.raw?.clientId;
+        
+        // If clientId exists, it's a client event (embedded in Client document)
+        // Otherwise, it's a standalone meeting from the Meeting collection
+        if (clientId) {
+          console.log(`Deleting client event: clientId=${clientId}, eventId=${eventId}`);
+          await clientService.deleteClientEvent(clientId, eventId);
+        } else {
+          console.log(`Deleting standalone meeting: id=${eventId}`);
+          await MeetingService.deleteMeeting(eventId);
+        }
+        
         // reload meetings
         await loadMeetingsForCurrentUser();
       } else {
@@ -324,7 +337,7 @@ function YourCalendar() {
       }
     } catch (err) {
       console.error("Failed to delete meeting:", err);
-      // you may show a toast or set an error state
+      alert(`Failed to delete: ${err.message || 'Unknown error'}`);
     } finally {
       setIsDeleteModalOpen(false);
       setDeleteType("");

@@ -14,7 +14,7 @@ import styles from "./Sidebar.module.css";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
 import useDateRange from "../../hooks/useDateRange";
 
-import auxin_logo from "../../assets/auxin_logo.png";
+import sonashi_logo from "../../assets/sonashi_logo.png";
 import users from "../../assets/dashboard/users.svg";
 import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import arrowdownup from "../../assets/dashboard/arrow-down-up.svg";
@@ -87,8 +87,8 @@ function Sidebar() {
       <div className={styles["sidebar-content"]}>
         <div className={styles["auxin-logo"]}>
           <img
-            src={auxin_logo}
-            alt="Auxin Logo"
+            src={sonashi_logo}
+            alt="Sonashi Logo"
             className={styles["auxinlogo-img"]}
           />
         </div>
@@ -131,7 +131,7 @@ function Sidebar() {
                 Leads
               </li>  */}
 
-              <li className={isActive("/salesandleads") ? styles.active : ""}>
+              {/* <li className={isActive("/salesandleads") ? styles.active : ""}>
                 <Link to="/salesandleads" className={styles["sidebar-link"]}>
                   <img
                     src={packageicon}
@@ -140,9 +140,9 @@ function Sidebar() {
                   />
                   Sales & Leads
                 </Link>
-              </li>
+              </li> */}
 
-              <li
+              {/* <li
                 style={{ cursor: "pointer" }}
                 className={isActive("/yourcalendar") ? styles.active : ""}
               >
@@ -150,9 +150,9 @@ function Sidebar() {
                   <img src={calendar} alt="Calendar" className={styles.icon} />{" "}
                   Calendar
                 </Link>
-              </li>
+              </li> */}
 
-              <li className={isActive("/reports") ? styles.active : ""}>
+              {/* <li className={isActive("/reports") ? styles.active : ""}>
                 <Link to="/reports" className={styles["sidebar-link"]}>
                   <img
                     src={filechartcolumn}
@@ -161,9 +161,9 @@ function Sidebar() {
                   />
                   Reports
                 </Link>
-              </li>
+              </li> */}
 
-              <li className={isActive("/checkin-history") ? styles.active : ""}>
+              {/* <li className={isActive("/checkin-history") ? styles.active : ""}>
                 <Link to="/checkin-history" className={styles["sidebar-link"]}>
                   <img
                     src={scaneye}
@@ -172,7 +172,7 @@ function Sidebar() {
                   />
                   Check-in History
                 </Link>
-              </li>
+              </li> */}
 
               <li className={isActive("/leave-requests") ? styles.active : ""}>
                 <Link to="/leave-requests" className={styles["sidebar-link"]}>

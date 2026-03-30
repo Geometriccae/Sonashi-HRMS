@@ -14,24 +14,52 @@ let otpStore = {}; // TEMP store (better use Redis or DB)
 
 
 router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  const rawInput = (req.body.username || '').trim();
+  const password = typeof req.body.password === 'string' ? req.body.password : '';
 
+  console.log('Login attempt for username/email:', rawInput ? '(provided)' : '(empty)');
 
   try {
-    const user = await User.findOne({ username });
-    if (!user) {
+    // Validate input
+    if (!rawInput || !password) {
+      console.log('Missing username/email or password');
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+
+    // Find user by username OR email (so login works with either)
+    const user = await User.findOne({
+      $or: [
+        { username: rawInput },
+        { emailId: rawInput }
+      ]
+    });
+    if (!user) {
+      console.log('User not found for:', rawInput);
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    console.log('User found, checking password...');
+    
     // Plain-text password check fallback if passwords are not hashed yet
     let passwordOk = false;
-    if (user.password && user.password.startsWith('$2')) {
-      passwordOk = await bcrypt.compare(password, user.password);
-    } else {
-      passwordOk = user.password === password;
+    try {
+      if (user.password && user.password.startsWith('$2')) {
+        passwordOk = await bcrypt.compare(password, user.password);
+      } else {
+        passwordOk = user.password === password;
+      }
+      console.log('Password check result:', passwordOk);
+    } catch (bcryptError) {
+      console.error('Bcrypt error:', bcryptError);
+      return res.status(500).json({ message: 'Server error during authentication' });
     }
+
     if (!passwordOk) {
+      console.log('Password incorrect for user:', user.username);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+
+    console.log('Password correct, generating token...');
 
     // Generate JWT token
     const token = jwt.sign(
@@ -40,16 +68,16 @@ router.post('/login', async (req, res) => {
       { expiresIn: '3h' }
     );
 
-    console.log("Found user:", user);
-    console.log("User username:", user.username);
+    console.log("Login successful for user:", user.username);
+    
     res.status(200).json({
       message: 'Login successful',
       token,
       user,
       username: user.username,
-
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

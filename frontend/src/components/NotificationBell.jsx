@@ -128,7 +128,7 @@ function NotificationBell({ small = true }) {
         const opts = {
           body: payload.body || "",
           tag: payload.id,
-          icon: "/auxin_logo.png",
+          icon: "/sonashi_logo.png",
           silent: false,
         };
         const notification = new window.Notification(payload.title || "Reminder", opts);
@@ -248,7 +248,7 @@ function NotificationBell({ small = true }) {
           const shown = (typeof window !== 'undefined' && window.Notification && window.Notification.permission === 'granted');
           if (shown) {
             try {
-              new window.Notification(payload.title, { body: payload.body, tag: payload.id, icon: '/auxin_logo.png' });
+              new window.Notification(payload.title, { body: payload.body, tag: payload.id, icon: '/sonashi_logo.png' });
             } catch (err) {
               console.warn('Local reminder native Notification failed:', err);
             }
@@ -396,7 +396,7 @@ function NotificationBell({ small = true }) {
             new window.Notification(payload.title || 'Notification', { 
               body: payload.body || '', 
               tag: payload.id, 
-              icon: '/auxin_logo.png' 
+              icon: '/sonashi_logo.png' 
             });
           } catch (err) {
             console.warn('Failed to show browser notification:', err);

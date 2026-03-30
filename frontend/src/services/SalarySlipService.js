@@ -21,9 +21,12 @@ class SalarySlipService {
 
     getAuthHeaders() {
         const token = this.getAuthToken();
-        return {
-            'Authorization': `Bearer ${token}`
-        };
+        const headers = {};
+        // Only add Authorization header if token exists and is valid
+        if (token && token !== 'null' && token !== 'undefined' && token.trim() !== '') {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
     }
 
     async importSalarySlips(file, month, year) {
@@ -76,6 +79,11 @@ class SalarySlipService {
 
     async getAllSalarySlips(month = '', year = '') {
         try {
+            const token = this.getAuthToken();
+            if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
+                throw new Error('Authentication required. Please login again.');
+            }
+
             let url = `${this.baseURL}/all`;
             const params = new URLSearchParams();
             if (month) params.append('month', month);
@@ -99,7 +107,13 @@ class SalarySlipService {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 401) {
+                    // Token expired or invalid - clear it and throw meaningful error
+                    localStorage.removeItem('token');
+                    throw new Error('Session expired. Please login again.');
+                }
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
 
             return await response.json();
@@ -111,6 +125,11 @@ class SalarySlipService {
 
     async getMySalarySlips() {
         try {
+            const token = this.getAuthToken();
+            if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
+                throw new Error('Authentication required. Please login again.');
+            }
+
             const url = `${this.baseURL}/my-slips?t=${Date.now()}`;
             const response = await fetch(url, {
                 method: 'GET',
@@ -122,7 +141,13 @@ class SalarySlipService {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                if (response.status === 401) {
+                    // Token expired or invalid - clear it and throw meaningful error
+                    localStorage.removeItem('token');
+                    throw new Error('Session expired. Please login again.');
+                }
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
 
             return await response.json();

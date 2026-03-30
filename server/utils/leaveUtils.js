@@ -16,8 +16,8 @@ const OFFICIAL_HOLIDAYS_2026 = [
     '2026-03-03', // Holi (Tuesday)
     '2026-03-19', // Gudi Padwa (Thursday)
     '2026-03-21', // Ramzan Id (Saturday)
-    '2026-04-26', // Ram Navmi (Thursday)
-    '2026-04-31', // Mahavir Jayanti (Tuesday) - Note: April has 30 days, this appears to be March 31 or meant for a different date
+    '2026-03-26', // Ram Navmi (Thursday)
+    '2026-03-31', // Mahavir Jayanti (Tuesday)
     '2026-04-03', // Good Friday (Friday)
     '2026-04-14', // Dr. Babasaheb Ambedkar Jayanti (Tuesday)
     '2026-05-01', // Maharashtra Day (Friday)

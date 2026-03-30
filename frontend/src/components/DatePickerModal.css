@@ -201,6 +201,16 @@
   color: var(--Gray-500, #717680);
 }
 
+.calendar-cell.disabled {
+  color: var(--Gray-400, #9ca3af);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.calendar-cell.disabled .calendar-day {
+  color: inherit;
+}
+
 .calendar-day {
   color: inherit;
 }
