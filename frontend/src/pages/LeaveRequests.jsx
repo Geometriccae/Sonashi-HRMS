@@ -93,14 +93,9 @@ function LeaveRequests() {
                     <div className={styles.cardbox}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
-                                <h4>{(userRole === "admin" || userRole === "hod") ? "Annual Entitlement" : "Leave Balance"}</h4>
+                                <h4>Rejected</h4>
                             </div>
-                            <h2 style={{ color: "#3b82f6" }}>
-                                {(userRole === "admin" || userRole === "hod")
-                                    ? "21 Days"
-                                    : (leaveBalance === "--" ? "--" : `${leaveBalance} Days`)
-                                }
-                            </h2>
+                            <h2 style={{ color: "#dc2626" }}>{isLoadingMetrics ? "--" : metrics.rejected}</h2>
                         </div>
                     </div>
 
@@ -128,15 +123,6 @@ function LeaveRequests() {
                                 <h4>Approved</h4>
                             </div>
                             <h2 style={{ color: "#16a34a" }}>{isLoadingMetrics ? "--" : metrics.approved}</h2>
-                        </div>
-                    </div>
-
-                    <div className={styles.cardbox}>
-                        <div className={styles.cardboxcontent}>
-                            <div className={styles.cardheader}>
-                                <h4>Rejected</h4>
-                            </div>
-                            <h2 style={{ color: "#dc2626" }}>{isLoadingMetrics ? "--" : metrics.rejected}</h2>
                         </div>
                     </div>
                 </section>
