@@ -1,12 +1,14 @@
 import React from "react";
 import "./ProgressSteps.css";
 
-function ProgressSteps({ currentStep = 1, onStepClick }) {
-  const steps = [
-    { id: 1, label: "Corporate Details" },
-    { id: 2, label: "Billing Details" },
-    { id: 3, label: "Review Changes" },
-  ];
+function ProgressSteps({ currentStep = 1, onStepClick, steps = [] }) {
+  const stepItems = steps.length > 0 
+    ? steps.map((label, index) => ({ id: index + 1, label }))
+    : [
+        { id: 1, label: "Corporate Details" },
+        { id: 2, label: "Billing Details" },
+        { id: 3, label: "Review Changes" },
+      ];
 
   const handleStepClick = (stepId) => {
     if (onStepClick) {
@@ -16,7 +18,7 @@ function ProgressSteps({ currentStep = 1, onStepClick }) {
 
   return (
     <div className="progress-steps">
-      {steps.map((step, index) => (
+      {stepItems.map((step, index) => (
         <React.Fragment key={step.id}>
           <div
             className={`step-label ${currentStep === step.id ? "step-active" : "step-inactive"} ${onStepClick ? "step-clickable" : ""}`}
@@ -24,7 +26,7 @@ function ProgressSteps({ currentStep = 1, onStepClick }) {
           >
             {step.label}
           </div>
-          {index < steps.length - 1 && <div className="step-divider" />}
+          {index < stepItems.length - 1 && <div className="step-divider" />}
         </React.Fragment>
       ))}
     </div>

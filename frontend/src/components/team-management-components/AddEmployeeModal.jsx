@@ -14,6 +14,12 @@ import ToastContainer from "../Toast";
 function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
+  const [employeeDocuments, setEmployeeDocuments] = useState({
+    passport: null,
+    idCard: null,
+    labourCard: null
+  });
+
 
   const [formData, setFormData] = useState({
     // 1. Basic Information
@@ -107,6 +113,17 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const removeToast = (id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+  
+  const handleDocumentChange = (field, file) => {
+    setEmployeeDocuments((prev) => ({
+      ...prev,
+      [field]: file,
+    }));
+    // Clear error for this field if it exists
+    if (validationErrors[field]) {
+      setValidationErrors((prev) => ({ ...prev, [field]: false }));
+    }
+  };
 
   const handlePrevious = () => {
     if (currentStep > 1) {
@@ -139,7 +156,21 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         errors.role = true;
         missingFields.push("Role");
       }
+      // Document Validation
+      if (!employeeDocuments.passport) {
+        errors.passport = true;
+        missingFields.push("Passport");
+      }
+      if (!employeeDocuments.idCard) {
+        errors.idCard = true;
+        missingFields.push("ID Card");
+      }
+      if (!employeeDocuments.labourCard) {
+        errors.labourCard = true;
+        missingFields.push("Labour Card");
+      }
     } else if (step === 2) {
+
       if (!formData.department) {
         errors.department = true;
         missingFields.push("Department");
@@ -480,9 +511,39 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   handleInputChange("designation", e.target.value)
                 }
               />
+
+              {/* Documents Section */}
+              <div className="documents-section">
+                <h3 className="section-subtitle">Documents</h3>
+                <div className="documents-grid">
+                  <DocumentUploadField
+                    label="Passport"
+                    field="passport"
+                    file={employeeDocuments.passport}
+                    hasError={validationErrors.passport}
+                    onUpload={handleDocumentChange}
+                  />
+                  <DocumentUploadField
+                    label="ID Card"
+                    field="idCard"
+                    file={employeeDocuments.idCard}
+                    hasError={validationErrors.idCard}
+                    onUpload={handleDocumentChange}
+                  />
+                  <DocumentUploadField
+                    label="Labour Card"
+                    field="labourCard"
+                    file={employeeDocuments.labourCard}
+                    hasError={validationErrors.labourCard}
+                    onUpload={handleDocumentChange}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         );
+
+
 
       case 2:
         return (
@@ -763,10 +824,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
             </button>
           )}
           {currentStep < 3 ? (
-            <button className="button-primary" onClick={handleNext}>
+            <button 
+              className="button-primary" 
+              onClick={handleNext}
+              disabled={currentStep === 1 && (!employeeDocuments.passport || !employeeDocuments.idCard || !employeeDocuments.labourCard)}
+            >
               Next
             </button>
           ) : (
+
             <button
               className="button-primary"
               onClick={handleFinish}
@@ -782,4 +848,50 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   );
 }
 
+const DocumentUploadField = ({ label, field, file, hasError, onUpload }) => {
+  const fileInputRef = React.useRef(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) {
+      onUpload(field, selectedFile);
+    }
+  };
+
+  return (
+    <div className={`document-upload-field ${hasError ? "has-error" : ""}`}>
+      <label className="document-label">
+        {label} <span className="required-star">*</span>
+      </label>
+      <div className={`document-upload-box ${file ? "uploaded" : ""}`} onClick={handleUploadClick}>
+        <div className="upload-box-content">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {file ? (
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="#48bb78" />
+            ) : (
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+            )}
+            {file && <polyline points="22 4 12 14.01 9 11.01" stroke="#48bb78" />}
+          </svg>
+          <span className="upload-box-text">
+            {file ? file.name : "Upload File"}
+          </span>
+        </div>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        onChange={handleFileChange}
+        style={{ display: "none" }}
+        accept=".pdf,.jpg,.jpeg,.png"
+      />
+    </div>
+  );
+};
+
 export default AddEmployeeModal;
+
