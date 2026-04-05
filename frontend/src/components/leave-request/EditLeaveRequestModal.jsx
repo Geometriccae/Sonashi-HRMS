@@ -18,6 +18,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
         employeeId: "",
         employeeName: "",
         company: "",
+        department: "",
+        reportingManager: "",
         leaveType: "Personal Leave",
         startDate: "",
         endDate: "",
@@ -49,6 +51,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
                 employeeId: leaveRequest.employee?._id || leaveRequest.employee || "",
                 employeeName: leaveRequest.employee?.username || leaveRequest.employeeName || "",
                 company: leaveRequest.company || "",
+                department: leaveRequest.department || "",
+                reportingManager: leaveRequest.reportingManager || "",
                 leaveType: leaveRequest.leaveType || "Personal Leave",
                 startDate: leaveRequest.startDate ? new Date(leaveRequest.startDate).toISOString().split('T')[0] : "",
                 endDate: leaveRequest.endDate ? new Date(leaveRequest.endDate).toISOString().split('T')[0] : "",
@@ -125,6 +129,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
         { value: "Auxin Shipping Ltd", label: "Auxin Shipping Ltd" }
     ];
 
+    const departmentOptions = [
+        { value: "HR", label: "HR" },
+        { value: "IT", label: "IT" },
+        { value: "Sales", label: "Sales" },
+        { value: "Finance", label: "Finance" },
+        { value: "Operations", label: "Operations" },
+        { value: "Marketing", label: "Marketing" }
+    ];
+
     const employeeOptions = employees.map(emp => ({
         value: emp._id,
         label: emp.employeeName || emp.name || "Unknown"
@@ -170,6 +183,24 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest }) {
                                 options={companyOptions}
                                 value={formData.company}
                                 onChange={(e) => handleInputChange("company", e.target.value)}
+                                disabled={!isEditable}
+                            />
+
+                            <Dropdown
+                                label="Department *"
+                                placeholder="Select department"
+                                options={departmentOptions}
+                                value={formData.department}
+                                onChange={(e) => handleInputChange("department", e.target.value)}
+                                disabled={!isEditable}
+                            />
+
+                            <Dropdown
+                                label="Reporting Manager *"
+                                placeholder="Select reporting manager"
+                                options={employeeOptions}
+                                value={formData.reportingManager}
+                                onChange={(e) => handleInputChange("reportingManager", e.target.options[e.target.selectedIndex].text)}
                                 disabled={!isEditable}
                             />
 
