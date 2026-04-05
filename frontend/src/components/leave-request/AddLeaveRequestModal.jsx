@@ -19,6 +19,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit }) {
         employeeId: "",
         employeeName: "",
         company: "",
+        department: "",
+        reportingManager: "",
         leaveType: "Personal Leave",
         startDate: "",
         endDate: "",
@@ -104,7 +106,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit }) {
             employeeName: loggedInUser.username
         };
 
-        if (!submitData.employeeName || !submitData.company || !submitData.startDate || !submitData.endDate || !submitData.reason) {
+        if (!submitData.employeeName || !submitData.company || !submitData.department || !submitData.reportingManager || !submitData.startDate || !submitData.endDate || !submitData.reason) {
             showToast("Please fill in all required fields.", "error");
             return;
         }
@@ -119,6 +121,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit }) {
                 employeeId: "",
                 employeeName: "",
                 company: "",
+                department: "",
+                reportingManager: "",
                 leaveType: "Personal Leave",
                 startDate: "",
                 endDate: "",
@@ -144,6 +148,15 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit }) {
         { value: "Auxin Bulk Pvt Ltd", label: "Auxin Bulk Pvt Ltd" },
         { value: "Auxin Projects Pvt Ltd", label: "Auxin Projects Pvt Ltd" },
         { value: "Auxin Shipping Ltd", label: "Auxin Shipping Ltd" }
+    ];
+
+    const departmentOptions = [
+        { value: "HR", label: "HR" },
+        { value: "IT", label: "IT" },
+        { value: "Sales", label: "Sales" },
+        { value: "Finance", label: "Finance" },
+        { value: "Operations", label: "Operations" },
+        { value: "Marketing", label: "Marketing" }
     ];
 
     const employeeOptions = employees.map(emp => ({
@@ -187,6 +200,22 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit }) {
                                 options={companyOptions}
                                 value={formData.company}
                                 onChange={(e) => handleInputChange("company", e.target.value)}
+                            />
+
+                            <Dropdown
+                                label="Department *"
+                                placeholder="Select department"
+                                options={departmentOptions}
+                                value={formData.department}
+                                onChange={(e) => handleInputChange("department", e.target.value)}
+                            />
+
+                            <Dropdown
+                                label="Reporting Manager *"
+                                placeholder="Select reporting manager"
+                                options={employeeOptions}
+                                value={formData.reportingManager}
+                                onChange={(e) => handleInputChange("reportingManager", e.target.options[e.target.selectedIndex].text)}
                             />
 
                             <Dropdown

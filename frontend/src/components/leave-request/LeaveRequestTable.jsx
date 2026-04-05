@@ -241,6 +241,8 @@ function LeaveRequestTable({ onUpdate }) {
                         <tr>
                             <th>Employee</th>
                             <th>Company</th>
+                            <th>Department</th>
+                            <th>Manager</th>
                             <th>Type</th>
                             {activeFilter === "History" ? (
                                 <>
@@ -271,6 +273,8 @@ function LeaveRequestTable({ onUpdate }) {
                                 </td>
 
                                 <td>{req.company || 'N/A'}</td>
+                                <td>{req.department || 'N/A'}</td>
+                                <td>{req.reportingManager || 'N/A'}</td>
 
                                 <td>{req.leaveType}</td>
                                 {activeFilter === "History" ? (
