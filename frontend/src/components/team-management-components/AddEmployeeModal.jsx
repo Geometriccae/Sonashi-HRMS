@@ -48,6 +48,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     remarks: "",
     employeeStatus: "Active",
     attendance: "Onsite",
+    lifeInsurance: false,
+    medicalInsurance: false,
+    airFare: false,
 
     // 3. Project Assignments
     assignedProjects: [], // Array of client IDs
@@ -294,6 +297,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         remarks: "",
         employeeStatus: "Active",
         attendance: "Onsite",
+        lifeInsurance: false,
+        medicalInsurance: false,
+        airFare: false,
         assignedProjects: [],
       });
 
@@ -644,6 +650,54 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
+              <div className="input-group">
+                <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#333", fontSize: "14px" }}>
+                  Life Insurance
+                </label>
+                <div style={{ display: "flex", gap: "16px", height: "44px", alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
+                    <input type="radio" name="lifeInsurance" checked={formData.lifeInsurance === true} onChange={() => handleInputChange("lifeInsurance", true)} />
+                    Yes
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
+                    <input type="radio" name="lifeInsurance" checked={formData.lifeInsurance === false} onChange={() => handleInputChange("lifeInsurance", false)} />
+                    No
+                  </label>
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#333", fontSize: "14px" }}>
+                  Medical Insurance
+                </label>
+                <div style={{ display: "flex", gap: "16px", height: "44px", alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
+                    <input type="radio" name="medicalInsurance" checked={formData.medicalInsurance === true} onChange={() => handleInputChange("medicalInsurance", true)} />
+                    Yes
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
+                    <input type="radio" name="medicalInsurance" checked={formData.medicalInsurance === false} onChange={() => handleInputChange("medicalInsurance", false)} />
+                    No
+                  </label>
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#333", fontSize: "14px" }}>
+                  Air Fare
+                </label>
+                <div style={{ display: "flex", gap: "16px", height: "44px", alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
+                    <input type="radio" name="airFare" checked={formData.airFare === true} onChange={() => handleInputChange("airFare", true)} />
+                    Yes
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
+                    <input type="radio" name="airFare" checked={formData.airFare === false} onChange={() => handleInputChange("airFare", false)} />
+                    No
+                  </label>
+                </div>
+              </div>
+
               <div className="input-group" style={{ width: "100%" }}>
                 <label
                   style={{
@@ -727,6 +781,20 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
             },
           ],
           [
+            {
+              label: "Life Insurance",
+              value: formData.lifeInsurance ? "Yes" : "No",
+            },
+            {
+              label: "Medical Insurance",
+              value: formData.medicalInsurance ? "Yes" : "No",
+            },
+          ],
+          [
+            {
+              label: "Air Fare",
+              value: formData.airFare ? "Yes" : "No",
+            },
             {
               label: "Assigned Projects",
               value: selectedProjectNames || "Not assigned",

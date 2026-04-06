@@ -782,6 +782,28 @@ function TeamManagementSalesLeads() {
                           <span className={styles.text10}>Active</span>
                         </div>
                       </div>
+                      {/* fourth row - Insurance & Air Fare */}
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Life Insurance</span>
+                          <span className={styles.text10}>
+                            {employee.lifeInsurance ? "Yes" : "No"}
+                          </span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Medical Insurance</span>
+                          <span className={styles.text10}>
+                            {employee.medicalInsurance ? "Yes" : "No"}
+                          </span>
+                        </div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Air Fare</span>
+                          <span className={styles.text10}>
+                            {employee.airFare ? "Yes" : "No"}
+                          </span>
+                        </div>
+                        <div className={styles.column5}></div>
+                      </div>
                     </>
                   ) : (
                     <div style={{ padding: "40px", textAlign: "center" }}>
