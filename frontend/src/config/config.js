@@ -12,8 +12,17 @@ const config = {
  * Otherwise on auxincrm.cloud uses relative URL for same-origin; elsewhere uses localhost:5000.
  */
 export function getApiBaseUrl() {
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL.replace(/\/api\/?$/, '');
+  const env = process.env.REACT_APP_API_URL;
+  if (env) {
+    const v = String(env).trim();
+    if (v.startsWith('http://') || v.startsWith('https://')) {
+      return v.replace(/\/api\/?$/, '');
+    }
+    // Relative API root (e.g. "/api") — same-origin only on deployed CRM; otherwise assume local API on :5000
+    if (typeof window !== 'undefined' && window.location.origin === 'https://auxincrm.cloud') {
+      return '';
+    }
+    return 'http://localhost:5000';
   }
   if (typeof window !== 'undefined' && window.location.origin === 'https://auxincrm.cloud') {
     return ''; // relative URL - request goes to same origin

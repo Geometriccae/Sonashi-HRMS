@@ -336,9 +336,12 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
 };
 
 function SalarySlipTable({ userRole }) {
-    const isHOD = userRole === "hod";
-    const isAdminRole = userRole === "admin";
-    const isAdmin = isAdminRole || isHOD;
+    const currentRole = String(userRole || "").toLowerCase();
+    const isHOD = currentRole === "hod";
+    const isAdminRole = currentRole === "admin";
+    const isHR = currentRole === "hr";
+    const isAdmin = isAdminRole || isHOD || isHR;
+    const canManageSlips = isAdminRole || isHOD; // HR can view, but not create/edit/delete
     const { showToast } = useToast();
     const [salarySlips, setSalarySlips] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -369,6 +372,7 @@ function SalarySlipTable({ userRole }) {
     const [reportType, setReportType] = useState('salary');
     const [expenses, setExpenses] = useState([]);
     const [myExpenses, setMyExpenses] = useState([]);
+    const [searchQuery, setSearchQuery] = useState("");
 
     // Determine which expenses can be approved based on role
     const canApproveExpense = (expense) => {
@@ -435,7 +439,7 @@ function SalarySlipTable({ userRole }) {
             setCurrentPage(1); // Reset to first page on data change
         } catch (error) {
             console.error("Error fetching data:", error);
-            showToast("Failed to fetch data.", "error");
+            showToast(error.message || "Failed to fetch data.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -446,14 +450,24 @@ function SalarySlipTable({ userRole }) {
     }, [fetchData]);
 
     // Pagination calculations - works for both salary slips and expenses
+    const filteredSalarySlips = salarySlips.filter(slip => 
+        slip.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        slip.emailId?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const filteredExpenses = expenses.filter(exp => 
+        exp.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        exp.employeeEmail?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     const currentData = isAdmin
-        ? (reportType === 'expense' ? expenses : salarySlips)
+        ? (reportType === 'expense' ? filteredExpenses : filteredSalarySlips)
         : (employeeTab === 'expense' ? myExpenses : salarySlips);
     const totalPages = Math.ceil(currentData.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const currentSlips = salarySlips.slice(startIndex, endIndex);
-    const currentExpenses = expenses.slice(startIndex, endIndex);
+    const currentSlips = filteredSalarySlips.slice(startIndex, endIndex);
+    const currentExpenses = filteredExpenses.slice(startIndex, endIndex);
     const currentMyExpenses = myExpenses.slice(startIndex, endIndex);
 
     const handlePageChange = (page) => {
@@ -474,11 +488,18 @@ function SalarySlipTable({ userRole }) {
             const hra = slip.hra || 0;
             const conveyanceAllowance = slip.conveyanceAllowance || 0;
             const otherAllowance = slip.otherAllowance || 0;
-            const advance = slip.advance || 0;
+            let advance = slip.advance || 0;
             const leave = slip.leave || 0;
             const staffLoan = slip.staffLoan || 0;
             const profTax = slip.profTax || 0;
             const incomeTaxTDS = slip.incomeTaxTDS || 0;
+
+            // If we have a total/legacy deduction but no breakdown, put it in 'advance' so it's visible in PDF
+            const hasBreakdown = (advance + leave + staffLoan + profTax + incomeTaxTDS) > 0;
+            const legacyDeduction = slip.deductionsPFTax || slip.totalDeduction || 0;
+            if (!hasBreakdown && legacyDeduction > 0) {
+                advance = legacyDeduction;
+            }
 
             // Calculate gross salary and total deduction
             const grossSalary = slip.grossSalary || (basicPay + hra + conveyanceAllowance + otherAllowance);
@@ -846,11 +867,33 @@ function SalarySlipTable({ userRole }) {
                                     <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className={styles.select}>
                                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                                     </select>
+                                    <div className={styles.searchContainer}>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search Employee..." 
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className={styles.searchInput}
+                                        />
+                                        <svg className={styles.searchIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                    </div>
                                 </>
+                            )}
+                            {reportType === 'expense' && (
+                                <div className={styles.searchContainer}>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search Employee..." 
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className={styles.searchInput}
+                                    />
+                                    <svg className={styles.searchIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                </div>
                             )}
                         </div>
                     )}
-                    {isAdmin && reportType === 'salary' && (
+                    {canManageSlips && reportType === 'salary' && (
                         <>
                             <button onClick={() => setIsManualAddModalOpen(true)} className={styles.addBtn}>
                                 <img src={plus} alt="" className={styles.addBtnIcon} />
@@ -943,7 +986,7 @@ function SalarySlipTable({ userRole }) {
                                                     <DownloadIcon />
                                                     {!isAdmin && <span>Download</span>}
                                                 </button>
-                                                {isAdmin && (
+                                                {canManageSlips && (
                                                     <button
                                                         className={styles.editBtn}
                                                         onClick={() => {
@@ -955,7 +998,7 @@ function SalarySlipTable({ userRole }) {
                                                         <EditIcon />
                                                     </button>
                                                 )}
-                                                {isAdmin && (
+                                                {canManageSlips && (
                                                     <button
                                                         className={styles.deleteBtn}
                                                         onClick={() => openDeleteDialog(slip)}

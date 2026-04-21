@@ -37,11 +37,18 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
             const hra = salarySlip.hra || 0;
             const conveyanceAllowance = salarySlip.conveyanceAllowance || 0;
             const otherAllowance = salarySlip.otherAllowance || 0;
-            const advance = salarySlip.advance || 0;
+            let advance = salarySlip.advance || 0;
             const leave = salarySlip.leave || 0;
             const staffLoan = salarySlip.staffLoan || 0;
             const profTax = salarySlip.profTax || 0;
             const incomeTaxTDS = salarySlip.incomeTaxTDS || 0;
+
+            // If we have a total/legacy deduction but no breakdown, put it in 'advance' so it's visible
+            const hasBreakdown = (advance + leave + staffLoan + profTax + incomeTaxTDS) > 0;
+            const legacyDeduction = salarySlip.deductionsPFTax || salarySlip.totalDeduction || 0;
+            if (!hasBreakdown && legacyDeduction > 0) {
+                advance = legacyDeduction;
+            }
 
             const grossSalary = salarySlip.grossSalary || (basicPay + hra + conveyanceAllowance + otherAllowance);
             const totalDeduction = salarySlip.totalDeduction || (advance + leave + staffLoan + profTax + incomeTaxTDS) || salarySlip.deductionsPFTax || 0;

@@ -178,29 +178,26 @@ router.get('/', authMiddleware, async (req, res) => {
             if (employeeId) {
                 filter.employee = employeeId;
             }
-        } else if (req.user.role === 'admin') {
-            // Admin sees only HOD Approved requests (waiting for admin approval)
-            // and also sees requests they have already processed (Approved, Rejected)
-            // STRICTLY exclude 'Pending' requests regardless of query params
-            const visibleStatuses = ['HOD Approved', 'Approved', 'Rejected'];
+        } else if (req.user.role === 'admin' || req.user.role === 'hr') {
+            // Admin and HR see Pending requests, HOD processed requests, and final ones
+            const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected'];
 
             if (status && status !== 'All') {
                 if (visibleStatuses.includes(status)) {
                     filter.status = status;
                 } else {
-                    // If requesting a status admin shouldn't see (like 'Pending'), return nothing
-                    // We set it to a value that will never match a real status
+                    // If requesting a status admin/HR shouldn't see, return nothing
                     filter.status = 'RESTRICTED_VIEW';
                 }
             } else {
-                // Default: show HOD Approved (for approval) and completed ones
+                // Default: show Pending (for approval) and completed ones
                 filter.status = { $in: visibleStatuses };
             }
             if (employeeId) {
                 filter.employee = employeeId;
             }
         } else {
-            // Employees can only see their own requests
+            // Regular Employees can only see their own requests
             filter.employee = req.user.id;
             if (status && status !== 'All') {
                 filter.status = status;
@@ -208,7 +205,7 @@ router.get('/', authMiddleware, async (req, res) => {
         }
 
         const leaveRequests = await LeaveRequest.find(filter)
-            .populate('employee', 'username emailId')
+            .populate('employee', 'username emailId employeeId')
             .populate('hodApprovedBy', 'username')
             .populate('adminApprovedBy', 'username')
             .sort({ appliedOn: -1 });
@@ -223,16 +220,29 @@ router.get('/', authMiddleware, async (req, res) => {
 // Create a new leave request
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        const { employeeId, employeeName, company, leaveType, startDate, endDate, reason } = req.body;
+        const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason } = req.body;
 
         if (hasHolidayInRange(startDate, endDate)) {
             return res.status(400).json({ message: 'This is a government holiday. You should not apply for a leave request.' });
         }
 
+        let targetUserId = req.user.id; // Fallback to current acting user
+        if (employeeId) {
+            // employeeId from the frontend frontend dropdown is an Employee document _id. We need to find the equivalent User _id
+            const equivalentUser = await User.findOne({ employeeId: employeeId });
+            if (equivalentUser) {
+                targetUserId = equivalentUser._id;
+            } else {
+                targetUserId = employeeId; // In case the frontend actually sends a User ID or for non-user employees
+            }
+        }
+
         const newLeaveRequest = new LeaveRequest({
-            employee: employeeId || req.user.id,
+            employee: targetUserId,
             employeeName: employeeName || req.user.username,
             company,
+            department,
+            reportingManager,
             leaveType,
             startDate: new Date(startDate),
             endDate: new Date(endDate),
@@ -303,13 +313,13 @@ router.put('/:id', authMiddleware, async (req, res) => {
                     updateData.hodApprovedAt = new Date();
                 }
             }
-            // Admin Approval Logic
+            // Final Approval Logic: Only Admin can finalize.
             else if (userRole === 'admin') {
                 if (status === 'Approved') {
-                    // Admin can only approve HOD Approved requests
-                    if (currentStatus !== 'HOD Approved') {
+                    // Admin can approve Pending or HOD Approved requests
+                    if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
                         return res.status(400).json({
-                            message: 'Admin can only approve requests that have been approved by HOD first'
+                            message: 'Admin can only approve requests that are in Pending or HOD Approved status'
                         });
                     }
                     // Admin final approval
@@ -317,10 +327,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
                     updateData.adminApprovedBy = req.user.id;
                     updateData.adminApprovedAt = new Date();
                 } else if (status === 'Rejected') {
-                    // Admin can reject HOD Approved requests
-                    if (currentStatus !== 'HOD Approved') {
+                    // Admin can reject Pending or HOD Approved requests
+                    if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
                         return res.status(400).json({
-                            message: 'Admin can only reject requests that have been approved by HOD first'
+                            message: 'Admin can only reject requests that are in Pending or HOD Approved status'
                         });
                     }
                     updateData.status = 'Rejected';

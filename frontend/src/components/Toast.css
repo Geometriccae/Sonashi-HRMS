@@ -13,8 +13,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-width: 300px;
-  max-width: 450px;
+  min-width: min(360px, 92vw);
+  max-width: min(560px, 92vw);
   padding: 16px;
   background-color: #fff;
   border-radius: 8px;
@@ -97,10 +97,11 @@
 }
 
 .toast-body {
-  font-size: 13px;
+  font-size: 14px;
   color: #4b5563;
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 /* Close Button */

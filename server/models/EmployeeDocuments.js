@@ -8,6 +8,7 @@ const employeeDocumentSchema = new mongoose.Schema({
   fileType: String,
   fileSize: Number,
   type: String,
+  fileData: Buffer, // added for storing file in db
   uploadedBy: String,
   userRole: String,
   uploadedDate: { type: Date, default: Date.now },

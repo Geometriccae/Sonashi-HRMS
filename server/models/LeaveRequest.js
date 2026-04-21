@@ -12,8 +12,15 @@ const leaveRequestSchema = new mongoose.Schema({
     },
     company: {
         type: String,
-        enum: ['Auxin Bulk Pvt Ltd', 'Auxin Projects Pvt Ltd', 'Auxin Shipping Ltd'],
         required: true
+    },
+    department: {
+        type: String,
+        default: ""
+    },
+    reportingManager: {
+        type: String,
+        default: ""
     },
     leaveType: {
         type: String,

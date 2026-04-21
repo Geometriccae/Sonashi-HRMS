@@ -10,6 +10,49 @@ const nodemailer = require("nodemailer");
 const Notification = require('../models/Notification');
 const Attendance = require('../models/Attendance');
 const fs = require('fs'); // Add this import
+const crypto = require('crypto');
+const xlsx = require('xlsx');
+const mongoose = require('mongoose');
+const Client = require('../models/Client');
+const { buildEmployeePayload } = require('../utils/employeeExcelImport');
+
+/** Import rows only require these four fields (mobile & email are optional). */
+function importRowRequiredFieldsMissing(payload) {
+  const missing = [];
+  if (!String(payload?.employeeId ?? '').trim()) missing.push('employeeId');
+  if (!String(payload?.employeeName ?? '').trim()) missing.push('employeeName');
+  if (!String(payload?.role ?? '').trim()) missing.push('role');
+  if (!String(payload?.department ?? '').trim()) missing.push('department');
+  return missing;
+}
+
+const PLACEHOLDER_EMAIL_HOST = 'import.hrms.placeholder';
+
+/**
+ * Many databases still have a non-sparse unique index on emailId, so multiple
+ * "missing" / null emails throw E11000. When the user leaves email blank we
+ * assign a unique internal address; the UI shows "—" for this host.
+ */
+function ensureEmployeeEmailForDb(target, uniquenessExtra) {
+  const raw = String(target?.emailId ?? '').trim();
+  if (raw) {
+    target.emailId = raw.toLowerCase();
+    return;
+  }
+  let emp = String(target?.employeeId ?? '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  if (!emp) emp = 'emp';
+  emp = emp.slice(0, 48);
+  const salt = String(uniquenessExtra ?? '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 24);
+  const rand = crypto.randomBytes(6).toString('hex');
+  const u = `${salt}${salt ? '-' : ''}${rand}`.slice(0, 56);
+  target.emailId = `noemail+${emp}+${u}@${PLACEHOLDER_EMAIL_HOST}`.toLowerCase();
+}
 
 const DEFAULT_TASK_REMINDERS = [1, 15, 60, 180, 1440];
 
@@ -69,6 +112,24 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+const importStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../uploads'));
+  },
+  filename: (req, file, cb) => {
+    cb(null, `employee-import-${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
+const uploadEmployeeImport = multer({
+  storage: importStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (['.xlsx', '.xls'].includes(ext)) cb(null, true);
+    else cb(new Error('Only .xlsx or .xls files are allowed'));
+  },
 });
 // =============================================
 
@@ -196,6 +257,151 @@ router.get('/events', authMiddleware, async (req, res) => {
   }
 });
 
+// Bulk import employees from Excel (first sheet; headers match Team Management / Add Employee fields)
+router.post('/import', authMiddleware, uploadEmployeeImport.single('file'), async (req, res) => {
+  let filePath = null;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    filePath = req.file.path;
+
+    const clients = await Client.find({}, { companyName: 1 }).lean();
+    const nameToId = new Map();
+    for (const c of clients) {
+      if (c.companyName) nameToId.set(String(c.companyName).trim().toLowerCase(), String(c._id));
+    }
+
+    const workbook = xlsx.readFile(filePath, { cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(sheet, { defval: '', raw: false });
+
+    const results = [];
+    const errors = [];
+    /** Employee ID -> first Excel row number in this import that successfully saved (for clearer duplicate errors). */
+    const employeeIdFirstRowThisImport = new Map();
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowIndex = i + 2; // Excel row (1-based + header)
+      const row = rows[i];
+      if (!row || typeof row !== 'object') continue;
+
+      const allEmpty = Object.values(row).every(
+        (v) => v === '' || v === null || v === undefined || String(v).trim() === ''
+      );
+      if (allEmpty) continue;
+
+      try {
+        const payload = buildEmployeePayload(row, nameToId);
+        const missing = importRowRequiredFieldsMissing(payload);
+        if (missing.length) {
+          errors.push({ row: rowIndex, message: `Missing required: ${missing.join(', ')}` });
+          continue;
+        }
+
+        if (payload.mobile === undefined || payload.mobile === null) {
+          payload.mobile = '';
+        }
+
+        if (String(payload.emailId || '').trim()) {
+          payload.emailId = String(payload.emailId).trim().toLowerCase();
+        } else {
+          delete payload.emailId;
+        }
+
+        ensureEmployeeEmailForDb(payload, `r${rowIndex}`);
+
+        if (payload.profilePhoto === '') delete payload.profilePhoto;
+
+        if (payload.employeeStatus && !['Active', 'InActive'].includes(payload.employeeStatus)) {
+          delete payload.employeeStatus;
+        }
+        if (payload.attendance && !['Onsite', 'Leave'].includes(payload.attendance)) {
+          delete payload.attendance;
+        }
+        if (Array.isArray(payload.assignedProjects)) {
+          payload.assignedProjects = payload.assignedProjects.filter((id) =>
+            mongoose.Types.ObjectId.isValid(id)
+          );
+          if (payload.assignedProjects.length === 0) delete payload.assignedProjects;
+        }
+
+        const existingMail = await Employee.findOne({
+          emailId: payload.emailId.toLowerCase().trim(),
+        }).lean();
+        if (existingMail) {
+          errors.push({ row: rowIndex, message: `Duplicate email: ${payload.emailId}` });
+          continue;
+        }
+
+        const empIdKey = String(payload.employeeId).trim();
+        if (employeeIdFirstRowThisImport.has(empIdKey)) {
+          const firstRow = employeeIdFirstRowThisImport.get(empIdKey);
+          errors.push({
+            row: rowIndex,
+            message: `Duplicate employee ID: ${payload.employeeId} (same ID as Excel row ${firstRow} in this file — every row needs a unique Employee ID)`,
+          });
+          continue;
+        }
+
+        const existingId = await Employee.findOne({ employeeId: empIdKey }).lean();
+        if (existingId) {
+          errors.push({
+            row: rowIndex,
+            message: `Duplicate employee ID: ${payload.employeeId} (already in the database — change this ID in Excel or delete/rename the existing employee first)`,
+          });
+          continue;
+        }
+
+        const employee = new Employee(payload);
+        const saved = await employee.save();
+        employeeIdFirstRowThisImport.set(String(saved.employeeId).trim(), rowIndex);
+
+        try {
+          const io = req.app.get('io');
+          if (io) {
+            io.emit('employee-created', saved);
+            if (saved.emailId) io.to(`email-${saved.emailId}`).emit('employee-created', saved);
+            io.to('role-admin').emit('employee-created', saved);
+          }
+        } catch (emitErr) {
+          console.warn('employee import socket emit:', emitErr);
+        }
+
+        results.push({
+          row: rowIndex,
+          status: 'created',
+          _id: String(saved._id),
+          employeeId: saved.employeeId,
+          emailId: saved.emailId,
+        });
+      } catch (rowErr) {
+        errors.push({ row: rowIndex, message: rowErr.message || String(rowErr) });
+      }
+    }
+
+    res.status(201).json({
+      message: 'Import finished',
+      created: results.length,
+      failed: errors.length,
+      results,
+      errors,
+    });
+  } catch (error) {
+    console.error('Employee import error:', error);
+    res.status(500).json({ message: error.message || 'Import failed' });
+  } finally {
+    if (filePath) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+});
+
 // Create new employee with profile photo support
 router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res) => {
   try {
@@ -211,17 +417,25 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
     delete employeeData.id;
     delete employeeData.__v;
 
-    // Check for duplicate email BEFORE creating
-    if (employeeData.emailId) {
-      const existingEmployee = await Employee.findOne({
-        emailId: employeeData.emailId.toLowerCase().trim()
-      });
+    if (employeeData.mobile !== undefined && employeeData.mobile !== null) {
+      employeeData.mobile = String(employeeData.mobile).replace(/\D/g, '');
+    }
+    if (employeeData.emailId !== undefined && employeeData.emailId !== null) {
+      const em = String(employeeData.emailId).trim();
+      if (em) employeeData.emailId = em.toLowerCase();
+      else delete employeeData.emailId;
+    }
 
-      if (existingEmployee) {
-        return res.status(400).json({
-          message: `Employee with email "${employeeData.emailId}" already exists`
-        });
-      }
+    ensureEmployeeEmailForDb(employeeData, `c${Date.now().toString(36)}`);
+
+    const existingEmployee = await Employee.findOne({
+      emailId: employeeData.emailId.toLowerCase().trim(),
+    });
+
+    if (existingEmployee) {
+      return res.status(400).json({
+        message: `Employee with email "${employeeData.emailId}" already exists`,
+      });
     }
 
     // Check for duplicate employeeId (optional but good practice)
@@ -307,16 +521,31 @@ router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, re
       updateData = req.body;
     }
 
-    // Check for duplicate email (only if email is being updated)
+    if (Object.prototype.hasOwnProperty.call(updateData, 'mobile') && updateData.mobile != null) {
+      updateData.mobile = String(updateData.mobile).replace(/\D/g, '');
+    }
+    if (Object.prototype.hasOwnProperty.call(updateData, 'emailId')) {
+      const em = String(updateData.emailId || '').trim();
+      if (em) {
+        updateData.emailId = em.toLowerCase();
+      } else {
+        const cur = await Employee.findById(req.params.id).select('employeeId').lean();
+        const t = { employeeId: cur?.employeeId || 'emp', emailId: '' };
+        ensureEmployeeEmailForDb(t, `e${String(req.params.id).replace(/[^a-f0-9]/gi, '').slice(-12)}`);
+        updateData.emailId = t.emailId;
+      }
+    }
+
+    // Check for duplicate email (only if email is being updated to a non-empty value)
     if (updateData.emailId) {
       const existingEmployee = await Employee.findOne({
         emailId: updateData.emailId.toLowerCase().trim(),
-        _id: { $ne: req.params.id } // Exclude current employee
+        _id: { $ne: req.params.id }, // Exclude current employee
       });
 
       if (existingEmployee) {
         return res.status(400).json({
-          message: `Another employee with email "${updateData.emailId}" already exists`
+          message: `Another employee with email "${updateData.emailId}" already exists`,
         });
       }
     }
@@ -334,7 +563,6 @@ router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, re
       updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
     }
 
-    // Update employee
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -425,6 +653,20 @@ router.get('/profile-photo', authMiddleware, async (req, res) => {
     return res.json({ profilePhoto: (userByEmail && userByEmail.profilePicture) || '' });
   } catch (e) {
     res.status(500).json({ profilePhoto: '' });
+  }
+});
+
+// Get employee by email
+router.get('/by-email/:email', authMiddleware, async (req, res) => {
+  try {
+    const { email } = req.params;
+    const employee = await Employee.findOne({ emailId: new RegExp(`^${email}$`, 'i') });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    res.json(employee);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching employee', error: error.message });
   }
 });
 

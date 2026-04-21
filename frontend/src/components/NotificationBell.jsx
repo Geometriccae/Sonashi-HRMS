@@ -60,6 +60,9 @@ function NotificationBell({ small = true }) {
           
           // Add to state
           setNotifications(prev => {
+            if (item.id && prev.some(n => n.id === item.id)) {
+              return prev;
+            }
             const updated = [notification, ...prev].slice(0, 100); // Keep last 100
             // Save to localStorage
             try {
@@ -70,8 +73,7 @@ function NotificationBell({ small = true }) {
             return updated;
           });
           
-          // Update unread count
-          setUnreadCount(prev => prev + 1);
+          // Component useEffect handles unreadCount automatically.
           
           return notification;
         },
@@ -321,6 +323,57 @@ function NotificationBell({ small = true }) {
               }
             } catch (evErr) {
               console.debug('Could not prefetch events:', evErr);
+            }
+            
+            try {
+              if (me.role === 'admin' || me.role === 'hr') {
+                const empResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/employees`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (empResp.ok) {
+                  const empData = await empResp.json();
+                  const empList = Array.isArray(empData) ? empData : (empData.employees || []);
+                  
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const msPerDay = 1000 * 60 * 60 * 24;
+
+                  const checkExpiry = (employeeName, docName, dateStr) => {
+                    if (!dateStr) return;
+                    const expDate = new Date(dateStr);
+                    if (isNaN(expDate.getTime())) return;
+                    expDate.setHours(0, 0, 0, 0);
+                    
+                    const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
+                    
+                    if (diffDays >= 0 && diffDays <= 30) {
+                      let timeStr = "soon";
+                      if (diffDays === 0) timeStr = "today";
+                      else if (diffDays === 1) timeStr = "tomorrow";
+                      else timeStr = `in ${diffDays} days`;
+
+                      const notifId = `expiry-${employeeName}-${docName}-${dateStr}`;
+                      
+                      if (window.appNotifications?.push) {
+                        window.appNotifications.push({
+                          id: notifId,
+                          title: `Document Expiry Reminder`,
+                          body: `${employeeName}'s ${docName} is expiring ${timeStr} (${expDate.toLocaleDateString()})`,
+                          type: 'expiry-reminder'
+                        });
+                      }
+                    }
+                  };
+
+                  empList.forEach(emp => {
+                    checkExpiry(emp.employeeName, 'Passport', emp.passportExpiryDate);
+                    checkExpiry(emp.employeeName, 'Labour Card', emp.labourCardExpiryDate);
+                    checkExpiry(emp.employeeName, 'Visa', emp.visaExpiryDate);
+                  });
+                }
+              }
+            } catch (expErr) {
+              console.warn('Could not check expiries:', expErr);
             }
           }
         }

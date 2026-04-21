@@ -59,11 +59,16 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    if (user.role !== 'admin' && user.role !== 'hr') {
+      console.log('Access denied for role:', user.role);
+      return res.status(403).json({ message: 'Access denied. Only Admin and HR can log in.' });
+    }
+
     console.log('Password correct, generating token...');
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, username: user.username, emailId: user.emailId || "" },
+      { id: user._id, username: user.username, emailId: user.emailId || "", role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '3h' }
     );

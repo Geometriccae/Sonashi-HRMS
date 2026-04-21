@@ -4,12 +4,43 @@ import styles from "./TeamMembersTable.module.css";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddEmployeeModal from "./AddEmployeeModal";
 import EditEmployeeModal from "./EditEmployeeModal";
+import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 import FilterDropdown from "../FilterDropdown";
 import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
 import config from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
+
+/** Legacy server-generated placeholder emails — show as empty in the table. */
+const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
+
+function displayEmployeeEmail(emailId) {
+  if (emailId == null || String(emailId).trim() === "") {
+    return { text: "—", isEmpty: true };
+  }
+  const s = String(emailId).trim();
+  if (s.toLowerCase().endsWith(`@${LEGACY_PLACEHOLDER_EMAIL_HOST}`)) {
+    return { text: "—", isEmpty: true };
+  }
+  return { text: s, isEmpty: false };
+}
+
+/** Stable string id for selection / delete (ObjectId vs string from API/socket). */
+function empRowId(memberOrId) {
+  if (memberOrId == null) return "";
+  if (typeof memberOrId === "object" && ("_id" in memberOrId || "id" in memberOrId)) {
+    const raw = memberOrId._id ?? memberOrId.id;
+    return raw == null ? "" : String(raw);
+  }
+  return String(memberOrId);
+}
+
+function isRowSelected(selectedIds, member) {
+  const rid = empRowId(member);
+  if (!rid) return false;
+  return selectedIds.some((s) => String(s) === rid);
+}
 
 // SVG Components (reusing from ClientsTable)
 const UserPlusIcon = () => (
@@ -105,6 +136,25 @@ const EditIcon = () => (
     />
   </svg>
 );
+const ViewIcon = () => (
+  <svg
+    width="29"
+    height="29"
+    viewBox="0 0 29 29"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={styles["view-icon"]}
+  >
+    <path
+      d="M2.5 14.5C4.65 10.2 8.71 7.5 14.5 7.5C20.29 7.5 24.35 10.2 26.5 14.5C24.35 18.8 20.29 21.5 14.5 21.5C8.71 21.5 4.65 18.8 2.5 14.5Z"
+      stroke="#8C8E90"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="14.5" cy="14.5" r="3.5" stroke="#8C8E90" strokeWidth="2" />
+  </svg>
+);
 const DeleteIcon = () => (
   <svg
     width="29"
@@ -131,6 +181,7 @@ function TeamMembersTable() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState(null);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
   const [employeeToEdit, setEmployeeToEdit] = useState(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
@@ -141,8 +192,12 @@ function TeamMembersTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const filterButtonRef = useRef(null);
+  const selectAllCheckboxRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5; 
+  const userRole = localStorage.getItem("role") || "";
+  const isAdmin = userRole === "admin" || userRole === "hod";
+
   // Fetch employees and clients from API
   useEffect(() => {
     fetchEmployees();
@@ -201,22 +256,38 @@ function TeamMembersTable() {
   };
 
   const handleSelectAll = (e) => {
+    const ids = filteredData.map((m) => empRowId(m)).filter(Boolean);
+    if (!ids.length) return;
+    const idSet = new Set(ids);
     if (e.target.checked) {
-      const allIds = paginatedData.map(e => e._id || e.id);
-      setSelectedEmployeeIds(allIds);
+      setSelectedEmployeeIds((prev) => {
+        const merged = [...prev.map(String), ...ids];
+        return [...new Set(merged)];
+      });
     } else {
-      setSelectedEmployeeIds([]);
+      setSelectedEmployeeIds((prev) => prev.filter((id) => !idSet.has(String(id))));
     }
   };
 
   const handleSelectEmployee = (id) => {
-    setSelectedEmployeeIds(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(eId => eId !== id);
-      } else {
-        return [...prev, id];
+    const sid = empRowId(id);
+    if (!sid) return;
+    setSelectedEmployeeIds((prev) => {
+      if (prev.some((x) => String(x) === sid)) {
+        return prev.filter((eId) => String(eId) !== sid);
       }
+      return [...prev, sid];
     });
+  };
+
+  const handleSelectAllInListClick = () => {
+    const ids = filteredData.map((m) => empRowId(m)).filter(Boolean);
+    if (!ids.length) return;
+    setSelectedEmployeeIds((prev) => [...new Set([...prev.map(String), ...ids])]);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedEmployeeIds([]);
   };
 
   const handleEdit = (employee) => {
@@ -233,11 +304,11 @@ function TeamMembersTable() {
     try {
       if (memberToDelete) {
         // Single delete
-        await employeeService.deleteEmployee(memberToDelete._id || memberToDelete.id);
+        await employeeService.deleteEmployee(empRowId(memberToDelete));
         showToast(`${memberToDelete.employeeName} has been deleted.`, 'success');
       } else if (selectedEmployeeIds.length > 0) {
         // Bulk delete
-        await employeeService.bulkDeleteEmployees(selectedEmployeeIds);
+        await employeeService.bulkDeleteEmployees(selectedEmployeeIds.map(String));
         showToast(`${selectedEmployeeIds.length} employees have been deleted.`, 'success');
         setSelectedEmployeeIds([]);
       }
@@ -266,6 +337,27 @@ function TeamMembersTable() {
 
   const handleAddEmployeeClose = () => {
     setIsAddEmployeeModalOpen(false);
+  };
+
+  const handleBulkImportClose = () => {
+    setIsBulkImportModalOpen(false);
+  };
+
+  const handleBulkImportSuccess = async (res) => {
+    await fetchEmployees();
+    const created = res?.created ?? 0;
+    const failed = res?.failed ?? 0;
+    if (failed === 0) {
+      showToast(`Imported ${created} employee(s).`, "success");
+    } else {
+      const first = res?.errors?.[0];
+      const detail = first ? ` Row ${first.row}: ${first.message}` : "";
+      showToast(
+        `Imported ${created} employee(s). ${failed} row(s) failed.${detail} Open “Bulk import” again to read the full list.`,
+        "warning",
+        14000
+      );
+    }
   };
 
   const handleEditEmployeeClose = () => {
@@ -333,10 +425,12 @@ function TeamMembersTable() {
       matchesFilter = member.employeeStatus === "InActive";
     }
 
+    const q = searchTerm.toLowerCase();
     const matchesSearch =
-      (member.employeeName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.emailId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.role || "").toLowerCase().includes(searchTerm.toLowerCase());
+      (member.employeeName || "").toLowerCase().includes(q) ||
+      (member.employeeId || "").toLowerCase().includes(q) ||
+      (member.emailId || "").toLowerCase().includes(q) ||
+      (member.role || "").toLowerCase().includes(q);
 
     return matchesFilter && matchesSearch;
   });
@@ -364,6 +458,17 @@ function TeamMembersTable() {
 
   const startIndex = (currentPageSafe - 1) * itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+  const allFilteredSelected =
+    filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
+
+  useEffect(() => {
+    const el = selectAllCheckboxRef.current;
+    if (!el) return;
+    const some = filteredData.some((m) => isRowSelected(selectedEmployeeIds, m));
+    const all = filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
+    el.indeterminate = some && !all;
+  }, [filteredData, selectedEmployeeIds]);
 
   // Debug: show pagination & filter state in console to help diagnose UI issues
   useEffect(() => {
@@ -426,6 +531,8 @@ function TeamMembersTable() {
   };
 
   // Inline top banners
+  const isInitialLoading = loading && employees.length === 0 && !error;
+
   const inlineBanner = (
     <>
       {loading && employees.length > 0 && (
@@ -449,14 +556,39 @@ function TeamMembersTable() {
         <div className={styles["table-title-section"]}>
           <h2 className={styles["table-title"]}>Team Members</h2>
           <div className={styles["action-buttons"]}>
+            {filteredData.length > 0 && !allFilteredSelected && (
+              <button
+                type="button"
+                className={styles["secondary-button"]}
+                onClick={handleSelectAllInListClick}
+              >
+                Select all ({filteredData.length})
+              </button>
+            )}
+            {selectedEmployeeIds.length > 0 && (
+              <button
+                type="button"
+                className={styles["secondary-button"]}
+                onClick={handleClearSelection}
+              >
+                Clear selection
+              </button>
+            )}
             {selectedEmployeeIds.length > 0 && (
               <button 
                 className={`${styles["secondary-button"]} ${styles["delete-btn"]}`}
                 onClick={() => setIsDeleteModalOpen(true)}
               >
-                Delete Selected ({selectedEmployeeIds.length})
+                Delete selected ({selectedEmployeeIds.length})
               </button>
             )}
+            <button
+              type="button"
+              className={styles["secondary-button"]}
+              onClick={() => setIsBulkImportModalOpen(true)}
+            >
+              Bulk import
+            </button>
             <button className={styles["primary-button"]} onClick={handleAddEmployee}>
               Add Employee
               <UserPlusIcon />
@@ -488,7 +620,7 @@ function TeamMembersTable() {
             <div className={styles["search-container"]}>
               <input
                 type="text"
-                placeholder="Search employees..."
+                placeholder="Search by name, employee ID, email, role..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className={styles["search-input"]}
@@ -506,7 +638,12 @@ function TeamMembersTable() {
         </div>
       </div>
       
-                {filteredData.length === 0 ? (
+      {isInitialLoading ? (
+        <div className={styles["initial-loading"]}>
+          <div className={styles["spinner"]} aria-hidden="true"></div>
+          <p>Loading employees...</p>
+        </div>
+      ) : filteredData.length === 0 ? (
         <div className={styles["empty-state"]}>
           <p>No employees found.</p>
           {searchTerm && (
@@ -524,27 +661,29 @@ function TeamMembersTable() {
                 <div className={`${styles["table-column"]} ${styles["checkbox-column"]}`}>
                   <div className={styles["table-header"]}>
                     <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content-center"]}>
-                        <label className={styles["checkbox-label"]}>
+                      <div className={`${styles["header-content-center"]} ${styles["select-all-header"]}`}>
+                        <label className={styles["checkbox-label"]} title="Select or clear all rows in the current list (all pages)">
                           <input
+                            ref={selectAllCheckboxRef}
                             type="checkbox"
                             className={styles["hidden-checkbox"]}
                             onChange={handleSelectAll}
-                            checked={paginatedData.length > 0 && selectedEmployeeIds.length === paginatedData.length}
+                            checked={allFilteredSelected}
                           />
                           <span className={styles["custom-checkbox"]}></span>
                         </label>
+                        <span className={styles["select-all-label"]}>All</span>
                       </div>
                     </div>
                   </div>
                   {paginatedData.map((member) => (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["checkbox-cell"]}`}>
+                    <div key={empRowId(member)} className={`${styles["table-cell"]} ${styles["checkbox-cell"]}`}>
                       <label className={styles["checkbox-label"]}>
                         <input
                           type="checkbox"
                           className={styles["hidden-checkbox"]}
-                          checked={selectedEmployeeIds.includes(member._id || member.id)}
-                          onChange={() => handleSelectEmployee(member._id || member.id)}
+                          checked={isRowSelected(selectedEmployeeIds, member)}
+                          onChange={() => handleSelectEmployee(member)}
                         />
                         <span className={styles["custom-checkbox"]}></span>
                       </label>
@@ -634,13 +773,21 @@ function TeamMembersTable() {
                       </div>
                     </div>
                   </div>
-                  {paginatedData.map((member) => (
+                  {paginatedData.map((member) => {
+                    const emailDisplay = displayEmployeeEmail(member.emailId);
+                    return (
                     <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["assigned-cell"]}`}>
                       <div className={styles["assigned-info"]}>
-                        <div className={styles["assigned-name"]}>{member.emailId || 'No Email'}</div>
+                        <div
+                          className={`${styles["assigned-name"]} ${emailDisplay.isEmpty ? styles["email-empty"] : ""}`}
+                          title={emailDisplay.isEmpty ? "" : emailDisplay.text}
+                        >
+                          {emailDisplay.text}
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 
                 {/* Phone Number Column */}
@@ -684,13 +831,24 @@ function TeamMembersTable() {
                   })}
                 </div>
                 
-                {/* Edit Actions Column */}
-                <div className={`${styles["table-column"]} ${styles["edit-actions-column"]}`}>
+                {/* Actions Column */}
+                <div className={`${styles["table-column"]} ${styles["actions-column"]}`}>
                   <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}></div>
+                    <div className={styles["table-header-cell"]}>
+                      <div className={styles["header-content-center"]}>
+                        <span className={styles["header-text"]}>Actions</span>
+                      </div>
+                    </div>
                   </div>
                   {paginatedData.map((member) => (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["edit-actions-cell"]}`}>
+                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["actions-cell"]}`}>
+                      <Link
+                        to={`/teammanagement_salesleads/${member._id || member.id}`}
+                        className={`${styles["action-button"]} ${styles["view-button"]}`}
+                        aria-label="View team member"
+                      >
+                        <ViewIcon />
+                      </Link>
                       <button
                         className={`${styles["action-button"]} ${styles["edit-button"]}`}
                         onClick={() => handleEdit(member)}
@@ -698,24 +856,15 @@ function TeamMembersTable() {
                       >
                         <EditIcon />
                       </button>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Delete Actions Column */}
-                <div className={`${styles["table-column"]} ${styles["delete-actions-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}></div>
-                  </div>
-                  {paginatedData.map((member) => (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["delete-actions-cell"]}`}>
-                      <button
-                        className={`${styles["action-button"]} ${styles["delete-button"]}`}
-                        onClick={() => handleDelete(member)}
-                        aria-label="Delete team member"
-                      >
-                        <DeleteIcon />
-                      </button>
+                      {isAdmin && (
+                        <button
+                          className={`${styles["action-button"]} ${styles["delete-button"]}`}
+                          onClick={() => handleDelete(member)}
+                          aria-label="Delete team member"
+                        >
+                          <DeleteIcon />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -726,11 +875,11 @@ function TeamMembersTable() {
       )}
       
       {/* Pagination - ALWAYS RENDERED (like in ClientsTable) */}
-      <div className={styles["pagination-section"]} aria-hidden={filteredData.length === 0}>
+      <div className={styles["pagination-section"]} aria-hidden={filteredData.length === 0 || isInitialLoading}>
         <button
           className={styles["pagination-button"]}
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-          disabled={currentPageSafe === 1 || filteredData.length === 0}
+          disabled={currentPageSafe === 1 || filteredData.length === 0 || isInitialLoading}
           aria-label="Previous page"
         >
           <span>Previous</span>
@@ -743,7 +892,7 @@ function TeamMembersTable() {
         <button
           className={styles["pagination-button"]}
           onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-          disabled={currentPageSafe === totalPages || filteredData.length === 0}
+          disabled={currentPageSafe === totalPages || filteredData.length === 0 || isInitialLoading}
           aria-label="Next page"
         >
           <span>Next</span>
@@ -764,6 +913,12 @@ function TeamMembersTable() {
         isOpen={isAddEmployeeModalOpen}
         onClose={handleAddEmployeeClose}
         onSubmit={handleAddEmployeeSubmit}
+      />
+
+      <EmployeeBulkImportModal
+        isOpen={isBulkImportModalOpen}
+        onClose={handleBulkImportClose}
+        onSuccess={handleBulkImportSuccess}
       />
 
       <EditEmployeeModal

@@ -13,6 +13,7 @@ function InputField({
   hasError = false,
   disabled = false,
   name,
+  inputMode,
 }) {
   return (
     <div className="input-field">
@@ -59,6 +60,7 @@ function InputField({
             onChange={onChange}
             disabled={disabled}
             name={name}
+            inputMode={inputMode}
           />
         )}
       </div>

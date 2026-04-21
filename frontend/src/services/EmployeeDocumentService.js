@@ -1,7 +1,7 @@
 import config from "../config/config";
 
-// API_BASE_URL already includes /api; append /documents
-const baseUrl = `${config.API_BASE_URL}/api/employeedocuments`;
+const apiRoot = (config.API_BASE_URL || "").replace(/\/$/, "");
+const baseUrl = `${apiRoot}/employeedocuments`;
 
 const listByEmployee = async (employeeId) => {
   const response = await fetch(`${baseUrl}/${employeeId}`);

@@ -73,7 +73,9 @@ function Dashboard() {
         {/* Desktop Header */}
         <header className={styles["desktop-header"]}>
           <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Dashboard</div>
+            <div className={styles["dashboard-title"]}>
+              {userRole === 'admin' ? 'Admin Dashboard' : userRole === 'hr' ? 'HR Dashboard' : 'Dashboard'}
+            </div>
 
             <div className={styles["dashboard-profile"]}>
               <NotificationBell />

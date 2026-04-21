@@ -35,9 +35,8 @@ function TeamManagementSalesLeads() {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("basicInfo");
   const basicInfoRef = useRef(null);
-  const meetingsRef = useRef(null);
+  const salaryRef = useRef(null);
   const documentsRef = useRef(null);
-  const remarksRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
   const [remarks, setRemarks] = useState([]);
   const [remarksLoading, setRemarksLoading] = useState(false);
@@ -179,14 +178,11 @@ function TeamManagementSalesLeads() {
         case "basicInfo":
           activeElement = basicInfoRef.current;
           break;
-        case "meetings":
-          activeElement = meetingsRef.current;
-          break;
         case "documents":
           activeElement = documentsRef.current;
           break;
-        case "remarks":
-          activeElement = remarksRef.current;
+        case "salary":
+          activeElement = salaryRef.current;
           break;
         default:
           activeElement = basicInfoRef.current;
@@ -370,23 +366,24 @@ function TeamManagementSalesLeads() {
 
   // Render different buttons based on active tab
   const renderButtons = () => {
+    const isAdmin = userRole === "admin" || userRole === "hod";
+    const canEdit = isAdmin || userRole === "hr";
+
     switch (activeTab) {
       case "basicInfo":
         return (
           <div className={styles.row_view5}>
-            {/* <button className={`${styles.button_row_view} ${styles.editbutton}`} onClick={() => alert("Edit Data Pressed!")}>
-              <span className={`${styles.text3} ${styles.editbuttontext}`}>Edit Data</span>
-              <img src={pencillineblue} className={styles.image3} alt="edit"/>
-            </button> */}
-            <button
-              className={`${styles.button_row_view} ${styles.editbutton}`}
-              onClick={() => setIsEditEmployeeModalOpen(true)}
-            >
-              <span className={`${styles.text3} ${styles.editbuttontext}`}>
-                Edit Data
-              </span>
-              <img src={pencillineblue} className={styles.image3} alt="edit" />
-            </button>
+            {canEdit && (
+              <button
+                className={`${styles.button_row_view} ${styles.editbutton}`}
+                onClick={() => setIsEditEmployeeModalOpen(true)}
+              >
+                <span className={`${styles.text3} ${styles.editbuttontext}`}>
+                  Edit Data
+                </span>
+                <img src={pencillineblue} className={styles.image3} alt="edit" />
+              </button>
+            )}
             <button
               ref={exportButtonRef}
               className={styles.button_row_view2}
@@ -395,22 +392,20 @@ function TeamManagementSalesLeads() {
               <span className={styles.text4}>Export</span>
               <img src={upload} className={styles.image3} alt="export" />
             </button>
-            <button
-              className={styles.button_row_view3}
-              onClick={handleDeleteEntry}
-            >
-              <span className={styles.text5}>Delete Entry</span>
-              <img src={deletewhite} className={styles.image3} alt="delete" />
-            </button>
+            {isAdmin && (
+              <button
+                className={styles.button_row_view3}
+                onClick={handleDeleteEntry}
+              >
+                <span className={styles.text5}>Delete Entry</span>
+                <img src={deletewhite} className={styles.image3} alt="delete" />
+              </button>
+            )}
           </div>
         );
-      case "meetings":
+      case "salary":
         return (
           <div className={styles.row_view5}>
-            <button className={styles.button_row_view} onClick={handleNewEvent}>
-              <span className={styles.text3}>Assign Task</span>
-              <img src={plus} className={styles.image3} alt="" />
-            </button>
             <button
               ref={exportButtonRef}
               className={styles.button_row_view2}
@@ -438,13 +433,6 @@ function TeamManagementSalesLeads() {
             >
               <span className={styles.text4}>Export</span>
               <img src={upload} className={styles.image3} alt="export" />
-            </button>
-            <button
-              className={styles.button_row_view3}
-              onClick={handleDeleteData}
-            >
-              <span className={styles.text5}>Delete Data</span>
-              <img src={deletewhite} className={styles.image3} alt="delete" />
             </button>
           </div>
         );
@@ -626,15 +614,6 @@ function TeamManagementSalesLeads() {
                   >
                     {"Basic Info"}
                   </span>
-                  <span
-                    ref={meetingsRef}
-                    className={`${styles.text7} ${
-                      activeTab === "meetings" ? styles.active : ""
-                    }`}
-                    onClick={() => setActiveTab("meetings")}
-                  >
-                    {"Meetings"}
-                  </span>
                   <div
                     ref={documentsRef}
                     className={`${styles.view2} ${
@@ -644,17 +623,15 @@ function TeamManagementSalesLeads() {
                   >
                     <span className={styles.text8}>{"Documents"}</span>
                   </div>
-                  {canAccessRemarks && (
-                    <div
-                      ref={remarksRef}
-                      className={`${styles.view2} ${
-                        activeTab === "remarks" ? styles.active : ""
-                      }`}
-                      onClick={() => setActiveTab("remarks")}
-                    >
-                      <span className={styles.text8}>{"Remarks"}</span>
-                    </div>
-                  )}
+                  <div
+                    ref={salaryRef}
+                    className={`${styles.view2} ${
+                      activeTab === "salary" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("salary")}
+                  >
+                    <span className={styles.text8}>{"Salary Details"}</span>
+                  </div>
                   <div
                     className={styles.box}
                     style={{
@@ -689,119 +666,45 @@ function TeamManagementSalesLeads() {
                     <>
                       {/* first row */}
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Employee ID</span>
-                          <span className={styles.text10}>
-                            {employee.employeeId || "Not provided"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Employee Name</span>
-                          <span className={styles.text10}>
-                            {employee.employeeName || "Not provided"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Email ID</span>
-                          <span className={styles.text10}>
-                            {employee.emailId || "Not provided"}
-                          </span>
-                        </div>
-                        <div className={styles.column5}>
-                          <span className={styles.text9}>Mobile Number</span>
-                          <span className={styles.text10}>
-                            {employee.mobile || "Not provided"}
-                          </span>
-                        </div>
+                        <div className={styles.column4}><span className={styles.text9}>Employee ID</span><span className={styles.text10}>{employee.employeeId || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Employee Name</span><span className={styles.text10}>{employee.employeeName || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Email ID</span><span className={styles.text10}>{employee.emailId || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Mobile Number</span><span className={styles.text10}>{employee.mobile || "Not provided"}</span></div>
                       </div>
-                      {/* second row */}
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Role</span>
-                          <span className={styles.text10}>
-                            {employee.role || "Not provided"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Designation</span>
-                          <span className={styles.text10}>
-                            {employee.designation || "Not provided"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Department</span>
-                          <span className={styles.text10}>
-                            {employee.department || "Not provided"}
-                          </span>
-                        </div>
-                        <div className={styles.column5}>
-                          <span className={styles.text9}>
-                            Attendance Status
-                          </span>
-                          <span className={styles.text10}>
-                            {employee.attendance || "Not provided"}
-                          </span>
-                        </div>
+                        <div className={styles.column4}><span className={styles.text9}>Role</span><span className={styles.text10}>{employee.role || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Designation</span><span className={styles.text10}>{employee.designation || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Department</span><span className={styles.text10}>{employee.department || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Attendance Status</span><span className={styles.text10}>{employee.attendance || "Not provided"}</span></div>
                       </div>
-                      {/* third row - Projects */}
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>
-                            Assigned Projects
-                          </span>
-                          <span className={styles.text10}>
-                            {employee.assignedProjects &&
-                            Array.isArray(employee.assignedProjects)
-                              ? employee.assignedProjects.join(", ")
-                              : employee.assignedProjects ||
-                                "No projects assigned"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Profile Created</span>
-                          <span className={styles.text10}>
-                            {employee.createdAt
-                              ? new Date(
-                                  employee.createdAt
-                                ).toLocaleDateString()
-                              : "Not available"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Last Updated</span>
-                          <span className={styles.text10}>
-                            {employee.updatedAt
-                              ? new Date(
-                                  employee.updatedAt
-                                ).toLocaleDateString()
-                              : "Not available"}
-                          </span>
-                        </div>
-                        <div className={styles.column5}>
-                          <span className={styles.text9}>Status</span>
-                          <span className={styles.text10}>Active</span>
-                        </div>
+                        <div className={styles.column4}><span className={styles.text9}>Assigned Projects</span><span className={styles.text10}>{employee.assignedProjects && Array.isArray(employee.assignedProjects) ? employee.assignedProjects.map(p => p.clientName || p.companyName || p).join(", ") : employee.assignedProjects || "No projects assigned"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Date of Birth</span><span className={styles.text10}>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Gender</span><span className={styles.text10}>{employee.gender || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Nationality</span><span className={styles.text10}>{employee.nationality || "Not provided"}</span></div>
                       </div>
-                      {/* fourth row - Insurance & Air Fare */}
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Life Insurance</span>
-                          <span className={styles.text10}>
-                            {employee.lifeInsurance ? "Yes" : "No"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Medical Insurance</span>
-                          <span className={styles.text10}>
-                            {employee.medicalInsurance ? "Yes" : "No"}
-                          </span>
-                        </div>
-                        <div className={styles.column4}>
-                          <span className={styles.text9}>Air Fare</span>
-                          <span className={styles.text10}>
-                            {employee.airFare ? "Yes" : "No"}
-                          </span>
-                        </div>
+                        <div className={styles.column4}><span className={styles.text9}>Date of Join (DOJ)</span><span className={styles.text10}>{employee.doj ? new Date(employee.doj).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Total Exp (Yrs)</span><span className={styles.text10}>{employee.totalYearsExperience !== undefined && employee.totalYearsExperience !== null ? employee.totalYearsExperience : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Emirates ID</span><span className={styles.text10}>{employee.emiratesId || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Passport No</span><span className={styles.text10}>{employee.passportNo || "Not provided"}</span></div>
+                      </div>
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}><span className={styles.text9}>Passport Expiry</span><span className={styles.text10}>{employee.passportExpiryDate ? new Date(employee.passportExpiryDate).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Labour Card Expiry</span><span className={styles.text10}>{employee.labourCardExpiryDate ? new Date(employee.labourCardExpiryDate).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Visa Expiry</span><span className={styles.text10}>{employee.visaExpiryDate ? new Date(employee.visaExpiryDate).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Office</span><span className={styles.text10}>{employee.office || "Not provided"}</span></div>
+                      </div>
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}><span className={styles.text9}>Work Permit No</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Reporting Manager</span><span className={styles.text10}>{employee.reportingManager || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Status</span><span className={styles.text10}>{employee.employeeStatus || "Active"}</span></div>
+                        <div className={styles.column5}></div>
+                      </div>
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}><span className={styles.text9}>Life Insurance</span><span className={styles.text10}>{employee.lifeInsurance ? "Yes" : "No"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Medical Insurance</span><span className={styles.text10}>{employee.medicalInsurance ? "Yes" : "No"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Air Fare</span><span className={styles.text10}>{employee.airFare ? "Yes" : "No"}</span></div>
                         <div className={styles.column5}></div>
                       </div>
                     </>
@@ -813,68 +716,34 @@ function TeamManagementSalesLeads() {
                 </>
               )}
 
-              {activeTab === "meetings" && (
-                <div className={styles.meetingsContent}>
-                  <Meetingstable key={calendarKey} employeeId={employeeId}/>
+              {activeTab === "salary" && (
+                <div style={{ padding: "16px 36px" }}>
+                  <div className={styles.row_view6}>
+                    <div className={styles.column4}><span className={styles.text9}>BASIC</span><span className={styles.text10}>{employee?.salaryDetails?.basicSalary ? `AED ${employee.salaryDetails.basicSalary}` : "0"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>HOUSE RENT</span><span className={styles.text10}>{employee?.salaryDetails?.houseRent ? `AED ${employee.salaryDetails.houseRent}` : "0"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>TRAVEL EXP</span><span className={styles.text10}>{employee?.salaryDetails?.travelExp ? `AED ${employee.salaryDetails.travelExp}` : "0"}</span></div>
+                    <div className={styles.column5}><span className={styles.text9}>OTHER</span><span className={styles.text10}>{employee?.salaryDetails?.other ? `AED ${employee.salaryDetails.other}` : "0"}</span></div>
+                  </div>
+                  <div className={styles.row_view6}>
+                    <div className={styles.column4}><span className={styles.text9}>Total Allowance</span><span className={styles.text10}>{employee?.salaryDetails?.totalAllowance ? `AED ${employee.salaryDetails.totalAllowance}` : "0"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>DEDUCTION</span><span className={styles.text10}>{employee?.salaryDetails?.deduction ? `AED ${employee.salaryDetails.deduction}` : "0"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>Net Salary</span><span className={styles.text10}>{employee?.salaryDetails?.totalSalary ? `AED ${employee.salaryDetails.totalSalary}` : "0"}</span></div>
+                    <div className={styles.column5}></div>
+                  </div>
+                  <div className={styles.row_view6}>
+                    <div className={styles.column4}><span className={styles.text9}>Bank Name</span><span className={styles.text10}>{employee?.salaryDetails?.bankName || "Not provided"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>Account Number</span><span className={styles.text10}>{employee?.salaryDetails?.accountNumber || "Not provided"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>IFSC Code</span><span className={styles.text10}>{employee?.salaryDetails?.ifscCode || "Not provided"}</span></div>
+                    <div className={styles.column5}></div>
+                  </div>
                 </div>
               )}
 
               {activeTab === "documents" && (
                 <div>
-                  {/* <p>Documents content will be displayed here</p> */}
-                  {/* Add your documents content here when ready */}
                   <section className="documents-table-section">
                     <Documents employeeId={employeeId} refreshKey={documentsKey}  />
                   </section>
-                </div>
-              )}
-
-              {activeTab === "remarks" && canAccessRemarks && (
-                <div className={styles.remarksSection}>
-                  <form onSubmit={handleAddRemark} className={styles.remarksForm}>
-                    <textarea
-                      className={styles.remarksTextarea}
-                      value={remarkText}
-                      onChange={(e) => {
-                        setRemarkText(e.target.value);
-                        setRemarkError("");
-                      }}
-                      placeholder="Add a remark..."
-                      rows={3}
-                      maxLength={2000}
-                      disabled={addingRemark}
-                    />
-                    <button
-                      type="submit"
-                      className={styles.remarksSubmitBtn}
-                      disabled={addingRemark || !(remarkText || "").trim()}
-                    >
-                      {addingRemark ? "Adding..." : "Add Remark"}
-                    </button>
-                  </form>
-                  {remarkError && (
-                    <div className={styles.remarksError}>{remarkError}</div>
-                  )}
-                  <div className={styles.remarksListLabel}>Remarks history (latest first)</div>
-                  <div className={styles.remarksList}>
-                    {remarksLoading ? (
-                      <p className={styles.remarksLoading}>Loading remarks...</p>
-                    ) : remarks.length === 0 ? (
-                      <p className={styles.remarksEmpty}>No remarks yet.</p>
-                    ) : (
-                      remarks.map((r, index) => (
-                        <div
-                          key={r._id}
-                          className={`${styles.remarkCard} ${index === 0 ? styles.remarkCardLatest : ""}`}
-                        >
-                          <div className={styles.remarkText}>{r.text}</div>
-                          <div className={styles.remarkMeta}>
-                            {r.createdBy?.username || "Unknown"} · {r.createdBy?.role ? `${r.createdBy.role}` : ""} · {r.createdAt ? new Date(r.createdAt).toLocaleString() : ""}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
                 </div>
               )}
             </div>

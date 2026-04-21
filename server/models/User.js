@@ -20,7 +20,8 @@ const userSchema = new mongoose.Schema({
       "operations_executive",
       "admin",
       "sales_executive",
-      "hod"
+      "hod",
+      "hr"
     ],
     default: "sales_executive",
     required: true

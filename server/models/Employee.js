@@ -33,8 +33,9 @@ const employeeSchema = new mongoose.Schema({
     default: "Onsite"
   },
 
-  mobile: { type: String, required: true },
-  emailId: { type: String, required: true, unique: true },
+  mobile: { type: String, default: "" },
+  /** Optional; sparse unique allows many employees with no email (field omitted or null). */
+  emailId: { type: String },
 
   profilePhoto: { type: String, default: "" }, // URL or path to photo
 
@@ -46,10 +47,29 @@ const employeeSchema = new mongoose.Schema({
     required: true
   },
 
+  salaryDetails: {
+    basicSalary: { type: Number, default: 0 },
+    houseRent: { type: Number, default: 0 },
+    travelExp: { type: Number, default: 0 },
+    other: { type: Number, default: 0 },
+    totalAllowance: { type: Number, default: 0 },
+    deduction: { type: Number, default: 0 },
+    totalSalary: { type: Number, default: 0 },
+    bankName: { type: String, default: "" },
+    accountNumber: { type: String, default: "" },
+    ifscCode: { type: String, default: "" }
+  },
+
+  lifeInsurance: { type: Boolean, default: false },
+  medicalInsurance: { type: Boolean, default: false },
+  airFare: { type: Boolean, default: false },
+
   assignedProjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Client" }], // multiple projects can be assigned
 
   events: [assignEventSchema]
 
 }, { timestamps: true });
+
+employeeSchema.index({ emailId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("Employee", employeeSchema);
