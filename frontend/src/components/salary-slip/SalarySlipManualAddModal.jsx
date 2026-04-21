@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import styles from './SalarySlipManualAddModal.module.css';
 import { FaTimes, FaSave, FaSpinner } from 'react-icons/fa';
 import salarySlipService from '../../services/SalarySlipService';
+import employeeService from '../../services/EmployeeService';
 import { useToast } from '../../context/ToastContext';
+import Dropdown from '../DropDown';
 
 function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
     const { showToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [employees, setEmployees] = useState([]);
+    const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
     const [formData, setFormData] = useState({
+        selectedEmployeeId: '',
         employeeName: '',
         email: '',
         designation: '',
@@ -30,6 +35,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
     useEffect(() => {
         if (isOpen) {
             setFormData({
+                selectedEmployeeId: '',
                 employeeName: '',
                 email: '',
                 designation: '',
@@ -44,8 +50,56 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
                 month: month,
                 year: year
             });
+
+            // Fetch employees for the dropdown
+            const fetchEmployees = async () => {
+                setIsLoadingEmployees(true);
+                try {
+                    const data = await employeeService.getEmployees();
+                    // Filter active employees or as per business logic
+                    setEmployees(data || []);
+                } catch (error) {
+                    console.error("Error fetching employees:", error);
+                } finally {
+                    setIsLoadingEmployees(false);
+                }
+            };
+            fetchEmployees();
         }
     }, [isOpen, month, year]);
+
+    const handleEmployeeSelect = (e) => {
+        const employeeId = e.target.value;
+        const emp = employees.find(emp => emp._id === employeeId);
+        if (emp) {
+            // Priority: Use the detailed fields if they exist in salaryDetails
+            // Otherwise, fallback to the old calculation logic
+            const basic = emp.salaryDetails?.basicSalary || 0;
+            const houseRent = emp.salaryDetails?.houseRent !== undefined ? emp.salaryDetails.houseRent : (basic / 2);
+            const travelExp = emp.salaryDetails?.travelExp || 0;
+            const other = emp.salaryDetails?.other !== undefined ? emp.salaryDetails.other : Math.max(0, (emp.salaryDetails?.allowance || 0) - houseRent);
+            const deduction = emp.salaryDetails?.deduction || 0;
+            
+            const grossSalary = basic + houseRent + travelExp + other;
+            const netSalary = grossSalary - deduction;
+
+            setFormData(prev => ({
+                ...prev,
+                selectedEmployeeId: employeeId,
+                employeeName: emp.employeeName,
+                email: emp.emailId || '',
+                designation: emp.designation || emp.role || '',
+                dateOfJoining: emp.doj ? new Date(emp.doj).toISOString().split('T')[0] : '',
+                basic: basic.toString(),
+                houseRent: houseRent.toString(),
+                travelExp: travelExp.toString(),
+                other: other.toString(),
+                deduction: deduction.toString(),
+                grossSalary: grossSalary.toFixed(2),
+                netSalary: netSalary.toFixed(2)
+            }));
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -114,8 +168,18 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
                         <h3 className={styles.sectionTitle}>Employee Information</h3>
                         <div className={styles.grid}>
                             <div className={styles.inputGroup}>
-                                <label>Employee Name *</label>
-                                <input type="text" name="employeeName" value={formData.employeeName} onChange={handleChange} required placeholder="Full Name" />
+                                <Dropdown 
+                                    label="Employee Name *" 
+                                    placeholder={isLoadingEmployees ? "Loading employees..." : "Search Name or ID..."}
+                                    value={formData.selectedEmployeeId}
+                                    options={employees.map(emp => ({
+                                        label: `${emp.employeeName} (${emp.employeeId || 'No ID'})`,
+                                        value: emp._id
+                                    }))}
+                                    onChange={handleEmployeeSelect}
+                                    required
+                                    disabled={isLoadingEmployees}
+                                />
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Employee Email *</label>
@@ -131,11 +195,11 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Month</label>
-                                <input type="text" value={formData.month} readOnly className={styles.readOnlyInput} />
+                                <input type="text" name="month" value={formData.month} onChange={handleChange} placeholder="e.g. January" />
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Year</label>
-                                <input type="text" value={formData.year} readOnly className={styles.readOnlyInput} />
+                                <input type="text" name="year" value={formData.year} onChange={handleChange} placeholder="e.g. 2024" />
                             </div>
                         </div>
                     </div>

@@ -5,6 +5,7 @@ import leaveRequestService from "../../services/LeaveRequestService";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddLeaveRequestModal from "./AddLeaveRequestModal";
 import EditLeaveRequestModal from "./EditLeaveRequestModal";
+import LeaveApplicationFormModal from "./LeaveApplicationFormModal";
 import { useToast } from "../../context/ToastContext";
 
 const EditIcon = () => (
@@ -23,6 +24,10 @@ const XIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 );
 
+const ViewIcon = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+);
+
 function LeaveRequestTable({ onUpdate }) {
     const { showToast } = useToast();
     const [leaveRequests, setLeaveRequests] = useState([]);
@@ -31,14 +36,16 @@ function LeaveRequestTable({ onUpdate }) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [userRole, setUserRole] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    const isHOD = userRole === "hod";
-    const isAdminRole = userRole === "admin";
-    const isAdminOrHOD = isAdminRole || isHOD;
+    const isHOD = String(userRole || "").toLowerCase() === "hod";
+    const isAdminRole = String(userRole || "").toLowerCase() === "admin";
+    const isHR = String(userRole || "").toLowerCase() === "hr";
+    const canManageLeaves = isAdminRole || isHOD || isHR;
 
     const fetchLeaveRequests = async () => {
         setIsLoading(true);
@@ -69,6 +76,11 @@ function LeaveRequestTable({ onUpdate }) {
         setIsDeleteModalOpen(true);
     };
 
+    const handleViewForm = (request) => {
+        setSelectedRequest(request);
+        setIsFormModalOpen(true);
+    };
+
     const handleDeleteConfirm = async () => {
         try {
             await leaveRequestService.deleteLeaveRequest(selectedRequest._id);
@@ -84,11 +96,7 @@ function LeaveRequestTable({ onUpdate }) {
         try {
             // The backend will handle the proper status transition based on user role
             await leaveRequestService.approveLeaveRequest(request._id, "Approved");
-            if (isHOD) {
-                showToast("Leave request approved by HOD. Waiting for Admin approval.", "success");
-            } else {
-                showToast("Leave request approved successfully.", "success");
-            }
+            showToast("Leave request approved successfully.", "success");
             fetchLeaveRequests();
         } catch (error) {
             console.error("Error approving leave request:", error);
@@ -112,14 +120,14 @@ function LeaveRequestTable({ onUpdate }) {
     const filteredRequests = leaveRequests.filter(req => {
         if (activeFilter === "All") return true;
         if (activeFilter === "History") return req.status === "Approved" || req.status === "Rejected";
-        if (activeFilter === "HOD Approved") return req.status === "HOD Approved";
         return req.status === activeFilter;
     });
 
     // Determine which requests can be approved based on role
     const canApprove = (request) => {
-        if (isHOD && request.status === "Pending") return true;
-        if (isAdminRole && request.status === "HOD Approved") return true;
+        // Only Admin can approve (Pending or HOD Approved). 
+        // HR can create/edit but NOT approve.
+        if (isAdminRole && (request.status === "Pending" || request.status === "HOD Approved")) return true;
         return false;
     };
 
@@ -207,7 +215,13 @@ function LeaveRequestTable({ onUpdate }) {
             <div className={styles.header}>
                 <h2 className={styles.title}>Leave Management</h2>
                 <div className={styles.actions}>
-                    {!isAdminOrHOD && (
+                    {isHR && (
+                        <button className={styles.addButton} onClick={() => setIsAddModalOpen(true)}>
+                            <span>Request Leave</span>
+                            <img src={plus} alt="" />
+                        </button>
+                    )}
+                    {!canManageLeaves && (
                         <button className={styles.addButton} onClick={() => setIsAddModalOpen(true)}>
                             <span>Request Leave</span>
                             <img src={plus} alt="" />
@@ -219,17 +233,15 @@ function LeaveRequestTable({ onUpdate }) {
             <div className={styles.controls}>
                 <div className={styles.segmentedControl}>
                     {(isAdminRole
-                        ? ["All", "HOD Approved", "Approved", "Rejected", "History"]
-                        : isHOD
-                            ? ["All", "Pending", "HOD Approved", "Approved", "Rejected", "History"]
-                            : ["All", "Pending", "HOD Approved", "Approved", "Rejected", "History"]
+                        ? ["All", "Pending", "Approved", "Rejected", "History"]
+                        : ["All", "Pending", "Approved", "Rejected", "History"]
                     ).map(filter => (
                         <button
                             key={filter}
                             className={`${styles.filterButton} ${activeFilter === filter ? styles.active : ""}`}
                             onClick={() => setActiveFilter(filter)}
                         >
-                            {filter === "HOD Approved" ? "HOD Approved" : filter}
+                            {filter}
                         </button>
                     ))}
                 </div>
@@ -305,42 +317,71 @@ function LeaveRequestTable({ onUpdate }) {
                                 <td>{new Date(req.appliedOn).toLocaleDateString()}</td>
                                 <td>
                                     <div className={styles.rowActions}>
-                                        {isAdminOrHOD ? (
-                                            // HOD/Admin view: Show Approve/Reject buttons based on status
-                                            canApprove(req) ? (
-                                                <>
+                                        {canManageLeaves ? (
+                                            // Management view (Admin/HOD/HR)
+                                            <>
+                                                {/* Admin, HR and HOD can View. Only HR and HOD can Edit/Delete. Admin only Approves/Rejects */}
+                                                {(isAdminRole || isHR || isHOD) && (
                                                     <button
-                                                        className={`${styles.iconButton} ${styles.approveButton}`}
-                                                        onClick={() => handleApprove(req)}
-                                                        title={isHOD ? "Approve (Send to Admin)" : "Final Approve"}
+                                                        className={styles.iconButton}
+                                                        onClick={() => handleViewForm(req)}
+                                                        title="View Leave Application Form"
                                                     >
-                                                        <CheckIcon />
+                                                        <ViewIcon />
                                                     </button>
-                                                    <button
-                                                        className={`${styles.iconButton} ${styles.rejectButton}`}
-                                                        onClick={() => handleReject(req)}
-                                                        title="Reject"
-                                                    >
-                                                        <XIcon />
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <span className={styles.noAction}>—</span>
-                                            )
+                                                )}
+
+                                                {(isHR || isHOD) && (
+                                                    <>
+                                                        <button className={styles.iconButton} onClick={() => handleEdit(req)} title="Edit">
+                                                            <EditIcon />
+                                                        </button>
+                                                        <button className={styles.iconButton} onClick={() => handleDelete(req)} title="Delete">
+                                                            <DeleteIcon />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                
+                                                {canApprove(req) ? (
+                                                    <div style={{ display: "flex", gap: "8px" }}>
+                                                        <button
+                                                            className={`${styles.iconButton} ${styles.approveButton}`}
+                                                            onClick={() => handleApprove(req)}
+                                                            title={isHOD ? "Approve (Send to Admin)" : "Final Approve"}
+                                                        >
+                                                            <CheckIcon />
+                                                        </button>
+                                                        <button
+                                                            className={`${styles.iconButton} ${styles.rejectButton}`}
+                                                            onClick={() => handleReject(req)}
+                                                            title="Reject"
+                                                        >
+                                                            <XIcon />
+                                                        </button>
+                                                    </div>
+                                                ) : (isAdminRole ? <span className={styles.noAction}>—</span> : null)}
+                                            </>
                                         ) : (
-                                            // Employee view: Show Edit/Delete buttons only for Pending requests
-                                            req.status === "Pending" ? (
-                                                <>
-                                                    <button className={styles.iconButton} onClick={() => handleEdit(req)}>
-                                                        <EditIcon />
-                                                    </button>
-                                                    <button className={styles.iconButton} onClick={() => handleDelete(req)}>
-                                                        <DeleteIcon />
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <span className={styles.noAction}>—</span>
-                                            )
+                                            // Employee view
+                                            <>
+                                                <button
+                                                    className={styles.iconButton}
+                                                    onClick={() => handleViewForm(req)}
+                                                    title="View Leave Application Form"
+                                                >
+                                                    <ViewIcon />
+                                                </button>
+                                                {req.status === "Pending" && (
+                                                    <>
+                                                        <button className={styles.iconButton} onClick={() => handleEdit(req)}>
+                                                            <EditIcon />
+                                                        </button>
+                                                        <button className={styles.iconButton} onClick={() => handleDelete(req)}>
+                                                            <DeleteIcon />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </td>
@@ -394,6 +435,7 @@ function LeaveRequestTable({ onUpdate }) {
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
                 onSubmit={fetchLeaveRequests}
+                allLeaveRequests={leaveRequests}
             />
 
             <EditLeaveRequestModal
@@ -401,6 +443,7 @@ function LeaveRequestTable({ onUpdate }) {
                 onClose={() => setIsEditModalOpen(false)}
                 leaveRequest={selectedRequest}
                 onSubmit={fetchLeaveRequests}
+                allLeaveRequests={leaveRequests}
             />
 
             <DeleteModal
@@ -409,6 +452,13 @@ function LeaveRequestTable({ onUpdate }) {
                 onConfirm={handleDeleteConfirm}
                 title="Delete Leave Management"
                 description="Are you sure you want to delete this leave record? This action cannot be undone."
+            />
+
+            <LeaveApplicationFormModal
+                isOpen={isFormModalOpen}
+                onClose={() => setIsFormModalOpen(false)}
+                leaveRequest={selectedRequest}
+                allLeaveRequests={leaveRequests}
             />
         </div>
     );

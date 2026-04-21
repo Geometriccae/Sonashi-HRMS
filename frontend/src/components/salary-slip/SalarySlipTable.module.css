@@ -1112,3 +1112,34 @@
         flex: 1;
     }
 }
+
+.searchContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 200px;
+}
+
+.searchInput {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    border: 1px solid #e4e4e4;
+    border-radius: 6px;
+    font-size: 14px;
+    background: #fff;
+    color: #1a1a1a;
+    transition: all 0.2s;
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: #007aff;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.searchIcon {
+    position: absolute;
+    left: 12px;
+    color: #999;
+    pointer-events: none;
+}

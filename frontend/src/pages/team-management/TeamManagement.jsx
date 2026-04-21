@@ -22,7 +22,9 @@ function TeamManagement() {
   const [stats, setStats] = useState({
     attendancePercentage: 0,
     totalAssignedProjects: 0,
-    totalEmployees: 0
+    totalEmployees: 0,
+    activeEmployees: 0,
+    inactiveEmployees: 0
   });
 
   useEffect(() => {
@@ -37,9 +39,18 @@ function TeamManagement() {
       
       // 1. Total Employees
       const totalEmployees = employees.length;
+      
+      let activeCount = 0;
+      let inactiveCount = 0;
+      employees.forEach(emp => {
+          if (emp.employeeStatus && String(emp.employeeStatus).toLowerCase() === "active") {
+            activeCount++;
+          } else {
+            inactiveCount++;
+          }
+      });
 
       // 2. Today's Attendance (Percentage of 'Onsite' employees)
-      // We fetch today's attendance records to be accurate
       const todayStr = new Date().toISOString().slice(0, 10);
       let presentCount = 0;
       try {
@@ -49,7 +60,6 @@ function TeamManagement() {
         }
       } catch (err) {
         console.warn("Failed to fetch today's attendance for stats:", err);
-        // Fallback to employee profile status if report fails
         presentCount = employees.filter(emp => emp.attendance === 'Onsite').length;
       }
 
@@ -57,12 +67,11 @@ function TeamManagement() {
         ? Math.round((presentCount / totalEmployees) * 100) 
         : 0;
 
-      // 3. Total Assigned Projects (Unique projects assigned across all employees)
+      // 3. Total Assigned Projects
       const uniqueProjects = new Set();
       employees.forEach(emp => {
         if (Array.isArray(emp.assignedProjects)) {
           emp.assignedProjects.forEach(proj => {
-            // Handle both populated objects and IDs
             const projectId = (typeof proj === 'object' && proj !== null) ? proj._id : proj;
             if (projectId) uniqueProjects.add(projectId.toString());
           });
@@ -73,7 +82,9 @@ function TeamManagement() {
       setStats({
         attendancePercentage,
         totalAssignedProjects,
-        totalEmployees
+        totalEmployees,
+        activeEmployees: activeCount,
+        inactiveEmployees: inactiveCount
       });
 
     } catch (error) {
@@ -120,138 +131,15 @@ function TeamManagement() {
 
         {/* Stats Cards Section */}
         <section className={styles["stats-container"]}>
-          {/* Today's Attendance Card */}
-          <div className={styles["attendance-card"]}>
-            <div className={styles["card-header"]}>
-              <div className={styles["card-title-section"]}>
-                <div className={styles["card-title"]}>Today's Attendance</div>
-                <div className={styles["card-main-stat"]}>
-                  <div className={styles["percentage"]}>{stats.attendancePercentage}%</div>
-                  <div className={styles["growth-chip"]}>
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 21 21"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M10.695 16.9132V3.7832M10.695 3.7832L5.77124 8.70694M10.695 3.7832L15.6187 8.70694"
-                        stroke="#147129"
-                        strokeWidth="1.64125"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    {/* <span>04%</span> */}
-                  </div>
-                </div>
-              </div>
-              <div
-                className={styles["iconlink"]}
-                onClick={() => navigate("/attendance-management")}
-                title="Go to Attendance Management"
-                style={{ cursor: "pointer" }}
-              >
-                <img src={arrowupright} alt="arrowup" />
-              </div>
-            </div>
 
-            {/* Attendance Chart */}
-            <div className={styles["attendance-chart"]}>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{
-                    height: "44px",
-                    backgroundColor: "rgba(255,128,31,0.5)",
-                  }}
-                ></div>
-                <div className={styles["day-label"]}>M</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{ height: "74px", backgroundColor: "#C0EECC" }}
-                ></div>
-                <div className={styles["day-label"]}>T</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{
-                    height: "44px",
-                    backgroundColor: "rgba(255,128,31,0.5)",
-                  }}
-                ></div>
-                <div className={styles["day-label"]}>W</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{ height: "74px", backgroundColor: "#C0EECC" }}
-                ></div>
-                <div className={styles["day-label"]}>T</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{ height: "74px", backgroundColor: "#C0EECC" }}
-                ></div>
-                <div className={styles["day-label"]}>F</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{
-                    height: "44px",
-                    backgroundColor: "rgba(255,128,31,0.5)",
-                  }}
-                ></div>
-                <div className={styles["day-label"]}>S</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{ height: "60px", backgroundColor: "#FF801F" }}
-                ></div>
-                <div className={styles["day-label"]}>Today</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{ height: "6px", backgroundColor: "#E9ECF1" }}
-                ></div>
-                <div className={styles["day-label"]}>M</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{ height: "6px", backgroundColor: "#E9ECF1" }}
-                ></div>
-                <div className={styles["day-label"]}>T</div>
-              </div>
-              <div className={styles["chart-bar"]}>
-                <div
-                  className={styles["bar"]}
-                  style={{ height: "6px", backgroundColor: "#E9ECF1" }}
-                ></div>
-                <div className={styles["day-label"]}>W</div>
-              </div>
-            </div>
-          </div>
-
-           <div className={styles.cardbox}>
+          <div className={styles.cardbox}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
-                <h4>Total Assigned Projects</h4>
-                {/* <div className={styles.iconlink}>
-                  <img src={arrowupright} alt="arrowup" />
-                </div> */}
+                <h4>Total Employees</h4>
               </div>
-              <h2>{stats.totalAssignedProjects}</h2>
+              <h2>{stats.totalEmployees}</h2>
               <p className={styles["success-text"]}>
-                0.0% down <span>from last week</span>
+                Active Team Members
               </p>
             </div>
           </div>
@@ -259,14 +147,23 @@ function TeamManagement() {
           <div className={styles.cardbox}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
-                <h4>Total Employees</h4>
-                {/* <div className={styles.iconlink}>
-                  <img src={arrowupright} alt="arrowup" />
-                </div> */}
+                <h4>Active Employees</h4>
               </div>
-              <h2>{stats.totalEmployees}</h2>
+              <h2>{stats.activeEmployees}</h2>
               <p className={styles["success-text"]}>
-                Active Team Members
+                Present in workspace
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.cardbox}>
+            <div className={styles.cardboxcontent}>
+              <div className={styles.cardheader}>
+                <h4>Inactive Employees</h4>
+              </div>
+              <h2>{stats.inactiveEmployees}</h2>
+              <p className={styles["success-text"]}>
+                Offboarded or absent
               </p>
             </div>
           </div>

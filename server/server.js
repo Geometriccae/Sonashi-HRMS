@@ -24,6 +24,8 @@ const supportRoutes = require('./routes/supportRoutes');
 const leaveRequestRoutes = require('./routes/leaveRequestRoutes');
 const salarySlipRoutes = require('./routes/salarySlipRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
+const { initExpiryCron } = require('./services/expiryService');
+const Employee = require('./models/Employee');
 
 
 const app = express();
@@ -273,9 +275,18 @@ app.use('/api/expenses', expenseRoutes);
 
 
 // ====== DATABASE CONNECTION ======
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(async () => {
+    console.log('✅ MongoDB connected');
+    try {
+      await Employee.syncIndexes();
+      console.log('✅ Employee indexes synced (emailId sparse unique where supported)');
+    } catch (syncErr) {
+      console.warn('⚠️ Employee.syncIndexes skipped:', syncErr.message);
+    }
+  })
+  .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // ====== SERVE FRONTEND ======
 const frontendPath = path.join(__dirname, '../frontend/build');
@@ -325,6 +336,7 @@ app.get('/teammanagement_salesleads/:id', (req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔌 Socket.io is enabled and listening for connections`);
+  initExpiryCron();
 });
 
 module.exports = { app, server, io };

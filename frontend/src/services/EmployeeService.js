@@ -1,20 +1,21 @@
-import config from '../config/config';
+import config, { getApiBaseUrl } from '../config/config';
 
 class EmployeeService {
   constructor() {
-    let baseURL = config.API_BASE_URL || 'http://localhost:5000/api';
-
-    // Ensure baseURL ends with /api
-    if (!baseURL.endsWith('/api')) {
-      if (baseURL.endsWith('/')) {
-        baseURL += 'api';
-      } else {
-        baseURL += '/api';
+    const raw = (config.API_BASE_URL || '').trim();
+    let apiRoot;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      apiRoot = raw.replace(/\/$/, '');
+      if (!apiRoot.endsWith('/api')) {
+        apiRoot = apiRoot.endsWith('/') ? `${apiRoot}api` : `${apiRoot}/api`;
       }
+    } else {
+      const host = getApiBaseUrl();
+      apiRoot = host ? `${host.replace(/\/$/, '')}/api` : '/api';
     }
 
-    this.baseURL = `${baseURL}/employees`;
-    this.attendanceURL = `${baseURL}/attendance`;
+    this.baseURL = `${apiRoot}/employees`;
+    this.attendanceURL = `${apiRoot}/attendance`;
     console.log('EmployeeService initialized with baseURL:', this.baseURL);
   }
 
@@ -84,6 +85,25 @@ class EmployeeService {
       return await response.json();
     } catch (error) {
       console.error('Error fetching employee:', error);
+      throw error;
+    }
+  }
+
+  // Get employee by email
+  async getEmployeeByEmail(email) {
+    try {
+      const response = await fetch(`${this.baseURL}/by-email/${encodeURIComponent(email)}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching employee by email:', error);
       throw error;
     }
   }
@@ -397,6 +417,23 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
   }
 }
 
+  async importEmployeesFromExcel(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${this.baseURL}/import`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || `Import failed (${response.status})`);
+    }
+    return data;
+  }
+
   // Update employee with profile photo
   async updateEmployeeWithFile(id, employeeData, profileImage) {
     try {
@@ -436,7 +473,8 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
         throw new Error(errorMessage);
       }
 
-      return await response.json();
+      const body = await response.json();
+      return body.employee || body;
     } catch (error) {
       console.error('Error in updateEmployeeWithFile:', error);
       throw error;

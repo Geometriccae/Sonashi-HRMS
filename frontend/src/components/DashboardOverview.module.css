@@ -1,9 +1,10 @@
-.singleCardDashboard {
+.multiCardDashboard {
   display: flex;
-  justify-content: flex-start; /* Aligns card to the left */
+  justify-content: flex-start;
   align-items: flex-start;
+  gap: 2rem;
+  flex-wrap: wrap;
   width: 100%;
-  min-height: 25rem; 
   padding: 2.5rem;
 }
 

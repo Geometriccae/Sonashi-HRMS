@@ -6,61 +6,37 @@ import ProfilePhotoUpload from "../ProfilePhotoUpload";
 import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
+import config from "../../config/config";
 import Dropdown from "../DropDown";
 import Select from "react-select";
 import ToastContainer from "../Toast";
-
-// Options for dropdowns
-  const activeOptions = [
-    { value: "", label: "-Select-" },
-    { value: "Active", label: "Active" },
-    { value: "InActive", label: "InActive" },
-  ];
-
- const departmentOptions = [
-    { value: "", label: "-Select-" },
-    { value: "Bulk Sales", label: "Bulk Sales" },
-    { value: "Bulk Operations", label: "Bulk Operations" },
-    { value: "Project Sales", label: "Project Sales" },
-    { value: "Project Operations", label: "Project Operations" },
-    { value: "HR", label: "HR" },
-    { value: "Finance", label: "Finance" },
-    { value: "IT", label: "IT" },
-    { value: "Logistics", label: "Logistics" },
-    { value: "Customer Service", label: "Customer Service" },
-];
-
-const genderOptions = [
-  { value: "", label: "-Select-" },
-  { value: "Male", label: "Male" },
-  { value: "Female", label: "Female" },
-  { value: "Other", label: "Other" },
-];
-
-  const roleOptions = [
-    { value: "", label: "-Select-" },
-    { value: "Managing Director", label: "Managing Director" },
-    { value: "Director", label: "Director" },
-    { value: "Business Development Manager", label: "Business Development Manager" },
-    { value: "Sales Executive", label: "Sales Executive" },
-    { value: "Operations Manager", label: "Operations Manager" },
-    { value: "Operations Executive", label: "Operations Executive" },
-    { value: "Pricing Manager", label: "Pricing Manager" },
-    { value: "Pricing Executive", label: "Pricing Executive" },
-    { value: "Logistics Coordinator", label: "Logistics Coordinator" },
-    { value: "Account Manager", label: "Account Manager" },
-    { value: "HR Manager", label: "HR Manager" },
-    { value: "IT Specialist", label: "IT Specialist" },
-    {
-      value: "Customer Service Representative",
-      label: "Customer Service Representative",
-    },
-];
+import DocumentUploadField from "./DocumentUploadField";
+import DocumentsService from "../../services/EmployeeDocumentService";
+import {
+  ACTIVE_OPTIONS,
+  ATTENDANCE_OPTIONS,
+  DEPARTMENT_OPTIONS_DEFAULT,
+  GENDER_OPTIONS,
+  ROLE_OPTIONS_DEFAULT,
+  ensureOptionWithValue,
+  mergeWithDynamicOptions,
+} from "../../constants/employeeDropdownOptions";
 
 function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
+  const apiHost = (config.API_BASE_URL || "").replace(/\/api\/?$/, "");
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
   const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState(null);
+  const [employeeDocuments, setEmployeeDocuments] = useState({
+    passport: null,
+    idCard: null,
+    labourCard: null,
+  });
+  const [existingEmployeeDocuments, setExistingEmployeeDocuments] = useState({
+    passport: null,
+    idCard: null,
+    labourCard: null,
+  });
 
   const [formData, setFormData] = useState({
     // 1. Basic Information
@@ -93,18 +69,55 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     medicalInsurance: false,
     airFare: false,
 
-    // 3. Project Assignments
+    // 3. Salary details
+    basicSalary: "",
+    houseRent: "",
+    travelExp: "",
+    other: "",
+    totalAllowance: "",
+    deduction: "",
+    totalSalary: "",
+    bankName: "",
+    accountNumber: "",
+    ifscCode: "",
+
+    // 4. Project Assignments
     assignedProjects: [],
   });
 
   const [clients, setClients] = useState([]);
+  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS_DEFAULT);
+  const [departmentOptions, setDepartmentOptions] = useState(DEPARTMENT_OPTIONS_DEFAULT);
   const [toasts, setToasts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeOptions = ACTIVE_OPTIONS;
+  const attendanceOptions = ATTENDANCE_OPTIONS;
+  const genderOptions = GENDER_OPTIONS;
+
+  const mapStoredTypeToField = (type) => {
+    const s = String(type || "").trim().toLowerCase();
+    if (s === "passport") return "passport";
+    if (s === "id card" || s === "idcard" || s === "emirates id") return "idCard";
+    if (s === "labour card" || s === "labor card" || s === "labourcard") return "labourCard";
+    return null;
+  };
+
+  const buildDocumentUrl = (path) => {
+    if (!path) return "";
+    const cleaned = String(path).replace(
+      /\/uploads\/employeedocuments\/employeedocuments\//g,
+      "/uploads/employeedocuments/"
+    );
+    if (/^https?:\/\//i.test(cleaned)) return cleaned;
+    if (!apiHost) return cleaned;
+    return `${apiHost}${cleaned}`;
+  };
 
   useEffect(() => {
     if (isOpen) {
       fetchClients();
+      fetchEmployeeDropdownValues();
     }
   }, [isOpen]);
 
@@ -119,31 +132,37 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     }
   };
 
+  const fetchEmployeeDropdownValues = async () => {
+    // User specifically disabled Excel extraction and requested only the predefined explicit constant options.
+    setRoleOptions(ROLE_OPTIONS_DEFAULT);
+    setDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
+  };
+
+  const fetchEmployeeDocuments = async (employeeId) => {
+    if (!employeeId) return;
+    try {
+      const docs = await DocumentsService.listByEmployee(employeeId);
+      const typed = { passport: null, idCard: null, labourCard: null };
+      const ordered = Array.isArray(docs)
+        ? [...docs].sort((a, b) => new Date(b.uploadedDate || 0) - new Date(a.uploadedDate || 0))
+        : [];
+      for (const doc of ordered) {
+        const key = mapStoredTypeToField(doc.type);
+        if (!key || typed[key]) continue;
+        typed[key] = { ...doc, filePath: buildDocumentUrl(doc.filePath) };
+      }
+      setExistingEmployeeDocuments(typed);
+    } catch (err) {
+      console.warn("Failed to fetch employee documents:", err);
+      setExistingEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+    }
+  };
+
   // Populate form data when employee prop changes
   useEffect(() => {
     if (employee && isOpen) {
-      console.log("EditEmployeeModal - Employee Data:", employee);
-      console.log("EditEmployeeModal - Role Options:", roleOptions);
-      console.log("EditEmployeeModal - Department Options:", departmentOptions);
-
-      // Helper to find matching option value
-      const findMatchingValue = (value, options) => {
-        if (!value) return "";
-        const valStr = value.toString().toLowerCase();
-        const match = options.find(
-          (opt) =>
-            opt.value.toLowerCase() === valStr ||
-            opt.label.toLowerCase() === valStr
-        );
-        console.log(`findMatchingValue - Value: ${value}, Match:`, match);
-        return match ? match.value : value;
-      };
-
-      const normalizedRole = findMatchingValue(employee.role, roleOptions);
-      const normalizedDepartment = findMatchingValue(employee.department, departmentOptions);
-
-      console.log("Normalized Role:", normalizedRole);
-      console.log("Normalized Department:", normalizedDepartment);
+      setRoleOptions((prev) => ensureOptionWithValue(prev, employee.role));
+      setDepartmentOptions((prev) => ensureOptionWithValue(prev, employee.department));
 
       setFormData({
         workPermitNo: employee.workPermitNo || "",
@@ -156,9 +175,9 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         emailId: employee.emailId || "",
         emiratesId: employee.emiratesId || "",
         nationality: employee.nationality || "",
-        role: normalizedRole,
+        role: employee.role || "",
         designation: employee.designation || "",
-        department: normalizedDepartment,
+        department: employee.department || "",
         doj: employee.doj ? String(employee.doj).slice(0, 10) : "",
         totalYearsExperience:
           employee.totalYearsExperience !== undefined &&
@@ -176,6 +195,16 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         lifeInsurance: employee.lifeInsurance || false,
         medicalInsurance: employee.medicalInsurance || false,
         airFare: employee.airFare || false,
+        basicSalary: employee.salaryDetails?.basicSalary ? String(employee.salaryDetails.basicSalary) : "",
+        houseRent: employee.salaryDetails?.houseRent ? String(employee.salaryDetails.houseRent) : "",
+        travelExp: employee.salaryDetails?.travelExp ? String(employee.salaryDetails.travelExp) : "",
+        other: employee.salaryDetails?.other ? String(employee.salaryDetails.other) : "",
+        totalAllowance: employee.salaryDetails?.totalAllowance ? String(employee.salaryDetails.totalAllowance) : "",
+        deduction: employee.salaryDetails?.deduction ? String(employee.salaryDetails.deduction) : "",
+        totalSalary: employee.salaryDetails?.totalSalary ? String(employee.salaryDetails.totalSalary) : "",
+        bankName: employee.salaryDetails?.bankName || "",
+        accountNumber: employee.salaryDetails?.accountNumber || "",
+        ifscCode: employee.salaryDetails?.ifscCode || "",
         assignedProjects: Array.isArray(employee.assignedProjects)
           ? employee.assignedProjects.map((p) =>
               typeof p === "object" && p !== null ? p._id : p
@@ -191,7 +220,9 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       // Reset form state
       setCurrentStep(1);
       setProfileImage(null);
+      setEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
       setValidationErrors({});
+      fetchEmployeeDocuments(employee._id || employee.id);
     }
   }, [employee, isOpen]);
 
@@ -202,6 +233,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setProfileImage(null);
       setCurrentProfileImageUrl(null);
       setValidationErrors({});
+      setEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+      setExistingEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
       setFormData({
         workPermitNo: "",
         employeeId: "",
@@ -229,6 +262,16 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         lifeInsurance: false,
         medicalInsurance: false,
         airFare: false,
+        basicSalary: "",
+        houseRent: "",
+        travelExp: "",
+        other: "",
+        totalAllowance: "",
+        deduction: "",
+        totalSalary: "",
+        bankName: "",
+        accountNumber: "",
+        ifscCode: "",
         assignedProjects: [],
       });
     }
@@ -273,6 +316,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleDocumentChange = (field, file) => {
+    setEmployeeDocuments((prev) => ({ ...prev, [field]: file }));
+    if (validationErrors[field]) {
+      setValidationErrors((prev) => ({ ...prev, [field]: false }));
+    }
+  };
+
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
@@ -287,8 +337,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     if (step === 1) {
       if (!formData.employeeId) { errors.employeeId = true; missingFields.push("Employee ID"); }
       if (!formData.employeeName) { errors.employeeName = true; missingFields.push("Employee Name"); }
-      if (!formData.mobile) { errors.mobile = true; missingFields.push("Mobile Number"); }
-      if (!formData.emailId) { errors.emailId = true; missingFields.push("Email ID"); }
       if (!formData.role) { errors.role = true; missingFields.push("Role"); }
     } else if (step === 2) {
       if (!formData.department) { errors.department = true; missingFields.push("Department"); }
@@ -308,7 +356,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
   const handleNext = () => {
     if (validateStep(currentStep)) {
-      if (currentStep < 3) {
+      if (currentStep < 4) {
         setCurrentStep(currentStep + 1);
       }
     }
@@ -328,8 +376,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
     if (!formData.employeeId) { errors.employeeId = true; missingFields.push("Employee ID"); }
     if (!formData.employeeName) { errors.employeeName = true; missingFields.push("Employee Name"); }
-    if (!formData.mobile) { errors.mobile = true; missingFields.push("Mobile Number"); }
-    if (!formData.emailId) { errors.emailId = true; missingFields.push("Email ID"); }
     if (!formData.role) { errors.role = true; missingFields.push("Role"); }
     if (!formData.department) { errors.department = true; missingFields.push("Department"); }
 
@@ -353,11 +399,57 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
       // assignedProjects is already an array of IDs
 
+      const payload = { ...filteredData };
+      payload.salaryDetails = {
+        basicSalary: parseFloat(formData.basicSalary) || 0,
+        houseRent: parseFloat(formData.houseRent) || 0,
+        travelExp: parseFloat(formData.travelExp) || 0,
+        other: parseFloat(formData.other) || 0,
+        totalAllowance: parseFloat(formData.totalAllowance) || 0,
+        deduction: parseFloat(formData.deduction) || 0,
+        totalSalary: parseFloat(formData.totalSalary) || 0,
+        bankName: formData.bankName || "",
+        accountNumber: formData.accountNumber || "",
+        ifscCode: formData.ifscCode || ""
+      };
+
       const updatedEmployee = await employeeService.updateEmployeeWithFile(
         employee._id || employee.id,
-        filteredData,
+        payload,
         profileImage
       );
+
+      const empId = employee._id || employee.id;
+      if (empId) {
+        const uploadedBy = localStorage.getItem("username") || "";
+        const userRole = localStorage.getItem("role") || "";
+        const docUploads = [
+          { file: employeeDocuments.passport, type: "Passport" },
+          { file: employeeDocuments.idCard, type: "ID Card" },
+          { file: employeeDocuments.labourCard, type: "Labour Card" },
+        ];
+        for (const { file, type } of docUploads) {
+          if (!file) continue;
+          try {
+            const fieldKey = mapStoredTypeToField(type);
+            const existing = fieldKey ? existingEmployeeDocuments[fieldKey] : null;
+            if (existing?._id) {
+              try {
+                await DocumentsService.remove(existing._id);
+              } catch (removeErr) {
+                console.warn("Failed to remove previous document:", removeErr);
+              }
+            }
+            await DocumentsService.uploadForEmployee(empId, file, {
+              uploadedBy,
+              userRole,
+              type,
+            });
+          } catch (docErr) {
+            console.warn("Document upload failed:", type, docErr);
+          }
+        }
+      }
 
       // Call the onSubmit callback with the updated employee data
       if (onSubmit) {
@@ -365,6 +457,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       }
 
       onClose();
+      setEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+      await fetchEmployeeDocuments(employee._id || employee.id);
     } catch (err) {
       console.error("Error updating employee:", err);
 
@@ -489,19 +583,20 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               />
 
               <InputField
-                label="Mobile Number"
-                placeholder="+91 1234567890"
-                required
+                label="Mobile Number (digits only, optional)"
+                placeholder="971501234567"
                 type="tel"
+                inputMode="numeric"
                 value={formData.mobile}
-                onChange={(e) => handleInputChange("mobile", e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("mobile", e.target.value.replace(/\D/g, ""))
+                }
                 hasError={validationErrors.mobile}
               />
 
               <InputField
-                label="Email ID"
+                label="Email ID (optional)"
                 placeholder="employee@company.com"
-                required
                 type="email"
                 value={formData.emailId}
                 onChange={(e) => handleInputChange("emailId", e.target.value)}
@@ -544,6 +639,39 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   handleInputChange("designation", e.target.value)
                 }
               />
+
+              <div className="documents-section">
+                <h3 className="section-subtitle">Documents</h3>
+                <div className="documents-grid">
+                  <DocumentUploadField
+                    label="Passport"
+                    field="passport"
+                    file={employeeDocuments.passport}
+                    existingDocument={existingEmployeeDocuments.passport}
+                    hasError={validationErrors.passport}
+                    onUpload={handleDocumentChange}
+                    optional
+                  />
+                  <DocumentUploadField
+                    label="ID Card"
+                    field="idCard"
+                    file={employeeDocuments.idCard}
+                    existingDocument={existingEmployeeDocuments.idCard}
+                    hasError={validationErrors.idCard}
+                    onUpload={handleDocumentChange}
+                    optional
+                  />
+                  <DocumentUploadField
+                    label="Labour Card"
+                    field="labourCard"
+                    file={employeeDocuments.labourCard}
+                    existingDocument={existingEmployeeDocuments.labourCard}
+                    hasError={validationErrors.labourCard}
+                    onUpload={handleDocumentChange}
+                    optional
+                  />
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -648,11 +776,21 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 }
               />
 
-              <div className="input-group">
-                <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#333", fontSize: "14px" }}>
-                  Life Insurance
-                </label>
-                <div style={{ display: "flex", gap: "16px", height: "44px", alignItems: "center" }}>
+              <Dropdown
+                label="Attendance"
+                placeholder="Select attendance"
+                options={attendanceOptions}
+                value={formData.attendance}
+                onChange={(e) =>
+                  handleInputChange("attendance", e.target.value)
+                }
+              />
+
+              <div className="input-field">
+                <div className="input-label-container">
+                  <label className="input-label">Life Insurance</label>
+                </div>
+                <div style={{ display: "flex", gap: "24px", height: "46px", alignItems: "center", background: "#f9f9f9", borderRadius: "8px", padding: "0 16px", border: "1px dashed #ccc" }}>
                   <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
                     <input type="radio" name="lifeInsurance" checked={formData.lifeInsurance === true} onChange={() => handleInputChange("lifeInsurance", true)} />
                     Yes
@@ -664,11 +802,11 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 </div>
               </div>
 
-              <div className="input-group">
-                <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#333", fontSize: "14px" }}>
-                  Medical Insurance
-                </label>
-                <div style={{ display: "flex", gap: "16px", height: "44px", alignItems: "center" }}>
+              <div className="input-field">
+                <div className="input-label-container">
+                  <label className="input-label">Medical Insurance</label>
+                </div>
+                <div style={{ display: "flex", gap: "24px", height: "46px", alignItems: "center", background: "#f9f9f9", borderRadius: "8px", padding: "0 16px", border: "1px dashed #ccc" }}>
                   <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
                     <input type="radio" name="medicalInsurance" checked={formData.medicalInsurance === true} onChange={() => handleInputChange("medicalInsurance", true)} />
                     Yes
@@ -680,11 +818,11 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 </div>
               </div>
 
-              <div className="input-group">
-                <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#333", fontSize: "14px" }}>
-                  Air Fare
-                </label>
-                <div style={{ display: "flex", gap: "16px", height: "44px", alignItems: "center" }}>
+              <div className="input-field">
+                <div className="input-label-container">
+                  <label className="input-label">Air Fare</label>
+                </div>
+                <div style={{ display: "flex", gap: "24px", height: "46px", alignItems: "center", background: "#f9f9f9", borderRadius: "8px", padding: "0 16px", border: "1px dashed #ccc" }}>
                   <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#333" }}>
                     <input type="radio" name="airFare" checked={formData.airFare === true} onChange={() => handleInputChange("airFare", true)} />
                     Yes
@@ -695,58 +833,140 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   </label>
                 </div>
               </div>
-
-              <div className="input-group" style={{ width: "100%" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "8px",
-                    fontWeight: "500",
-                    color: "#333",
-                    flexDirection: "column",
-                    fontSize: "14px",
-                  }}
-                >
-                  Assigned Projects
-                </label>
-                <Select
-                  isMulti
-                  options={clientOptions}
-                  value={clientOptions.filter((option) =>
-                    formData.assignedProjects.includes(option.value)
-                  )}
-                  onChange={handleProjectSelection}
-                  placeholder="Select projects..."
-                  className="form-select-container"
-                  classNamePrefix="select"
-                  styles={{
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "44px",
-                      borderRadius: "8px",
-                      borderColor: "#E0E0E0",
-                      boxShadow: "none",
-                      "&:hover": {
-                        borderColor: "#BDBDBD",
-                      },
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                  }}
-                />
-              </div>
             </div>
           </div>
         );
 
       case 3:
-        const selectedProjectNames = clients
-          .filter((c) => formData.assignedProjects.includes(c._id))
-          .map((c) => c.clientName || c.companyName)
-          .join(", ");
+        return (
+          <div className="billing-content">
+            <div className="form-fields-grid">
+              <InputField
+                label="Basic Salary (BASIC)"
+                placeholder="0.00"
+                type="number"
+                value={formData.basicSalary}
+                onChange={(e) => {
+                  const basic = parseFloat(e.target.value) || 0;
+                  const hra = parseFloat(formData.houseRent) || 0;
+                  const travel = parseFloat(formData.travelExp) || 0;
+                  const other = parseFloat(formData.other) || 0;
+                  const totalAllow = hra + travel + other;
+                  const deduct = parseFloat(formData.deduction) || 0;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    basicSalary: e.target.value, 
+                    totalAllowance: totalAllow.toString(),
+                    totalSalary: (basic + totalAllow - deduct).toString() 
+                  }));
+                }}
+              />
+              <InputField
+                label="House Rent (HOUSE RENT)"
+                placeholder="0.00"
+                type="number"
+                value={formData.houseRent}
+                onChange={(e) => {
+                  const hra = parseFloat(e.target.value) || 0;
+                  const basic = parseFloat(formData.basicSalary) || 0;
+                  const travel = parseFloat(formData.travelExp) || 0;
+                  const other = parseFloat(formData.other) || 0;
+                  const totalAllow = hra + travel + other;
+                  const deduct = parseFloat(formData.deduction) || 0;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    houseRent: e.target.value, 
+                    totalAllowance: totalAllow.toString(),
+                    totalSalary: (basic + totalAllow - deduct).toString() 
+                  }));
+                }}
+              />
+              <InputField
+                label="Travel Exp (TRAVEL EXP)"
+                placeholder="0.00"
+                type="number"
+                value={formData.travelExp}
+                onChange={(e) => {
+                  const travel = parseFloat(e.target.value) || 0;
+                  const basic = parseFloat(formData.basicSalary) || 0;
+                  const hra = parseFloat(formData.houseRent) || 0;
+                  const other = parseFloat(formData.other) || 0;
+                  const totalAllow = hra + travel + other;
+                  const deduct = parseFloat(formData.deduction) || 0;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    travelExp: e.target.value, 
+                    totalAllowance: totalAllow.toString(),
+                    totalSalary: (basic + totalAllow - deduct).toString() 
+                  }));
+                }}
+              />
+              <InputField
+                label="Other Allowance (OTHER)"
+                placeholder="0.00"
+                type="number"
+                value={formData.other}
+                onChange={(e) => {
+                  const other = parseFloat(e.target.value) || 0;
+                  const basic = parseFloat(formData.basicSalary) || 0;
+                  const hra = parseFloat(formData.houseRent) || 0;
+                  const travel = parseFloat(formData.travelExp) || 0;
+                  const totalAllow = hra + travel + other;
+                  const deduct = parseFloat(formData.deduction) || 0;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    other: e.target.value, 
+                    totalAllowance: totalAllow.toString(),
+                    totalSalary: (basic + totalAllow - deduct).toString() 
+                  }));
+                }}
+              />
+              <InputField
+                label="Deduction (DEDUCTION)"
+                placeholder="0.00"
+                type="number"
+                value={formData.deduction}
+                onChange={(e) => {
+                  const deduct = parseFloat(e.target.value) || 0;
+                  const basic = parseFloat(formData.basicSalary) || 0;
+                  const totalAllow = parseFloat(formData.totalAllowance) || 0;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    deduction: e.target.value, 
+                    totalSalary: (basic + totalAllow - deduct).toString() 
+                  }));
+                }}
+              />
+              <InputField
+                label="Net Salary"
+                placeholder="0.00"
+                type="number"
+                readOnly
+                value={formData.totalSalary}
+              />
+              <InputField
+                label="Bank Name"
+                placeholder="Enter bank name"
+                value={formData.bankName}
+                onChange={(e) => handleInputChange("bankName", e.target.value)}
+              />
+              <InputField
+                label="Account Number"
+                placeholder="Enter account number"
+                value={formData.accountNumber}
+                onChange={(e) => handleInputChange("accountNumber", e.target.value)}
+              />
+              <InputField
+                label="IFSC Code"
+                placeholder="Enter IFSC"
+                value={formData.ifscCode}
+                onChange={(e) => handleInputChange("ifscCode", e.target.value)}
+              />
+            </div>
+          </div>
+        );
 
+      case 4:
         const employeeData = [
           [
             {
@@ -795,8 +1015,38 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               value: formData.airFare ? "Yes" : "No",
             },
             {
-              label: "Assigned Projects",
-              value: selectedProjectNames || "Not assigned",
+              label: "",
+              value: "",
+            },
+          ],
+          [
+            {
+              label: "Basic Salary",
+              value: formData.basicSalary ? `AED ${formData.basicSalary}` : "0",
+            },
+            {
+              label: "HRA",
+              value: formData.houseRent ? `AED ${formData.houseRent}` : "0",
+            },
+          ],
+          [
+            {
+              label: "Travel Exp",
+              value: formData.travelExp ? `AED ${formData.travelExp}` : "0",
+            },
+            {
+              label: "Other",
+              value: formData.other ? `AED ${formData.other}` : "0",
+            },
+          ],
+          [
+            {
+              label: "Deduction",
+              value: formData.deduction ? `AED ${formData.deduction}` : "0",
+            },
+            {
+              label: "Net Salary",
+              value: formData.totalSalary ? `AED ${formData.totalSalary}` : "0",
             },
           ],
         ];
@@ -866,6 +1116,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       case 2:
         return "Edit Employment Details";
       case 3:
+        return "Edit Salary Details";
+      case 4:
         return "Review Updated Information";
       default:
         return "Edit Employee";
@@ -885,7 +1137,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         <ProgressSteps
           currentStep={currentStep}
           onStepClick={handleStepClick}
-          steps={["Basic Info", "Employment Details", "Review"]}
+          steps={["Basic Info", "Employment Details", "Salary Details", "Review"]}
         />
 
         {renderStepContent()}
@@ -896,7 +1148,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               Previous
             </button>
           )}
-          {currentStep < 3 ? (
+          {currentStep < 4 ? (
             <button className="button-primary" onClick={handleNext}>
               Next
             </button>

@@ -49,7 +49,8 @@ function getUserDataFromReq(req) {
             if (decoded && decoded.id) {
                 return {
                     userId: String(decoded.id),
-                    emailId: decoded.emailId ? String(decoded.emailId).toLowerCase() : ""
+                    emailId: decoded.emailId ? String(decoded.emailId).toLowerCase() : "",
+                    role: decoded.role ? String(decoded.role).toLowerCase() : null
                 };
             }
         } else {
@@ -75,26 +76,29 @@ const requireAdmin = async (req, res, next) => {
     try {
         const userData = getUserDataFromReq(req);
         console.log('requireAdmin - userData:', userData);
-        
+
         if (!userData || !userData.userId) {
             console.log('requireAdmin - No userId found, returning 401');
             return res.status(401).json({ message: 'Unauthorized - No valid token provided' });
         }
 
-        const user = await User.findById(userData.userId);
-        console.log('requireAdmin - User found:', user ? { id: user._id, role: user.role, username: user.username } : null);
-        
-        if (!user) {
-            console.log('requireAdmin - User not found in database');
-            return res.status(401).json({ message: 'Unauthorized - User not found' });
-        }
-        
-        if (user.role !== 'admin' && user.role !== 'hod') {
-            console.log('requireAdmin - User does not have admin/hod role:', user.role);
-            return res.status(403).json({ message: 'Admin access required' });
+        const user = await User.findById(userData.userId).lean();
+
+        let userRole = '';
+        if (user) {
+            userRole = String(user.role || '').toLowerCase();
+        } else if (userData.role) {
+            // Fallback to token role if DB lookup fails but token is valid
+            userRole = userData.role;
         }
 
-        req.user = user;
+        if (userRole !== 'admin' && userRole !== 'hod' && userRole !== 'hr') {
+            console.log('requireAdmin - Access denied for role:', userRole);
+            return res.status(403).json({ message: 'Administrative access required' });
+        }
+
+        if (user) req.user = user;
+        else req.user = { _id: userData.userId, role: userRole }; // Minimal user object for read routes
         next();
     } catch (e) {
         console.error('requireAdmin - Error:', e.message);
@@ -109,8 +113,35 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Middleware to check strictly admin or HOD role (no HR)
+const requireStrictAdmin = async (req, res, next) => {
+    try {
+        const userData = getUserDataFromReq(req);
+        if (!userData || !userData.userId) return res.status(401).json({ message: 'Unauthorized' });
+
+        const user = await User.findById(userData.userId).lean();
+
+        let userRole = '';
+        if (user) {
+            userRole = String(user.role || '').toLowerCase();
+        } else if (userData.role) {
+            userRole = userData.role;
+        }
+
+        if (userRole !== 'admin' && userRole !== 'hod') {
+            return res.status(403).json({ message: 'Admin or HOD access required for this action' });
+        }
+
+        if (user) req.user = user;
+        else req.user = { _id: userData.userId, role: userRole };
+        next();
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+};
+
 // Manual Create
-router.post('/create', requireAdmin, async (req, res) => {
+router.post('/create', requireStrictAdmin, async (req, res) => {
     try {
         const slipData = { ...req.body, uploadedBy: req.user._id };
         if (!slipData.emailId) return res.status(400).json({ message: 'Email ID is required' });
@@ -127,7 +158,7 @@ router.post('/create', requireAdmin, async (req, res) => {
 });
 
 // Admin: Bulk Import Salary Slips
-router.post('/import', requireAdmin, upload.single('file'), async (req, res) => {
+router.post('/import', requireStrictAdmin, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
@@ -255,9 +286,21 @@ async function enrichSlipsWithProfilePhoto(slips) {
     });
 }
 
-// Admin: Get all
-router.get('/all', requireAdmin, async (req, res) => {
+// Admin/HR: Get all
+router.get('/all', async (req, res) => {
     try {
+        const userData = getUserDataFromReq(req);
+        if (!userData || !userData.userId) return res.status(401).json({ message: 'Unauthorized' });
+
+        const user = await User.findById(userData.userId).lean();
+        if (!user) return res.status(401).json({ message: 'User not found' });
+
+        const role = String(user.role || '').toLowerCase();
+        // Only allow Administrative roles + HR
+        if (role !== 'admin' && role !== 'hod' && role !== 'hr') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
         const { month, year } = req.query;
         const filter = {};
         if (month && month !== 'All' && month !== '') filter.month = { $regex: new RegExp(`^${String(month).trim()}$`, 'i') };
@@ -291,7 +334,7 @@ router.get('/my-slips', async (req, res) => {
 });
 
 // Bulk Delete
-router.post('/bulk-delete', requireAdmin, async (req, res) => {
+router.post('/bulk-delete', requireStrictAdmin, async (req, res) => {
     try {
         const { ids } = req.body;
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -306,7 +349,7 @@ router.post('/bulk-delete', requireAdmin, async (req, res) => {
 });
 
 // Update salary slip
-router.put('/:id', requireAdmin, async (req, res) => {
+router.put('/:id', requireStrictAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const updateData = { ...req.body };
@@ -333,7 +376,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 });
 
 // Delete
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireStrictAdmin, async (req, res) => {
     try {
         await SalarySlip.findByIdAndDelete(req.params.id);
         res.json({ message: 'Salary slip deleted' });

@@ -113,7 +113,7 @@ class SalarySlipService {
                     throw new Error('Session expired. Please login again.');
                 }
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                throw new Error(`${errorData.message || 'Error'} (Status: ${response.status})`);
             }
 
             return await response.json();

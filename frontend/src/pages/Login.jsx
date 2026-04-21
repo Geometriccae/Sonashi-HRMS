@@ -18,10 +18,12 @@ function Login() {
     try {
       const res = await axios.post(getAuthApiUrl('/login'), { username, password }, { withCredentials: true });
 
-      // Store the token in localStorage
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem('username', res.data.username);
       console.log(res.data.username); 
+
+      if (res.data.user.role !== 'admin' && res.data.user.role !== 'hr') {
+        setError('Access Denied. Only Admin and HR can log in.');
+        return;
+      }
 
       // Store the token and user data in localStorage
       localStorage.setItem("token", res.data.token);

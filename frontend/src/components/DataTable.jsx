@@ -6,7 +6,7 @@ import SortIcon from "./SortIcon";
 import TrashIcon from "./TrashIcon";
 import DeleteModal from "./delete-modal/DeleteModal";
 
-function DataTable({ data, onDelete }) {
+function DataTable({ data, onDelete, onOpen }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
@@ -47,7 +47,25 @@ function DataTable({ data, onDelete }) {
               </div>
             </div>
             {data.map((item) => (
-              <div key={item.id} className="table-cell file-cell">
+              <div
+                key={item.id}
+                className="table-cell file-cell"
+                role={onOpen ? "button" : undefined}
+                tabIndex={onOpen ? 0 : undefined}
+                onClick={onOpen ? () => onOpen(item) : undefined}
+                onKeyDown={
+                  onOpen
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onOpen(item);
+                        }
+                      }
+                    : undefined
+                }
+                style={onOpen ? { cursor: "pointer" } : undefined}
+                title={onOpen ? "Open document" : undefined}
+              >
                 <FileIcon type={item.fileType} />
                 <div className="file-info">
                   <div className="file-name">{item.fileName}</div>
