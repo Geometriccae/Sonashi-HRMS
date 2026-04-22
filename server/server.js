@@ -32,6 +32,11 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
+// Health check route - MUST BE AT TOP
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Sonashi HRMS Backend is running' });
+});
+
 // ====== SOCKET.IO CONFIGURATION ======
 const { Server } = require("socket.io");
 // allow configuring frontend origin from env (useful for live VPS deploys)
@@ -39,9 +44,6 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim(); // set this to you
 let allowedOrigins = [
   "https://firebrick-dolphin-412303.hostingersite.com",
   "https://limegreen-raven-687443.hostingersite.com",
-  "https://auxin-mern-app-front.onrender.com",
-  "http://72.60.202.115:5000",
-  "https://auxincrm.cloud",
   "http://localhost:3000"
 ];
 if (FRONTEND_URL && !allowedOrigins.includes(FRONTEND_URL)) {
@@ -215,6 +217,8 @@ app.use(cors({
 // ====== MIDDLEWARE ======
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+/* health check moved to top */
 
 // ====== API ROUTES ======
 // Client remarks: explicit routes registered first so POST/GET always match
