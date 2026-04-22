@@ -57,7 +57,8 @@ const employeeSchema = new mongoose.Schema({
     totalSalary: { type: Number, default: 0 },
     bankName: { type: String, default: "" },
     accountNumber: { type: String, default: "" },
-    ifscCode: { type: String, default: "" }
+    ibanNumber: { type: String, default: "" },
+    bankSortCode: { type: String, default: "" }
   },
 
   lifeInsurance: { type: Boolean, default: false },
@@ -66,7 +67,15 @@ const employeeSchema = new mongoose.Schema({
 
   assignedProjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Client" }], // multiple projects can be assigned
 
-  events: [assignEventSchema]
+  events: [assignEventSchema],
+  
+  increments: [{
+    date: { type: Date, default: Date.now },
+    previousSalary: { type: Number, default: 0 },
+    incrementAmount: { type: Number, default: 0 },
+    newSalary: { type: Number, default: 0 },
+    reason: { type: String, default: "" }
+  }]
 
 }, { timestamps: true });
 

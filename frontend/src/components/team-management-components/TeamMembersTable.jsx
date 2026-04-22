@@ -490,45 +490,7 @@ function TeamMembersTable() {
     return () => clearTimeout(id);
   }, [activeFilter, searchTerm, employees.length, filteredData.length, currentPage, currentPageSafe]);
 
-  // Helper to format assignedProjects for display with company names
-  const getProjectsDisplay = (assignedProjects) => {
-    if (!assignedProjects) {
-      return { main: "No Projects", description: "Not assigned" };
-    }
 
-    if (Array.isArray(assignedProjects)) {
-      if (assignedProjects.length === 0) {
-        return { main: "No Projects", description: "Not assigned" };
-      }
-      
-      // Map project IDs to company names
-      const projectNames = assignedProjects
-        .map(projectId => {
-          // Handle both object and string IDs
-          const id = typeof projectId === 'object' && projectId !== null ? projectId._id : projectId;
-          const client = clients.find(c => c._id === id);
-          return client ? (client.clientName || client.companyName || "Unknown") : null;
-        })
-        .filter(name => name !== null);
-      
-      if (projectNames.length === 0) {
-        return { main: "No Projects", description: "Not assigned" };
-      }
-      
-      const main = projectNames[0];
-      const description =
-        projectNames.length > 1
-          ? `+${projectNames.length - 1} more projects`
-          : "Single project assigned";
-      return { main, description };
-    }
-
-    // If it's a string or other primitive, try to find the company name
-    const id = typeof assignedProjects === 'object' && assignedProjects !== null ? assignedProjects._id : assignedProjects;
-    const client = clients.find(c => c._id === id);
-    const companyName = client ? (client.clientName || client.companyName || "Unknown") : String(assignedProjects);
-    return { main: companyName, description: "Project assigned" };
-  };
 
   // Inline top banners
   const isInitialLoading = loading && employees.length === 0 && !error;
@@ -808,28 +770,7 @@ function TeamMembersTable() {
                   ))}
                 </div>
                 
-                {/* Assigned Project Column */}
-                <div className={`${styles["table-column"]} ${styles["phone-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content"]}>
-                        <span className={styles["header-text"]}>Assigned Project</span>
-                        <SortIcon />
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => {
-                    const projectDisplay = getProjectsDisplay(member.assignedProjects);
-                    return (
-                      <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["phone-cell"]}`}>
-                        <div className={styles["phone-info"]}>
-                          <div className={styles["phone-text"]}>{projectDisplay.main}</div>
-                          <div className={styles["company-email"]}>{projectDisplay.description}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+
                 
                 {/* Actions Column */}
                 <div className={`${styles["table-column"]} ${styles["actions-column"]}`}>

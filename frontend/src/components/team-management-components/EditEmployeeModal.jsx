@@ -79,10 +79,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     totalSalary: "",
     bankName: "",
     accountNumber: "",
-    ifscCode: "",
-
-    // 4. Project Assignments
-    assignedProjects: [],
+    ibanNumber: "",
+    bankSortCode: "",
   });
 
   const [clients, setClients] = useState([]);
@@ -204,12 +202,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         totalSalary: employee.salaryDetails?.totalSalary ? String(employee.salaryDetails.totalSalary) : "",
         bankName: employee.salaryDetails?.bankName || "",
         accountNumber: employee.salaryDetails?.accountNumber || "",
-        ifscCode: employee.salaryDetails?.ifscCode || "",
-        assignedProjects: Array.isArray(employee.assignedProjects)
-          ? employee.assignedProjects.map((p) =>
-              typeof p === "object" && p !== null ? p._id : p
-            )
-          : [],
+        ibanNumber: employee.salaryDetails?.ibanNumber || "",
+        bankSortCode: employee.salaryDetails?.bankSortCode || "",
       });
 
       // Set current profile image URL if exists
@@ -271,8 +265,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         totalSalary: "",
         bankName: "",
         accountNumber: "",
-        ifscCode: "",
-        assignedProjects: [],
+        ibanNumber: "",
+        bankSortCode: "",
       });
     }
   }, [isOpen]);
@@ -297,15 +291,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     }
   };
 
-  const handleProjectSelection = (selectedOptions) => {
-    const selectedValues = selectedOptions
-      ? selectedOptions.map((option) => option.value)
-      : [];
-    setFormData((prev) => ({
-      ...prev,
-      assignedProjects: selectedValues,
-    }));
-  };
+
 
   const addToast = (message, type = "error") => {
     const id = Date.now();
@@ -410,7 +396,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         totalSalary: parseFloat(formData.totalSalary) || 0,
         bankName: formData.bankName || "",
         accountNumber: formData.accountNumber || "",
-        ifscCode: formData.ifscCode || ""
+        ibanNumber: formData.ibanNumber || "",
+        bankSortCode: formData.bankSortCode || ""
       };
 
       const updatedEmployee = await employeeService.updateEmployeeWithFile(
@@ -957,10 +944,16 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 onChange={(e) => handleInputChange("accountNumber", e.target.value)}
               />
               <InputField
-                label="IFSC Code"
-                placeholder="Enter IFSC"
-                value={formData.ifscCode}
-                onChange={(e) => handleInputChange("ifscCode", e.target.value)}
+                label="IBAN Number"
+                placeholder="Enter IBAN"
+                value={formData.ibanNumber}
+                onChange={(e) => handleInputChange("ibanNumber", e.target.value)}
+              />
+              <InputField
+                label="Bank SORT Code"
+                placeholder="Enter SORT Code"
+                value={formData.bankSortCode}
+                onChange={(e) => handleInputChange("bankSortCode", e.target.value)}
               />
             </div>
           </div>

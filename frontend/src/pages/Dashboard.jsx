@@ -10,9 +10,11 @@ import belldot from "../assets/dashboard/bell-dot.svg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
+import { FaBars } from "react-icons/fa";
+import { useSidebar } from "../context/SidebarContext";
 
 function Dashboard() {
-
+    const { toggleSidebar } = useSidebar();
     const [username, setUsername] = useState("");
     const [userRole, setUserRole] = useState("");
   
@@ -73,8 +75,13 @@ function Dashboard() {
         {/* Desktop Header */}
         <header className={styles["desktop-header"]}>
           <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>
-              {userRole === 'admin' ? 'Admin Dashboard' : userRole === 'hr' ? 'HR Dashboard' : 'Dashboard'}
+            <div className={styles["header-left"]}>
+              <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
+                <FaBars />
+              </button>
+              <div className={styles["dashboard-title"]}>
+                {userRole === 'admin' ? 'Admin Dashboard' : userRole === 'hr' ? 'HR Dashboard' : 'Dashboard'}
+              </div>
             </div>
 
             <div className={styles["dashboard-profile"]}>

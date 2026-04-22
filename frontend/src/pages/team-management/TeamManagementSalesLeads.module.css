@@ -49,6 +49,30 @@ main {
   letter-spacing: -0.075rem;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.menuToggleBtn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #161616;
+  cursor: pointer;
+  padding: 0.5rem;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 991px) {
+  .menuToggleBtn {
+    display: flex;
+  }
+}
+
 .dashboard-profile {
   display: flex;
   align-items: center;
@@ -589,4 +613,45 @@ main {
   color: #666;
   font-size: 0.9375rem;
   padding: 1rem 0;
+}
+
+/* Increments Table Styles */
+.increments_table_container {
+  width: 100%;
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 0.5rem;
+  border: 1px solid #e4e4e4;
+  margin-top: 1rem;
+}
+
+.increments_table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.increments_table th {
+  background: #f8f9fa;
+  padding: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #7a8699;
+  border-bottom: 1px solid #e4e4e4;
+  white-space: nowrap;
+}
+
+.increments_table td {
+  padding: 1rem;
+  font-size: 0.9375rem;
+  color: #161616;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.increments_table tr:last-child td {
+  border-bottom: none;
+}
+
+.increments_table tr:hover {
+  background: #fafafa;
 }

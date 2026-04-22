@@ -15,6 +15,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
         selectedEmployeeId: '',
         employeeName: '',
         email: '',
+        department: '',
         designation: '',
         dateOfJoining: '',
         // Earnings (custom fields)
@@ -38,6 +39,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
                 selectedEmployeeId: '',
                 employeeName: '',
                 email: '',
+                department: '',
                 designation: '',
                 dateOfJoining: '',
                 basic: '',
@@ -79,7 +81,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
             const travelExp = emp.salaryDetails?.travelExp || 0;
             const other = emp.salaryDetails?.other !== undefined ? emp.salaryDetails.other : Math.max(0, (emp.salaryDetails?.allowance || 0) - houseRent);
             const deduction = emp.salaryDetails?.deduction || 0;
-            
+
             const grossSalary = basic + houseRent + travelExp + other;
             const netSalary = grossSalary - deduction;
 
@@ -88,6 +90,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
                 selectedEmployeeId: employeeId,
                 employeeName: emp.employeeName,
                 email: emp.emailId || '',
+                department: emp.department || '',
                 designation: emp.designation || emp.role || '',
                 dateOfJoining: emp.doj ? new Date(emp.doj).toISOString().split('T')[0] : '',
                 basic: basic.toString(),
@@ -130,6 +133,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
             await salarySlipService.createSalarySlip({
                 employeeName: formData.employeeName,
                 emailId: formData.email,
+                department: formData.department,
                 designation: formData.designation,
                 dateOfJoining: formData.dateOfJoining,
                 // Map custom fields to existing backend fields (so other screens stay unchanged)
@@ -168,8 +172,8 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
                         <h3 className={styles.sectionTitle}>Employee Information</h3>
                         <div className={styles.grid}>
                             <div className={styles.inputGroup}>
-                                <Dropdown 
-                                    label="Employee Name *" 
+                                <Dropdown
+                                    label="Employee Name *"
                                     placeholder={isLoadingEmployees ? "Loading employees..." : "Search Name or ID..."}
                                     value={formData.selectedEmployeeId}
                                     options={employees.map(emp => ({
@@ -246,7 +250,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
                                     <tr className={styles.totalRow}>
                                         <td><strong>Gross Salary</strong></td>
                                         <td>
-                                            <input 
+                                            <input
                                                 type="text"
                                                 value={formData.grossSalary ? `₹${parseFloat(formData.grossSalary).toLocaleString('en-IN')}` : '₹0.00'}
                                                 readOnly

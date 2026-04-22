@@ -373,6 +373,9 @@ function SalarySlipTable({ userRole }) {
     const [expenses, setExpenses] = useState([]);
     const [myExpenses, setMyExpenses] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
+    const [selectedDepartment, setSelectedDepartment] = useState("All");
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [departments, setDepartments] = useState([]);
 
     // Determine which expenses can be approved based on role
     const canApproveExpense = (expense) => {
@@ -414,6 +417,20 @@ function SalarySlipTable({ userRole }) {
             showToast(error.message || 'Failed to reject expense.', 'error');
         }
     };
+    
+    // Fetch unique departments from employees
+    useEffect(() => {
+        const fetchDepartments = async () => {
+            try {
+                const emps = await employeeService.getEmployees();
+                const depts = [...new Set(emps.map(e => e.department).filter(Boolean))];
+                setDepartments(depts);
+            } catch (err) {
+                console.warn("Failed to fetch departments for filter", err);
+            }
+        };
+        if (isAdmin) fetchDepartments();
+    }, [isAdmin]);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
@@ -450,10 +467,12 @@ function SalarySlipTable({ userRole }) {
     }, [fetchData]);
 
     // Pagination calculations - works for both salary slips and expenses
-    const filteredSalarySlips = salarySlips.filter(slip => 
-        slip.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        slip.emailId?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredSalarySlips = salarySlips.filter(slip => {
+        const matchesSearch = slip.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                             slip.emailId?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesDept = selectedDepartment === "All" || slip.department === selectedDepartment;
+        return matchesSearch && matchesDept;
+    });
 
     const filteredExpenses = expenses.filter(exp => 
         exp.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -597,7 +616,10 @@ function SalarySlipTable({ userRole }) {
             doc.setFont("helvetica", "bold");
             doc.text("Email ID:", pageWidth / 2, currentY + 7);
             doc.setFont("helvetica", "normal");
-            doc.text(slip.emailId || 'N/A', pageWidth / 2 + 18, currentY + 7);
+            const displayEmail = (slip.emailId && !slip.emailId.includes('import.hrms.placeholder')) 
+                ? slip.emailId 
+                : '-';
+            doc.text(displayEmail, pageWidth / 2 + 18, currentY + 7);
 
             // Row 2: Designation (left)
             doc.setFont("helvetica", "bold");
@@ -796,6 +818,32 @@ function SalarySlipTable({ userRole }) {
         }
     };
 
+    const handleGenerateBulk = async () => {
+        if (selectedMonth === "All" || selectedYear === "All") {
+            showToast("Please select a specific Month and Year first.", "error");
+            return;
+        }
+
+        if (!window.confirm(`Generate salary slips for all active employees for ${selectedMonth} ${selectedYear}?`)) {
+            return;
+        }
+
+        setIsGenerating(true);
+        try {
+            const resp = await salarySlipService.generateBulkSalarySlips(selectedMonth, selectedYear);
+            showToast(resp.message || "Bulk generation completed.", "success");
+            fetchData();
+        } catch (error) {
+            // Check if error is the 'Unexpected token <' which means backend returned HTML (usually 404 or crash)
+            const errorMsg = error.message.includes('Unexpected token') 
+                ? "Backend route not found. Please RESTART YOUR SERVER (node server) to apply new changes." 
+                : error.message;
+            showToast(errorMsg || "Failed to generate slips.", "error");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     if (isLoading) return <div className={styles.loading}>Loading...</div>;
 
     const months = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -867,6 +915,10 @@ function SalarySlipTable({ userRole }) {
                                     <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className={styles.select}>
                                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                                     </select>
+                                    <select value={selectedDepartment} onChange={(e) => setSelectedDepartment(e.target.value)} className={styles.select}>
+                                        <option value="All">All Departments</option>
+                                        {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
                                     <div className={styles.searchContainer}>
                                         <input 
                                             type="text" 
@@ -899,12 +951,29 @@ function SalarySlipTable({ userRole }) {
                                 <img src={plus} alt="" className={styles.addBtnIcon} />
                                 <span>Create Salary Slip</span>
                             </button>
-                            <div className={styles.importWrapper}>
+                            <button 
+                                onClick={handleGenerateBulk} 
+                                className={styles.generateBtn}
+                                disabled={isGenerating}
+                            >
+                                {isGenerating ? (
+                                    <div className={styles.spinner}></div>
+                                ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M21 2v6h-6"></path>
+                                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                                        <path d="M3 22v-6h6"></path>
+                                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                                    </svg>
+                                )}
+                                <span>{isGenerating ? 'Generating...' : 'Auto-Generate for All'}</span>
+                            </button>
+                            {/* <div className={styles.importWrapper}>
                                 <button onClick={() => setIsImportModalOpen(true)} className={styles.importButton}>
                                     <img src={plus} alt="" className={styles.plusIcon} />
                                     <span>Bulk Import</span>
                                 </button>
-                            </div>
+                            </div> */}
                         </>
                     )}
                     {!isAdmin && (employeeTab === 'expense') && (
@@ -965,7 +1034,13 @@ function SalarySlipTable({ userRole }) {
                                 currentSlips.map((slip) => (
                                     <tr key={slip._id}>
                                         <td className={styles.empName}>{slip.employeeName}</td>
-                                        {isAdmin && <td>{slip.emailId}</td>}
+                                        {isAdmin && (
+                                            <td>
+                                                {(slip.emailId && !slip.emailId.includes('import.hrms.placeholder')) 
+                                                    ? slip.emailId 
+                                                    : '-'}
+                                            </td>
+                                        )}
                                         <td>{slip.designation}</td>
                                         {isAdmin && <td>{slip.month}</td>}
                                         {isAdmin && <td>{slip.year}</td>}

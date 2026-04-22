@@ -114,13 +114,23 @@ const HEADER_ALIASES = {
   'medical insurance': 'medicalInsurance',
   airfare: 'airFare',
   'air fare': 'airFare',
-  assignedprojects: 'assignedProjects',
-  'assigned projects': 'assignedProjects',
-  projects: 'assignedProjects',
-  'project names': 'assignedProjects',
   profilephoto: 'profilePhoto',
   'profile photo': 'profilePhoto',
   photo: 'profilePhoto',
+  bankname: 'bankName',
+  'bank name': 'bankName',
+  bank: 'bankName',
+  accountnumber: 'accountNumber',
+  'account number': 'accountNumber',
+  account: 'accountNumber',
+  'acc no': 'accountNumber',
+  ibannumber: 'ibanNumber',
+  'iban number': 'ibanNumber',
+  iban: 'ibanNumber',
+  banksortcode: 'bankSortCode',
+  'bank sort code': 'bankSortCode',
+  'sort code': 'bankSortCode',
+  sortcode: 'bankSortCode',
 };
 
 function rowToNormMap(row) {
@@ -262,6 +272,19 @@ function buildEmployeePayload(row, nameToId) {
     remarks: String(pickRaw(map, 'remarks') || '').trim(),
     department,
     profilePhoto: String(pickRaw(map, 'profilePhoto') || '').trim(),
+    salaryDetails: {
+      bankName: String(pickRaw(map, 'bankName') || '').trim(),
+      accountNumber: String(pickRaw(map, 'accountNumber') || '').trim(),
+      ibanNumber: String(pickRaw(map, 'ibanNumber') || '').trim(),
+      bankSortCode: String(pickRaw(map, 'bankSortCode') || '').trim(),
+      basicSalary: 0, // placeholders for required structure
+      houseRent: 0,
+      travelExp: 0,
+      other: 0,
+      totalAllowance: 0,
+      deduction: 0,
+      totalSalary: 0
+    }
   };
 
   if (emailRaw) payload.emailId = emailRaw.toLowerCase();
@@ -307,9 +330,7 @@ function buildEmployeePayload(row, nameToId) {
   const af = parseBool(pickRaw(map, 'airFare'));
   if (af !== null) payload.airFare = af;
 
-  const projRaw = pickRaw(map, 'assignedProjects');
-  const projIds = parseAssignedProjects(projRaw, nameToId);
-  if (projIds.length) payload.assignedProjects = projIds;
+
 
   return payload;
 }

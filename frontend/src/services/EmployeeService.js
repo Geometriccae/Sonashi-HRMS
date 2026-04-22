@@ -147,6 +147,25 @@ class EmployeeService {
     }
   }
 
+  // Add an increment for an employee. Requires Admin/HOD.
+  async addEmployeeIncrement(employeeId, incrementData) {
+    try {
+      const response = await fetch(`${this.baseURL}/${employeeId}/increments`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(incrementData),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding employee increment:', error);
+      throw error;
+    }
+  }
+
   // Create new employee
   async createEmployee(employeeData) {
     try {

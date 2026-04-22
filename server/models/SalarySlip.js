@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const salarySlipSchema = new mongoose.Schema({
     employeeName: { type: String, required: true },
     emailId: { type: String, required: true },
+    department: { type: String, default: "" }, // Added department field
     designation: { type: String, required: true },
     dateOfJoining: { type: String, default: '' },
     month: { type: String, required: true },

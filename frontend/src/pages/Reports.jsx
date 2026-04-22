@@ -230,7 +230,6 @@ function Reports() {
       "Designation": e.designation || "",
       "Department": e.department || "",
       "Status": e.attendance || "",
-      "Assigned Projects": Array.isArray(e.assignedProjects) ? e.assignedProjects.length : 0,
       "Created At": e.createdAt ? new Date(e.createdAt).toLocaleDateString() : ""
     }));
 

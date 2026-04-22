@@ -224,6 +224,29 @@ class SalarySlipService {
             throw error;
         }
     }
+
+    async generateBulkSalarySlips(month, year) {
+        try {
+            const response = await fetch(`${this.baseURL}/generate-bulk`, {
+                method: 'POST',
+                headers: {
+                    ...this.getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ month, year }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error generating bulk salary slips:', error);
+            throw error;
+        }
+    }
 }
 
 const salarySlipServiceInstance = new SalarySlipService();

@@ -12,8 +12,11 @@ import TeamMembersTable from "../../components/team-management-components/TeamMe
 import ProfileAvatar from "../../components/ProfileAvatar";
 import EmployeeService from "../../services/EmployeeService";
 import AttendanceService from "../../services/AttendanceService";
+import { FaBars } from "react-icons/fa";
+import { useSidebar } from "../../context/SidebarContext";
 
 function TeamManagement() {
+  const { toggleSidebar } = useSidebar();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [userRole, setUserRole] = useState("");
@@ -98,7 +101,12 @@ function TeamManagement() {
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Team Management</div>
+            <div className={styles["header-left"]}>
+              <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
+                <FaBars />
+              </button>
+              <div className={styles["dashboard-title"]}>Team Management</div>
+            </div>
 
             <div className={styles["dashboard-profile"]}>
               <NotificationBell/>

@@ -10,6 +10,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
     const [formData, setFormData] = useState({
         employeeName: '',
         email: '',
+        department: '',
         designation: '',
         dateOfJoining: '',
         // Earnings
@@ -55,7 +56,10 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
 
             setFormData({
                 employeeName: salarySlip.employeeName || '',
-                email: salarySlip.emailId || '',
+                email: (salarySlip.emailId && !salarySlip.emailId.includes('import.hrms.placeholder')) 
+                    ? salarySlip.emailId 
+                    : '-',
+                department: salarySlip.department || '',
                 designation: salarySlip.designation || '',
                 dateOfJoining: salarySlip.dateOfJoining || '',
                 basicPay: basicPay.toString(),
@@ -122,6 +126,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
             await salarySlipService.updateSalarySlip(salarySlip._id, {
                 employeeName: formData.employeeName,
                 emailId: formData.email,
+                department: formData.department,
                 designation: formData.designation,
                 dateOfJoining: formData.dateOfJoining,
                 // Earnings

@@ -6,10 +6,13 @@ import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import NotificationBell from "../components/NotificationBell";
+import { FaBars } from "react-icons/fa";
+import { useSidebar } from "../context/SidebarContext";
 import leaveRequestService from "../services/LeaveRequestService";
 import UserService from "../services/UserService";
 
 function LeaveRequests() {
+    const { toggleSidebar } = useSidebar();
     const [username, setUsername] = useState("");
     const [userRole, setUserRole] = useState("");
     const [leaveBalance, setLeaveBalance] = useState("--");
@@ -64,7 +67,12 @@ function LeaveRequests() {
             <main>
                 <header className={styles["dashboard-header"]}>
                     <div className={styles["dashboard-row"]}>
-                        <div className={styles["dashboard-title"]}>Leave Management</div>
+                        <div className={styles["header-left"]}>
+                            <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
+                                <FaBars />
+                            </button>
+                            <div className={styles["dashboard-title"]}>Leave Management</div>
+                        </div>
 
                         <div className={styles["dashboard-profile"]}>
                             <NotificationBell />
