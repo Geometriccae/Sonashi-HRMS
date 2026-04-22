@@ -16,7 +16,7 @@ const config = {
 /**
  * Returns the base URL for API requests (no trailing /api).
  * When REACT_APP_API_URL is set, always use it so requests go to that backend (e.g. localhost:5000).
- * Otherwise on auxincrm.cloud uses relative URL for same-origin; elsewhere uses Hostinger backend.
+ * Otherwise uses Hostinger backend.
  */
 export function getApiBaseUrl() {
   const env = process.env.REACT_APP_API_URL;
@@ -25,14 +25,11 @@ export function getApiBaseUrl() {
     if (v.startsWith('http://') || v.startsWith('https://')) {
       return v.replace(/\/api\/?$/, '');
     }
-    // Relative API root (e.g. "/api") — same-origin only on deployed CRM; otherwise assume Hostinger backend
-    if (typeof window !== 'undefined' && window.location.origin === 'https://auxincrm.cloud') {
-      return '';
-    }
+    // Relative API root (e.g. "/api") — assume Hostinger backend
     return isLocalhost ? 'http://localhost:5000' : 'https://limegreen-raven-687443.hostingersite.com';
   }
-  if (typeof window !== 'undefined' && (window.location.origin === 'https://auxincrm.cloud' || window.location.origin === 'https://limegreen-raven-687443.hostingersite.com' || window.location.origin === 'https://firebrick-dolphin-412303.hostingersite.com')) {
-    return ''; // relative URL - request goes to same origin
+  if (typeof window !== 'undefined' && window.location.origin === 'https://limegreen-raven-687443.hostingersite.com') {
+    return ''; // relative URL - only for same-origin backend
   }
   return isLocalhost ? 'http://localhost:5000' : 'https://limegreen-raven-687443.hostingersite.com';
 }

@@ -33,29 +33,32 @@ router.post('/login', async (req, res) => {
         { emailId: rawInput }
       ]
     });
+    
     if (!user) {
-      console.log('User not found for:', rawInput);
+      console.log(`[LOGIN DEBUG] User not found for input: "${rawInput}"`);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    console.log('User found, checking password...');
+    console.log(`[LOGIN DEBUG] User found: ${user.username}. Checking password...`);
     
     // Plain-text password check fallback if passwords are not hashed yet
     let passwordOk = false;
     try {
       if (user.password && user.password.startsWith('$2')) {
+        console.log('[LOGIN DEBUG] Using bcrypt comparison');
         passwordOk = await bcrypt.compare(password, user.password);
       } else {
+        console.log('[LOGIN DEBUG] Using plain-text comparison');
         passwordOk = user.password === password;
       }
-      console.log('Password check result:', passwordOk);
+      console.log('[LOGIN DEBUG] Password match result:', passwordOk);
     } catch (bcryptError) {
-      console.error('Bcrypt error:', bcryptError);
+      console.error('[LOGIN DEBUG] Auth Error:', bcryptError);
       return res.status(500).json({ message: 'Server error during authentication' });
     }
 
     if (!passwordOk) {
-      console.log('Password incorrect for user:', user.username);
+      console.log(`[LOGIN DEBUG] Password MISMATCH for user: ${user.username}`);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
