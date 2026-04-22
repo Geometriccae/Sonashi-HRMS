@@ -157,6 +157,87 @@ router.post('/create', requireStrictAdmin, async (req, res) => {
     }
 });
 
+// Admin: Auto-generate slips for all active employees
+router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
+    try {
+        const { month, year } = req.body;
+        if (!month || !year) {
+            return res.status(400).json({ message: 'Month and Year are required' });
+        }
+
+        // Fetch all active employees with salaryDetails
+        const employees = await Employee.find({ employeeStatus: "Active" }).lean();
+        
+        const results = [];
+        const skipped = [];
+        const errors = [];
+
+        for (const emp of employees) {
+            try {
+                if (!emp.emailId) {
+                    skipped.push({ name: emp.employeeName, reason: "No email ID" });
+                    continue;
+                }
+
+                const email = emp.emailId.trim().toLowerCase();
+                
+                // Prepare slip data from employee records
+                const salary = emp.salaryDetails || {};
+                const basic = parseFloat(salary.basicSalary) || 0;
+                
+                // Auto-calculate logic if fields are 0/empty
+                const houseRent = parseFloat(salary.houseRent) || (basic / 2);
+                const travelExp = parseFloat(salary.travelExp) || 0;
+                // If other is not set, use (Total Allowance - HouseRent - Travel) if positive
+                const other = parseFloat(salary.other) || Math.max(0, (parseFloat(salary.totalAllowance) || 0) - houseRent - travelExp);
+                const deduction = parseFloat(salary.deduction) || 0;
+                
+                const grossSalary = basic + houseRent + travelExp + other;
+                const netSalary = grossSalary - deduction;
+
+                const slipData = {
+                    employeeName: emp.employeeName,
+                    emailId: email,
+                    department: emp.department || '',
+                    designation: emp.designation || emp.role || 'Employee',
+                    month: month,
+                    year: year,
+                    basicPay: basic,
+                    hra: houseRent,
+                    conveyanceAllowance: travelExp,
+                    otherAllowance: other,
+                    grossSalary: grossSalary,
+                    totalDeduction: deduction,
+                    deductionsPFTax: deduction,
+                    netSalary: netSalary,
+                    uploadedBy: req.user._id
+                };
+
+                // Use findOneAndUpdate with upsert: true to overwrite/update existing slips
+                await SalarySlip.findOneAndUpdate(
+                    { emailId: email, month: { $regex: new RegExp(`^${month}$`, 'i') }, year: year },
+                    { $set: slipData },
+                    { upsert: true, new: true }
+                );
+                
+                results.push(email);
+            } catch (err) {
+                errors.push({ name: emp.employeeName, error: err.message });
+            }
+        }
+
+        res.json({
+            message: `Successfully generated/updated ${results.length} salary slips.`,
+            count: results.length,
+            results,
+            skipped,
+            errors: errors.length > 0 ? errors : undefined
+        });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
 // Admin: Bulk Import Salary Slips
 router.post('/import', requireStrictAdmin, upload.single('file'), async (req, res) => {
     try {
@@ -229,6 +310,12 @@ router.post('/import', requireStrictAdmin, upload.single('file'), async (req, re
                     netSalary: parseNum(getRowVal(fieldMappings.netSalary)),
                     uploadedBy: req.user._id
                 };
+
+                // Try to find employee to get department
+                const employeeRecord = await Employee.findOne({ emailId: slipData.emailId }).lean();
+                if (employeeRecord) {
+                    slipData.department = employeeRecord.department || '';
+                }
 
                 // Clear any legacy keys that might trigger stale unique indexes
                 await SalarySlip.findOneAndUpdate(

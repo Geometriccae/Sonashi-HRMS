@@ -31,7 +31,10 @@ export const EMPLOYEE_IMPORT_HEADERS = [
   "Life Insurance",
   "Medical Insurance",
   "Air Fare",
-  "Assigned Projects",
+  "Bank Name",
+  "Account Number",
+  "IBAN Number",
+  "Bank SORT Code",
   "Profile Photo",
 ];
 
@@ -60,9 +63,10 @@ const SAMPLE_ROW = [
   "Active",
   "Onsite",
   "Yes",
-  "No",
-  "No",
-  "Acme Logistics",
+  "Acme Bank",
+  "7654321098",
+  "AE123456789012345678901",
+  "12-34-56",
   "",
 ];
 
@@ -140,9 +144,7 @@ function EmployeeBulkImportModal({ isOpen, onClose, onSuccess }) {
               Edit employee.
             </li>
             <li>Dates: YYYY-MM-DD or standard Excel date cells</li>
-            <li>
-              <strong>Assigned Projects:</strong> client names from CRM, separated by comma, ;, or |
-            </li>
+
             <li>Documents are not imported from Excel — add them under Edit employee</li>
           </ul>
           <div className={styles.toolbar}>

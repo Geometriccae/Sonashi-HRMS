@@ -27,11 +27,13 @@ import SalarySlips from "./pages/SalarySlips";
 
 
 import { ToastProvider } from "./context/ToastContext";
+import { SidebarProvider } from "./context/SidebarContext";
 
 function App() {
   return (
     <ToastProvider>
-      <Router>
+      <SidebarProvider>
+        <Router>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={
@@ -89,6 +91,7 @@ function App() {
 
         </Routes>
       </Router>
+      </SidebarProvider>
     </ToastProvider>
   );
 }

@@ -5,9 +5,12 @@ import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import NotificationBell from "../components/NotificationBell";
+import { FaBars } from "react-icons/fa";
+import { useSidebar } from "../context/SidebarContext";
 import SalarySlipTable from "../components/salary-slip/SalarySlipTable";
 
 function SalarySlips() {
+    const { toggleSidebar } = useSidebar();
     const [username, setUsername] = useState("");
     const [userRole, setUserRole] = useState("");
 
@@ -25,7 +28,12 @@ function SalarySlips() {
             <main>
                 <header className={styles["dashboard-header"]}>
                     <div className={styles["dashboard-row"]}>
-                        <div className={styles["dashboard-title"]}>Salary Slips</div>
+                        <div className={styles["header-left"]}>
+                            <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
+                                <FaBars />
+                            </button>
+                            <div className={styles["dashboard-title"]}>Salary Slips</div>
+                        </div>
 
                         <div className={styles["dashboard-profile"]}>
                             <NotificationBell />

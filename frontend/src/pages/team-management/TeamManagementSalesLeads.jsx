@@ -9,12 +9,15 @@ import Documents from "../../components/team-management-components/TeamMangement
 // import Calendar from "../../components/CalendarComponent";
 import Meetingstable from "../../components/team-management-components/MeetingsTable";
 import config from "../../config/config";
+import { FaBars } from "react-icons/fa";
 import DeleteModal from "../../components/delete-modal/DeleteModal";
 import AssignTaskModal from "../../components/team-management-components/AssignTaskModal";
 import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
+import AddIncrementModal from "../../components/team-management-components/AddIncrementModal";
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
+import { useSidebar } from "../../context/SidebarContext";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -32,10 +35,12 @@ import MobileBottomNavigation from "../../components/MobileBottomNavigation";
 import { useToast } from "../../context/ToastContext";
 
 function TeamManagementSalesLeads() {
+  const { toggleSidebar } = useSidebar();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("basicInfo");
   const basicInfoRef = useRef(null);
   const salaryRef = useRef(null);
+  const incrementsRef = useRef(null);
   const documentsRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
   const [remarks, setRemarks] = useState([]);
@@ -61,6 +66,7 @@ function TeamManagementSalesLeads() {
   const [documentsKey, setDocumentsKey] = useState(0); // Force documents refresh
 
   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
+  const [isIncrementModalOpen, setIsIncrementModalOpen] = useState(false);
 
   const [username, setUsername] = useState("");
   const [userRole, setUserRole] = useState("");
@@ -184,6 +190,9 @@ function TeamManagementSalesLeads() {
         case "salary":
           activeElement = salaryRef.current;
           break;
+        case "increments":
+          activeElement = incrementsRef.current;
+          break;
         default:
           activeElement = basicInfoRef.current;
       }
@@ -266,14 +275,23 @@ function TeamManagementSalesLeads() {
   
   const handleEditEmployeeSubmit = async (updatedEmployee) => {
     try {
-      // Update the client data in local state
       setEmployee(updatedEmployee);
       setIsEditEmployeeModalOpen(false);
       showToast("Employee details updated successfully.", 'success');
     } catch (err) {
       console.error("Error updating employee:", err);
-      setError(err.message || "Failed to update employee");
       showToast("Failed to update employee.", 'error');
+    }
+  };
+
+  const handleAddIncrement = async (incrementData) => {
+    try {
+      const updatedEmployee = await employeeService.addEmployeeIncrement(employeeId, incrementData);
+      setEmployee(updatedEmployee);
+      showToast("Salary increment added successfully.", 'success');
+    } catch (err) {
+      console.error("Error adding increment:", err);
+      showToast(err.message || "Failed to add increment.", 'error');
     }
   };
 
@@ -436,6 +454,18 @@ function TeamManagementSalesLeads() {
             </button>
           </div>
         );
+      case "increments":
+        return isAdmin ? (
+          <div className={styles.row_view5}>
+            <button
+              className={styles.button_row_view}
+              onClick={() => setIsIncrementModalOpen(true)}
+            >
+              <span className={styles.text3}>Add Increment</span>
+              <img src={plus} className={styles.image3} alt="plus" />
+            </button>
+          </div>
+        ) : null;
       default:
         return null;
     }
@@ -450,7 +480,12 @@ function TeamManagementSalesLeads() {
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Team Management</div>
+            <div className={styles["header-left"]}>
+              <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
+                <FaBars />
+              </button>
+              <div className={styles["dashboard-title"]}>Team Management</div>
+            </div>
 
             <div className={styles["dashboard-profile"]}>
                 <NotificationBell/>
@@ -633,6 +668,15 @@ function TeamManagementSalesLeads() {
                     <span className={styles.text8}>{"Salary Details"}</span>
                   </div>
                   <div
+                    ref={incrementsRef}
+                    className={`${styles.view2} ${
+                      activeTab === "increments" ? styles.active : ""
+                    }`}
+                    onClick={() => setActiveTab("increments")}
+                  >
+                    <span className={styles.text8}>{"Increments"}</span>
+                  </div>
+                  <div
                     className={styles.box}
                     style={{
                       width: `${indicatorStyle.width}px`,
@@ -678,7 +722,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column5}><span className={styles.text9}>Attendance Status</span><span className={styles.text10}>{employee.attendance || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}><span className={styles.text9}>Assigned Projects</span><span className={styles.text10}>{employee.assignedProjects && Array.isArray(employee.assignedProjects) ? employee.assignedProjects.map(p => p.clientName || p.companyName || p).join(", ") : employee.assignedProjects || "No projects assigned"}</span></div>
+
                         <div className={styles.column4}><span className={styles.text9}>Date of Birth</span><span className={styles.text10}>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString() : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Gender</span><span className={styles.text10}>{employee.gender || "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Nationality</span><span className={styles.text10}>{employee.nationality || "Not provided"}</span></div>
@@ -730,11 +774,51 @@ function TeamManagementSalesLeads() {
                     <div className={styles.column4}><span className={styles.text9}>Net Salary</span><span className={styles.text10}>{employee?.salaryDetails?.totalSalary ? `AED ${employee.salaryDetails.totalSalary}` : "0"}</span></div>
                     <div className={styles.column5}></div>
                   </div>
-                  <div className={styles.row_view6}>
+                   <div className={styles.row_view6}>
                     <div className={styles.column4}><span className={styles.text9}>Bank Name</span><span className={styles.text10}>{employee?.salaryDetails?.bankName || "Not provided"}</span></div>
                     <div className={styles.column4}><span className={styles.text9}>Account Number</span><span className={styles.text10}>{employee?.salaryDetails?.accountNumber || "Not provided"}</span></div>
-                    <div className={styles.column4}><span className={styles.text9}>IFSC Code</span><span className={styles.text10}>{employee?.salaryDetails?.ifscCode || "Not provided"}</span></div>
-                    <div className={styles.column5}></div>
+                    <div className={styles.column4}><span className={styles.text9}>IBAN Number</span><span className={styles.text10}>{employee?.salaryDetails?.ibanNumber || "Not provided"}</span></div>
+                    <div className={styles.column5}><span className={styles.text9}>Bank SORT Code</span><span className={styles.text10}>{employee?.salaryDetails?.bankSortCode || "Not provided"}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "increments" && (
+                <div style={{ padding: "0 36px", width: "100%" }}>
+                  <div className={styles.increments_table_container}>
+                    <table className={styles.increments_table}>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Previous Salary</th>
+                          <th>Increment</th>
+                          <th>New Salary</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employee?.increments && employee.increments.length > 0 ? (
+                          employee.increments
+                            .slice()
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .map((inc, index) => (
+                              <tr key={index}>
+                                <td>{new Date(inc.date).toLocaleDateString()}</td>
+                                <td>AED {inc.previousSalary?.toLocaleString() || 0}</td>
+                                <td style={{ color: "#34C759", fontWeight: "600" }}>+AED {inc.incrementAmount?.toLocaleString() || 0}</td>
+                                <td style={{ fontWeight: "600" }}>AED {inc.newSalary?.toLocaleString() || 0}</td>
+                                <td>{inc.reason || "-"}</td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td colSpan="5" style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
+                              No increment history found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -768,10 +852,7 @@ function TeamManagementSalesLeads() {
         }
       />
 
-      <AssignTaskModal
-        isOpen={isCreateEventModalOpen}
-        onClose={handleCreateEventClose}
-      />
+
 
       <FileUploadModal
         isOpen={isFileUploadModalOpen}
@@ -790,6 +871,13 @@ function TeamManagementSalesLeads() {
         isOpen={isEditEmployeeModalOpen}
         onClose={handleEditEmployeeClose}
         onSubmit={handleEditEmployeeSubmit}
+        employee={employee}
+      />
+
+      <AddIncrementModal
+        isOpen={isIncrementModalOpen}
+        onClose={() => setIsIncrementModalOpen(false)}
+        onSubmit={handleAddIncrement}
         employee={employee}
       />
 

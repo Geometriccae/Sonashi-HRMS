@@ -36,6 +36,36 @@ main {
   width: 100%;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.menuToggleBtn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #1a202c;
+  cursor: pointer;
+  padding: 8px;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.menuToggleBtn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+@media (max-width: 991px) {
+  .menuToggleBtn {
+    display: flex;
+  }
+}
+
 .dashboard-title {
   color: #161616;
   font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;

@@ -13,6 +13,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from "./Sidebar.module.css";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
 import useDateRange from "../../hooks/useDateRange";
+import { useSidebar } from "../../context/SidebarContext";
 
 import sonashi_logo from "../../assets/sonashi_logo.png";
 import users from "../../assets/dashboard/users.svg";
@@ -40,6 +41,7 @@ function Sidebar() {
   const location = useLocation();
   const isActive = (path) => location.pathname.startsWith(path);
   const navigate = useNavigate();
+  const { isOpen, closeSidebar } = useSidebar();
 
 
   // Fix: Get role directly from localStorage
@@ -83,8 +85,16 @@ function Sidebar() {
   };
 
   return (
-    <div className={styles["sidebar-layout"]}>
-      <div className={styles["sidebar-content"]}>
+    <>
+      <div 
+        className={`${styles.overlay} ${isOpen ? styles.showOverlay : ""}`} 
+        onClick={closeSidebar}
+      />
+      <div className={`${styles["sidebar-layout"]} ${isOpen ? styles.open : ""}`}>
+        <div className={styles.mobileCloseBtn} onClick={closeSidebar}>
+          ×
+        </div>
+        <div className={styles["sidebar-content"]}>
         <div className={styles["auxin-logo"]}>
           <img
             src={sonashi_logo}
@@ -273,6 +283,7 @@ function Sidebar() {
         initialEndDate={dateRange.end}
       />
     </div>
+    </>
   );
 }
 

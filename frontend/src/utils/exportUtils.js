@@ -89,9 +89,6 @@ export const exportEmployeeBasicInfo = (employeeData) => {
     'Designation': employeeData.designation || 'Not provided',
     'Department': employeeData.department || 'Not provided',
     'Attendance Status': employeeData.attendance || 'Not provided',
-    'Assigned Projects': employeeData.assignedProjects && Array.isArray(employeeData.assignedProjects)
-      ? employeeData.assignedProjects.join('; ')
-      : employeeData.assignedProjects || 'No projects assigned',
     'Profile Created': employeeData.createdAt ? new Date(employeeData.createdAt).toLocaleDateString() : 'Not available',
     'Last Updated': employeeData.updatedAt ? new Date(employeeData.updatedAt).toLocaleDateString() : 'Not available',
     'Status': 'Active'

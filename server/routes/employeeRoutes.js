@@ -769,6 +769,45 @@ router.post('/:id/remarks', authMiddleware, requireAdminOrHod, async (req, res) 
   }
 });
 
+// POST /api/employees/:id/increments - add an increment
+router.post('/:id/increments', authMiddleware, requireAdminOrHod, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, previousSalary, incrementAmount, newSalary, reason } = req.body;
+
+    const employee = await Employee.findById(id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    const newIncrement = {
+      date: date || Date.now(),
+      previousSalary: Number(previousSalary) || 0,
+      incrementAmount: Number(incrementAmount) || 0,
+      newSalary: Number(newSalary) || 0,
+      reason: reason || ""
+    };
+
+    if (!employee.increments) {
+      employee.increments = [];
+    }
+    
+    employee.increments.push(newIncrement);
+
+    // Update the main salary details to reflect the new salary
+    if (newSalary) {
+      employee.salaryDetails.totalSalary = Number(newSalary);
+      // We can also adjust basicSalary if we want to maintain the breakdown, 
+      // but without specific breakdown info, we just update the total.
+    }
+
+    await employee.save();
+    res.status(201).json(employee);
+  } catch (error) {
+    res.status(500).json({ message: 'Error adding increment', error: error.message });
+  }
+});
+
 // Get single employee by ID
 router.get('/:id', authMiddleware, async (req, res) => {
   try {

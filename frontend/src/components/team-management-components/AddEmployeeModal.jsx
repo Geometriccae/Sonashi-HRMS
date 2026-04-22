@@ -71,10 +71,8 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     totalSalary: "",
     bankName: "",
     accountNumber: "",
-    ifscCode: "",
-
-    // 4. Project Assignments
-    assignedProjects: [], // Array of client IDs
+    ibanNumber: "",
+    bankSortCode: "",
   });
 
   const [clients, setClients] = useState([]);
@@ -128,15 +126,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     }
   };
 
-  const handleProjectSelection = (selectedOptions) => {
-    const selectedValues = selectedOptions
-      ? selectedOptions.map((option) => option.value)
-      : [];
-    setFormData((prev) => ({
-      ...prev,
-      assignedProjects: selectedValues,
-    }));
-  };
+
 
   const addToast = (message, type = "error") => {
     const id = Date.now();
@@ -272,7 +262,8 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         totalSalary: parseFloat(formData.totalSalary) || 0,
         bankName: formData.bankName || "",
         accountNumber: formData.accountNumber || "",
-        ifscCode: formData.ifscCode || ""
+        ibanNumber: formData.ibanNumber || "",
+        bankSortCode: formData.bankSortCode || ""
       };
 
       const savedEmployee = await employeeService.createEmployeeWithFile(
@@ -347,8 +338,8 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         totalSalary: "",
         bankName: "",
         accountNumber: "",
-        ifscCode: "",
-        assignedProjects: [],
+        ibanNumber: "",
+        bankSortCode: "",
       });
 
       setProfileImage(null);
@@ -827,10 +818,16 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 onChange={(e) => handleInputChange("accountNumber", e.target.value)}
               />
               <InputField
-                label="IFSC Code"
-                placeholder="Enter IFSC"
-                value={formData.ifscCode}
-                onChange={(e) => handleInputChange("ifscCode", e.target.value)}
+                label="IBAN Number"
+                placeholder="Enter IBAN"
+                value={formData.ibanNumber}
+                onChange={(e) => handleInputChange("ibanNumber", e.target.value)}
+              />
+              <InputField
+                label="Bank SORT Code"
+                placeholder="Enter SORT Code"
+                value={formData.bankSortCode}
+                onChange={(e) => handleInputChange("bankSortCode", e.target.value)}
               />
             </div>
           </div>
@@ -907,6 +904,26 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
             {
               label: "Other",
               value: formData.other ? `AED ${formData.other}` : "0",
+            },
+          ],
+          [
+            {
+              label: "Bank Name",
+              value: formData.bankName || "Not provided",
+            },
+            {
+              label: "Account Number",
+              value: formData.accountNumber || "Not provided",
+            },
+          ],
+          [
+            {
+              label: "IBAN Number",
+              value: formData.ibanNumber || "Not provided",
+            },
+            {
+              label: "Bank SORT Code",
+              value: formData.bankSortCode || "Not provided",
             },
           ],
           [
