@@ -1,8 +1,15 @@
 // All API calls use this; ensure REACT_APP_API_URL is set for local backend (e.g. http://localhost:5000)
 console.log('API BASE URL:', process.env.REACT_APP_API_URL);
 
+// Automatically detect if we are running locally
+const isLocalhost = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || 
+   window.location.hostname === '127.0.0.1' || 
+   window.location.hostname.startsWith('192.168.'));
+
 const config = {
-  API_BASE_URL: process.env.REACT_APP_API_URL || 'https://limegreen-raven-687443.hostingersite.com/api',
+  API_BASE_URL: process.env.REACT_APP_API_URL || 
+    (isLocalhost ? 'http://localhost:5000/api' : 'https://limegreen-raven-687443.hostingersite.com/api'),
   // Add other configuration variables here
 };
 
@@ -22,12 +29,12 @@ export function getApiBaseUrl() {
     if (typeof window !== 'undefined' && window.location.origin === 'https://auxincrm.cloud') {
       return '';
     }
-    return 'https://limegreen-raven-687443.hostingersite.com';
+    return isLocalhost ? 'http://localhost:5000' : 'https://limegreen-raven-687443.hostingersite.com';
   }
-  if (typeof window !== 'undefined' && (window.location.origin === 'https://auxincrm.cloud' || window.location.origin === 'https://limegreen-raven-687443.hostingersite.com')) {
+  if (typeof window !== 'undefined' && (window.location.origin === 'https://auxincrm.cloud' || window.location.origin === 'https://limegreen-raven-687443.hostingersite.com' || window.location.origin === 'https://firebrick-dolphin-412303.hostingersite.com')) {
     return ''; // relative URL - request goes to same origin
   }
-  return 'https://limegreen-raven-687443.hostingersite.com';
+  return isLocalhost ? 'http://localhost:5000' : 'https://limegreen-raven-687443.hostingersite.com';
 }
 
 /**
