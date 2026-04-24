@@ -43,6 +43,7 @@ const { Server } = require("socket.io");
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim(); // set this to your live frontend origin (eg https://app.example.com)
 let allowedOrigins = [
   "https://backend.sonashi.in",
+  "https://hrms.sonashi.in",
   "https://firebrick-dolphin-412303.hostingersite.com",
   "http://localhost:3000"
 ];
