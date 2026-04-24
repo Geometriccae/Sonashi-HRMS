@@ -109,7 +109,7 @@ function Sidebar() {
             <p className={styles["section-title"]}>MAIN</p>
             <ul>
               <li className={isActive("/dashboard") ? styles.active : ""}>
-                <Link to="/dashboard" className={styles["sidebar-link"]}>
+                <Link to="/dashboard" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img
                     src={layoutdashboard}
                     alt="Dashboard"
@@ -119,11 +119,8 @@ function Sidebar() {
                 </Link>
               </li>
 
-              {/* */}
-              {/* Fixed: Compare userRole directly, not userRole.role */}
-
               <li className={isActive("/teammanagement") ? styles.active : ""}>
-                <Link to="/teammanagement" className={styles["sidebar-link"]}>
+                <Link to="/teammanagement" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img
                     src={users}
                     alt="teamManagement"
@@ -133,59 +130,8 @@ function Sidebar() {
                 </Link>
               </li>
 
-
-
-
-              {/* <li>
-                <img src={packageicon} alt="Sales" className={styles.icon} /> Sales &
-                Leads
-              </li>  */}
-
-              {/* <li className={isActive("/salesandleads") ? styles.active : ""}>
-                <Link to="/salesandleads" className={styles["sidebar-link"]}>
-                  <img
-                    src={packageicon}
-                    alt="salesandleads"
-                    className={styles.icon}
-                  />
-                  Sales & Leads
-                </Link>
-              </li> */}
-
-              {/* <li
-                style={{ cursor: "pointer" }}
-                className={isActive("/yourcalendar") ? styles.active : ""}
-              >
-                <Link to="/yourcalendar" className={styles["sidebar-link"]}>
-                  <img src={calendar} alt="Calendar" className={styles.icon} />{" "}
-                  Calendar
-                </Link>
-              </li> */}
-
-              {/* <li className={isActive("/reports") ? styles.active : ""}>
-                <Link to="/reports" className={styles["sidebar-link"]}>
-                  <img
-                    src={filechartcolumn}
-                    alt="Reports"
-                    className={styles.icon}
-                  />
-                  Reports
-                </Link>
-              </li> */}
-
-              {/* <li className={isActive("/checkin-history") ? styles.active : ""}>
-                <Link to="/checkin-history" className={styles["sidebar-link"]}>
-                  <img
-                    src={scaneye}
-                    alt="Check-in History"
-                    className={styles.icon}
-                  />
-                  Check-in History
-                </Link>
-              </li> */}
-
               <li className={isActive("/leave-requests") ? styles.active : ""}>
-                <Link to="/leave-requests" className={styles["sidebar-link"]}>
+                <Link to="/leave-requests" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img
                     src={calendar}
                     alt="Leave Management"
@@ -196,7 +142,7 @@ function Sidebar() {
               </li>
 
               <li className={isActive("/salary-slips") ? styles.active : ""}>
-                <Link to="/salary-slips" className={styles["sidebar-link"]}>
+                <Link to="/salary-slips" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img
                     src={filechartcolumn}
                     alt="Salary Slips"
@@ -210,7 +156,7 @@ function Sidebar() {
               {/* User Management - Admin & HOD Only */}
               {["admin", "hod"].includes(userRole) && (
                 <li className={isActive("/user-management") ? styles.active : ""}>
-                  <Link to="/user-management" className={styles["sidebar-link"]}>
+                  <Link to="/user-management" className={styles["sidebar-link"]} onClick={closeSidebar}>
                     <img
                       src={addcontact}
                       alt="User Management"
@@ -227,19 +173,19 @@ function Sidebar() {
             <p className={styles["section-title"]}>ADDITIONAL</p>
             <ul>
               <li className={isActive("/profile") ? styles.active : ""}>
-                <Link to="/profile" className={styles["sidebar-link"]}>
+                <Link to="/profile" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img src={settings} alt="Profile" className={styles.icon} />{" "}
                   Settings
                 </Link>
               </li>
               <li>
-                <Link to="" className={styles["sidebar-link"]}>
+                <Link to="" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img src={cloud} alt="My Files" className={styles.icon} /> My
                   Files
                 </Link>
               </li>
               <li className={isActive("/help-support") ? styles.active : ""}>
-                <Link to="/help-support" className={styles["sidebar-link"]}>
+                <Link to="/help-support" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img
                     src={circlehelp}
                     alt="Help & Support"
@@ -248,7 +194,7 @@ function Sidebar() {
                   Help & Support
                 </Link>
               </li>
-              <li className={styles["logout"]} onClick={handleLogout}>
+              <li className={styles["logout"]} onClick={() => { handleLogout(); closeSidebar(); }}>
                 <Link to="" className={styles["sidebar-link"]}>
                   <img src={logout} alt="Log Out" className={styles.icon} /> Log
                   Out

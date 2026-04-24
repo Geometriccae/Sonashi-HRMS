@@ -44,11 +44,7 @@ function Dashboard() {
 
   return (
     <div className={styles["dashboard-layout"]}>
-      {/* Desktop Sidebar */}
-      <div className={styles["desktop-sidebar"]}>
-        <Side />
-      </div>
-
+      <Side />
       <main className={styles["main-container"]}>
         {/* Mobile Header */}
         {/* <div className={styles["mobile-header"]}>
@@ -118,8 +114,6 @@ function Dashboard() {
         </section>
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNavigation />
     </div>
   );
 }

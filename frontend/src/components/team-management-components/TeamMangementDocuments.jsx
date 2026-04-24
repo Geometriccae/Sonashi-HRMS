@@ -36,7 +36,11 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
       "/uploads/employeedocuments/"
     );
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
-    return `${apiHost}${cleaned}`;
+    
+    // Ensure exactly one slash between host and path
+    const host = apiHost.replace(/\/$/, "");
+    const relativePath = cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
+    return `${host}${relativePath}`;
   };
   
 

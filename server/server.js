@@ -42,8 +42,8 @@ const { Server } = require("socket.io");
 // allow configuring frontend origin from env (useful for live VPS deploys)
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim(); // set this to your live frontend origin (eg https://app.example.com)
 let allowedOrigins = [
+  "https://backend.sonashi.in",
   "https://firebrick-dolphin-412303.hostingersite.com",
-  "https://limegreen-raven-687443.hostingersite.com",
   "http://localhost:3000"
 ];
 if (FRONTEND_URL && !allowedOrigins.includes(FRONTEND_URL)) {

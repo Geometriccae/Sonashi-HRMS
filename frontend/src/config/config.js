@@ -9,7 +9,7 @@ const isLocalhost = typeof window !== 'undefined' &&
 
 const config = {
   API_BASE_URL: process.env.REACT_APP_API_URL || 
-    (isLocalhost ? 'http://localhost:5000/api' : 'https://limegreen-raven-687443.hostingersite.com/api'),
+    (isLocalhost ? 'http://localhost:5000/api' : 'https://backend.sonashi.in/api'),
   // Add other configuration variables here
 };
 
@@ -26,12 +26,12 @@ export function getApiBaseUrl() {
       return v.replace(/\/api\/?$/, '');
     }
     // Relative API root (e.g. "/api") — assume Hostinger backend
-    return isLocalhost ? 'http://localhost:5000' : 'https://limegreen-raven-687443.hostingersite.com';
+    return isLocalhost ? 'http://localhost:5000' : 'https://backend.sonashi.in';
   }
-  if (typeof window !== 'undefined' && window.location.origin === 'https://limegreen-raven-687443.hostingersite.com') {
+  if (typeof window !== 'undefined' && window.location.origin === 'https://backend.sonashi.in') {
     return ''; // relative URL - only for same-origin backend
   }
-  return isLocalhost ? 'http://localhost:5000' : 'https://limegreen-raven-687443.hostingersite.com';
+  return isLocalhost ? 'http://localhost:5000' : 'https://backend.sonashi.in';
 }
 
 /**
