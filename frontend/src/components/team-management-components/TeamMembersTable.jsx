@@ -688,8 +688,8 @@ function TeamMembersTable() {
                       <div className={styles["avatar"]}>
                     {member.profilePhoto ? (
                       <img
-                        src={`${config.API_BASE_URL.replace('/api', '')}${member.profilePhoto}`}
-                        alt={`${member.companyName} profile`}
+                        src={`${config.API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "")}/${(member.profilePhoto || "").replace(/^\//, "")}`}
+                        alt={`${member.employeeName} profile`}
                         className={styles["client-profile-image"]}
                       />
                     ) : (

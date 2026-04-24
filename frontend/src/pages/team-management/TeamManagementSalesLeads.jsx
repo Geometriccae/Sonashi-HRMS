@@ -474,9 +474,7 @@ function TeamManagementSalesLeads() {
 
   return (
     <div className={styles["dashboard-layout"]}>
-     <div className={styles["desktop-sidebar"]}>
-        <Side />
-      </div>
+      <Side />
       <main>
         <header className={styles["dashboard-header"]}>
           <div className={styles["dashboard-row"]}>
@@ -569,9 +567,7 @@ function TeamManagementSalesLeads() {
                       {employee ? (
                         employee.profilePhoto ? (
                           <img
-                            src={`${config.API_BASE_URL.replace("/api", "")}${
-                              employee.profilePhoto
-                            }`}
+                            src={`${config.API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "")}/${(employee.profilePhoto || "").replace(/^\//, "")}`}
                             className={styles.image2}
                             alt={`${employee.employeeName} logo`}
                           />

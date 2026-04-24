@@ -594,42 +594,252 @@ main {
   }
   
   .attendance-chart {
-    height: 4.5rem;
+    display: flex;
+    width: 100%;
+    height: 7.125rem;
+    align-items: flex-end;
+    gap: 1rem;
+    justify-content: space-between;
   }
 }
 
-/* Tablet and Mobile */
-@media (max-width: 991px) {
+.chart-bar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1875rem;
+}
+
+.bar {
+  align-self: stretch;
+  border-radius: 0.42006rem;
+  width: 100%;
+}
+
+.day-label {
+  color: #9ca1a0;
+  text-align: center;
+  letter-spacing: 0.02488rem;
+  font: 400 0.875rem/116% "Inter Tight";
+}
+
+/* Team Table Section */
+.team-table-section {
+  display: flex;
+  width: 100%;
+  padding: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.64481rem;
+  border-radius: 1.125rem 1.125rem 0 0;
+  position: relative;
+  left: auto;
+  top: auto;
+  height: auto;
+  background: transparent;
+  margin-top: 1.5rem;
+}
+
+/* Table Header Section */
+.table-header-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.table-title-row {
+  display: flex;
+  padding: 0 1.34031rem;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.table-title {
+  color: #161616;
+  letter-spacing: 0.01456rem;
+  font: 600 clamp(1.25rem, 1.5vw, 1.5rem)/116% "Inter Tight";
+  margin: 0;
+}
+
+/* ========================================
+   LAPTOP RESPONSIVE STYLES (Aggressive Scaling)
+   ======================================== */
+
+/* 1536px Breakpoint */
+@media (max-width: 1536px) {
+  .dashboard-header {
+    padding: 1rem 1.5rem;
+  }
+  
+  .dashboard-title {
+    font-size: 1.5rem;
+  }
+  
   .stats-container {
-    flex-direction: column;
+    gap: 1rem;
+    margin: 0.5rem  0.5rem 0  0.9rem;
+    width: 97%;
   }
   
   .attendance-card, .stats-card, .cardbox {
-    width: 100%;
-    min-width: 100%;
-    min-height: auto;
     padding: 1.25rem;
+    min-height: 12rem;
+    gap: 1rem;
+  }
+  
+  .cardbox h2, .card-value {
+    font-size: 2rem;
+  }
+  
+  .cardbox h4, .card-subtitle {
+    font-size: 1.25rem;
+  }
+  
+  .attendance-chart {
+    height: 6rem;
+  }
+  
+  .chart-bar {
+    gap: 0.75rem;
   }
 }
 
-@media (max-width: 768px) {
-  .dashboard-layout {
-    max-width: 100%;
-  }
-  
-  .desktop-sidebar {
-    display: none;
-  }
-  
+/* 1440px Breakpoint */
+@media (max-width: 1440px) {
   .dashboard-header {
+    padding: 0.875rem 1.25rem;
+  }
+  
+  .dashboard-title {
+    font-size: 1.35rem;
+  }
+  
+  .attendance-card, .stats-card, .cardbox {
     padding: 1rem;
+    min-height: 11rem;
+    gap: 0.75rem;
+  }
+  
+  .cardbox h2, .card-value {
+    font-size: 1.75rem;
+  }
+  
+  .cardbox h4, .card-subtitle {
+    font-size: 1.125rem;
+  }
+  
+  .attendance-chart {
+    height: 5.5rem;
+  }
+}
+
+/* 1366px Breakpoint */
+@media (max-width: 1366px) {
+  .main-content {
+    padding: 1rem;
+    gap: 1rem;
+  }
+  
+  .attendance-card, .stats-card, .cardbox {
+    padding: 0.875rem;
+    min-height: 10rem;
+  }
+  
+  .cardbox h2, .card-value {
+    font-size: 1.5rem;
+  }
+  
+  .cardbox h4, .card-subtitle {
+    font-size: 1rem;
+  }
+  
+  .percentage {
+    font-size: 1.5rem;
+  }
+  
+  .attendance-chart {
+    height: 5rem;
+  }
+}
+
+/* 1280px Breakpoint */
+@media (max-width: 1280px) {
+  .dashboard-header {
+    padding: 0.75rem 1rem;
   }
   
   .dashboard-title {
     font-size: 1.25rem;
   }
   
+  .attendance-card, .stats-card, .cardbox {
+    padding: 0.75rem;
+    min-height: 9rem;
+  }
+  
+  .cardbox h2, .card-value {
+    font-size: 1.35rem;
+  }
+  
+  .cardbox h4, .card-subtitle {
+    font-size: 0.9rem;
+  }
+  
+  .attendance-chart {
+    height: 4.5rem;
+  }
+}
+
+/* Tablet and Mobile */
+@media (max-width: 991px) {
+  .dashboard-layout { flex-direction: column; width: 100%; height: auto; }
+  .desktop-sidebar { display: none; }
+  .contain { margin: 0; width: 100%; border-radius: 0; }
+  .row_view { flex-direction: column; align-items: flex-start; }
+  .row_view2 { width: 100%; justify-content: space-between; }
+  .row_view5 { width: 100%; flex-wrap: wrap; }
+  .column3 { margin: 1rem; width: calc(100% - 2rem); }
+  .column2 { min-width: 100%; overflow-x: auto; }
+  
+  .dashboard-header {
+    padding: 0.75rem 1rem;
+  }
+  
+  .dashboard-title {
+    font-size: 1.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
+  
+  .dashboard-profile {
+    gap: 0.5rem;
+  }
+  
+  .profile-column, .breadcrumb-section {
+    display: none;
+  }
+
   .stats-container {
+    flex-direction: column;
     padding: 1rem;
+  }
+  
+  .attendance-card, .stats-card, .cardbox {
+    width: 100%;
+    min-width: 100%;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-layout {
+    max-width: 100%;
   }
 }

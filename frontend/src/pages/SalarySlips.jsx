@@ -21,9 +21,7 @@ function SalarySlips() {
 
     return (
         <div className={styles["dashboard-layout"]}>
-            <div className={styles["desktop-sidebar"]}>
-                <Side />
-            </div>
+            <Side />
 
             <main>
                 <header className={styles["dashboard-header"]}>
@@ -62,7 +60,6 @@ function SalarySlips() {
                     <SalarySlipTable userRole={userRole} />
                 </section>
             </main>
-            <MobileBottomNavigation />
         </div>
     );
 }

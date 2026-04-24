@@ -88,11 +88,17 @@
   }
   
   .metricCardBig {
-    padding: 2rem 1.5rem;
-    gap: 1.5rem;
+    padding: 1.25rem 1rem;
+    gap: 1rem;
+    min-width: 100%;
   }
   
   .metricValue {
-    font-size: 3.5rem;
+    font-size: 2.5rem;
+    margin-top: 0.25rem;
+  }
+
+  .metricLabel {
+    font-size: 0.95rem;
   }
 }

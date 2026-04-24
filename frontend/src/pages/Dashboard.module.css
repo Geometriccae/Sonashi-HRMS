@@ -488,8 +488,9 @@
 @media (max-width: 768px) {
   .dashboard-layout {
     background-color: #fafbfb;
-    max-width: 39rem;
-    margin: 0 auto;
+    width: 100%;
+    margin: 0;
+    overflow-x: hidden;
   }
 
 
@@ -499,16 +500,21 @@
   }
 
   .dashboard-title {
-    font-size: 1rem;
-    margin-right: 5px;
+    font-size: 1.25rem;
+    font-weight: 700;
   }
   .desktop-header {
     display: block;
   }
 
-  .belldot-icon{
+  .profile-column {
     display: none;
   }
+
+  .dashboard-profile {
+    gap: 0.75rem;
+  }
+
   .breadcrumb-section {
     display: none;
   }
@@ -523,7 +529,7 @@
   }
 
   .main-content {
-    padding-bottom: 80px; /* Account for bottom navigation */
+    padding-bottom: 90px; /* Account for bottom navigation */
     background-color: #fafbfb;
   }
 }

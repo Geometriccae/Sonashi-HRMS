@@ -332,8 +332,8 @@ li:hover {
     box-shadow: 10px 0 30px rgba(0,0,0,0.1);
   }
 
-  .sidebar-layout.open {
-    left: 0;
+  .open {
+    left: 0 !important;
   }
 
   .overlay {
@@ -351,8 +351,8 @@ li:hover {
   }
 
   .showOverlay {
-    opacity: 1;
-    visibility: visible;
+    opacity: 1 !important;
+    visibility: visible !important;
   }
 
   .mobileCloseBtn {

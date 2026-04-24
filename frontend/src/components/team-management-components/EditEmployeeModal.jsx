@@ -109,7 +109,11 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     );
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
     if (!apiHost) return cleaned;
-    return `${apiHost}${cleaned}`;
+    
+    // Ensure exactly one slash between host and path
+    const host = apiHost.replace(/\/$/, "");
+    const relativePath = cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
+    return `${host}${relativePath}`;
   };
 
   useEffect(() => {

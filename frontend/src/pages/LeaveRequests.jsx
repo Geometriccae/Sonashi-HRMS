@@ -60,9 +60,7 @@ function LeaveRequests() {
 
     return (
         <div className={styles["dashboard-layout"]}>
-            <div className={styles["desktop-sidebar"]}>
-                <Side />
-            </div>
+            <Side />
 
             <main>
                 <header className={styles["dashboard-header"]}>
@@ -139,7 +137,6 @@ function LeaveRequests() {
                     <LeaveRequestTable onUpdate={fetchMetrics} />
                 </section>
             </main>
-            <MobileBottomNavigation />
         </div>
     );
 }
