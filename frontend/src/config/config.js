@@ -29,7 +29,7 @@ export function getApiBaseUrl() {
     return isLocalhost ? 'http://localhost:5000' : 'https://backend.sonashi.in';
   }
   if (typeof window !== 'undefined' && window.location.origin === 'https://backend.sonashi.in') {
-    return ''; // relative URL - only for same-origin backend
+    return ''; // relative URL - only if backend and frontend are identical
   }
   return isLocalhost ? 'http://localhost:5000' : 'https://backend.sonashi.in';
 }
