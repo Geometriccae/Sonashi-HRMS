@@ -7,6 +7,8 @@ import AddLeaveRequestModal from "./AddLeaveRequestModal";
 import EditLeaveRequestModal from "./EditLeaveRequestModal";
 import LeaveApplicationFormModal from "./LeaveApplicationFormModal";
 import { useToast } from "../../context/ToastContext";
+import OptionService from "../../services/OptionService";
+import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 
 const EditIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -40,6 +42,13 @@ function LeaveRequestTable({ onUpdate }) {
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [userRole, setUserRole] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedDept, setSelectedDept] = useState("All");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
+    const [selectedManager, setSelectedManager] = useState("All");
+    const [departments, setDepartments] = useState([]);
+    const [managers, setManagers] = useState([]);
     const itemsPerPage = 10;
 
     const isHOD = String(userRole || "").toLowerCase() === "hod";
@@ -52,6 +61,15 @@ function LeaveRequestTable({ onUpdate }) {
         try {
             const data = await leaveRequestService.getLeaveRequests();
             setLeaveRequests(data);
+            
+            // Extract unique managers from data in the table
+            const uniqueManagers = [...new Set(data.map(req => req.reportingManager).filter(Boolean))];
+            setManagers(uniqueManagers.sort());
+
+            // Extract unique departments from data in the table
+            const uniqueDepts = [...new Set(data.map(req => req.department).filter(Boolean))];
+            setDepartments(uniqueDepts.sort());
+            
             if (onUpdate) onUpdate();
         } catch (error) {
             console.error("Error fetching leave requests:", error);
@@ -118,9 +136,42 @@ function LeaveRequestTable({ onUpdate }) {
     };
 
     const filteredRequests = leaveRequests.filter(req => {
-        if (activeFilter === "All") return true;
-        if (activeFilter === "History") return req.status === "Approved" || req.status === "Rejected";
-        return req.status === activeFilter;
+        // Status Filter (Segmented Control)
+        if (activeFilter !== "All") {
+            if (activeFilter === "History") {
+                if (req.status !== "Approved" && req.status !== "Rejected") return false;
+            } else if (req.status !== activeFilter) {
+                return false;
+            }
+        }
+
+        // Search Query (Name or ID)
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            const name = (req.employee?.username || req.employeeName || "").toLowerCase();
+            const id = (req.employeeId || "").toLowerCase();
+            if (!name.includes(query) && !id.includes(query)) return false;
+        }
+
+        // Department Filter
+        if (selectedDept !== "All" && req.department !== selectedDept) return false;
+
+        // Manager Filter
+        if (selectedManager !== "All" && req.reportingManager !== selectedManager) return false;
+
+        // Date Range Filter
+        if (startDate) {
+            const reqStart = new Date(req.startDate);
+            const filterStart = new Date(startDate);
+            if (reqStart < filterStart) return false;
+        }
+        if (endDate) {
+            const reqEnd = new Date(req.endDate);
+            const filterEnd = new Date(endDate);
+            if (reqEnd > filterEnd) return false;
+        }
+
+        return true;
     });
 
     // Determine which requests can be approved based on role
@@ -140,7 +191,7 @@ function LeaveRequestTable({ onUpdate }) {
     // Reset to page 1 when filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [activeFilter]);
+    }, [activeFilter, searchQuery, selectedDept, startDate, endDate, selectedManager]);
 
     // Handle page change
     const handlePageChange = (page) => {
@@ -231,6 +282,81 @@ function LeaveRequestTable({ onUpdate }) {
             </div>
 
             <div className={styles.controls}>
+                <div className={styles.filterBar}>
+                    <div className={styles.searchSection}>
+                        <div className={styles.inputWrapper}>
+                            <svg className={styles.searchIcon} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input
+                                type="text"
+                                placeholder="Search by name or ID..."
+                                className={styles.searchInput}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className={styles.selectSection}>
+                        <select 
+                            className={styles.filterSelect}
+                            value={selectedDept}
+                            onChange={(e) => setSelectedDept(e.target.value)}
+                        >
+                            <option value="All">Department</option>
+                            {departments.map(dept => (
+                                <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                        </select>
+
+                        <select 
+                            className={styles.filterSelect}
+                            value={selectedManager}
+                            onChange={(e) => setSelectedManager(e.target.value)}
+                        >
+                            <option value="All">Manager</option>
+                            {managers.map(manager => (
+                                <option key={manager} value={manager}>{manager}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className={styles.dateSection}>
+                        <div className={styles.dateInputWrapper}>
+                            <span>From:</span>
+                            <input 
+                                type="date" 
+                                className={styles.dateInput}
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                            />
+                        </div>
+                        <div className={styles.dateInputWrapper}>
+                            <span>To:</span>
+                            <input 
+                                type="date" 
+                                className={styles.dateInput}
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                            />
+                        </div>
+                        <button 
+                            className={styles.resetButton}
+                            onClick={() => {
+                                setSearchQuery("");
+                                setSelectedDept("All");
+                                setSelectedManager("All");
+                                setStartDate("");
+                                setEndDate("");
+                            }}
+                        >
+                            Reset
+                        </button>
+                    </div>
+                </div>
+
                 <div className={styles.segmentedControl}>
                     {(isAdminRole
                         ? ["All", "Pending", "Approved", "Rejected", "History"]
@@ -320,16 +446,14 @@ function LeaveRequestTable({ onUpdate }) {
                                         {canManageLeaves ? (
                                             // Management view (Admin/HOD/HR)
                                             <>
-                                                {/* Admin, HR and HOD can View. Only HR and HOD can Edit/Delete. Admin only Approves/Rejects */}
-                                                {(isAdminRole || isHR || isHOD) && (
-                                                    <button
-                                                        className={styles.iconButton}
-                                                        onClick={() => handleViewForm(req)}
-                                                        title="View Leave Application Form"
-                                                    >
-                                                        <ViewIcon />
-                                                    </button>
-                                                )}
+                                                {/* HR and HOD can Edit/Delete. Everyone can View. */}
+                                                <button
+                                                    className={styles.iconButton}
+                                                    onClick={() => handleViewForm(req)}
+                                                    title="View Leave Details"
+                                                >
+                                                    <ViewIcon />
+                                                </button>
 
                                                 {(isHR || isHOD) && (
                                                     <>
@@ -359,7 +483,7 @@ function LeaveRequestTable({ onUpdate }) {
                                                             <XIcon />
                                                         </button>
                                                     </div>
-                                                ) : (isAdminRole ? <span className={styles.noAction}>—</span> : null)}
+                                                ) : (isAdminRole || isHOD ? <span className={styles.noAction}>—</span> : null)}
                                             </>
                                         ) : (
                                             // Employee view
@@ -367,7 +491,7 @@ function LeaveRequestTable({ onUpdate }) {
                                                 <button
                                                     className={styles.iconButton}
                                                     onClick={() => handleViewForm(req)}
-                                                    title="View Leave Application Form"
+                                                    title="View Leave Details"
                                                 >
                                                     <ViewIcon />
                                                 </button>

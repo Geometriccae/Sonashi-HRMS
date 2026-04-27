@@ -14,6 +14,7 @@ import styles from "./Sidebar.module.css";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
 import useDateRange from "../../hooks/useDateRange";
 import { useSidebar } from "../../context/SidebarContext";
+import LogoutModal from "../../components/logout-modal/LogoutModal";
 
 import sonashi_logo from "../../assets/sonashi_logo.png";
 import users from "../../assets/dashboard/users.svg";
@@ -42,18 +43,28 @@ function Sidebar() {
   const isActive = (path) => location.pathname.startsWith(path);
   const navigate = useNavigate();
   const { isOpen, closeSidebar } = useSidebar();
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
 
   // Fix: Get role directly from localStorage
   const userRole = localStorage.getItem("role"); // This returns a string like "sales_executive"
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleConfirmLogout = () => {
     // Clear authentication data
     localStorage.removeItem("token");
     localStorage.removeItem("username");
     localStorage.removeItem("role"); // Also clear role on logout
     // Redirect to login page
     navigate("/login", { replace: true });
+    setIsLogoutModalOpen(false);
+  };
+
+  const handleCloseLogoutModal = () => {
+    setIsLogoutModalOpen(false);
   };
 
   // Use the custom date range hook for backend functionality
@@ -194,7 +205,7 @@ function Sidebar() {
                   Help & Support
                 </Link>
               </li>
-              <li className={styles["logout"]} onClick={() => { handleLogout(); closeSidebar(); }}>
+              <li className={styles["logout"]} onClick={() => { handleLogoutClick(); }}>
                 <Link to="" className={styles["sidebar-link"]}>
                   <img src={logout} alt="Log Out" className={styles.icon} /> Log
                   Out
@@ -227,6 +238,12 @@ function Sidebar() {
         onApplyDateRange={handleDateRangeApply}
         initialStartDate={dateRange.start}
         initialEndDate={dateRange.end}
+      />
+      {/* Logout Confirmation Modal */}
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        onClose={handleCloseLogoutModal}
+        onConfirm={handleConfirmLogout}
       />
     </div>
     </>

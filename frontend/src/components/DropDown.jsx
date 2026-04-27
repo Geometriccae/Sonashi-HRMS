@@ -12,6 +12,8 @@ function Dropdown({
   hasError = false,
   disabled = false,
   id: menuIdProp,
+  onAdd,
+  onDelete,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -100,6 +102,36 @@ function Dropdown({
   const selectedOption = safeOptions.find((opt) => opt.value === value);
   const displayText = selectedOption ? selectedOption.label : placeholder;
 
+  const [isAdding, setIsAdding] = useState(false);
+  const [newOptionLabel, setNewOptionLabel] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState(null); // stores the option to delete
+
+  const handleAdd = async () => {
+    if (!newOptionLabel.trim() || !onAdd) return;
+    try {
+      await onAdd(newOptionLabel.trim());
+      setNewOptionLabel("");
+      setIsAdding(false);
+    } catch (err) {
+      console.error("Error adding option:", err);
+    }
+  };
+
+  const confirmDelete = (e, option) => {
+    e.stopPropagation();
+    setDeleteConfirmation(option);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirmation || !onDelete) return;
+    try {
+      await onDelete(deleteConfirmation);
+      setDeleteConfirmation(null);
+    } catch (err) {
+      console.error("Error deleting option:", err);
+    }
+  };
+
   const pos = coords.width > 0 ? coords : coordsRef.current;
   const dropdownMenu = (
     <div
@@ -110,19 +142,66 @@ function Dropdown({
         top: pos.top,
         left: pos.left,
         width: pos.width || 252,
-        zIndex: 99999,
+        zIndex: 1000001,
       }}
     >
-      {/* Search Input */}
+      {/* Delete Confirmation Overlay */}
+      {deleteConfirmation && (
+        <div className={styles.confirmOverlay}>
+          <div className={styles.confirmBox}>
+            <p className={styles.confirmText}>Delete "{deleteConfirmation.label}"?</p>
+            <div className={styles.confirmActions}>
+              <button className={styles.cancelBtn} onClick={() => setDeleteConfirmation(null)}>No</button>
+              <button className={styles.confirmDeleteBtn} onClick={handleDelete}>Yes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search & Add Input */}
       <div className={styles.searchContainer}>
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className={styles.searchInput}
-        />
+        {isAdding ? (
+          <div className={styles.addInputWrapper}>
+            <input
+              type="text"
+              placeholder="Enter new option..."
+              value={newOptionLabel}
+              onChange={(e) => setNewOptionLabel(e.target.value)}
+              className={styles.searchInput}
+              autoFocus
+            />
+            <button className={styles.addTickBtn} onClick={handleAdd} title="Save">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </button>
+            <button className={styles.addCancelBtn} onClick={() => { setIsAdding(false); setNewOptionLabel(""); }} title="Cancel">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <div className={styles.searchInputWrapper}>
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={styles.searchInput}
+            />
+            {onAdd && (
+              <button className={styles.addBtn} onClick={() => setIsAdding(true)} title="Add New">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Options List */}
@@ -131,12 +210,18 @@ function Dropdown({
           filteredOptions.map((option, index) => (
             <div
               key={index}
-              className={`${styles.option} ${
-                option.value === value ? styles.optionSelected : ""
-              }`}
+              className={`${styles.option} ${option.value === value ? styles.optionSelected : ""}`}
               onClick={() => handleSelect(option.value)}
             >
-              {option.label}
+              <span className={styles.optionLabel}>{option.label}</span>
+              {onDelete && option.value !== "" && (
+                <button className={styles.deleteBtn} onClick={(e) => confirmDelete(e, option)} title="Delete">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              )}
             </div>
           ))
         ) : (
@@ -181,9 +266,8 @@ function Dropdown({
         }}
       >
         <div
-          className={`${styles.text} ${
-            !selectedOption ? styles.placeholder : ""
-          }`}
+          className={`${styles.text} ${!selectedOption ? styles.placeholder : ""
+            }`}
         >
           {displayText}
         </div>

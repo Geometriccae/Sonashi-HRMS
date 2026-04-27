@@ -5,10 +5,13 @@ import EmployeeService from "../../services/EmployeeService";
 import InputField from "../InputField";
 import Dropdown from "../DropDown";
 import DatePickerModal from "../DatePickerModal";
+import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
+import OptionService from "../../services/OptionService";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
-import "../sales-and-leads/AddClientModal.css";
+import "./LeaveForm.css"; // Using new clean grid styles
 
 function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLeaveRequests }) {
     const { showToast } = useToast();
@@ -29,6 +32,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     });
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
+    const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
 
     const currentRole = String(userRole || "").toLowerCase();
     const isAdmin = currentRole === "admin";
@@ -48,17 +52,62 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     useEffect(() => {
         const role = localStorage.getItem("role") || "";
         setUserRole(role);
-        if (isOpen && (role.toLowerCase() === "admin" || role.toLowerCase() === "hr")) {
-            fetchEmployees();
+        if (isOpen) {
+            if (role.toLowerCase() === "admin" || role.toLowerCase() === "hr") {
+                fetchEmployees();
+            }
+            fetchDepartmentOptions();
         }
     }, [isOpen]);
 
+    const fetchDepartmentOptions = async () => {
+        try {
+            const dbOptions = await OptionService.getOptions('department');
+            const merged = OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, dbOptions);
+            setDynamicDepartmentOptions(merged);
+        } catch (error) {
+            console.error("Error fetching departments:", error);
+            setDynamicDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
+        }
+    };
+
+    const handleAddDepartment = async (label) => {
+        try {
+            await OptionService.addOption('department', label);
+            await fetchDepartmentOptions();
+            showToast(`Department "${label}" added successfully`, "success");
+        } catch (err) {
+            console.error("Error adding department:", err);
+            showToast(err.response?.data?.message || "Failed to add department", "error");
+        }
+    };
+
+    const handleDeleteDepartment = async (option) => {
+        try {
+            const dbOptions = await OptionService.getOptions('department');
+            const toDelete = dbOptions.find(o => o.label === option.label);
+            if (toDelete) {
+                await OptionService.deleteOption('department', toDelete._id);
+                await fetchDepartmentOptions();
+                showToast(`Department "${option.label}" deleted`, "success");
+            } else {
+                showToast("Cannot delete default options", "error");
+            }
+        } catch (err) {
+            console.error("Error deleting department:", err);
+            showToast("Failed to delete department", "error");
+        }
+    };
+
     useEffect(() => {
         if (leaveRequest) {
+            const empId = leaveRequest.employee?._id || leaveRequest.employee || "";
+            const empName = leaveRequest.employee?.username || leaveRequest.employeeName || "";
+            
             setFormData({
-                employeeId: leaveRequest.employee?._id || leaveRequest.employee || "",
-                employeeName: leaveRequest.employee?.username || leaveRequest.employeeName || "",
-                company: leaveRequest.company || "",
+                employeeId: empId,
+                employeeName: empName,
+                company: leaveRequest.company || "Sonashi",
                 department: leaveRequest.department || "",
                 reportingManager: leaveRequest.reportingManager || "",
                 leaveType: leaveRequest.leaveType || "Personal Leave",
@@ -91,13 +140,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         setFormData((prev) => ({ ...prev, [field]: value }));
     };
 
-    const handleEmployeeChange = (e) => {
-        const selectedId = e.target.value;
+    const handleEmployeeChange = (selectedOption) => {
+        if (!selectedOption) {
+            setFormData(prev => ({ ...prev, employeeId: "", employeeName: "" }));
+            return;
+        }
+        const selectedId = selectedOption.value;
         const selectedEmployee = employees.find(emp => emp._id === selectedId);
         setFormData((prev) => ({
             ...prev,
             employeeId: selectedId,
-            employeeName: selectedEmployee ? selectedEmployee.employeeName : ""
+            employeeName: selectedEmployee ? (selectedEmployee.employeeName || selectedEmployee.name || "") : ""
         }));
     };
 
@@ -131,24 +184,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         { value: "Rejected", label: "Rejected" }
     ];
 
-    const companyOptions = [
-        { value: "Auxin Bulk Pvt Ltd", label: "Auxin Bulk Pvt Ltd" },
-        { value: "Auxin Projects Pvt Ltd", label: "Auxin Projects Pvt Ltd" },
-        { value: "Auxin Shipping Ltd", label: "Auxin Shipping Ltd" }
-    ];
-
-    const baseDepartmentOptions = [
-        { value: "HR", label: "HR" },
-        { value: "IT", label: "IT" },
-        { value: "Sales", label: "Sales" },
-        { value: "Finance", label: "Finance" },
-        { value: "Operations", label: "Operations" },
-        { value: "Marketing", label: "Marketing" }
-    ];
+    const baseDepartmentOptions = dynamicDepartmentOptions;
 
     const employeeOptions = employees.map(emp => ({
         value: emp._id,
-        label: emp.employeeName || emp.name || "Unknown"
+        label: `${emp.employeeName || emp.name || "Unknown"} (${emp.employeeId || "N/A"})`
     }));
 
     const reportingManagerOptions = employees.map(emp => ({
@@ -156,7 +196,6 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         label: emp.employeeName || emp.name || "Unknown"
     }));
 
-    // Ensure auto-filled department and manager appear in Dropdowns even if not in standard list
     const departmentOptions = [...baseDepartmentOptions];
     if (formData.department && !departmentOptions.find(o => o.value === formData.department)) {
         departmentOptions.push({ value: formData.department, label: formData.department });
@@ -166,99 +205,88 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         reportingManagerOptions.push({ value: formData.reportingManager, label: formData.reportingManager });
     }
 
-    // Logic moved to state above for clarity
-
-
     return (
-        <div className="modal-backdrop" onClick={handleBackdropClick}>
-            <div className="add-client-modal" style={{ width: "40rem", height: "auto", maxHeight: "90vh" }}>
-                <div className="add-client-header">
-                    <h2 className="add-client-title">Request Leave</h2>
-                    <button className="close-button" onClick={onClose}>
-                        <span className="close-icon">&times;</span>
-                    </button>
+        <div className="modal-backdrop" onClick={handleBackdropClick} style={{ zIndex: 100000 }}>
+            <div className="leave-modal-container">
+                <div className="leave-modal-header">
+                    <h2 className="leave-modal-title">Edit Leave Request</h2>
+                    <button className="leave-modal-close" onClick={onClose}>&times;</button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-                    <div className="add-client-content" style={{ padding: "2rem 2.5rem", gap: "1.5rem", flex: 1, overflowY: "auto" }}>
-                        <div className="form-fields-grid">
-                            {isManager ? (
-                                <Dropdown
-                                    label="Employee *"
-                                    placeholder="Select employee"
-                                    options={employeeOptions}
-                                    value={formData.employeeId}
-                                    onChange={handleEmployeeChange}
-                                    disabled={!isEditable}
-                                />
-                            ) : (
-                                <InputField
-                                    label="Employee"
-                                    value={formData.employeeName}
-                                    disabled={true}
-                                    readOnly={true}
-                                />
-                            )}
+                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                    <div className="leave-modal-content">
+                        <div className="leave-form-grid">
+                            <div className="full-width">
+                                {isManager ? (
+                                    <div className="full-width">
+                                        <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>
+                                            Employee <span style={{ color: "red", marginLeft: "4px" }}>*</span>
+                                        </label>
+                                        <Select
+                                            options={employeeOptions}
+                                            value={employeeOptions.find(opt => opt.value === formData.employeeId) || null}
+                                            onChange={handleEmployeeChange}
+                                            placeholder="Select employee..."
+                                            isSearchable
+                                            isDisabled={!isEditable}
+                                            styles={{
+                                                control: (base) => ({
+                                                    ...base,
+                                                    minHeight: '44px',
+                                                    borderRadius: '8px',
+                                                    borderColor: '#E2E8F0',
+                                                    boxShadow: 'none',
+                                                    '&:hover': { borderColor: '#CBD5E1' }
+                                                }),
+                                                menuPortal: base => ({ ...base, zIndex: 999999 })
+                                            }}
+                                            menuPortalTarget={document.body}
+                                        />
+                                    </div>
+                                ) : (
+                                    <InputField
+                                        label="Employee"
+                                        value={formData.employeeName}
+                                        disabled={true}
+                                    />
+                                )}
+                            </div>
 
                             {(() => {
                                 const selectedEmp = employees.find(e => e._id === formData.employeeId) || leaveRequest?.employee;
-                                
-                                if (selectedEmp) {
+                                if (selectedEmp && typeof selectedEmp === 'object') {
                                     const { balance, totalTaken } = calculateLeaveBalance(selectedEmp, allLeaveRequests);
-                                    
-                                    // Calculate requested days for the current form
                                     let requestedDays = 0;
                                     if (formData.startDate && formData.endDate) {
                                         const s = new Date(formData.startDate);
                                         const e = new Date(formData.endDate);
-                                        if (!isNaN(s) && !isNaN(e) && e >= s) {
-                                            requestedDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
-                                        }
+                                        if (!isNaN(s) && !isNaN(e) && e >= s) requestedDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
                                     }
 
                                     return (
-                                        <div style={{
-                                            gridColumn: "1 / -1",
+                                        <div className="leave-balance-card" style={{
                                             background: balance > 0 ? "#f0fdf4" : (balance < 0 ? "#fef2f2" : "#f8fafc"),
                                             border: `1px solid ${balance > 0 ? "#bbf7d0" : (balance < 0 ? "#fecaca" : "#e2e8f0")}`,
-                                            padding: "16px 24px",
-                                            borderRadius: "12px",
-                                            color: balance > 0 ? "#166534" : (balance < 0 ? "#991b1b" : "#334155"),
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: "12px",
-                                            marginTop: "5px",
-                                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
+                                            color: balance > 0 ? "#166534" : (balance < 0 ? "#991b1b" : "#334155")
                                         }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                <div style={{ display: "flex", gap: "8px" }}>
-                                                    <span style={{ opacity: 0.8 }}>Current Taken:</span>
+                                            <div className="leave-balance-row">
+                                                <div className="leave-balance-item">
+                                                    <span className="leave-balance-label">Current Taken:</span>
                                                     <span>{totalTaken} Days</span>
                                                 </div>
-                                                <div style={{ width: "1px", height: "16px", background: "currentColor", opacity: 0.2 }}></div>
-                                                <div style={{ display: "flex", gap: "8px" }}>
-                                                    <span style={{ opacity: 0.8 }}>Current Balance:</span>
+                                                <div className="leave-balance-item">
+                                                    <span className="leave-balance-label">Current Balance:</span>
                                                     <span>{balance} Days</span>
                                                 </div>
                                             </div>
-                                            
                                             {requestedDays > 0 && (
-                                                <div style={{ 
-                                                    display: "flex", 
-                                                    justifyContent: "space-between", 
-                                                    alignItems: "center", 
-                                                    paddingTop: "12px", 
-                                                    borderTop: "1px dashed currentColor", 
-                                                    opacity: 0.9 
-                                                }}>
-                                                    <div style={{ display: "flex", gap: "8px" }}>
-                                                        <span style={{ opacity: 0.8 }}>This Request:</span>
-                                                        <span style={{ color: "#1d4ed8" }}>{requestedDays} Days</span>
+                                                <div className="leave-balance-row" style={{ paddingTop: "12px", borderTop: "1px dashed currentColor" }}>
+                                                    <div className="leave-balance-item">
+                                                        <span className="leave-balance-label">This Request:</span>
+                                                        <span style={{ color: "#007aff" }}>{requestedDays} Days</span>
                                                     </div>
-                                                    <div style={{ display: "flex", gap: "8px" }}>
-                                                        <span style={{ opacity: 0.8 }}>Remaining:</span>
+                                                    <div className="leave-balance-item">
+                                                        <span className="leave-balance-label">Remaining:</span>
                                                         <span style={{ color: (balance - requestedDays) < 0 ? "#ef4444" : "inherit" }}>
                                                             {balance - requestedDays} Days
                                                         </span>
@@ -284,6 +312,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 options={departmentOptions}
                                 value={formData.department}
                                 onChange={(e) => handleInputChange("department", e.target.value)}
+                                onAdd={isManager ? handleAddDepartment : null}
+                                onDelete={isManager ? handleDeleteDepartment : null}
                                 disabled={!isEditable}
                             />
 
@@ -313,7 +343,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         </div>
                                         <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.startDate || ""} placeholder="Select date" />
-                                            <img src={calendarIcon} alt="" width="16" height="16" style={{ flexShrink: 0 }} />
+                                            <img src={calendarIcon} alt="" width="16" height="16" />
                                         </div>
                                     </div>
                                     <div className="input-field">
@@ -322,53 +352,45 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         </div>
                                         <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.endDate || ""} placeholder="Select date" />
-                                            <img src={calendarIcon} alt="" width="16" height="16" style={{ flexShrink: 0 }} />
+                                            <img src={calendarIcon} alt="" width="16" height="16" />
                                         </div>
                                     </div>
                                 </>
                             ) : (
                                 <>
-                                    <InputField
-                                        label="Start Date *"
-                                        type="date"
-                                        value={formData.startDate}
-                                        disabled={true}
-                                    />
-                                    <InputField
-                                        label="End Date *"
-                                        type="date"
-                                        value={formData.endDate}
-                                        disabled={true}
-                                    />
+                                    <InputField label="Start Date *" value={formData.startDate} disabled={true} />
+                                    <InputField label="End Date *" value={formData.endDate} disabled={true} />
                                 </>
                             )}
 
-                            {isManager && (
-                                <Dropdown
-                                    label="Status *"
-                                    placeholder="Select status"
-                                    options={statusOptions}
-                                    value={formData.status}
-                                    onChange={(e) => handleInputChange("status", e.target.value)}
-                                />
+                            {isAdmin && (
+                                <div className="full-width">
+                                    <Dropdown
+                                        label="Status *"
+                                        placeholder="Select status"
+                                        options={statusOptions}
+                                        value={formData.status}
+                                        onChange={(e) => handleInputChange("status", e.target.value)}
+                                    />
+                                </div>
                             )}
 
-                            <InputField
-                                label="Reason *"
-                                placeholder="Enter reason for leave"
-                                value={formData.reason}
-                                onChange={(e) => handleInputChange("reason", e.target.value)}
-                                disabled={!isEditable}
-                            />
+                            <div className="full-width">
+                                <InputField
+                                    label="Reason *"
+                                    placeholder="Enter reason for leave"
+                                    value={formData.reason}
+                                    onChange={(e) => handleInputChange("reason", e.target.value)}
+                                    disabled={!isEditable}
+                                />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="form-actions">
-                        <button type="button" className="button-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="button-primary" disabled={isSubmitting}>
-                            {isSubmitting ? "Updating..." : "Update"}
+                    <div className="leave-modal-footer">
+                        <button type="button" className="leave-btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="leave-btn-primary" disabled={isSubmitting}>
+                            {isSubmitting ? "Updating..." : "Update Request"}
                         </button>
                     </div>
                 </form>

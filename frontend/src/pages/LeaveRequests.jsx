@@ -62,7 +62,7 @@ function LeaveRequests() {
         <div className={styles["dashboard-layout"]}>
             <Side />
 
-            <main>
+            <main className={styles["main-container"]}>
                 <header className={styles["dashboard-header"]}>
                     <div className={styles["dashboard-row"]}>
                         <div className={styles["header-left"]}>

@@ -9,7 +9,9 @@ import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
-import "../sales-and-leads/AddClientModal.css";
+import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
+import OptionService from "../../services/OptionService";
+import "./LeaveForm.css";
 
 function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
     const { showToast } = useToast();
@@ -30,51 +32,91 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
     });
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
+    const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
 
     const currentRole = String(userRole || "").toLowerCase();
     const isAdmin = currentRole === "admin";
     const isHR = currentRole === "hr";
     const isManager = isAdmin || isHR;
 
-    const handleDateSelect = (date) => {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, "0");
-        const d = String(date.getDate()).padStart(2, "0");
-        const value = `${y}-${m}-${d}`;
-        setFormData((prev) => ({ ...prev, [datePickerField === "start" ? "startDate" : "endDate"]: value }));
-        setDatePickerOpen(false);
-    };
-
     useEffect(() => {
-        // Get logged-in user info from localStorage
         const role = localStorage.getItem("role") || "";
         const username = localStorage.getItem("username") || "";
         const userId = localStorage.getItem("userId") || "";
 
         setUserRole(role);
         setLoggedInUser({ id: userId, username: username });
-
-        // For non-management users, auto-fill employee info
-        const lowerRole = role.toLowerCase();
-        if (lowerRole !== "admin" && lowerRole !== "hr" && isOpen) {
-            setFormData(prev => ({
-                ...prev,
-                employeeId: userId,
-                employeeName: username
-            }));
-        }
     }, [isOpen]);
 
     useEffect(() => {
         if (isOpen) {
             fetchEmployees();
+            fetchDepartmentOptions();
         }
     }, [isOpen]);
+
+    const fetchDepartmentOptions = async () => {
+        try {
+            const dbOptions = await OptionService.getOptions('department');
+            console.log("DB DEPARTMENTS:", dbOptions);
+            const merged = OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, dbOptions);
+            console.log("MERGED DEPARTMENTS:", merged);
+            setDynamicDepartmentOptions(merged);
+        } catch (error) {
+            console.error("Error fetching departments:", error);
+            setDynamicDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
+        }
+    };
+
+    const handleAddDepartment = async (label) => {
+        try {
+            await OptionService.addOption('department', label);
+            await fetchDepartmentOptions();
+            showToast(`Department "${label}" added successfully`, "success");
+        } catch (err) {
+            console.error("Error adding department:", err);
+            showToast(err.response?.data?.message || "Failed to add department", "error");
+        }
+    };
+
+    const handleDeleteDepartment = async (option) => {
+        try {
+            const dbOptions = await OptionService.getOptions('department');
+            const toDelete = dbOptions.find(o => o.label === option.label);
+            if (toDelete) {
+                await OptionService.deleteOption('department', toDelete._id);
+                await fetchDepartmentOptions();
+                showToast(`Department "${option.label}" deleted`, "success");
+            } else {
+                showToast("Cannot delete default options", "error");
+            }
+        } catch (err) {
+            console.error("Error deleting department:", err);
+            showToast("Failed to delete department", "error");
+        }
+    };
+
+    // Update form data for regular users once employees are loaded
+    useEffect(() => {
+        if (isOpen && employees.length > 0 && userRole.toLowerCase() !== "admin" && userRole.toLowerCase() !== "hr") {
+            const userId = localStorage.getItem("userId") || "";
+            const username = localStorage.getItem("username") || "";
+            const me = employees.find(e => e._id === userId || e.employeeId === userId);
+            setFormData(prev => ({
+                ...prev,
+                employeeId: userId,
+                employeeName: username,
+                department: me?.department || prev.department,
+                reportingManager: me?.reportingManager || prev.reportingManager
+            }));
+        }
+    }, [isOpen, employees, userRole]);
 
     const fetchEmployees = async () => {
         try {
             const data = await EmployeeService.getEmployees();
-            setEmployees(data);
+            const empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+            setEmployees(empList);
         } catch (error) {
             console.error("Error fetching employees:", error);
         }
@@ -83,9 +125,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
     if (!isOpen) return null;
 
     const handleBackdropClick = (e) => {
-        if (e.target === e.currentTarget) {
-            onClose();
-        }
+        if (e.target === e.currentTarget) onClose();
     };
 
     const handleInputChange = (field, value) => {
@@ -105,35 +145,47 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
         }
         const selectedId = selectedOption.value;
         const selectedEmployee = employees.find(emp => emp._id === selectedId);
-        setFormData((prev) => ({
-            ...prev,
-            employeeId: selectedId,
-            employeeName: selectedEmployee ? (selectedEmployee.employeeName || selectedEmployee.name || "") : "",
-            department: selectedEmployee?.department || prev.department,
-            reportingManager: selectedEmployee?.reportingManager || prev.reportingManager
-        }));
+
+        console.log("SELECTED EMPLOYEE DATA:", selectedEmployee);
+
+        setFormData((prev) => {
+            const updated = {
+                ...prev,
+                employeeId: selectedId,
+                employeeName: selectedEmployee ? (selectedEmployee.employeeName || selectedEmployee.name || "") : "",
+                department: (selectedEmployee?.department || "").trim(),
+                reportingManager: (selectedEmployee?.reportingManager || "").trim()
+            };
+            console.log("UPDATED FORM STATE:", updated);
+            return updated;
+        });
+    };
+
+    const handleDateSelect = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        const value = `${y}-${m}-${d}`;
+        setFormData((prev) => ({ ...prev, [datePickerField === "start" ? "startDate" : "endDate"]: value }));
+        setDatePickerOpen(false);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        // Both HR and Admin can select someone. Use selected employee details.
-        const submitData = formData;
-
-        if (!submitData.employeeName || !submitData.company || !submitData.department || !submitData.reportingManager || !submitData.startDate || !submitData.endDate || !submitData.reason) {
+        if (!formData.employeeName || !formData.company || !formData.department || !formData.reportingManager || !formData.startDate || !formData.endDate || !formData.reason) {
             showToast("Please fill in all required fields.", "error");
             return;
         }
 
         setIsSubmitting(true);
         try {
-            const result = await leaveRequestService.createLeaveRequest(submitData);
+            const result = await leaveRequestService.createLeaveRequest(formData);
             showToast("Leave request submitted successfully.", "success");
             onSubmit(result);
             onClose();
             setFormData({
-                employeeId: userRole.toLowerCase() === "admin" || userRole.toLowerCase() === "hr" ? "" : loggedInUser.id,
-                employeeName: userRole.toLowerCase() === "admin" || userRole.toLowerCase() === "hr" ? "" : loggedInUser.username,
+                employeeId: isAdmin || isHR ? "" : loggedInUser.id,
+                employeeName: isAdmin || isHR ? "" : loggedInUser.username,
                 company: "Sonashi",
                 department: "",
                 reportingManager: "",
@@ -150,6 +202,26 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
         }
     };
 
+    // Calculate History Logic (Same as View Template)
+    const selectedEmp = employees.find(e => e._id === formData.employeeId);
+    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0 };
+    const years = [2026, 2025, 2024, 2023, 2022];
+    const employeeLeaves = (allLeaveRequests || []).filter(req => {
+        const reqName = String(req.employeeName || "").toLowerCase().trim();
+        const empNameSearch = String(selectedEmp?.employeeName || selectedEmp?.name || "").toLowerCase().trim();
+        return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
+    });
+
+    const getYearlyTotal = (year) => {
+        return employeeLeaves
+            .filter(req => new Date(req.startDate).getFullYear() === year)
+            .reduce((total, req) => {
+                const s = new Date(req.startDate);
+                const e = new Date(req.endDate);
+                return total + (Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1);
+            }, 0);
+    };
+
     const leaveTypeOptions = [
         { value: "Sick Leave", label: "Sick Leave" },
         { value: "Vacation", label: "Vacation" },
@@ -158,232 +230,193 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
         { value: "Other", label: "Other" }
     ];
 
-    const companyOptions = [
-        { value: "Auxin Bulk Pvt Ltd", label: "Auxin Bulk Pvt Ltd" },
-        { value: "Auxin Projects Pvt Ltd", label: "Auxin Projects Pvt Ltd" },
-        { value: "Auxin Shipping Ltd", label: "Auxin Shipping Ltd" }
-    ];
-
-    const baseDepartmentOptions = [
-        { value: "HR", label: "HR" },
-        { value: "IT", label: "IT" },
-        { value: "Sales", label: "Sales" },
-        { value: "Finance", label: "Finance" },
-        { value: "Operations", label: "Operations" },
-        { value: "Marketing", label: "Marketing" }
-    ];
+    const departmentOptions = dynamicDepartmentOptions;
 
     const employeeOptions = employees.map(emp => ({
         value: emp._id,
-        label: emp.employeeName || emp.name || "Unknown"
+        label: `${emp.employeeName || emp.name || "Unknown"} (${emp.employeeId || "N/A"})`
     }));
 
     const reportingManagerOptions = employees.map(emp => ({
-        value: emp.employeeName || emp.name || "Unknown",
-        label: emp.employeeName || emp.name || "Unknown"
-    }));
+        value: (emp.employeeName || emp.name || "").trim(),
+        label: (emp.employeeName || emp.name || "Unknown").trim()
+    })).filter(opt => opt.value !== "");
 
-    // Ensure auto-filled department and manager appear in Dropdowns even if not in standard list
-    const departmentOptions = [...baseDepartmentOptions];
-    if (formData.department && !departmentOptions.find(o => o.value === formData.department)) {
-        departmentOptions.push({ value: formData.department, label: formData.department });
-    }
-
-    if (formData.reportingManager && !reportingManagerOptions.find(o => o.value === formData.reportingManager)) {
-        reportingManagerOptions.push({ value: formData.reportingManager, label: formData.reportingManager });
+    const currentManager = (formData.reportingManager || "").trim();
+    if (currentManager && !reportingManagerOptions.find(o => o.value === currentManager)) {
+        reportingManagerOptions.push({ value: currentManager, label: currentManager });
     }
 
     return (
-        <div className="modal-backdrop" onClick={handleBackdropClick}>
-            <div className="add-client-modal" style={{ width: "40rem", height: "auto", maxHeight: "90vh" }}>
-                <div className="add-client-header">
-                    <h2 className="add-client-title">Request Leave</h2>
-                    <button className="close-button" onClick={onClose}>
-                        <span className="close-icon">&times;</span>
-                    </button>
+        <div className="modal-backdrop" onClick={handleBackdropClick} style={{ zIndex: 100000 }}>
+            <div className="leave-modal-container">
+                <div className="leave-modal-header">
+                    <h2 className="leave-modal-title">New Leave Request</h2>
+                    <button className="leave-modal-close" onClick={onClose}>&times;</button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-                    <div className="add-client-content" style={{ padding: "2rem 2.5rem", gap: "1.5rem", flex: 1, overflowY: "auto" }}>
-                        <div className="form-fields-grid">
-                            <div className="input-field" style={{ gridColumn: "1 / -1" }}>
-                                <div className="input-label-container">
-                                    <label className="input-label">Employee <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
-                                </div>
+                <div className="leave-modal-content" style={{ background: "#f8fafc" }}>
+                    <form onSubmit={handleSubmit} className="leave-main-form">
+                        <div className="leave-form-grid" style={{ display: "grid", gap: "20px" }}>
+                            <div className="full-width">
+                                <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Employee *</label>
                                 {isManager ? (
                                     <Select
                                         options={employeeOptions}
                                         value={employeeOptions.find(opt => opt.value === formData.employeeId) || null}
                                         onChange={handleEmployeeChange}
                                         placeholder="Select employee..."
-                                        isSearchable
                                         styles={{
                                             control: (base) => ({
                                                 ...base,
-                                                minHeight: '42px',
+                                                minHeight: '44px',
                                                 borderRadius: '8px',
                                                 borderColor: '#E2E8F0',
                                                 boxShadow: 'none',
-                                                '&:hover': {
-                                                    borderColor: '#CBD5E1'
-                                                }
+                                                '&:hover': { borderColor: '#CBD5E1' }
                                             }),
-                                            menuPortal: base => ({ ...base, zIndex: 9999 })
+                                            menuPortal: base => ({ ...base, zIndex: 999999 })
                                         }}
                                         menuPortalTarget={document.body}
                                     />
                                 ) : (
-                                    <input 
-                                        type="text" 
-                                        className="input-field-input" 
-                                        value={formData.employeeName} 
-                                        disabled={true} 
-                                        style={{ background: "#f8fafc", color: "#64748b" }}
-                                    />
+                                    <input type="text" className="input-field-input" value={formData.employeeName} disabled style={{ background: "#f8fafc" }} />
                                 )}
                             </div>
 
-                            <InputField
-                                label="Company *"
-                                value="Sonashi"
-                                disabled={true}
-                                onChange={() => {}}
-                            />
-
-                            <Dropdown
-                                label="Department *"
-                                placeholder="Select department"
-                                options={departmentOptions}
-                                value={formData.department}
-                                onChange={(e) => handleInputChange("department", e.target.value)}
-                            />
-
-                            <Dropdown
-                                label="Reporting Manager *"
-                                placeholder="Select reporting manager"
-                                options={reportingManagerOptions}
-                                value={formData.reportingManager}
-                                onChange={(e) => handleInputChange("reportingManager", e.target.value)}
-                            />
-
-                            <Dropdown
-                                label="Leave Type *"
-                                placeholder="Select leave type"
-                                options={leaveTypeOptions}
-                                value={formData.leaveType}
-                                onChange={(e) => handleInputChange("leaveType", e.target.value)}
-                            />
-
-                            <div className="input-field">
-                                <div className="input-label-container">
-                                    <label className="input-label">Start Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
-                                </div>
-                                <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
-                                    <input type="text" className="input-field-input" readOnly value={formData.startDate || ""} placeholder="Select date" />
-                                    <img src={calendarIcon} alt="" width="16" height="16" style={{ flexShrink: 0 }} />
+                            <div className="full-width">
+                                <div className="form-row">
+                                    <Dropdown
+                                        label="Department *"
+                                        options={departmentOptions}
+                                        value={formData.department}
+                                        onChange={(e) => handleInputChange("department", e.target.value)}
+                                        onAdd={isManager ? handleAddDepartment : null}
+                                        onDelete={isManager ? handleDeleteDepartment : null}
+                                        required
+                                    />
+                                    <Dropdown
+                                        label="Reporting Manager *"
+                                        options={reportingManagerOptions}
+                                        value={formData.reportingManager}
+                                        onChange={(e) => handleInputChange("reportingManager", e.target.value)}
+                                        required
+                                    />
                                 </div>
                             </div>
 
-                            <div className="input-field">
-                                <div className="input-label-container">
-                                    <label className="input-label">End Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
-                                </div>
-                                <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
-                                    <input type="text" className="input-field-input" readOnly value={formData.endDate || ""} placeholder="Select date" />
-                                    <img src={calendarIcon} alt="" width="16" height="16" style={{ flexShrink: 0 }} />
-                                </div>
+                            <div className="full-width">
+                                <Dropdown
+                                    label="Leave Type *"
+                                    options={leaveTypeOptions}
+                                    value={formData.leaveType}
+                                    onChange={(e) => handleInputChange("leaveType", e.target.value)}
+                                    required
+                                    style={{ maxWidth: "50%" }}
+                                />
                             </div>
 
-                            {(() => {
-                                const selectedEmp = employees.find(e => e._id === formData.employeeId) || (loggedInUser.id === formData.employeeId ? { doj: localStorage.getItem("doj") || new Date().toISOString(), _id: loggedInUser.id, employeeName: loggedInUser.username } : null);
-                                
-                                if (selectedEmp) {
-                                    const { balance, totalTaken } = calculateLeaveBalance(selectedEmp, allLeaveRequests);
-                                    
-                                    // Calculate requested days for the current form
-                                    let requestedDays = 0;
-                                    if (formData.startDate && formData.endDate) {
-                                        const s = new Date(formData.startDate);
-                                        const e = new Date(formData.endDate);
-                                        if (!isNaN(s) && !isNaN(e) && e >= s) {
-                                            requestedDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
-                                        }
-                                    }
-
-                                    return (
-                                        <div style={{
-                                            gridColumn: "1 / -1",
-                                            background: balance > 0 ? "#f0fdf4" : (balance < 0 ? "#fef2f2" : "#f8fafc"),
-                                            border: `1px solid ${balance > 0 ? "#bbf7d0" : (balance < 0 ? "#fecaca" : "#e2e8f0")}`,
-                                            padding: "16px 24px",
-                                            borderRadius: "12px",
-                                            color: balance > 0 ? "#166534" : (balance < 0 ? "#991b1b" : "#334155"),
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: "12px",
-                                            marginTop: "5px",
-                                            boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
-                                        }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                <div style={{ display: "flex", gap: "8px" }}>
-                                                    <span style={{ opacity: 0.8 }}>Current Taken:</span>
-                                                    <span>{totalTaken} Days</span>
-                                                </div>
-                                                <div style={{ width: "1px", height: "16px", background: "currentColor", opacity: 0.2 }}></div>
-                                                <div style={{ display: "flex", gap: "8px" }}>
-                                                    <span style={{ opacity: 0.8 }}>Current Balance:</span>
-                                                    <span>{balance} Days</span>
-                                                </div>
-                                            </div>
-                                            
-                                            {requestedDays > 0 && (
-                                                <div style={{ 
-                                                    display: "flex", 
-                                                    justifyContent: "space-between", 
-                                                    alignItems: "center", 
-                                                    paddingTop: "12px", 
-                                                    borderTop: "1px dashed currentColor", 
-                                                    opacity: 0.9 
-                                                }}>
-                                                    <div style={{ display: "flex", gap: "8px" }}>
-                                                        <span style={{ opacity: 0.8 }}>This Request:</span>
-                                                        <span style={{ color: "#1d4ed8" }}>{requestedDays} Days</span>
-                                                    </div>
-                                                    <div style={{ display: "flex", gap: "8px" }}>
-                                                        <span style={{ opacity: 0.8 }}>Remaining:</span>
-                                                        <span style={{ color: (balance - requestedDays) < 0 ? "#ef4444" : "inherit" }}>
-                                                            {balance - requestedDays} Days
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            )}
+                            <div className="full-width">
+                                <div className="form-row">
+                                    <div className="input-field">
+                                        <label className="input-label">Start Date *</label>
+                                        <div className="input-container" onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
+                                            <input type="text" className="input-field-input" readOnly value={formData.startDate} placeholder="Start date" />
+                                            <img src={calendarIcon} alt="" width="16" />
                                         </div>
-                                    );
-                                }
-                                return null;
-                            })()}
+                                    </div>
+                                    <div className="input-field">
+                                        <label className="input-label">End Date *</label>
+                                        <div className="input-container" onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
+                                            <input type="text" className="input-field-input" readOnly value={formData.endDate} placeholder="End date" />
+                                            <img src={calendarIcon} alt="" width="16" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                            <InputField
-                                label="Reason *"
-                                placeholder="Enter reason for leave"
-                                value={formData.reason}
-                                onChange={(e) => handleInputChange("reason", e.target.value)}
-                            />
+                            <div className="full-width">
+                                <InputField label="Reason *" placeholder="Reason for leave" value={formData.reason} onChange={(e) => handleInputChange("reason", e.target.value)} />
+                            </div>
+
+                            <div className="leave-modal-footer" style={{ padding: "0", border: "none", marginTop: "12px" }}>
+                                <button type="button" className="leave-btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+                                <button type="submit" className="leave-btn-primary" disabled={isSubmitting} style={{ flex: 2 }}>
+                                    {isSubmitting ? "Submitting..." : "Submit Request"}
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    </form>
 
-                    <div className="form-actions">
-                        <button type="button" className="button-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="button-primary" disabled={isSubmitting}>
-                            {isSubmitting ? "Submitting..." : (isManager ? "Submit Request" : "Request Leave")}
-                        </button>
-                    </div>
-                </form>
+                    {/* Employee Leave Overview Section - Now neatly UNDER the fields */}
+                    {selectedEmp ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                            <div style={{ background: "#fff", padding: "24px", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+                                <h3 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "20px", color: "#0f172a" }}>Employee Leave Summary</h3>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "16px" }}>
+                                    <div style={{ padding: "16px", background: "#f0fdf4", borderRadius: "12px", border: "1px solid #bbf7d0", textAlign: "center" }}>
+                                        <div style={{ fontSize: "11px", color: "#166534", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Entitlement</div>
+                                        <div style={{ fontSize: "20px", fontWeight: "800", color: "#14532d" }}>{leaveStats.entitlement} Days</div>
+                                    </div>
+                                    <div style={{ padding: "16px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecaca", textAlign: "center" }}>
+                                        <div style={{ fontSize: "11px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Taken</div>
+                                        <div style={{ fontSize: "20px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
+                                    </div>
+                                    <div style={{ padding: "16px", background: "#eff6ff", borderRadius: "12px", border: "1px solid #bfdbfe", textAlign: "center" }}>
+                                        <div style={{ fontSize: "11px", color: "#1e40af", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Available</div>
+                                        <div style={{ fontSize: "20px", fontWeight: "800", color: "#1e3a8a" }}>{leaveStats.balance} Days</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                                <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                                    <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History (Last 5 Years)</h3>
+                                </div>
+                                <div style={{ overflowX: "auto" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "400px" }}>
+                                        <thead>
+                                            <tr style={{ background: "#f8fafc" }}>
+                                                <th style={{ textAlign: "left", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>YEAR</th>
+                                                <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>TAKEN</th>
+                                                <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>STATUS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {years.map(year => {
+                                                const total = getYearlyTotal(year);
+                                                return (
+                                                    <tr key={year} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                                        <td style={{ padding: "14px 24px", fontSize: "14px", fontWeight: "600", color: "#334155" }}>{year}</td>
+                                                        <td style={{ padding: "14px 24px", fontSize: "14px", textAlign: "right", color: "#0f172a" }}>{total} Days</td>
+                                                        <td style={{ padding: "14px 24px", textAlign: "right" }}>
+                                                            <span style={{
+                                                                padding: "4px 10px",
+                                                                borderRadius: "6px",
+                                                                fontSize: "11px",
+                                                                fontWeight: "700",
+                                                                background: total > 30 ? "#fef2f2" : "#f0fdf4",
+                                                                color: total > 30 ? "#ef4444" : "#16a34a"
+                                                            }}>
+                                                                {total > 30 ? "EXCEEDED" : "WITHIN LIMIT"}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ padding: "40px", background: "#fff", borderRadius: "16px", border: "1px dashed #cbd5e1", textAlign: "center", color: "#94a3b8" }}>
+                            Select an employee to view their leave history and balance summary.
+                        </div>
+                    )}
+                </div>
             </div>
+
             <DatePickerModal
                 isOpen={datePickerOpen}
                 onClose={() => setDatePickerOpen(false)}
@@ -396,4 +429,3 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
 }
 
 export default AddLeaveRequestModal;
-

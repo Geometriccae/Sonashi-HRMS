@@ -49,14 +49,14 @@ const getMe = async () => {
   return parseResponse(response);
 };
 
-const updateMe = async ({ username, phoneNumber, newPassword, emailId }) => {
+const updateMe = async ({ username, phoneNumber, newPassword, emailId, profilePicture }) => {
   const response = await fetch(`${baseUrl}/me`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${getAuthToken()}`
     },
-    body: JSON.stringify({ username, phoneNumber, newPassword, emailId })
+    body: JSON.stringify({ username, phoneNumber, newPassword, emailId, profilePicture })
   });
   return parseResponse(response);
 };

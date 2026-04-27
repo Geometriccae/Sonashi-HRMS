@@ -265,6 +265,8 @@ app.post('/api/client-remarks/:clientId', authMiddleware, async (req, res) => {
   }
 });
 
+const optionRoutes = require('./routes/optionRoutes');
+
 app.use('/api/salary-slips', salarySlipRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/employeedocuments', employeeDocumentRoutes);
@@ -277,8 +279,8 @@ app.use('/api/checkins', require('./routes/checkInRoutes'));
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/leave-requests', leaveRequestRoutes);
-app.use('/api/leave-requests', leaveRequestRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/options', optionRoutes);
 
 
 // ====== DATABASE CONNECTION ======

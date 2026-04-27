@@ -9,6 +9,7 @@ import UserService from "../services/UserService";
 import config from "../config/config";
 import ProfileAvatar from "../components/ProfileAvatar";
 import NotificationBell from "../components/NotificationBell";
+import LogoutModal from "../components/logout-modal/LogoutModal";
 
 function Profile() {
   const [username, setUsername] = useState("");
@@ -22,6 +23,8 @@ function Profile() {
     browserNotifications: false,
     appNotifications: true,
   });
+  const [leaveBalance, setLeaveBalance] = useState("--");
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
@@ -40,6 +43,7 @@ function Profile() {
             ? `${config.API_BASE_URL.replace("/api", "")}${me.profilePicture}`
             : null,
         }));
+        setLeaveBalance(me.leaveBalance !== undefined ? me.leaveBalance : 21);
       } catch (e) {
         // ignore
       }
@@ -67,13 +71,19 @@ function Profile() {
   };
 
   // Add this function to handle logout
-  const handleLogout = () => {
-    if (window.confirm("Are you sure you want to logout?")) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("username");
-      localStorage.removeItem("role");
-      window.location.href = "/login";
-    }
+  const handleLogoutClick = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleConfirmLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    localStorage.removeItem("role");
+    window.location.href = "/login";
+  };
+
+  const handleCloseLogoutModal = () => {
+    setIsLogoutModalOpen(false);
   };
 
   const handleSaveChanges = async () => {
@@ -83,6 +93,7 @@ function Profile() {
         phoneNumber: formData.phoneNumber,
         emailId: formData.emailId,
         newPassword: formData.newPassword || undefined,
+        profilePicture: formData.profilePicture ? formData.profilePicture.replace(`${config.API_BASE_URL.replace("/api", "")}`, "") : null,
       });
       setUsername(updated.username || "");
       alert("Profile updated successfully!");
@@ -117,8 +128,6 @@ function Profile() {
 
   const handleRemoveProfilePicture = () => {
     setFormData((prev) => ({ ...prev, profilePicture: null }));
-    // Persist removal
-    UserService.updateMe({ profilePicture: null }).catch(() => {});
   };
 
   return (
@@ -173,7 +182,7 @@ function Profile() {
             </button> */}
               <button
                 className={styles["logout-button"]}
-                onClick={handleLogout}
+                onClick={handleLogoutClick}
               >
                 <span>Logout</span>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -211,6 +220,8 @@ function Profile() {
                 />
               </div>
             </div>
+
+            <div className={styles["divider"]}></div>
 
             <div className={styles["divider"]}></div>
 
@@ -412,6 +423,12 @@ function Profile() {
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNavigation />
+      {/* Logout Confirmation Modal */}
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        onClose={handleCloseLogoutModal}
+        onConfirm={handleConfirmLogout}
+      />
     </div>
   );
 }

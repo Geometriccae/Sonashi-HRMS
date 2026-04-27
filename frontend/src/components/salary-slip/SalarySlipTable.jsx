@@ -47,27 +47,38 @@ const XIcon = () => (
     </svg>
 );
 
-// Delete Confirmation Dialog Component
-const DeleteConfirmDialog = ({ isOpen, onClose, onConfirm, employeeName }) => {
+// Generic Confirmation Dialog Component
+const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", confirmColor = "#dc2626", icon = "warning" }) => {
     if (!isOpen) return null;
 
     return (
         <div className={styles.dialogOverlay}>
             <div className={styles.dialogContent}>
                 <div className={styles.dialogIcon}>
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                    </svg>
+                    {icon === "warning" ? (
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={confirmColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    ) : (
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                    )}
                 </div>
-                <h3 className={styles.dialogTitle}>Delete Salary Slip</h3>
-                <p className={styles.dialogMessage}>
-                    Are you sure you want to delete the salary slip for <strong>{employeeName}</strong>? This action cannot be undone.
-                </p>
+                <h3 className={styles.dialogTitle}>{title}</h3>
+                <p className={styles.dialogMessage}>{message}</p>
                 <div className={styles.dialogActions}>
                     <button className={styles.dialogCancelBtn} onClick={onClose}>Cancel</button>
-                    <button className={styles.dialogDeleteBtn} onClick={onConfirm}>Delete</button>
+                    <button 
+                        className={styles.dialogDeleteBtn} 
+                        style={{ backgroundColor: confirmColor }} 
+                        onClick={onConfirm}
+                    >
+                        {confirmText}
+                    </button>
                 </div>
             </div>
         </div>
@@ -376,6 +387,9 @@ function SalarySlipTable({ userRole }) {
     const [selectedDepartment, setSelectedDepartment] = useState("All");
     const [isGenerating, setIsGenerating] = useState(false);
     const [departments, setDepartments] = useState([]);
+    const [selectedSlips, setSelectedSlips] = useState([]);
+    const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+    const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
 
     // Determine which expenses can be approved based on role
     const canApproveExpense = (expense) => {
@@ -801,6 +815,33 @@ function SalarySlipTable({ userRole }) {
         setDeleteDialogOpen(true);
     };
 
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedSlips(currentSlips.map(s => s._id));
+        } else {
+            setSelectedSlips([]);
+        }
+    };
+
+    const handleSelectRow = (id) => {
+        setSelectedSlips(prev =>
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedSlips.length === 0) return;
+        try {
+            await salarySlipService.bulkDeleteSalarySlips(selectedSlips);
+            showToast(`Successfully deleted ${selectedSlips.length} salary slips.`, "success");
+            setSelectedSlips([]);
+            setBulkDeleteConfirmOpen(false);
+            fetchData();
+        } catch (error) {
+            showToast(error.message || "Failed to delete records.", "error");
+        }
+    };
+
     const closeDeleteDialog = () => {
         setDeleteDialogOpen(false);
         setSlipToDelete(null);
@@ -824,19 +865,25 @@ function SalarySlipTable({ userRole }) {
             return;
         }
 
-        if (!window.confirm(`Generate salary slips for all active employees for ${selectedMonth} ${selectedYear}?`)) {
+        // Check if slips already exist for the selected month/year
+        if (salarySlips.length > 0) {
+            showToast(`Salary slips for ${selectedMonth} ${selectedYear} have already been generated.`, "info");
             return;
         }
+        
+        setGenerateConfirmOpen(true);
+    };
 
+    const confirmGenerateBulk = async () => {
+        setGenerateConfirmOpen(false);
         setIsGenerating(true);
         try {
             const resp = await salarySlipService.generateBulkSalarySlips(selectedMonth, selectedYear);
             showToast(resp.message || "Bulk generation completed.", "success");
             fetchData();
         } catch (error) {
-            // Check if error is the 'Unexpected token <' which means backend returned HTML (usually 404 or crash)
             const errorMsg = error.message.includes('Unexpected token') 
-                ? "Backend route not found. Please RESTART YOUR SERVER (node server) to apply new changes." 
+                ? "Backend error. Please check your server." 
                 : error.message;
             showToast(errorMsg || "Failed to generate slips.", "error");
         } finally {
@@ -969,11 +1016,17 @@ function SalarySlipTable({ userRole }) {
                                 <span>{isGenerating ? 'Generating...' : 'Auto-Generate for All'}</span>
                             </button>
                             {/* <div className={styles.importWrapper}>
-                                <button onClick={() => setIsImportModalOpen(true)} className={styles.importButton}>
-                                    <img src={plus} alt="" className={styles.plusIcon} />
-                                    <span>Bulk Import</span>
                                 </button>
                             </div> */}
+                            {selectedSlips.length > 0 && (
+                                <button
+                                    onClick={() => setBulkDeleteConfirmOpen(true)}
+                                    className={styles.bulkDeleteBtn}
+                                >
+                                    <TrashIcon />
+                                    <span>Delete Selected ({selectedSlips.length})</span>
+                                </button>
+                            )}
                         </>
                     )}
                     {!isAdmin && (employeeTab === 'expense') && (
@@ -1014,6 +1067,16 @@ function SalarySlipTable({ userRole }) {
                     <table className={styles.table}>
                         <thead>
                             <tr>
+                                {canManageSlips && (
+                                    <th className={styles.checkboxColumn}>
+                                        <input
+                                            type="checkbox"
+                                            className={styles.checkbox}
+                                            checked={currentSlips.length > 0 && selectedSlips.length === currentSlips.length}
+                                            onChange={handleSelectAll}
+                                        />
+                                    </th>
+                                )}
                                 <th>Employee Name</th>
                                 {isAdmin && <th>Email ID</th>}
                                 <th>Designation</th>
@@ -1032,7 +1095,17 @@ function SalarySlipTable({ userRole }) {
                         <tbody>
                             {currentSlips.length > 0 ? (
                                 currentSlips.map((slip) => (
-                                    <tr key={slip._id}>
+                                    <tr key={slip._id} className={selectedSlips.includes(slip._id) ? styles.selectedRow : ""}>
+                                        {canManageSlips && (
+                                            <td className={styles.checkboxColumn}>
+                                                <input
+                                                    type="checkbox"
+                                                    className={styles.checkbox}
+                                                    checked={selectedSlips.includes(slip._id)}
+                                                    onChange={() => handleSelectRow(slip._id)}
+                                                />
+                                            </td>
+                                        )}
                                         <td className={styles.empName}>{slip.employeeName}</td>
                                         {isAdmin && (
                                             <td>
@@ -1088,7 +1161,7 @@ function SalarySlipTable({ userRole }) {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={isAdmin ? 13 : 9} className={styles.noData}>
+                                    <td colSpan={isAdmin ? 14 : 9} className={styles.noData}>
                                         No salary slips found {selectedMonth !== 'All' || selectedYear !== 'All' ? `for ${selectedMonth} ${selectedYear}` : 'in the system'}.
                                     </td>
                                 </tr>
@@ -1303,13 +1376,38 @@ function SalarySlipTable({ userRole }) {
                     </div>
                 </div>
             )}
-
-            {/* Delete Confirmation Dialog */}
-            <DeleteConfirmDialog
+            {/* Single Delete Confirmation */}
+            <ConfirmDialog
                 isOpen={deleteDialogOpen}
                 onClose={closeDeleteDialog}
                 onConfirm={confirmDelete}
-                employeeName={slipToDelete?.employeeName || ''}
+                title="Delete Salary Slip"
+                message={<>Are you sure you want to delete the salary slip for <strong>{slipToDelete?.employeeName}</strong>? This action cannot be undone.</>}
+                confirmText="Delete"
+                confirmColor="#dc2626"
+            />
+
+            {/* Bulk Delete Confirmation */}
+            <ConfirmDialog
+                isOpen={bulkDeleteConfirmOpen}
+                onClose={() => setBulkDeleteConfirmOpen(false)}
+                onConfirm={handleBulkDelete}
+                title="Delete Multiple Records"
+                message={`Are you sure you want to delete ${selectedSlips.length} selected salary slips? This action cannot be undone.`}
+                confirmText="Delete All"
+                confirmColor="#dc2626"
+            />
+
+            {/* Bulk Generate Confirmation */}
+            <ConfirmDialog
+                isOpen={generateConfirmOpen}
+                onClose={() => setGenerateConfirmOpen(false)}
+                onConfirm={confirmGenerateBulk}
+                title="Generate Salary Slips"
+                message={`Generate/Update salary slips for all active employees for ${selectedMonth} ${selectedYear}?`}
+                confirmText="Generate Now"
+                confirmColor="#16a34a"
+                icon="success"
             />
 
             <SalarySlipBulkImportModal
@@ -1326,6 +1424,7 @@ function SalarySlipTable({ userRole }) {
                 onSuccess={fetchData}
                 month={selectedMonth === 'All' ? new Date().toLocaleString('default', { month: 'long' }) : selectedMonth}
                 year={selectedYear === 'All' ? new Date().getFullYear().toString() : selectedYear}
+                existingSlips={salarySlips}
             />
 
             <SalarySlipEditModal
