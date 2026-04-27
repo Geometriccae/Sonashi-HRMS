@@ -93,8 +93,6 @@
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  left: 0 !important;
-  width: auto !important;
 }
 
 .form-fields-grid {
@@ -352,14 +350,14 @@
 @media (max-width: 1536px) {
   .add-client-modal {
     width: min(60rem, calc(100vw - 32px));
-    height: min(30.5rem, calc(100vh - 40px));
+    height: 90vh;
     max-height: calc(100vh - 40px);
   }
   
  .add-client-content {
-    gap: 0rem; /* 28.8px */
-    padding: 2.5rem 3rem;; /* 32px 123px */
-    overflow: hidden;
+    gap: 0.5rem;
+    padding: 1.5rem 3rem;
+    overflow-y: auto;
   }
   
   .billing-content {
@@ -407,14 +405,13 @@
 @media (max-width: 1440px) {
   .add-client-modal {
     width: min(56.25rem, calc(100vw - 32px));
-    height: min(32.8rem, calc(100vh - 40px));
+    height: 90vh;
     max-height: calc(100vh - 40px);
   }
   .add-client-content {
-    gap: 0rem; /* 27px */
-    padding: 1.875rem 3rem;
-     /* 30px 115.5px */
-     overflow: hidden;
+    gap: 0.5rem;
+    padding: 1.5rem 3rem;
+     overflow-y: auto;
   }
 
   .add-client-header {

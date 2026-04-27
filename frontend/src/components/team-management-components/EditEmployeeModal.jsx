@@ -12,6 +12,7 @@ import Select from "react-select";
 import ToastContainer from "../Toast";
 import DocumentUploadField from "./DocumentUploadField";
 import DocumentsService from "../../services/EmployeeDocumentService";
+import OptionService from "../../services/OptionService";
 import {
   ACTIVE_OPTIONS,
   ATTENDANCE_OPTIONS,
@@ -135,9 +136,73 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   };
 
   const fetchEmployeeDropdownValues = async () => {
-    // User specifically disabled Excel extraction and requested only the predefined explicit constant options.
-    setRoleOptions(ROLE_OPTIONS_DEFAULT);
-    setDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
+    try {
+      const [roles, depts] = await Promise.all([
+        OptionService.getOptions('role'),
+        OptionService.getOptions('department')
+      ]);
+      
+      setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles));
+      setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts));
+    } catch (err) {
+      console.error("Failed to fetch dynamic options:", err);
+      setRoleOptions(ROLE_OPTIONS_DEFAULT);
+      setDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
+    }
+  };
+
+  const handleRoleAdd = async (label) => {
+    try {
+      await OptionService.addOption('role', label);
+      await fetchEmployeeDropdownValues();
+      addToast(`Role "${label}" added successfully`, "success");
+    } catch (err) {
+      console.error("Error adding role:", err);
+      addToast(err.response?.data?.message || "Failed to add role", "error");
+    }
+  };
+
+  const handleRoleDelete = async (option) => {
+    try {
+      const roles = await OptionService.getOptions('role');
+      const toDelete = roles.find(r => r.label === option.label);
+      if (toDelete) {
+        await OptionService.deleteOption('role', toDelete._id);
+        await fetchEmployeeDropdownValues();
+        addToast(`Role "${option.label}" deleted`, "success");
+      } else {
+        addToast("Cannot delete default options", "error");
+      }
+    } catch (err) {
+      addToast("Failed to delete role", "error");
+    }
+  };
+
+  const handleDeptAdd = async (label) => {
+    try {
+      await OptionService.addOption('department', label);
+      await fetchEmployeeDropdownValues();
+      addToast(`Department "${label}" added successfully`, "success");
+    } catch (err) {
+      console.error("Error adding department:", err);
+      addToast(err.response?.data?.message || "Failed to add department", "error");
+    }
+  };
+
+  const handleDeptDelete = async (option) => {
+    try {
+      const depts = await OptionService.getOptions('department');
+      const toDelete = depts.find(d => d.label === option.label);
+      if (toDelete) {
+        await OptionService.deleteOption('department', toDelete._id);
+        await fetchEmployeeDropdownValues();
+        addToast(`Department "${option.label}" deleted`, "success");
+      } else {
+        addToast("Cannot delete default options", "error");
+      }
+    } catch (err) {
+      addToast("Failed to delete department", "error");
+    }
   };
 
   const fetchEmployeeDocuments = async (employeeId) => {
@@ -618,6 +683,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 required
                 options={roleOptions}
                 value={formData.role}
+                onAdd={handleRoleAdd}
+                onDelete={handleRoleDelete}
                 onChange={(e) => handleInputChange("role", e.target.value)}
                 hasError={validationErrors.role}
               />
@@ -751,6 +818,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 required
                 options={departmentOptions}
                 value={formData.department}
+                onAdd={handleDeptAdd}
+                onDelete={handleDeptDelete}
                 onChange={(e) =>
                   handleInputChange("department", e.target.value)
                 }

@@ -6,7 +6,7 @@ import employeeService from '../../services/EmployeeService';
 import { useToast } from '../../context/ToastContext';
 import Dropdown from '../DropDown';
 
-function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
+function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, existingSlips = [] }) {
     const { showToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [employees, setEmployees] = useState([]);
@@ -128,8 +128,29 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Validation: Check if slip already exists for this employee/month/year
+        // This is a basic frontend check. The backend also handles this via findOneAndUpdate.
+        const monthStr = formData.month.trim().toLowerCase();
+        const yearStr = formData.year.toString().trim();
+        const emailStr = formData.email.trim().toLowerCase();
+        
         setIsLoading(true);
         try {
+            // Check if slip already exists in the provided list
+            const alreadyExists = existingSlips.find(s => 
+                s.emailId?.toLowerCase() === emailStr && 
+                s.month?.toLowerCase() === monthStr && 
+                String(s.year) === yearStr
+            );
+
+            if (alreadyExists) {
+                if (!window.confirm(`A salary slip for ${formData.employeeName} for ${formData.month} ${formData.year} already exists. Do you want to update it?`)) {
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
             await salarySlipService.createSalarySlip({
                 employeeName: formData.employeeName,
                 emailId: formData.email,
