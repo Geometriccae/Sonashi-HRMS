@@ -1,22 +1,26 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import "./ProfilePhotoUpload.css";
-import config from "../config/config";
+import config, { buildImageUrl, handleImageError } from "../config/config";
 
-function ProfilePhotoUpload({ onUpload, initialImage, clientData }) {
+function ProfilePhotoUpload({ onUpload, initialImage, clientData, onImageError: externalOnError }) {
   const fileInputRef = useRef(null);
   const [previewImage, setPreviewImage] = useState(initialImage || null);
   const [profileImageUrl, setProfileImageUrl] = useState(null);
 
   // Get profile image URL if clientData exists
-  React.useEffect(() => {
-    if (clientData?.profilePicture) {
-      // Construct the full URL for the profile picture
-      let baseURL = config.API_BASE_URL || 'http://localhost:5000';
-      // Remove /api from baseURL if it exists for file serving
-      baseURL = baseURL.replace('/api', '');
-      setProfileImageUrl(`${baseURL}${clientData.profilePicture}`);
+  useEffect(() => {
+    if (clientData?.profilePicture || clientData?.profilePhoto) {
+      setProfileImageUrl(buildImageUrl(clientData.profilePicture || clientData.profilePhoto));
     }
   }, [clientData]);
+
+  const onImageError = (e) => {
+    if (externalOnError) {
+      externalOnError(e);
+      return;
+    }
+    handleImageError(e);
+  };
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -60,6 +64,7 @@ function ProfilePhotoUpload({ onUpload, initialImage, clientData }) {
               src={displayImage}
               alt="Profile"
               className="profile-image"
+              onError={onImageError}
             />
           ) : (
             <>

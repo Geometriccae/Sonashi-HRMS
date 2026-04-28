@@ -36,15 +36,15 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
       "/uploads/employeedocuments/"
     );
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
-    
+
     // Ensure exactly one slash between host and path
     const host = apiHost.replace(/\/$/, "");
     const relativePath = cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
     return `${host}${relativePath}`;
   };
-  
 
- useEffect(() => {
+
+  useEffect(() => {
     if (!employeeId) return;
     const fetchDocs = async () => {
       try {
@@ -76,12 +76,12 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   if (loading) return <div className="documents-loading">Loading documents...</div>;
   if (error) return <div className="documents-error">{error}</div>;
 
- 
+
 
   return (
     <div className={styles.container}>
       <section className={styles["documents-table-section"]}>
-        <DataTable 
+        <DataTable
           data={documents}
           onOpen={(item) => {
             if (!item?.filePath) return;
@@ -100,7 +100,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
             // Refresh list locally
             setDocuments(prev => prev.filter(d => d.id !== docId));
           }}
-          // You can add additional props for employee-specific actions
+        // You can add additional props for employee-specific actions
         />
       </section>
       {previewImageUrl && (

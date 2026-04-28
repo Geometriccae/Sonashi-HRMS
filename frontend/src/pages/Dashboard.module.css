@@ -312,13 +312,13 @@
 @media (max-width: 1440px) {
   .desktop-header {
     padding: 1.25rem 1.75rem;
-   
+
   }
 
   .breadcrumb-section {
     padding: 0.5rem 1.75rem;
   }
-  
+
 
   .dashboard-title {
     font-size: 1.75rem;
@@ -466,7 +466,7 @@
 
   .dashboard-title {
     font-size: 1.5rem;
-    
+
   }
 
   .dashboard-profile {
@@ -503,6 +503,7 @@
     font-size: 1.25rem;
     font-weight: 700;
   }
+
   .desktop-header {
     display: block;
   }
@@ -529,7 +530,8 @@
   }
 
   .main-content {
-    padding-bottom: 90px; /* Account for bottom navigation */
+    padding-bottom: 90px;
+    /* Account for bottom navigation */
     background-color: #fafbfb;
   }
 }
@@ -574,6 +576,7 @@
 
   .main-content {
     overflow-y: auto;
-    height: calc(100vh - 140px); /* Account for header and bottom nav */
+    height: calc(100vh - 140px);
+    /* Account for header and bottom nav */
   }
 }

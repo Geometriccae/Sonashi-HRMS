@@ -63,7 +63,8 @@ main {
   margin: 0;
 }
 
-.actions, .filters {
+.actions,
+.filters {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -85,7 +86,8 @@ main {
   font-weight: 500;
 }
 
-.date-inputs input, .input-small {
+.date-inputs input,
+.input-small {
   padding: 8px 12px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
@@ -100,7 +102,8 @@ main {
 }
 
 /* Buttons */
-.action-btn, .update-btn {
+.action-btn,
+.update-btn {
   background: #2563eb;
   color: #fff;
   border: none;
@@ -112,7 +115,8 @@ main {
   transition: background 0.2s;
 }
 
-.action-btn:hover, .update-btn:hover {
+.action-btn:hover,
+.update-btn:hover {
   background: #1d4ed8;
 }
 
@@ -131,7 +135,8 @@ main {
   background: #e5e7eb;
 }
 
-.action-btn-outline, .update-btn-outline {
+.action-btn-outline,
+.update-btn-outline {
   background: transparent;
   color: #2563eb;
   border: 1px solid #2563eb;
@@ -142,13 +147,15 @@ main {
   cursor: pointer;
 }
 
-.action-btn-outline:hover, .update-btn-outline:hover {
+.action-btn-outline:hover,
+.update-btn-outline:hover {
   background: #eff6ff;
 }
 
 .btn-onsite {
   background: #16a34a;
 }
+
 .btn-onsite:hover {
   background: #15803d;
 }
@@ -156,11 +163,13 @@ main {
 .btn-leave {
   background: #dc2626;
 }
+
 .btn-leave:hover {
   background: #b91c1c;
 }
 
-.action-btn[disabled], .update-btn[disabled] {
+.action-btn[disabled],
+.update-btn[disabled] {
   opacity: 0.6;
   cursor: not-allowed;
 }

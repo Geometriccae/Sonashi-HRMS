@@ -220,7 +220,7 @@ router.get('/', authMiddleware, async (req, res) => {
 // Create a new leave request
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason } = req.body;
+        const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
 
         if (hasHolidayInRange(startDate, endDate)) {
             return res.status(400).json({ message: 'This is a government holiday. You should not apply for a leave request.' });
@@ -247,7 +247,8 @@ router.post('/', authMiddleware, async (req, res) => {
             startDate: new Date(startDate),
             endDate: new Date(endDate),
             reason,
-            status: 'Pending'
+            status: 'Pending',
+            requestAirfare: req.body.requestAirfare === true || req.body.requestAirfare === 'true'
         });
 
         const savedRequest = await newLeaveRequest.save();
@@ -275,7 +276,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // Update leave request status (Admin/HOD) or edit request (Employee)
 router.put('/:id', authMiddleware, async (req, res) => {
     try {
-        const { employeeId, employeeName, company, status, leaveType, startDate, endDate, reason } = req.body;
+        const { employeeId, employeeName, company, status, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
         const updateData = {};
 
         const oldRequest = await LeaveRequest.findById(req.params.id);
@@ -353,6 +354,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
         if (startDate) updateData.startDate = new Date(startDate);
         if (endDate) updateData.endDate = new Date(endDate);
         if (reason) updateData.reason = reason;
+        if (req.body.requestAirfare !== undefined) {
+            updateData.requestAirfare = req.body.requestAirfare === true || req.body.requestAirfare === 'true';
+        }
 
         const effectiveStart = updateData.startDate || oldRequest.startDate;
         const effectiveEnd = updateData.endDate || oldRequest.endDate;

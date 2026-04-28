@@ -205,12 +205,6 @@ function Sidebar() {
                   Help & Support
                 </Link>
               </li>
-              <li className={styles["logout"]} onClick={() => { handleLogoutClick(); }}>
-                <Link to="" className={styles["sidebar-link"]}>
-                  <img src={logout} alt="Log Out" className={styles.icon} /> Log
-                  Out
-                </Link>
-              </li>
             </ul>
           </div>
         </div>
@@ -226,9 +220,10 @@ function Sidebar() {
         </div> */}
 
         <div className={styles["line"]}></div>
-        <div className={styles["sidebar-footer-text"]}>
-          2025 | Powered by <span>Ryzenforge</span>
-        </div>
+        <button className={styles.footerLogoutBtn} onClick={handleLogoutClick}>
+          <img src={logout} alt="Logout" className={styles.icon} />
+          Logout
+        </button>
       </div>
 
       {/* Date Range Picker Modal */}

@@ -490,24 +490,23 @@ main {
   .profile-container {
     padding: 0 0 1rem 0;
   }
-   .profile-content {
+  .profile-content {
     margin-top: 0rem !important;
   }
   .form-row {
-     margin-bottom: 0rem;
+    margin-bottom: 0rem;
   }
   .header-content {
     margin: 1.25rem auto;
   }
-  
   .profile-content {
     margin-top: 3rem;
   }
-  
+
   .form-label {
     width: 14rem;
   }
-  
+
   .form-field {
     max-width: 28rem;
   }
@@ -518,24 +517,24 @@ main {
   .dashboard-header {
     padding: 0.875rem 1.25rem;
   }
-  
+
   .dashboard-title {
     font-size: 1.35rem;
   }
-  
+
   .profile-title {
     font-size: 1.35rem;
   }
-  
+
   .form-label {
     width: 13rem;
     font-size: 0.95rem;
   }
-  
+
   .form-field {
     max-width: 26rem;
   }
-  
+
   .form-input {
     font-size: 0.95rem;
   }
@@ -546,15 +545,15 @@ main {
   .header-content {
     margin: 1rem auto;
   }
-  
+
   .profile-content {
     margin-top: 2rem;
   }
-  
+
   .form-label {
     width: 12rem;
   }
-  
+
   .form-field {
     max-width: 24rem;
   }
@@ -565,24 +564,24 @@ main {
   .dashboard-header {
     padding: 0.75rem 1rem;
   }
-  
+
   .dashboard-title {
     font-size: 1.25rem;
   }
-  
+
   .profile-title {
     font-size: 1.25rem;
   }
-  
+
   .form-label {
     width: 11rem;
     font-size: 0.9rem;
   }
-  
+
   .form-field {
     max-width: 22rem;
   }
-  
+
   .form-input {
     font-size: 0.9rem;
   }
@@ -598,33 +597,34 @@ main {
   .desktop-sidebar {
     display: none;
   }
-  
+
   .header-content {
     margin: 1rem;
     padding: 0;
     width: auto;
   }
-  
+
   .profile-content {
     margin: 1rem;
     padding: 0;
     width: auto;
   }
-  
+
   .form-row {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .form-label {
     width: 100%;
   }
-  
+
   .form-field {
     max-width: 100%;
   }
-  
-  .profile-picture-section, .notifications-section {
+
+  .profile-picture-section,
+  .notifications-section {
     max-width: 100%;
   }
 }
@@ -633,8 +633,9 @@ main {
   .header-actions {
     gap: 0.75rem;
   }
-  
-  .save-button, .cancel-button {
+
+  .save-button,
+  .cancel-button {
     padding: 0.375rem 0.75rem;
   }
 }
@@ -643,16 +644,13 @@ main {
   .dashboard-header {
     padding: 0.75rem;
   }
-  
   .breadcrumb-section {
     padding: 0.5rem 0.75rem;
   }
-  
   /* Show logout button on mobile */
   .logout-button {
     display: flex;
   }
-  
   .header-actions {
     flex-wrap: wrap;
   }

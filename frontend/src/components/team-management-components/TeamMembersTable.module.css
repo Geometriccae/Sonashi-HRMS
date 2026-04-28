@@ -430,6 +430,7 @@
 .type-chip.active {
   background-color: #ebf9ee;
 }
+
 .type-chip.inactive {
   background-color: #eaf2fd;
 }
@@ -442,6 +443,7 @@
 .type-chip.active .chip-text {
   color: #258d3f;
 }
+
 .type-chip.inactive .chip-text {
   color: #006fe8;
 }
@@ -460,6 +462,7 @@
   padding: 0;
   transition: opacity 0.2s ease;
 }
+
 /* .actionButton {
   background: none;
   border: none;
@@ -487,11 +490,40 @@
 .pagination-section {
   display: flex;
   padding: clamp(0.5rem, 0.89vw, 0.89356rem) clamp(1rem, 1.5vw, 1.5rem);
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
   width: 100%;
   border-top: 0.0625rem solid #e4e4e4;
+}
+
+.rows-per-page {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #344054;
+  font: 500 0.875rem/1.4 Inter, sans-serif;
+}
+
+.rows-select {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 0.0625rem solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+  font: 500 0.875rem/1.4 Inter, sans-serif;
+  cursor: pointer;
+  outline: none;
+}
+
+.rows-select:focus {
+  border-color: #007aff;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .pagination-button {
@@ -556,7 +588,7 @@
   border-radius: 0.375rem;
 }
 
-.hidden-checkbox:checked ~ .custom-checkbox {
+.hidden-checkbox:checked~.custom-checkbox {
   background-color: #007aff;
   border-color: #007aff;
 }
@@ -567,7 +599,7 @@
   display: none;
 }
 
-.hidden-checkbox:checked ~ .custom-checkbox:after {
+.hidden-checkbox:checked~.custom-checkbox:after {
   display: block;
 }
 
@@ -683,21 +715,22 @@
   }
 
   .edit-icon,
-.view-icon,
-.delete-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  flex-shrink: 0;
-}
- 
-.button-icon,
-.search-icon,
-.filter-icon,
-.sort-icon{
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-}
+  .view-icon,
+  .delete-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .button-icon,
+  .search-icon,
+  .filter-icon,
+  .sort-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+
   .controls-section {
     padding: 0 calc(clamp(1rem, 1.5vw, 1.5rem) * 0.9);
   }
@@ -745,8 +778,7 @@
   }
 
   .table-header-cell {
-    padding: calc(clamp(0.5rem, 0.89vw, 0.89356rem) * 0.9)
-      calc(clamp(0.75rem, 1.34vw, 1.3403rem) * 0.9);
+    padding: calc(clamp(0.5rem, 0.89vw, 0.89356rem) * 0.9) calc(clamp(0.75rem, 1.34vw, 1.3403rem) * 0.9);
     gap: calc(0.819rem * 0.9);
   }
 
@@ -804,6 +836,7 @@
   .table-header-cell {
     padding: 0.75rem 1rem;
   }
+
   .table-cell {
     padding: 0.75rem 1rem;
   }
@@ -812,10 +845,12 @@
     width: 15rem;
     flex: 2 0 15rem;
   }
+
   .assigned-column {
     width: 13rem;
     flex: 1.5 0 13rem;
   }
+
   .phone-column {
     min-width: 10rem;
   }
@@ -824,6 +859,7 @@
     width: 2.5rem;
     height: 2.5rem;
   }
+
   .action-button {
     width: 2rem;
     height: 2rem;
@@ -847,10 +883,12 @@
     width: 14rem;
     flex: 2 0 14rem;
   }
+
   .assigned-column {
     width: 12rem;
     flex: 1.5 0 12rem;
   }
+
   .categories-column {
     width: 9rem;
     flex: 1 0 9rem;
@@ -860,10 +898,12 @@
     height: 4.5rem;
     padding: 0.75rem;
   }
+
   .company-name,
   .assigned-name {
     font-size: 0.9rem;
   }
+
   .company-email,
   .assigned-role {
     font-size: 0.85rem;
@@ -882,6 +922,7 @@
   }
 
   .table-columns {
-    min-width: 62.5rem; /* Ensure horizontal scroll */
+    min-width: 62.5rem;
+    /* Ensure horizontal scroll */
   }
 }

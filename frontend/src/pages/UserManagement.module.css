@@ -304,12 +304,11 @@ main {
   .dashboard-header {
     padding: 1rem 1.5rem;
   }
-  
   .container {
     padding: 1.5rem;
   }
-  
-  .table th, .table td {
+  .table th,
+  .table td {
     padding: 0.75rem;
   }
 }
@@ -319,12 +318,11 @@ main {
   .dashboard-header {
     padding: 0.875rem 1.25rem;
   }
-  
   .container {
     padding: 1.25rem;
   }
-  
-  .table th, .table td {
+  .table th,
+  .table td {
     padding: 0.625rem 0.75rem;
     font-size: 0.9rem;
   }
@@ -335,12 +333,11 @@ main {
   .container {
     padding: 1rem;
   }
-  
   .header {
     margin-bottom: 1.25rem;
   }
-  
-  .table th, .table td {
+  .table th,
+  .table td {
     padding: 0.5rem 0.625rem;
   }
 }
@@ -350,21 +347,18 @@ main {
   .dashboard-header {
     padding: 0.75rem 1rem;
   }
-  
   .dashboard-title {
     font-size: 1.25rem;
   }
-  
   .header h1 {
     font-size: 1.25rem;
   }
-  
   .addButton {
     padding: 0.5rem 1rem;
     font-size: 0.8125rem;
   }
-  
-  .table th, .table td {
+  .table th,
+  .table td {
     font-size: 0.875rem;
   }
 }
@@ -379,11 +373,9 @@ main {
   .desktop-sidebar {
     display: none;
   }
-  
   .container {
     padding: 1rem;
   }
-  
   .tableContainer {
     box-shadow: none;
     border: 1px solid #eee;
@@ -396,11 +388,9 @@ main {
     gap: 1rem;
     align-items: flex-start;
   }
-  
   .addButton {
     width: 100%;
   }
-  
   .table {
     min-width: 600px;
   }
@@ -410,11 +400,9 @@ main {
   .dashboard-header {
     padding: 0.75rem;
   }
-  
   .breadcrumb-section {
     padding: 0.5rem 0.75rem;
   }
-  
   .container {
     padding: 0.75rem;
   }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import UserService from "../services/UserService";
-import config from "../config/config";
+import config, { buildImageUrl } from "../config/config";
 
 function ProfileAvatar({ size = 32, className = "", userData = null }) {
   const [user, setUser] = useState(userData);
@@ -13,14 +13,23 @@ function ProfileAvatar({ size = 32, className = "", userData = null }) {
         try {
           const me = await UserService.getMe();
           setUser(me);
-        } catch (e) {}
+        } catch (e) { }
       })();
     }
   }, [userData]);
 
-  const src = user?.profilePicture
-    ? `${config.API_BASE_URL.replace('/api', '')}${user.profilePicture}`
-    : null;
+  const src = buildImageUrl(user?.profilePicture);
+
+  const onImageError = (e) => {
+    const currentSrc = e.target.src;
+    const productionBase = 'https://backend.sonashi.in';
+    if (!currentSrc.startsWith(productionBase)) {
+      const path = new URL(currentSrc).pathname;
+      e.target.src = `${productionBase}${path}`;
+    } else {
+      e.target.style.display = 'none';
+    }
+  };
 
   if (src) {
     return (
@@ -31,6 +40,7 @@ function ProfileAvatar({ size = 32, className = "", userData = null }) {
         height={size}
         style={{ borderRadius: '50%', objectFit: 'cover' }}
         className={className}
+        onError={onImageError}
       />
     );
   }

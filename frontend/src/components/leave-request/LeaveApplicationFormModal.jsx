@@ -8,6 +8,7 @@ import "./LeaveForm.css"; // Reusing the shared clean modal styles
 function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequests }) {
     const [employeeDetails, setEmployeeDetails] = useState({});
     const [isLoading, setIsLoading] = useState(true);
+    const [expandedYear, setExpandedYear] = useState(null);
 
     useEffect(() => {
         if (!isOpen || !leaveRequest) return;
@@ -108,17 +109,46 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                         <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
                             <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Total Entitlement</span>
                             <div style={{ fontSize: "24px", fontWeight: "700", color: "#0f172a", marginTop: "4px" }}>{leaveStats.entitlement} Days</div>
-                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>30 days per year of service</span>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Last 5 years (Capped)</span>
+                        </div>
+                        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
+                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Expired / Unavailable</span>
+                            <div style={{ fontSize: "24px", fontWeight: "700", color: "#9a3412", marginTop: "4px" }}>{leaveStats.expiredDays} Days</div>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Older than 5 years</span>
                         </div>
                         <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
                             <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Total Taken</span>
                             <div style={{ fontSize: "24px", fontWeight: "700", color: "#ef4444", marginTop: "4px" }}>{leaveStats.totalTaken} Days</div>
-                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Approved leaves only</span>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>In last 5 years</span>
                         </div>
-                        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Pending Balance</span>
-                            <div style={{ fontSize: "24px", fontWeight: "700", color: "#10b981", marginTop: "4px" }}>{leaveStats.balance} Days</div>
-                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Available for request</span>
+                    </div>
+
+                    {/* Airfare Benefit Box */}
+                    <div style={{ 
+                        background: leaveRequest.requestAirfare ? "#f0fdf4" : "#f8fafc", 
+                        padding: "16px 20px", 
+                        borderRadius: "12px", 
+                        border: `1px solid ${leaveRequest.requestAirfare ? "#bbf7d0" : "#e2e8f0"}`,
+                        marginBottom: "24px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                    }}>
+                        <div>
+                            <div style={{ fontSize: "13px", color: "#64748b", fontWeight: "600" }}>AIRFARE CLAIM STATUS</div>
+                            <div style={{ fontSize: "18px", fontWeight: "800", color: leaveRequest.requestAirfare ? "#166534" : "#475569" }}>
+                                {leaveRequest.requestAirfare ? "YES - COMPANY TICKET REQUESTED" : "NO - PERSONAL TICKET / OWN EXPENSE"}
+                            </div>
+                        </div>
+                        <div style={{ 
+                            padding: "8px 16px", 
+                            borderRadius: "20px", 
+                            background: leaveRequest.requestAirfare ? "#16a34a" : "#94a3b8",
+                            color: "#fff",
+                            fontSize: "12px",
+                            fontWeight: "700"
+                        }}>
+                            {leaveRequest.requestAirfare ? "COMPANY PAY" : "SELF PAY"}
                         </div>
                     </div>
 
@@ -144,24 +174,72 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                             <tbody>
                                 {years.map(year => {
                                     const total = getYearlyTotal(year);
+                                    const yearLeaves = employeeLeaves.filter(req => new Date(req.startDate).getFullYear() === year);
+                                    const isExpanded = expandedYear === year;
                                     return (
-                                        <tr key={year} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                            <td style={{ padding: "12px 20px", fontSize: "14px", fontWeight: "600", color: "#334155" }}>{year}</td>
-                                            <td style={{ padding: "12px 20px", fontSize: "14px", textAlign: "right", color: total > 0 ? "#0f172a" : "#94a3b8" }}>
-                                                {total} Days
-                                            </td>
-                                            <td style={{ padding: "12px 20px", fontSize: "12px", textAlign: "right" }}>
-                                                <span style={{ 
-                                                    padding: "4px 8px", 
-                                                    borderRadius: "4px", 
-                                                    background: total > 30 ? "#fef2f2" : "#f0fdf4",
-                                                    color: total > 30 ? "#ef4444" : "#16a34a",
-                                                    fontWeight: "600"
-                                                }}>
-                                                    {total > 30 ? "Exceeded" : "Within Limit"}
-                                                </span>
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={year}>
+                                            <tr style={{ borderBottom: "1px solid #f1f5f9", cursor: total > 0 ? "pointer" : "default" }} onClick={() => total > 0 && setExpandedYear(isExpanded ? null : year)}>
+                                                <td style={{ padding: "12px 20px", fontSize: "14px", fontWeight: "600", color: "#334155" }}>{year}</td>
+                                                <td style={{ padding: "12px 20px", fontSize: "14px", textAlign: "right", color: total > 0 ? "#007aff" : "#94a3b8", textDecoration: total > 0 ? "underline" : "none" }}>
+                                                    {total} Days
+                                                </td>
+                                                <td style={{ padding: "12px 20px", fontSize: "12px", textAlign: "right" }}>
+                                                    <span style={{ 
+                                                        padding: "4px 8px", 
+                                                        borderRadius: "4px", 
+                                                        background: total > 30 ? "#fef2f2" : "#f0fdf4",
+                                                        color: total > 30 ? "#ef4444" : "#16a34a",
+                                                        fontWeight: "600"
+                                                    }}>
+                                                        {total > 30 ? "Exceeded" : "Within Limit"}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            {isExpanded && yearLeaves.length > 0 && (
+                                                <tr>
+                                                    <td colSpan="3" style={{ padding: "0" }}>
+                                                        <div style={{ background: "#f8fafc", padding: "16px 20px", borderBottom: "1px solid #e2e8f0" }}>
+                                                            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#475569", textTransform: "uppercase" }}>Leave Details for {year}</h4>
+                                                            <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: "8px", overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                                                                <thead>
+                                                                    <tr style={{ background: "#f1f5f9" }}>
+                                                                        <th style={{ padding: "10px 16px", fontSize: "11px", textAlign: "left", color: "#64748b", borderBottom: "1px solid #e2e8f0" }}>TYPE</th>
+                                                                        <th style={{ padding: "10px 16px", fontSize: "11px", textAlign: "left", color: "#64748b", borderBottom: "1px solid #e2e8f0" }}>DATES</th>
+                                                                        <th style={{ padding: "10px 16px", fontSize: "11px", textAlign: "right", color: "#64748b", borderBottom: "1px solid #e2e8f0" }}>DURATION</th>
+                                                                        <th style={{ padding: "10px 16px", fontSize: "11px", textAlign: "center", color: "#64748b", borderBottom: "1px solid #e2e8f0" }}>AIRFARE</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {yearLeaves.map(leave => (
+                                                                        <tr key={leave._id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                                                            <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>{leave.leaveType || 'Annual'}</td>
+                                                                            <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>
+                                                                                {new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}
+                                                                            </td>
+                                                                            <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155", textAlign: "right" }}>
+                                                                                {Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
+                                                                            </td>
+                                                                            <td style={{ padding: "10px 16px", fontSize: "12px", textAlign: "center" }}>
+                                                                                <span style={{
+                                                                                    padding: "4px 8px",
+                                                                                    borderRadius: "4px",
+                                                                                    background: leave.requestAirfare ? "#dcfce7" : "#f1f5f9",
+                                                                                    color: leave.requestAirfare ? "#166534" : "#64748b",
+                                                                                    fontWeight: "600",
+                                                                                    display: "inline-block"
+                                                                                }}>
+                                                                                    {leave.requestAirfare ? "COMPANY" : "NONE"}
+                                                                                </span>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     );
                                 })}
                             </tbody>

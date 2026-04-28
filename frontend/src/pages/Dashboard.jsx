@@ -12,8 +12,10 @@ import chevrondright from "../assets/dashboard/chevron-right.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import { FaBars } from "react-icons/fa";
 import { useSidebar } from "../context/SidebarContext";
+import { useNavigate } from "react-router-dom";
 
 function Dashboard() {
+    const navigate = useNavigate();
     const { toggleSidebar } = useSidebar();
     const [username, setUsername] = useState("");
     const [userRole, setUserRole] = useState("");
@@ -80,7 +82,7 @@ function Dashboard() {
               </div>
             </div>
 
-            <div className={styles["dashboard-profile"]}>
+            <div className={styles["dashboard-profile"]} onClick={() => navigate("/profile")} style={{ cursor: 'pointer' }}>
               <NotificationBell />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>

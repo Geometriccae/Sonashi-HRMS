@@ -67,6 +67,15 @@ const leaveRequestSchema = new mongoose.Schema({
     adminApprovedAt: {
         type: Date,
         default: null
+    },
+    requestAirfare: {
+        type: Boolean,
+        default: false
+    },
+    airfareStatus: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected', 'Not Applicable'],
+        default: 'Not Applicable'
     }
 }, { timestamps: true });
 
