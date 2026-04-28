@@ -49,6 +49,8 @@ function LeaveRequestTable({ onUpdate }) {
     const [selectedManager, setSelectedManager] = useState("All");
     const [departments, setDepartments] = useState([]);
     const [managers, setManagers] = useState([]);
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [approvalAction, setApprovalAction] = useState(null); // { type: 'approve' | 'reject', request: object }
     const itemsPerPage = 10;
 
     const isHOD = String(userRole || "").toLowerCase() === "hod";
@@ -110,27 +112,34 @@ function LeaveRequestTable({ onUpdate }) {
         }
     };
 
-    const handleApprove = async (request) => {
-        try {
-            // The backend will handle the proper status transition based on user role
-            await leaveRequestService.approveLeaveRequest(request._id, "Approved");
-            showToast("Leave request approved successfully.", "success");
-            fetchLeaveRequests();
-        } catch (error) {
-            console.error("Error approving leave request:", error);
-            const errorMessage = error.response?.data?.message || "Failed to approve leave request.";
-            showToast(errorMessage, "error");
-        }
+    const handleApprove = (request) => {
+        setApprovalAction({ type: 'approve', request });
+        setIsApprovalModalOpen(true);
     };
 
-    const handleReject = async (request) => {
+    const handleReject = (request) => {
+        setApprovalAction({ type: 'reject', request });
+        setIsApprovalModalOpen(true);
+    };
+
+    const confirmApprovalAction = async () => {
+        if (!approvalAction) return;
+        const { type, request } = approvalAction;
+        
         try {
-            await leaveRequestService.approveLeaveRequest(request._id, "Rejected");
-            showToast("Leave request rejected successfully.", "success");
+            if (type === 'approve') {
+                await leaveRequestService.approveLeaveRequest(request._id, "Approved");
+                showToast("Leave request approved successfully.", "success");
+            } else {
+                await leaveRequestService.approveLeaveRequest(request._id, "Rejected");
+                showToast("Leave request rejected successfully.", "success");
+            }
             fetchLeaveRequests();
+            setIsApprovalModalOpen(false);
+            setApprovalAction(null);
         } catch (error) {
-            console.error("Error rejecting leave request:", error);
-            const errorMessage = error.response?.data?.message || "Failed to reject leave request.";
+            console.error(`Error ${type}ing leave request:`, error);
+            const errorMessage = error.response?.data?.message || `Failed to ${type} leave request.`;
             showToast(errorMessage, "error");
         }
     };
@@ -387,11 +396,13 @@ function LeaveRequestTable({ onUpdate }) {
                                     <th>Reason</th>
                                     <th>Days</th>
                                     <th>Dates</th>
+                                    <th>Airfare</th>
                                     <th>Status</th>
                                 </>
                             ) : (
                                 <>
                                     <th>Duration</th>
+                                    <th>Airfare</th>
                                     <th>Status</th>
                                 </>
                             )}
@@ -422,6 +433,15 @@ function LeaveRequestTable({ onUpdate }) {
                                         <td>
                                             {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
                                         </td>
+                                        <td style={{ textAlign: "center" }}>
+                                            <span style={{ 
+                                                fontWeight: "700", 
+                                                color: req.requestAirfare ? "#16a34a" : "#94a3b8",
+                                                fontSize: "12px"
+                                            }}>
+                                                {req.requestAirfare ? "YES" : "NO"}
+                                            </span>
+                                        </td>
                                         <td>
                                             <span className={`${styles.statusChip} ${styles[req.status.toLowerCase().replace(' ', '_')]}`}>
                                                 {req.status}
@@ -432,6 +452,15 @@ function LeaveRequestTable({ onUpdate }) {
                                     <>
                                         <td>
                                             {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                                        </td>
+                                        <td style={{ textAlign: "center" }}>
+                                            <span style={{ 
+                                                fontWeight: "700", 
+                                                color: req.requestAirfare ? "#16a34a" : "#94a3b8",
+                                                fontSize: "12px"
+                                            }}>
+                                                {req.requestAirfare ? "YES" : "NO"}
+                                            </span>
                                         </td>
                                         <td>
                                             <span className={`${styles.statusChip} ${styles[req.status.toLowerCase().replace(' ', '_')]}`}>
@@ -584,6 +613,84 @@ function LeaveRequestTable({ onUpdate }) {
                 leaveRequest={selectedRequest}
                 allLeaveRequests={leaveRequests}
             />
+
+            {isApprovalModalOpen && (
+                <div className="modal-backdrop" style={{ zIndex: 200000 }}>
+                    <div style={{ 
+                        background: "#fff", 
+                        padding: "32px", 
+                        borderRadius: "16px", 
+                        maxWidth: "450px", 
+                        width: "90%",
+                        boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)"
+                    }}>
+                        <h2 style={{ fontSize: "20px", fontWeight: "800", marginBottom: "12px", color: "#0f172a" }}>
+                            Confirm {approvalAction.type === 'approve' ? 'Approval' : 'Rejection'}
+                        </h2>
+                        <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "24px", lineHeight: "1.6" }}>
+                            Are you sure you want to <strong>{approvalAction.type}</strong> the leave request for 
+                            <strong> {approvalAction.request.employeeName || approvalAction.request.employee?.username}</strong>?
+                        </p>
+
+                        <div style={{ 
+                            background: "#f8fafc", 
+                            padding: "16px", 
+                            borderRadius: "12px", 
+                            border: "1px solid #e2e8f0",
+                            marginBottom: "24px"
+                        }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                                <span style={{ fontSize: "13px", color: "#64748b" }}>Leave Duration:</span>
+                                <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
+                                    {new Date(approvalAction.request.startDate).toLocaleDateString()} - {new Date(approvalAction.request.endDate).toLocaleDateString()}
+                                </span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: "13px", color: "#64748b" }}>Airfare Claim:</span>
+                                <span style={{ 
+                                    fontSize: "13px", 
+                                    fontWeight: "800", 
+                                    color: approvalAction.request.requestAirfare ? "#16a34a" : "#475569" 
+                                }}>
+                                    {approvalAction.request.requestAirfare ? "COMPANY TICKET" : "PERSONAL TICKET"}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: "12px" }}>
+                            <button 
+                                onClick={() => setIsApprovalModalOpen(false)}
+                                style={{ 
+                                    flex: 1, 
+                                    padding: "12px", 
+                                    borderRadius: "8px", 
+                                    border: "1px solid #e2e8f0", 
+                                    background: "#fff",
+                                    fontWeight: "600",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={confirmApprovalAction}
+                                style={{ 
+                                    flex: 1, 
+                                    padding: "12px", 
+                                    borderRadius: "8px", 
+                                    border: "none", 
+                                    background: approvalAction.type === 'approve' ? "#10b981" : "#ef4444",
+                                    color: "#fff",
+                                    fontWeight: "600",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                Confirm {approvalAction.type === 'approve' ? 'Approve' : 'Reject'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

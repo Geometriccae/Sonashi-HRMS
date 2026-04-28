@@ -12,8 +12,10 @@ import {
   FaPassport, 
   FaUserPlus 
 } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 function DashboardOverview() {
+  const navigate = useNavigate();
   const [data, setData] = useState({
     employees: [],
     leaveRequests: []
@@ -117,6 +119,7 @@ function DashboardOverview() {
 
   const handleCardClick = (category) => {
     const today = new Date();
+    today.setHours(0,0,0,0);
     today.setHours(0,0,0,0);
     const next60Days = new Date(today);
     next60Days.setDate(today.getDate() + 60);
@@ -274,7 +277,15 @@ function DashboardOverview() {
                   </thead>
                   <tbody>
                     {filteredList.map((item, idx) => (
-                      <tr key={idx}>
+                      <tr 
+                        key={idx} 
+                        onClick={() => {
+                          const id = item._id || item.id || item.employee?._id;
+                          if (id) navigate(`/teammanagement_salesleads/${id}`);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                        className={styles.modalRow}
+                      >
                         <td>{item.employeeName || item.name || "N/A"}</td>
                         <td>{item.employeeId || "-"}</td>
                         {selectedCategory.includes("Vacation") ? (
@@ -301,6 +312,18 @@ function DashboardOverview() {
               )}
             </div>
             <div className={styles.modalFooter}>
+              <button 
+                className={styles.viewAllBtn} 
+                onClick={() => {
+                  if (selectedCategory.includes("Vacation")) {
+                    navigate("/leave-requests");
+                  } else {
+                    navigate("/teammanagement");
+                  }
+                }}
+              >
+                View All in {selectedCategory.includes("Vacation") ? "Leave Management" : "Team Management"}
+              </button>
               <button className={styles.modalCloseBtn} onClick={() => setSelectedCategory(null)}>Close</button>
             </div>
           </div>

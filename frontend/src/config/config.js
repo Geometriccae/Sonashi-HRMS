@@ -1,37 +1,55 @@
-// All API calls use this; ensure REACT_APP_API_URL is set for local backend (e.g. http://localhost:5000)
-console.log('API BASE URL:', process.env.REACT_APP_API_URL);
-
 // Automatically detect if we are running locally
 const isLocalhost = typeof window !== 'undefined' && 
   (window.location.hostname === 'localhost' || 
    window.location.hostname === '127.0.0.1' || 
-   window.location.hostname.startsWith('192.168.'));
+   window.location.hostname.startsWith('192.168.') || 
+   window.location.hostname.startsWith('10.') || 
+   window.location.hostname.startsWith('172.') || 
+   window.location.hostname.endsWith('.local') ||
+   window.location.hostname === '0.0.0.0');
 
 const config = {
   API_BASE_URL: process.env.REACT_APP_API_URL || 
-    (isLocalhost ? 'http://localhost:5000/api' : 'https://backend.sonashi.in/api'),
-  // Add other configuration variables here
+    (isLocalhost ? `http://${window.location.hostname}:5000/api` : 'https://backend.sonashi.in/api'),
 };
 
 /**
  * Returns the base URL for API requests (no trailing /api).
- * When REACT_APP_API_URL is set, always use it so requests go to that backend (e.g. localhost:5000).
- * Otherwise uses Hostinger backend.
  */
 export function getApiBaseUrl() {
   const env = process.env.REACT_APP_API_URL;
   if (env) {
-    const v = String(env).trim();
-    if (v.startsWith('http://') || v.startsWith('https://')) {
-      return v.replace(/\/api\/?$/, '');
-    }
-    // Relative API root (e.g. "/api") — assume Hostinger backend
-    return isLocalhost ? 'http://localhost:5000' : 'https://backend.sonashi.in';
+    return String(env).replace(/\/api\/?$/, '');
   }
-  if (typeof window !== 'undefined' && window.location.origin === 'https://backend.sonashi.in') {
-    return ''; // relative URL - only if backend and frontend are identical
+  return isLocalhost ? `http://${window.location.hostname}:5000` : 'https://backend.sonashi.in';
+}
+
+/**
+ * Returns full URL for an image/file path.
+ * Handles absolute URLs, relative paths, and local/production switching.
+ */
+export function buildImageUrl(path) {
+  if (!path) return '';
+  
+  // If it's already a full URL, return it
+  if (/^https?:\/\//i.test(path)) return path;
+  
+  const base = getApiBaseUrl();
+  
+  // Normalize slashes (especially for paths stored with backslashes on Windows)
+  const normalizedPath = String(path).replace(/\\/g, '/');
+  
+  // Ensure exactly one leading slash
+  const cleanPath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  
+  const finalUrl = `${base.replace(/\/$/, '')}${cleanPath}`;
+  
+  // Debug log to help identify issues in the console
+  if (isLocalhost) {
+    console.log(`[buildImageUrl] Input: "${path}" -> Final: "${finalUrl}"`);
   }
-  return isLocalhost ? 'http://localhost:5000' : 'https://backend.sonashi.in';
+  
+  return finalUrl;
 }
 
 /**
@@ -39,7 +57,28 @@ export function getApiBaseUrl() {
  */
 export function getAuthApiUrl(path) {
   const base = getApiBaseUrl();
-  return base ? `${base}/api/auth${path}` : `/api/auth${path}`;
+  return `${base}/api/auth${path}`;
 }
 
+/**
+ * Shared error handler for images to fallback to production backend.
+ */
+export const handleImageError = (e) => {
+  const currentSrc = e.target.src;
+  const productionBase = 'https://backend.sonashi.in';
+  
+  if (currentSrc && !currentSrc.startsWith(productionBase) && !currentSrc.startsWith('blob:')) {
+    // Try production fallback
+    try {
+      const url = new URL(currentSrc);
+      e.target.src = `${productionBase}${url.pathname}`;
+    } catch (err) {
+      e.target.style.display = 'none';
+    }
+  } else {
+    e.target.style.display = 'none';
+  }
+};
+
 export default config;
+

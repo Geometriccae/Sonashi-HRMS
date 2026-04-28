@@ -10,6 +10,7 @@ const employeeSchema = new mongoose.Schema({
   reportingManager: { type: String, default: "" },
   gender: { type: String, default: "" },
   doj: { type: Date, default: null },
+  lastWorkingDay: { type: Date, default: null },
   totalYearsExperience: { type: Number, default: null },
   dateOfBirth: { type: Date, default: null },
   passportNo: { type: String, default: "" },

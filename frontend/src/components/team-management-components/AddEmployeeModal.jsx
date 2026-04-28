@@ -49,6 +49,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     designation: "",
     department: "",
     doj: "",
+    lastWorkingDay: "",
     totalYearsExperience: "",
     dateOfBirth: "",
     passportNo: "",
@@ -630,12 +631,19 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
               <InputField
                 label="Total Year of Experience"
-                placeholder="0"
-                type="number"
-                value={formData.totalYearsExperience}
-                onChange={(e) =>
-                  handleInputChange("totalYearsExperience", e.target.value)
-                }
+                placeholder="0.0"
+                value={(() => {
+                  if (!formData.doj) return "0.0";
+                  const start = new Date(formData.doj);
+                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay) 
+                    ? new Date(formData.lastWorkingDay) 
+                    : new Date();
+                  
+                  const diffMs = Math.max(0, end - start);
+                  const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+                  return years.toFixed(1);
+                })()}
+                readOnly
               />
 
               <InputField
@@ -716,6 +724,16 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   handleInputChange("employeeStatus", e.target.value)
                 }
               />
+
+              {formData.employeeStatus === "InActive" && (
+                <InputField
+                  label="Last Working Day"
+                  placeholder="YYYY-MM-DD"
+                  type="date"
+                  value={formData.lastWorkingDay}
+                  onChange={(e) => handleInputChange("lastWorkingDay", e.target.value)}
+                />
+              )}
 
               <div className="input-field">
                 <div className="input-label-container">

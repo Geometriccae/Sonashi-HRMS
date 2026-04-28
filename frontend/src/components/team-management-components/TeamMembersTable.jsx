@@ -8,9 +8,19 @@ import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 import FilterDropdown from "../FilterDropdown";
 import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
-import config from "../../config/config";
+import config, { buildImageUrl, handleImageError } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
+
+// use shared handleImageError from config
+const onImageError = (e) => {
+  handleImageError(e);
+  // Also show initials if the fallback failed or if we want them as backup
+  if (e.target.style.display === 'none') {
+    const fallback = e.target.parentElement.querySelector('.avatar-initials');
+    if (fallback) fallback.style.display = 'flex';
+  }
+};
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -194,7 +204,7 @@ function TeamMembersTable() {
   const filterButtonRef = useRef(null);
   const selectAllCheckboxRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; 
+  const [itemsPerPage, setItemsPerPage] = useState(5);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
 
@@ -225,7 +235,7 @@ function TeamMembersTable() {
     socket.on('employee-created', onEmployeeCreated);
 
     return () => {
-      try { socket.off('employee-created', onEmployeeCreated); socket.disconnect(); } catch (e) {}
+      try { socket.off('employee-created', onEmployeeCreated); socket.disconnect(); } catch (e) { }
     };
   }, []);
 
@@ -312,7 +322,7 @@ function TeamMembersTable() {
         showToast(`${selectedEmployeeIds.length} employees have been deleted.`, 'success');
         setSelectedEmployeeIds([]);
       }
-      
+
       // Refresh the employees list
       await fetchEmployees();
     } catch (err) {
@@ -537,7 +547,7 @@ function TeamMembersTable() {
               </button>
             )}
             {selectedEmployeeIds.length > 0 && (
-              <button 
+              <button
                 className={`${styles["secondary-button"]} ${styles["delete-btn"]}`}
                 onClick={() => setIsDeleteModalOpen(true)}
               >
@@ -599,7 +609,7 @@ function TeamMembersTable() {
           </div>
         </div>
       </div>
-      
+
       {isInitialLoading ? (
         <div className={styles["initial-loading"]}>
           <div className={styles["spinner"]} aria-hidden="true"></div>
@@ -680,24 +690,27 @@ function TeamMembersTable() {
                     </div>
                   </div>
                   {paginatedData.map((member) => (
-                    <Link  
-                      key={member._id || member.id} 
-                      to={`/teammanagement_salesleads/${member._id || member.id}`} 
+                    <Link
+                      key={member._id || member.id}
+                      to={`/teammanagement_salesleads/${member._id || member.id}`}
                       className={`${styles["table-cell"]} ${styles["company-cell"]} ${styles["no-link-style"]}`}
                     >
                       <div className={styles["avatar"]}>
-                    {member.profilePhoto ? (
-                      <img
-                        src={`${config.API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "")}/${(member.profilePhoto || "").replace(/^\//, "")}`}
-                        alt={`${member.employeeName} profile`}
-                        className={styles["client-profile-image"]}
-                      />
-                    ) : (
-                      <div className={styles["avatar"]}>
-                        {member.employeeName ? member.employeeName.charAt(0).toUpperCase() : 'E'}
+                        {member.profilePhoto ? (
+                          <img
+                            src={buildImageUrl(member.profilePhoto)}
+                            alt={`${member.employeeName} profile`}
+                            className={styles["client-profile-image"]}
+                            onError={onImageError}
+                          />
+                        ) : null}
+                        <span 
+                          className="avatar-initials" 
+                          style={{ display: member.profilePhoto ? 'none' : 'flex' }}
+                        >
+                          {member.employeeName ? member.employeeName.charAt(0).toUpperCase() : 'E'}
+                        </span>
                       </div>
-                          )}
-                       </div>
                       <div className={styles["companyinfo"]}>
                         <div className={styles["company-name"]}>{member.employeeName || 'Unknown'}</div>
                         <div className={styles["company-email"]}>{member.role || 'No Role'}</div>
@@ -705,7 +718,7 @@ function TeamMembersTable() {
                     </Link>
                   ))}
                 </div>
-                
+
                 {/* employeeStatus Column */}
                 <div className={`${styles["table-column"]} ${styles["type-column"]}`}>
                   <div className={styles["table-header"]}>
@@ -724,7 +737,7 @@ function TeamMembersTable() {
                     </div>
                   ))}
                 </div>
-                
+
                 {/* Email Column */}
                 <div className={`${styles["table-column"]} ${styles["assigned-column"]}`}>
                   <div className={styles["table-header"]}>
@@ -738,20 +751,20 @@ function TeamMembersTable() {
                   {paginatedData.map((member) => {
                     const emailDisplay = displayEmployeeEmail(member.emailId);
                     return (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["assigned-cell"]}`}>
-                      <div className={styles["assigned-info"]}>
-                        <div
-                          className={`${styles["assigned-name"]} ${emailDisplay.isEmpty ? styles["email-empty"] : ""}`}
-                          title={emailDisplay.isEmpty ? "" : emailDisplay.text}
-                        >
-                          {emailDisplay.text}
+                      <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["assigned-cell"]}`}>
+                        <div className={styles["assigned-info"]}>
+                          <div
+                            className={`${styles["assigned-name"]} ${emailDisplay.isEmpty ? styles["email-empty"] : ""}`}
+                            title={emailDisplay.isEmpty ? "" : emailDisplay.text}
+                          >
+                            {emailDisplay.text}
+                          </div>
                         </div>
                       </div>
-                    </div>
                     );
                   })}
                 </div>
-                
+
                 {/* Phone Number Column */}
                 <div className={`${styles["table-column"]} ${styles["categories-column"]}`}>
                   <div className={styles["table-header"]}>
@@ -769,9 +782,9 @@ function TeamMembersTable() {
                     </div>
                   ))}
                 </div>
-                
 
-                
+
+
                 {/* Actions Column */}
                 <div className={`${styles["table-column"]} ${styles["actions-column"]}`}>
                   <div className={styles["table-header"]}>
@@ -814,42 +827,60 @@ function TeamMembersTable() {
           </div>
         </>
       )}
-      
+
       {/* Pagination - ALWAYS RENDERED (like in ClientsTable) */}
       <div className={styles["pagination-section"]} aria-hidden={filteredData.length === 0 || isInitialLoading}>
-        <button
-          className={styles["pagination-button"]}
-          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-          disabled={currentPageSafe === 1 || filteredData.length === 0 || isInitialLoading}
-          aria-label="Previous page"
-        >
-          <span>Previous</span>
-        </button>
+        <div className={styles["rows-per-page"]}>
+          <span>Rows per page:</span>
+          <select 
+            value={itemsPerPage} 
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1); // Reset to first page when rows per page changes
+            }}
+            className={styles["rows-select"]}
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={15}>15</option>
+          </select>
+        </div>
 
-        <span className={styles["page-info"]} aria-live="polite">
-          Page {currentPageSafe} of {totalPages}
-        </span>
+        <div className={styles["pagination-controls"]}>
+          <button
+            className={styles["pagination-button"]}
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPageSafe === 1 || filteredData.length === 0 || isInitialLoading}
+            aria-label="Previous page"
+          >
+            <span>Previous</span>
+          </button>
 
-        <button
-          className={styles["pagination-button"]}
-          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-          disabled={currentPageSafe === totalPages || filteredData.length === 0 || isInitialLoading}
-          aria-label="Next page"
-        >
-          <span>Next</span>
-        </button>
+          <span className={styles["page-info"]} aria-live="polite">
+            Page {currentPageSafe} of {totalPages}
+          </span>
+
+          <button
+            className={styles["pagination-button"]}
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+            disabled={currentPageSafe === totalPages || filteredData.length === 0 || isInitialLoading}
+            aria-label="Next page"
+          >
+            <span>Next</span>
+          </button>
+        </div>
       </div>
-      
+
       <DeleteModal
         isOpen={isDeleteModalOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title={memberToDelete ? `Delete ${memberToDelete.employeeName}?` : `Delete ${selectedEmployeeIds.length} employees?`}
-        description={memberToDelete 
-          ? `Are you sure you want to delete ${memberToDelete.employeeName}? This action cannot be undone.` 
+        description={memberToDelete
+          ? `Are you sure you want to delete ${memberToDelete.employeeName}? This action cannot be undone.`
           : `Are you sure you want to delete these ${selectedEmployeeIds.length} employees? This action cannot be undone.`}
       />
-      
+
       <AddEmployeeModal
         isOpen={isAddEmployeeModalOpen}
         onClose={handleAddEmployeeClose}

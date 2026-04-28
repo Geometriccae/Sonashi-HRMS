@@ -8,7 +8,7 @@ import EditEmployeeModal from "../../components/team-management-components/EditE
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
 // import Calendar from "../../components/CalendarComponent";
 import Meetingstable from "../../components/team-management-components/MeetingsTable";
-import config from "../../config/config";
+import config, { buildImageUrl, handleImageError } from "../../config/config";
 import { FaBars } from "react-icons/fa";
 import DeleteModal from "../../components/delete-modal/DeleteModal";
 import AssignTaskModal from "../../components/team-management-components/AssignTaskModal";
@@ -50,7 +50,7 @@ function TeamManagementSalesLeads() {
   const [addingRemark, setAddingRemark] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteType, setDeleteType] = useState(""); // 'entry' or 'data'
- const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -227,26 +227,26 @@ function TeamManagementSalesLeads() {
   };
 
   const handleDeleteConfirm = async () => {
-      try {
-        if (deleteType === "entry") {
-          await employeeService.deleteEmployee(employeeId);
-          showToast("Employee deleted successfully.", 'success');
-          navigate("/teammanagement");
-          return; // no further cleanup needed, leaving page
-        } else if (deleteType === "data") {
-          // Optional: implement bulk document delete for this client in backend later
-          // For now, simply refresh documents list key
-          setDocumentsKey(prev => prev + 1);
-          showToast("Data deleted successfully.", 'success');
-        }
-      } catch (e) {
-        console.error("Delete failed", e);
-        showToast(e.message || "Delete failed", 'error');
-      } finally {
-        setIsDeleteModalOpen(false);
-        setDeleteType("");
+    try {
+      if (deleteType === "entry") {
+        await employeeService.deleteEmployee(employeeId);
+        showToast("Employee deleted successfully.", 'success');
+        navigate("/teammanagement");
+        return; // no further cleanup needed, leaving page
+      } else if (deleteType === "data") {
+        // Optional: implement bulk document delete for this client in backend later
+        // For now, simply refresh documents list key
+        setDocumentsKey(prev => prev + 1);
+        showToast("Data deleted successfully.", 'success');
       }
-    };
+    } catch (e) {
+      console.error("Delete failed", e);
+      showToast(e.message || "Delete failed", 'error');
+    } finally {
+      setIsDeleteModalOpen(false);
+      setDeleteType("");
+    }
+  };
 
   const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
@@ -265,14 +265,14 @@ function TeamManagementSalesLeads() {
     setIsEditEmployeeModalOpen(false);
   };
 
-   const handleEventCreated = (newEvent) => {
+  const handleEventCreated = (newEvent) => {
     console.log("Event created successfully:", newEvent);
     // Force calendar component to refresh by updating its key
     setCalendarKey(prev => prev + 1);
     // You can also update local events state if needed
     setEvents(prev => [...prev, newEvent]);
   };
-  
+
   const handleEditEmployeeSubmit = async (updatedEmployee) => {
     try {
       setEmployee(updatedEmployee);
@@ -486,7 +486,7 @@ function TeamManagementSalesLeads() {
             </div>
 
             <div className={styles["dashboard-profile"]}>
-                <NotificationBell/>
+              <NotificationBell />
               <div className={styles["profile-info"]}>
                 <div className={styles["profile-row"]}>
                   <ProfileAvatar
@@ -497,9 +497,9 @@ function TeamManagementSalesLeads() {
                     <div className={styles["profile-name"]}>
                       {username?.toUpperCase()}
                     </div>
-                     <div className={styles["profile-type"]}>
-                                          {userRole?.toUpperCase()}
-                                        </div>
+                    <div className={styles["profile-type"]}>
+                      {userRole?.toUpperCase()}
+                    </div>
                   </div>
                 </div>
                 {/* <img src={chevrondown} alt="" /> */}
@@ -567,9 +567,10 @@ function TeamManagementSalesLeads() {
                       {employee ? (
                         employee.profilePhoto ? (
                           <img
-                            src={`${config.API_BASE_URL.replace(/\/api\/?$/, "").replace(/\/$/, "")}/${(employee.profilePhoto || "").replace(/^\//, "")}`}
+                            src={buildImageUrl(employee.profilePhoto)}
                             className={styles.image2}
                             alt={`${employee.employeeName} logo`}
+                            onError={handleImageError}
                           />
                         ) : (
                           <div className={styles.defaultCompanyLogo}>
@@ -638,36 +639,32 @@ function TeamManagementSalesLeads() {
                 <div className={styles.column2}>
                   <span
                     ref={basicInfoRef}
-                    className={`${styles.text6} ${
-                      activeTab === "basicInfo" ? styles.active : ""
-                    }`}
+                    className={`${styles.text6} ${activeTab === "basicInfo" ? styles.active : ""
+                      }`}
                     onClick={() => setActiveTab("basicInfo")}
                   >
                     {"Basic Info"}
                   </span>
                   <div
                     ref={documentsRef}
-                    className={`${styles.view2} ${
-                      activeTab === "documents" ? styles.active : ""
-                    }`}
+                    className={`${styles.view2} ${activeTab === "documents" ? styles.active : ""
+                      }`}
                     onClick={() => setActiveTab("documents")}
                   >
                     <span className={styles.text8}>{"Documents"}</span>
                   </div>
                   <div
                     ref={salaryRef}
-                    className={`${styles.view2} ${
-                      activeTab === "salary" ? styles.active : ""
-                    }`}
+                    className={`${styles.view2} ${activeTab === "salary" ? styles.active : ""
+                      }`}
                     onClick={() => setActiveTab("salary")}
                   >
                     <span className={styles.text8}>{"Salary Details"}</span>
                   </div>
                   <div
                     ref={incrementsRef}
-                    className={`${styles.view2} ${
-                      activeTab === "increments" ? styles.active : ""
-                    }`}
+                    className={`${styles.view2} ${activeTab === "increments" ? styles.active : ""
+                      }`}
                     onClick={() => setActiveTab("increments")}
                   >
                     <span className={styles.text8}>{"Increments"}</span>
@@ -725,7 +722,22 @@ function TeamManagementSalesLeads() {
                       </div>
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Date of Join (DOJ)</span><span className={styles.text10}>{employee.doj ? new Date(employee.doj).toLocaleDateString() : "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Total Exp (Yrs)</span><span className={styles.text10}>{employee.totalYearsExperience !== undefined && employee.totalYearsExperience !== null ? employee.totalYearsExperience : "Not provided"}</span></div>
+                        <div className={styles.column4}>
+                          <span className={styles.text9}>Total Exp (Yrs)</span>
+                          <span className={styles.text10}>
+                            {(() => {
+                              if (!employee.doj) return "0";
+                              const start = new Date(employee.doj);
+                              const end = (employee.employeeStatus === "InActive" && employee.lastWorkingDay) 
+                                ? new Date(employee.lastWorkingDay) 
+                                : new Date();
+                              
+                              const diffMs = Math.max(0, end - start);
+                              const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+                              return years.toFixed(1);
+                            })()}
+                          </span>
+                        </div>
                         <div className={styles.column4}><span className={styles.text9}>Emirates ID</span><span className={styles.text10}>{employee.emiratesId || "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Passport No</span><span className={styles.text10}>{employee.passportNo || "Not provided"}</span></div>
                       </div>
@@ -739,7 +751,16 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4}><span className={styles.text9}>Work Permit No</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Reporting Manager</span><span className={styles.text10}>{employee.reportingManager || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Status</span><span className={styles.text10}>{employee.employeeStatus || "Active"}</span></div>
-                        <div className={styles.column5}></div>
+                        {employee.employeeStatus === "InActive" ? (
+                          <div className={styles.column5}>
+                            <span className={styles.text9}>Last Working Day</span>
+                            <span className={styles.text10}>
+                              {employee.lastWorkingDay ? new Date(employee.lastWorkingDay).toLocaleDateString() : "Not provided"}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className={styles.column5}></div>
+                        )}
                       </div>
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Life Insurance</span><span className={styles.text10}>{employee.lifeInsurance ? "Yes" : "No"}</span></div>
@@ -770,7 +791,7 @@ function TeamManagementSalesLeads() {
                     <div className={styles.column4}><span className={styles.text9}>Net Salary</span><span className={styles.text10}>{employee?.salaryDetails?.totalSalary ? `AED ${employee.salaryDetails.totalSalary}` : "0"}</span></div>
                     <div className={styles.column5}></div>
                   </div>
-                   <div className={styles.row_view6}>
+                  <div className={styles.row_view6}>
                     <div className={styles.column4}><span className={styles.text9}>Bank Name</span><span className={styles.text10}>{employee?.salaryDetails?.bankName || "Not provided"}</span></div>
                     <div className={styles.column4}><span className={styles.text9}>Account Number</span><span className={styles.text10}>{employee?.salaryDetails?.accountNumber || "Not provided"}</span></div>
                     <div className={styles.column4}><span className={styles.text9}>IBAN Number</span><span className={styles.text10}>{employee?.salaryDetails?.ibanNumber || "Not provided"}</span></div>
@@ -822,7 +843,7 @@ function TeamManagementSalesLeads() {
               {activeTab === "documents" && (
                 <div>
                   <section className="documents-table-section">
-                    <Documents employeeId={employeeId} refreshKey={documentsKey}  />
+                    <Documents employeeId={employeeId} refreshKey={documentsKey} />
                   </section>
                 </div>
               )}
@@ -831,7 +852,7 @@ function TeamManagementSalesLeads() {
         </div>
       </main>
 
-       {/* Mobile Bottom Navigation */}
+      {/* Mobile Bottom Navigation */}
       <MobileBottomNavigation />
 
       <DeleteModal

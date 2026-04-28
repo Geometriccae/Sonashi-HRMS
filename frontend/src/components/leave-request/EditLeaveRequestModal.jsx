@@ -18,6 +18,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [userRole, setUserRole] = useState("");
     const [employees, setEmployees] = useState([]);
+    const [error, setError] = useState("");
     const [formData, setFormData] = useState({
         employeeId: "",
         employeeName: "",
@@ -28,7 +29,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         startDate: "",
         endDate: "",
         reason: "",
-        status: "Pending"
+        status: "Pending",
+        requestAirfare: false
     });
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
@@ -114,7 +116,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 startDate: leaveRequest.startDate ? new Date(leaveRequest.startDate).toISOString().split('T')[0] : "",
                 endDate: leaveRequest.endDate ? new Date(leaveRequest.endDate).toISOString().split('T')[0] : "",
                 reason: leaveRequest.reason || "",
-                status: leaveRequest.status || "Pending"
+                status: leaveRequest.status || "Pending",
+                requestAirfare: leaveRequest.requestAirfare || false
             });
         }
     }, [leaveRequest]);
@@ -138,6 +141,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const handleInputChange = (field, value) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
+        if (error) setError("");
     };
 
     const handleEmployeeChange = (selectedOption) => {
@@ -156,6 +160,12 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!formData.employeeName || !formData.company || !formData.department || !formData.reportingManager || !formData.startDate || !formData.endDate || !formData.reason) {
+            setError("Please fill in all required fields marked with *");
+            return;
+        }
+
+        setError("");
         setIsSubmitting(true);
         try {
             const result = await leaveRequestService.updateLeaveRequest(leaveRequest._id, formData);
@@ -255,7 +265,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                             {(() => {
                                 const selectedEmp = employees.find(e => e._id === formData.employeeId) || leaveRequest?.employee;
                                 if (selectedEmp && typeof selectedEmp === 'object') {
-                                    const { balance, totalTaken } = calculateLeaveBalance(selectedEmp, allLeaveRequests);
+                                    const { balance, totalTaken, expiredDays, airfareEligible } = calculateLeaveBalance(selectedEmp, allLeaveRequests);
                                     let requestedDays = 0;
                                     if (formData.startDate && formData.endDate) {
                                         const s = new Date(formData.startDate);
@@ -278,6 +288,12 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                     <span className="leave-balance-label">Current Balance:</span>
                                                     <span>{balance} Days</span>
                                                 </div>
+                                                {expiredDays > 0 && (
+                                                    <div className="leave-balance-item">
+                                                        <span className="leave-balance-label" style={{ color: "#9a3412" }}>Expired/Unavailable:</span>
+                                                        <span style={{ color: "#7c2d12", fontWeight: "700" }}>{expiredDays} Days</span>
+                                                    </div>
+                                                )}
                                             </div>
                                             {requestedDays > 0 && (
                                                 <div className="leave-balance-row" style={{ paddingTop: "12px", borderTop: "1px dashed currentColor" }}>
@@ -375,7 +391,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 </div>
                             )}
 
-                            <div className="full-width">
+                             <div className="full-width">
                                 <InputField
                                     label="Reason *"
                                     placeholder="Enter reason for leave"
@@ -384,7 +400,55 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                     disabled={!isEditable}
                                 />
                             </div>
+
+                            {(() => {
+                                const selectedEmp = employees.find(e => e._id === formData.employeeId) || leaveRequest?.employee;
+                                const { airfareEligible } = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { airfareEligible: false };
+                                
+                                return (
+                                    <div className="full-width" style={{ background: "#fff", padding: "16px", borderRadius: "12px", border: "1px solid #e2e8f0", marginTop: "12px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <div>
+                                                <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f172a" }}>Airfare Request</div>
+                                                <div style={{ fontSize: "12px", color: "#64748b" }}>
+                                                    Eligibility: <span style={{ color: airfareEligible ? "#16a34a" : "#ef4444", fontWeight: "700" }}>{airfareEligible ? "Yes" : "No"}</span>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    id="requestAirfareEdit"
+                                                    checked={formData.requestAirfare}
+                                                    onChange={(e) => handleInputChange("requestAirfare", e.target.checked)}
+                                                    disabled={!isEditable}
+                                                    style={{ width: "20px", height: "20px", cursor: "pointer" }}
+                                                />
+                                                <label htmlFor="requestAirfareEdit" style={{ cursor: "pointer", fontSize: "14px", fontWeight: "600" }}>Request Airfare</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
+
+                        {error && (
+                            <div style={{ 
+                                margin: "16px 24px 0", 
+                                padding: "12px 16px", 
+                                background: "#fef2f2", 
+                                border: "1px solid #fecaca", 
+                                borderRadius: "8px", 
+                                color: "#991b1b", 
+                                fontSize: "13px",
+                                fontWeight: "600",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px"
+                            }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                {error}
+                            </div>
+                        )}
                     </div>
 
                     <div className="leave-modal-footer">

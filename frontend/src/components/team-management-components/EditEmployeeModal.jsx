@@ -6,7 +6,7 @@ import ProfilePhotoUpload from "../ProfilePhotoUpload";
 import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
-import config from "../../config/config";
+import config, { buildImageUrl, handleImageError } from "../../config/config";
 import Dropdown from "../DropDown";
 import Select from "react-select";
 import ToastContainer from "../Toast";
@@ -24,7 +24,6 @@ import {
 } from "../../constants/employeeDropdownOptions";
 
 function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
-  const apiHost = (config.API_BASE_URL || "").replace(/\/api\/?$/, "");
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
   const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState(null);
@@ -108,13 +107,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       /\/uploads\/employeedocuments\/employeedocuments\//g,
       "/uploads/employeedocuments/"
     );
-    if (/^https?:\/\//i.test(cleaned)) return cleaned;
-    if (!apiHost) return cleaned;
-    
-    // Ensure exactly one slash between host and path
-    const host = apiHost.replace(/\/$/, "");
-    const relativePath = cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
-    return `${host}${relativePath}`;
+    return buildImageUrl(cleaned);
   };
 
   useEffect(() => {
@@ -252,6 +245,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             ? String(employee.totalYearsExperience)
             : "",
         dateOfBirth: employee.dateOfBirth ? String(employee.dateOfBirth).slice(0, 10) : "",
+        lastWorkingDay: employee.lastWorkingDay ? String(employee.lastWorkingDay).slice(0, 10) : "",
         passportNo: employee.passportNo || "",
         passportExpiryDate: employee.passportExpiryDate ? String(employee.passportExpiryDate).slice(0, 10) : "",
         labourCardExpiryDate: employee.labourCardExpiryDate ? String(employee.labourCardExpiryDate).slice(0, 10) : "",
@@ -276,8 +270,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       });
 
       // Set current profile image URL if exists
-      if (employee.profilePhotoUrl) {
-        setCurrentProfileImageUrl(employee.profilePhotoUrl);
+      if (employee.profilePhoto) {
+        setCurrentProfileImageUrl(buildImageUrl(employee.profilePhoto));
       }
 
       // Reset form state
@@ -579,8 +573,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
           <div className="add-client-content">
             <ProfilePhotoUpload
               onUpload={handlePhotoUpload}
-              currentImageUrl={currentProfileImageUrl}
-              defaultText="Update Profile Photo"
+              initialImage={currentProfileImageUrl}
+              onImageError={handleImageError}
             />
             <div className="form-fields-grid">
               <InputField
@@ -748,12 +742,19 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
               <InputField
                 label="Total Year of Experience"
-                placeholder="0"
-                type="number"
-                value={formData.totalYearsExperience}
-                onChange={(e) =>
-                  handleInputChange("totalYearsExperience", e.target.value)
-                }
+                placeholder="0.0"
+                value={(() => {
+                  if (!formData.doj) return "0.0";
+                  const start = new Date(formData.doj);
+                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay) 
+                    ? new Date(formData.lastWorkingDay) 
+                    : new Date();
+                  
+                  const diffMs = Math.max(0, end - start);
+                  const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+                  return years.toFixed(1);
+                })()}
+                readOnly
               />
 
               <InputField
@@ -835,6 +836,16 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   handleInputChange("employeeStatus", e.target.value)
                 }
               />
+
+              {formData.employeeStatus === "InActive" && (
+                <InputField
+                  label="Last Working Day"
+                  placeholder="YYYY-MM-DD"
+                  type="date"
+                  value={formData.lastWorkingDay}
+                  onChange={(e) => handleInputChange("lastWorkingDay", e.target.value)}
+                />
+              )}
 
               <Dropdown
                 label="Attendance"
@@ -1119,7 +1130,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
         return (
           <div className="client-review-content">
-            <div className="company-profile-section">
+            <div className="add-employee-profile-section">
               <div className="company-info">
                 {profileImage ? (
                   <img
@@ -1132,6 +1143,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                     src={currentProfileImageUrl}
                     alt="Employee"
                     className="company-logo"
+                    onError={handleImageError}
                   />
                 ) : (
                   <div className="default-company-logo">
@@ -1145,14 +1157,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   {formData.employeeId || "Employee ID"}
                 </div> */}
               </div>
-              <button className="edit-photo-button" onClick={handleEditPhoto}>
+              {/* Hidden Edit Photo button in review step as per user request */}
+              {/* <button className="edit-photo-button" onClick={handleEditPhoto}>
                 <span className="edit-photo-text">Edit Photo</span>
                 <img
                   src={editIcon}
                   alt="Edit icon"
                   className="edit-photo-icon"
                 />
-              </button>
+              </button> */}
             </div>
 
             <div className="client-data-section">

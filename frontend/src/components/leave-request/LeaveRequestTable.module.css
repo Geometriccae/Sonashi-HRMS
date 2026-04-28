@@ -411,7 +411,8 @@
         font-size: 0.813rem;
     }
 
-    .table th, .table td {
+    .table th,
+    .table td {
         padding: 12px 16px;
         font-size: 0.813rem;
         white-space: nowrap;

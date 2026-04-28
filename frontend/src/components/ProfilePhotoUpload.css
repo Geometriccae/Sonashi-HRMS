@@ -133,14 +133,14 @@
 .profile-upload-container {
   display: flex;
   width: 55.75rem; 
-  padding: 1.5rem; 
+  padding: 0.75rem 1.5rem; /* Reduced padding */
   justify-content: space-between;
   align-items: center;
   border-radius: 0.75rem; 
   background-color: #f5f6f7;
-  margin-top: 3.125rem; 
+  margin-top: 0.5rem; /* Reduced from 3.125rem */
   box-sizing: border-box;
-  gap: 0.875rem; /* fallback gap if children use gap */
+  gap: 0.875rem; 
 }
 
 /* Keep this responsive-friendly by capping width */
