@@ -52,6 +52,18 @@ const leaveRequestService = {
             headers: getAuthHeader()
         });
         return response.data;
+    },
+    bulkImport: async (leaves) => {
+        const response = await axios.post(`${API_URL}/bulk-import`, { leaves }, {
+            headers: getAuthHeader()
+        });
+        return response.data;
+    },
+    bulkDelete: async (ids) => {
+        const response = await axios.post(`${API_URL}/bulk-delete`, { ids }, {
+            headers: getAuthHeader()
+        });
+        return response.data;
     }
 };
 

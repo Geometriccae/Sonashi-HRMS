@@ -6,6 +6,7 @@ import DeleteModal from "../delete-modal/DeleteModal";
 import AddLeaveRequestModal from "./AddLeaveRequestModal";
 import EditLeaveRequestModal from "./EditLeaveRequestModal";
 import LeaveApplicationFormModal from "./LeaveApplicationFormModal";
+import ImportLeaveExcelModal from "./ImportLeaveExcelModal";
 import { useToast } from "../../context/ToastContext";
 import OptionService from "../../services/OptionService";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
@@ -39,6 +40,7 @@ function LeaveRequestTable({ onUpdate }) {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [userRole, setUserRole] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
@@ -51,6 +53,8 @@ function LeaveRequestTable({ onUpdate }) {
     const [managers, setManagers] = useState([]);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
     const [approvalAction, setApprovalAction] = useState(null); // { type: 'approve' | 'reject', request: object }
+    const [selectedRows, setSelectedRows] = useState([]);
+    const [isDeletingBulk, setIsDeletingBulk] = useState(false);
     const itemsPerPage = 10;
 
     const isHOD = String(userRole || "").toLowerCase() === "hod";
@@ -94,6 +98,40 @@ function LeaveRequestTable({ onUpdate }) {
     const handleDelete = (request) => {
         setSelectedRequest(request);
         setIsDeleteModalOpen(true);
+    };
+
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedRows(paginatedRequests.map(req => req._id));
+        } else {
+            setSelectedRows([]);
+        }
+    };
+
+    const toggleSelectRow = (id) => {
+        if (selectedRows.includes(id)) {
+            setSelectedRows(selectedRows.filter(rowId => rowId !== id));
+        } else {
+            setSelectedRows([...selectedRows, id]);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedRows.length === 0) return;
+        if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} leave requests? This cannot be undone.`)) return;
+        
+        setIsDeletingBulk(true);
+        try {
+            await leaveRequestService.bulkDelete(selectedRows);
+            showToast(`Successfully deleted ${selectedRows.length} leave requests`, "success");
+            setSelectedRows([]);
+            fetchLeaveRequests();
+        } catch (error) {
+            console.error("Error bulk deleting:", error);
+            showToast(error.response?.data?.message || "Failed to delete selected leave requests", "error");
+        } finally {
+            setIsDeletingBulk(false);
+        }
     };
 
     const handleViewForm = (request) => {
@@ -181,7 +219,7 @@ function LeaveRequestTable({ onUpdate }) {
         }
 
         return true;
-    });
+    }).sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
 
     // Determine which requests can be approved based on role
     const canApprove = (request) => {
@@ -189,6 +227,17 @@ function LeaveRequestTable({ onUpdate }) {
         // HR can create/edit but NOT approve.
         if (isAdminRole && (request.status === "Pending" || request.status === "HOD Approved")) return true;
         return false;
+    };
+
+    // Strict UTC formatter for DD/MM/YYYY to completely prevent timezone shift
+    const formatDisplayDate = (dateString) => {
+        if (!dateString) return "N/A";
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return "N/A";
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const year = d.getUTCFullYear();
+        return `${day}/${month}/${year}`;
     };
 
     // Pagination calculations
@@ -275,6 +324,24 @@ function LeaveRequestTable({ onUpdate }) {
             <div className={styles.header}>
                 <h2 className={styles.title}>Leave Management</h2>
                 <div className={styles.actions}>
+                    {isHR && (
+                        <>
+                            {selectedRows.length > 0 && (
+                                <button 
+                                    className={styles.addButton} 
+                                    onClick={handleBulkDelete}
+                                    disabled={isDeletingBulk}
+                                    style={{ background: "#fee2e2", color: "#ef4444", border: "1px solid #fca5a5" }}
+                                >
+                                    <span>{isDeletingBulk ? "Deleting..." : `Delete Selected (${selectedRows.length})`}</span>
+                                </button>
+                            )}
+                            <button className={`${styles.addButton} ${styles.importButton || ''}`} style={{ background: '#10b981' }} onClick={() => setIsImportModalOpen(true)}>
+                                <span>Import Excel</span>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '6px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            </button>
+                        </>
+                    )}
                     {isHR && (
                         <button className={styles.addButton} onClick={() => setIsAddModalOpen(true)}>
                             <span>Request Leave</span>
@@ -386,6 +453,16 @@ function LeaveRequestTable({ onUpdate }) {
                 <table className={styles.table}>
                     <thead>
                         <tr>
+                            {isHR && (
+                                <th style={{ width: "40px" }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={paginatedRequests && paginatedRequests.length > 0 && selectedRows.length === paginatedRequests.length}
+                                        onChange={handleSelectAll}
+                                        style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                                    />
+                                </th>
+                            )}
                             <th>Employee</th>
                             <th>Company</th>
                             <th>Department</th>
@@ -413,6 +490,16 @@ function LeaveRequestTable({ onUpdate }) {
                     <tbody>
                         {paginatedRequests.map(req => (
                             <tr key={req._id}>
+                                {isHR && (
+                                    <td>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedRows.includes(req._id)}
+                                            onChange={() => toggleSelectRow(req._id)}
+                                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                                        />
+                                    </td>
+                                )}
                                 <td>
                                     <div className={styles.employeeInfo}>
                                         <div className={styles.employeeName}>
@@ -431,7 +518,7 @@ function LeaveRequestTable({ onUpdate }) {
                                         <td>{req.reason}</td>
                                         <td>{calculateDays(req.startDate, req.endDate)} Days</td>
                                         <td>
-                                            {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                                            {formatDisplayDate(req.startDate)} - {formatDisplayDate(req.endDate)}
                                         </td>
                                         <td style={{ textAlign: "center" }}>
                                             <span style={{ 
@@ -451,7 +538,7 @@ function LeaveRequestTable({ onUpdate }) {
                                 ) : (
                                     <>
                                         <td>
-                                            {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                                            {formatDisplayDate(req.startDate)} - {formatDisplayDate(req.endDate)}
                                         </td>
                                         <td style={{ textAlign: "center" }}>
                                             <span style={{ 
@@ -469,7 +556,7 @@ function LeaveRequestTable({ onUpdate }) {
                                         </td>
                                     </>
                                 )}
-                                <td>{new Date(req.appliedOn).toLocaleDateString()}</td>
+                                <td>{formatDisplayDate(req.appliedOn)}</td>
                                 <td>
                                     <div className={styles.rowActions}>
                                         {canManageLeaves ? (
@@ -484,7 +571,7 @@ function LeaveRequestTable({ onUpdate }) {
                                                     <ViewIcon />
                                                 </button>
 
-                                                {(isHR || isHOD) && (
+                                                {isHR && (
                                                     <>
                                                         <button className={styles.iconButton} onClick={() => handleEdit(req)} title="Edit">
                                                             <EditIcon />
@@ -612,6 +699,14 @@ function LeaveRequestTable({ onUpdate }) {
                 onClose={() => setIsFormModalOpen(false)}
                 leaveRequest={selectedRequest}
                 allLeaveRequests={leaveRequests}
+            />
+
+            <ImportLeaveExcelModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => {
+                    fetchLeaveRequests();
+                }}
             />
 
             {isApprovalModalOpen && (

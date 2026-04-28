@@ -401,4 +401,148 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     }
 });
 
+// Bulk delete leave requests
+router.post('/bulk-delete', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'hr') {
+            return res.status(403).json({ message: 'Only Admin and HR can bulk delete leave requests' });
+        }
+
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: 'No leave request IDs provided' });
+        }
+
+        const result = await LeaveRequest.deleteMany({ _id: { $in: ids } });
+        res.json({ message: `Successfully deleted ${result.deletedCount} leave requests`, deletedCount: result.deletedCount });
+    } catch (error) {
+        console.error('Error bulk deleting leave requests:', error);
+        res.status(500).json({ message: 'Error bulk deleting leave requests', error: error.message });
+    }
+});
+
+// Bulk import leave requests
+router.post('/bulk-import', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'hr') {
+            return res.status(403).json({ message: 'Only Admin and HR can bulk import leave requests' });
+        }
+
+        const { leaves } = req.body;
+        if (!Array.isArray(leaves) || leaves.length === 0) {
+            return res.status(400).json({ message: 'No leave data provided' });
+        }
+
+        const newLeaves = [];
+        const errors = [];
+
+        // Pre-fetch all users and employees to map employeeId to User _id or Employee _id
+        const Employee = require('../models/Employee'); // Ensure Employee model is available
+        const employees = await Employee.find({}).lean();
+        const users = await User.find({}).lean();
+        
+        const empIdMap = {}; // Maps "idmo-032" -> Employee
+        const empNameMap = {}; // Maps "pawan jaikishin" -> Employee
+        
+        employees.forEach(e => {
+            if (e.employeeId) empIdMap[String(e.employeeId).toLowerCase()] = e;
+            if (e.employeeName) empNameMap[String(e.employeeName).toLowerCase().replace(/[\s_.-]/g, '')] = e;
+        });
+
+        const userByEmpObjIdMap = {}; // Maps Employee._id -> User
+        const userNameMap = {}; // Maps "pawan" -> User
+        
+        users.forEach(u => {
+            if (u.employeeId) userByEmpObjIdMap[String(u.employeeId)] = u;
+            if (u.username) userNameMap[String(u.username).toLowerCase().replace(/[\s_.-]/g, '')] = u;
+        });
+
+        for (let i = 0; i < leaves.length; i++) {
+            const row = leaves[i];
+            try {
+                let targetUserId = null;
+                const rawId = String(row.employeeId || '').toLowerCase();
+                const rawName = String(row.employeeName || '').toLowerCase().replace(/[\s_.-]/g, '');
+                
+                // 1. Try matching by real Employee ID (e.g., idmo-032)
+                let matchedEmp = null;
+                if (rawId && empIdMap[rawId]) {
+                    matchedEmp = empIdMap[rawId];
+                }
+                
+                // 2. Try matching by Name exactly (if ID was a serial number like "1")
+                if (!matchedEmp && rawName) {
+                    matchedEmp = empNameMap[rawName];
+                }
+                
+                // 3. Try fuzzy matching name (e.g. if Excel says "PAWAN JAIKISHIN KOTAI" but DB has "Pawan Jaikishin")
+                if (!matchedEmp && rawName) {
+                    const possibleEmps = employees.filter(e => {
+                        const dbName = String(e.employeeName).toLowerCase().replace(/[\s_.-]/g, '');
+                        return dbName.includes(rawName) || rawName.includes(dbName);
+                    });
+                    if (possibleEmps.length > 0) matchedEmp = possibleEmps[0];
+                }
+
+                // Now resolve to a User ID (or fallback to Employee ID)
+                if (matchedEmp) {
+                    const linkedUser = userByEmpObjIdMap[String(matchedEmp._id)];
+                    targetUserId = linkedUser ? linkedUser._id : matchedEmp._id;
+                } else if (rawName && userNameMap[rawName]) {
+                    targetUserId = userNameMap[rawName]._id;
+                }
+                
+                if (!targetUserId) {
+                    const empText = row.employeeId ? `${row.employeeName} (ID: ${row.employeeId})` : `"${row.employeeName}"`;
+                    errors.push(`[Sheet ${row.sheetName || 'Unknown'}] Row ${row.rowNumber || 'Unknown'}: Employee ${empText} was not found in the database. Please ensure the name matches the system.`);
+                    continue;
+                }
+
+                let startDate = row.startDate ? new Date(row.startDate) : null;
+                let endDate = row.endDate ? new Date(row.endDate) : null;
+
+                if (!startDate || isNaN(startDate.getTime())) {
+                    errors.push(`[Sheet ${row.sheetName || 'Unknown'}] Row ${row.rowNumber || 'Unknown'}: Missing or invalid start date for "${row.employeeName}".`);
+                    continue;
+                }
+                if (!endDate || isNaN(endDate.getTime())) {
+                    endDate = startDate; // fallback to single day
+                }
+
+                newLeaves.push({
+                    employee: targetUserId,
+                    employeeName: row.employeeName || row.employeeId || 'Unknown Employee',
+                    company: row.company || 'Unknown Company',
+                    department: matchedEmp?.department || row.department || '',
+                    reportingManager: matchedEmp?.reportingManager || row.reportingManager || '',
+                    leaveType: row.leaveType || 'Personal Leave',
+                    startDate: startDate,
+                    endDate: endDate,
+                    reason: row.reason || 'Imported from Excel',
+                    status: row.status || 'Approved', // Defaults to Approved for imported history
+                    requestAirfare: row.requestAirfare === true || String(row.requestAirfare).toLowerCase() === 'yes' || String(row.requestAirfare).toLowerCase() === 'true',
+                    appliedOn: row.appliedOn ? new Date(row.appliedOn) : new Date(),
+                    adminApprovedBy: req.user.id,
+                    adminApprovedAt: new Date()
+                });
+            } catch (err) {
+                errors.push(`[Sheet ${row.sheetName || 'Unknown'}] Row ${row.rowNumber || 'Unknown'}: Failed to process "${row.employeeName}" - ${err.message}`);
+            }
+        }
+
+        if (newLeaves.length > 0) {
+            await LeaveRequest.insertMany(newLeaves);
+        }
+
+        res.json({
+            message: `Successfully imported ${newLeaves.length} leave requests.`,
+            errors: errors.length > 0 ? errors : undefined,
+            importedCount: newLeaves.length
+        });
+    } catch (error) {
+        console.error('Error bulk importing leave requests:', error);
+        res.status(500).json({ message: 'Error bulk importing leave requests', error: error.message });
+    }
+});
+
 module.exports = router;
