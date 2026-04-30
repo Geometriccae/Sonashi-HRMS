@@ -3,14 +3,14 @@ import styles from "./DashboardOverview.module.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
-import { 
-  FaUsers, 
-  FaUserCheck, 
-  FaUserTimes, 
-  FaPlane, 
-  FaCalendarAlt, 
-  FaPassport, 
-  FaUserPlus 
+import {
+  FaUsers,
+  FaUserCheck,
+  FaUserTimes,
+  FaPlane,
+  FaCalendarAlt,
+  FaPassport,
+  FaUserPlus
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
@@ -26,11 +26,12 @@ function DashboardOverview() {
     inactive: 0,
     onVacation: 0,
     upcomingVacation: 0,
+    vacationReturn: 0,
     visaExpiry: 0,
     onboarding: 0
   });
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Modal State
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [filteredList, setFilteredList] = useState([]);
@@ -47,13 +48,13 @@ function DashboardOverview() {
 
         const empList = Array.isArray(employees) ? employees : (employees?.data || []);
         const leaveList = Array.isArray(leaveRequests) ? leaveRequests : (leaveRequests?.data || []);
-        
+
         const today = new Date();
-        today.setHours(0,0,0,0);
-        
+        today.setHours(0, 0, 0, 0);
+
         const next60Days = new Date(today);
         next60Days.setDate(today.getDate() + 60);
-        
+
         const next90Days = new Date(today);
         next90Days.setDate(today.getDate() + 90);
 
@@ -80,16 +81,22 @@ function DashboardOverview() {
         // 2. Vacation Stats
         let onVacation = 0;
         let upcomingVacation = 0;
+        let vacationReturn = 0;
+
+        const lastMonth = new Date(today);
+        lastMonth.setMonth(today.getMonth() - 1);
 
         leaveList.forEach(req => {
           if (req.status === "Approved") {
             const start = new Date(req.startDate);
             const end = new Date(req.endDate);
-            
+
             if (today >= start && today <= end) {
               onVacation++;
             } else if (start > today && start <= next60Days) {
               upcomingVacation++;
+            } else if (end >= lastMonth && end < today) {
+              vacationReturn++;
             }
           }
         });
@@ -102,6 +109,7 @@ function DashboardOverview() {
             inactive,
             onVacation,
             upcomingVacation,
+            vacationReturn,
             visaExpiry,
             onboarding
           });
@@ -117,10 +125,35 @@ function DashboardOverview() {
     return () => { isMounted = false; };
   }, []);
 
+  const handleMarkAsReturned = async (req) => {
+    if (!window.confirm(`Are you sure ${req.employeeName} has returned early? This will update their leave end date to today.`)) return;
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Update Leave Request
+      await leaveRequestService.updateLeaveRequest(req._id, {
+        endDate: today.toISOString(),
+        status: "Approved"
+      });
+
+      // Update Employee Attendance if possible
+      const empId = req.employee?._id || req.employee;
+      if (empId) {
+        await employeeService.updateEmployee(empId, { attendance: "Onsite" });
+      }
+
+      window.location.reload(); // Refresh to update all cards
+    } catch (err) {
+      console.error("Failed to mark as returned:", err);
+      alert("Failed to update status.");
+    }
+  };
+
   const handleCardClick = (category) => {
     const today = new Date();
-    today.setHours(0,0,0,0);
-    today.setHours(0,0,0,0);
+    today.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
     const next60Days = new Date(today);
     next60Days.setDate(today.getDate() + 60);
     const next90Days = new Date(today);
@@ -145,14 +178,14 @@ function DashboardOverview() {
             const e = new Date(req.endDate);
             return today >= s && today <= e;
           })
-          .map(req => { 
+          .map(req => {
             const empName = req.employeeName || req.employee?.employeeName || "Unknown";
-            const linkedEmp = data.employees.find(e => 
-              (e._id === (req.employee?._id || req.employee)) || 
+            const linkedEmp = data.employees.find(e =>
+              (e._id === (req.employee?._id || req.employee)) ||
               (e.employeeName === empName)
             );
-            return { 
-              ...req, 
+            return {
+              ...req,
               employeeName: empName,
               employeeId: linkedEmp?.employeeId || req.employeeId || req.employee?.employeeId || "-"
             };
@@ -165,14 +198,36 @@ function DashboardOverview() {
             const s = new Date(req.startDate);
             return s > today && s <= next60Days;
           })
-          .map(req => { 
+          .map(req => {
             const empName = req.employeeName || req.employee?.employeeName || "Unknown";
-            const linkedEmp = data.employees.find(e => 
-              (e._id === (req.employee?._id || req.employee)) || 
+            const linkedEmp = data.employees.find(e =>
+              (e._id === (req.employee?._id || req.employee)) ||
               (e.employeeName === empName)
             );
-            return { 
-              ...req, 
+            return {
+              ...req,
+              employeeName: empName,
+              employeeId: linkedEmp?.employeeId || req.employeeId || req.employee?.employeeId || "-"
+            };
+          });
+        break;
+      case "Vacation Return":
+        list = data.leaveRequests
+          .filter(req => {
+            if (req.status !== "Approved") return false;
+            const e = new Date(req.endDate);
+            const lastM = new Date(today);
+            lastM.setMonth(today.getMonth() - 1);
+            return e >= lastM && e < today;
+          })
+          .map(req => {
+            const empName = req.employeeName || req.employee?.employeeName || "Unknown";
+            const linkedEmp = data.employees.find(e =>
+              (e._id === (req.employee?._id || req.employee)) ||
+              (e.employeeName === empName)
+            );
+            return {
+              ...req,
               employeeName: empName,
               employeeId: linkedEmp?.employeeId || req.employeeId || req.employee?.employeeId || "-"
             };
@@ -204,6 +259,7 @@ function DashboardOverview() {
     { label: "Inactive Employees", value: counts.inactive, icon: <FaUserTimes />, color: "#64748b" },
     { label: "On Vacation", value: counts.onVacation, icon: <FaPlane />, color: "#3b82f6", trend: "Live" },
     { label: "Upcoming Vacations", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "Next 60 days", tooltip: "Employees with approved leave starting in the next 60 days" },
+    { label: "Vacation Return", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 1 month", tooltip: "Employees who returned from vacation in the last 1 month" },
     { label: "Visa Expiry", value: counts.visaExpiry, icon: <FaPassport />, color: "#f97316", sub: "Next 90 days", alert: true, tooltip: "Visas expiring within the next 3 months. Action required." },
     { label: "Onboarding", value: counts.onboarding, icon: <FaUserPlus />, color: "#06b6d4", sub: "Probation/New", trend: "New" },
   ];
@@ -221,8 +277,8 @@ function DashboardOverview() {
     <div className={styles.dashboardContainer}>
       <div className={styles.dashboardGrid}>
         {cards.map((card, index) => (
-          <div 
-            key={index} 
+          <div
+            key={index}
             className={`${styles.statCard} ${card.alert ? styles.alertCard : ""}`}
             title={card.tooltip || ""}
             onClick={() => handleCardClick(card.label)}
@@ -266,6 +322,7 @@ function DashboardOverview() {
                         <>
                           <th>Start Date</th>
                           <th>End Date</th>
+                          {selectedCategory === "On Vacation" && <th>Action</th>}
                         </>
                       ) : (
                         <>
@@ -277,8 +334,8 @@ function DashboardOverview() {
                   </thead>
                   <tbody>
                     {filteredList.map((item, idx) => (
-                      <tr 
-                        key={idx} 
+                      <tr
+                        key={idx}
                         onClick={() => {
                           const id = item._id || item.id || item.employee?._id;
                           if (id) navigate(`/teammanagement_salesleads/${id}`);
@@ -292,12 +349,32 @@ function DashboardOverview() {
                           <>
                             <td>{new Date(item.startDate).toLocaleDateString()}</td>
                             <td>{new Date(item.endDate).toLocaleDateString()}</td>
+                            {selectedCategory === "On Vacation" && (
+                              <td>
+                                <button
+                                  className={styles.viewAllBtn}
+                                  style={{
+                                    padding: "6px 12px",
+                                    fontSize: "11px",
+                                    background: "#10b981",
+                                    margin: 0,
+                                    width: "auto"
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMarkAsReturned(item);
+                                  }}
+                                >
+                                  Mark Returned
+                                </button>
+                              </td>
+                            )}
                           </>
                         ) : (
                           <>
                             <td>{item.department || "-"}</td>
                             <td>
-                              {selectedCategory === "Visa Expiry" 
+                              {selectedCategory === "Visa Expiry"
                                 ? <span style={{ color: "#ef4444", fontWeight: "600" }}>{new Date(item.visaExpiryDate).toLocaleDateString()}</span>
                                 : item.role || item.employeeStatus || "-"}
                             </td>
@@ -312,8 +389,8 @@ function DashboardOverview() {
               )}
             </div>
             <div className={styles.modalFooter}>
-              <button 
-                className={styles.viewAllBtn} 
+              <button
+                className={styles.viewAllBtn}
                 onClick={() => {
                   if (selectedCategory.includes("Vacation")) {
                     navigate("/leave-requests");

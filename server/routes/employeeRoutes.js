@@ -213,7 +213,7 @@ async function sendTaskEmailsInBackground(employee, eventData, assignedBy, actio
 // Get all employees
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const employees = await Employee.find().sort({ createdAt: -1 });
+    const employees = await Employee.find().lean().sort({ createdAt: -1 });
     res.json(employees);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
@@ -805,6 +805,49 @@ router.post('/:id/increments', authMiddleware, requireAdminOrHod, async (req, re
     res.status(201).json(employee);
   } catch (error) {
     res.status(500).json({ message: 'Error adding increment', error: error.message });
+  }
+});
+
+// PUT /api/employees/:id/increments/:incrementId - update an increment
+router.put('/:id/increments/:incrementId', authMiddleware, requireAdminOrHod, async (req, res) => {
+  try {
+    const { id, incrementId } = req.params;
+    const { date, previousSalary, incrementAmount, newSalary, reason } = req.body;
+
+    const employee = await Employee.findById(id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    const increment = employee.increments.id(incrementId);
+    if (!increment) return res.status(404).json({ message: 'Increment not found' });
+
+    if (date) increment.date = date;
+    if (previousSalary !== undefined) increment.previousSalary = Number(previousSalary);
+    if (incrementAmount !== undefined) increment.incrementAmount = Number(incrementAmount);
+    if (newSalary !== undefined) {
+      increment.newSalary = Number(newSalary);
+      employee.salaryDetails.totalSalary = Number(newSalary);
+    }
+    if (reason !== undefined) increment.reason = reason;
+
+    await employee.save();
+    res.json(employee);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating increment', error: error.message });
+  }
+});
+
+// DELETE /api/employees/:id/increments/:incrementId - delete an increment
+router.delete('/:id/increments/:incrementId', authMiddleware, requireAdminOrHod, async (req, res) => {
+  try {
+    const { id, incrementId } = req.params;
+    const employee = await Employee.findById(id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    employee.increments.pull({ _id: incrementId });
+    await employee.save();
+    res.json(employee);
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting increment', error: error.message });
   }
 });
 

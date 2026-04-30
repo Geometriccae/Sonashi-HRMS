@@ -41,13 +41,13 @@ function NotificationBell({ small = true }) {
       } catch (e) {
         console.warn('Failed to parse stored notifications:', e);
       }
-      
+
       // Create appNotifications global object
       window.appNotifications = {
         list: [],
-        push: function(item) {
+        push: function (item) {
           console.log('📥 Adding notification to bell:', item);
-          
+
           const notification = {
             id: item.id || `notification-${Date.now()}-${Math.random()}`,
             title: item.title || 'Notification',
@@ -57,7 +57,7 @@ function NotificationBell({ small = true }) {
             timestamp: new Date(),
             type: item.type || 'notification'
           };
-          
+
           // Add to state
           setNotifications(prev => {
             if (item.id && prev.some(n => n.id === item.id)) {
@@ -72,12 +72,12 @@ function NotificationBell({ small = true }) {
             }
             return updated;
           });
-          
+
           // Component useEffect handles unreadCount automatically.
-          
+
           return notification;
         },
-        markAllRead: function() {
+        markAllRead: function () {
           setNotifications(prev => {
             const updated = prev.map(n => ({ ...n, read: true }));
             try {
@@ -113,7 +113,7 @@ function NotificationBell({ small = true }) {
       o.start();
       g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
       setTimeout(() => {
-        try { o.stop(); ctx.close(); } catch (_) {}
+        try { o.stop(); ctx.close(); } catch (_) { }
       }, 700);
     } catch (e) {
       console.warn("Audio beep failed:", e);
@@ -135,7 +135,7 @@ function NotificationBell({ small = true }) {
         };
         const notification = new window.Notification(payload.title || "Reminder", opts);
         notification.onclick = () => {
-          try { window.focus(); } catch (_) {}
+          try { window.focus(); } catch (_) { }
           const targetUrl = payload.url || payload.meta?.url;
           if (targetUrl) window.location.href = targetUrl;
           notification.close();
@@ -276,7 +276,7 @@ function NotificationBell({ small = true }) {
   useEffect(() => {
     return () => {
       for (const t of scheduledTimersRef.current.values()) {
-        try { clearTimeout(t); } catch (e) {}
+        try { clearTimeout(t); } catch (e) { }
       }
       scheduledTimersRef.current.clear();
     };
@@ -305,7 +305,7 @@ function NotificationBell({ small = true }) {
           if (resp.ok) {
             const me = await resp.json();
             meRef.current = me;
-            
+
             try {
               const eventsResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/clients/events`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -324,7 +324,7 @@ function NotificationBell({ small = true }) {
             } catch (evErr) {
               console.debug('Could not prefetch events:', evErr);
             }
-            
+
             try {
               if (me.role === 'admin' || me.role === 'hr') {
                 const empResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/employees`, {
@@ -333,7 +333,7 @@ function NotificationBell({ small = true }) {
                 if (empResp.ok) {
                   const empData = await empResp.json();
                   const empList = Array.isArray(empData) ? empData : (empData.employees || []);
-                  
+
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
                   const msPerDay = 1000 * 60 * 60 * 24;
@@ -343,9 +343,9 @@ function NotificationBell({ small = true }) {
                     const expDate = new Date(dateStr);
                     if (isNaN(expDate.getTime())) return;
                     expDate.setHours(0, 0, 0, 0);
-                    
+
                     const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
-                    
+
                     if (diffDays >= 0 && diffDays <= 30) {
                       let timeStr = "soon";
                       if (diffDays === 0) timeStr = "today";
@@ -353,7 +353,7 @@ function NotificationBell({ small = true }) {
                       else timeStr = `in ${diffDays} days`;
 
                       const notifId = `expiry-${employeeName}-${docName}-${dateStr}`;
-                      
+
                       if (window.appNotifications?.push) {
                         window.appNotifications.push({
                           id: notifId,
@@ -382,7 +382,7 @@ function NotificationBell({ small = true }) {
       }
 
       console.log('🔌 Notification socket connected', socket.id);
-      
+
       try {
         const token = localStorage.getItem('token');
         if (token) {
@@ -416,7 +416,7 @@ function NotificationBell({ small = true }) {
         console.warn('Error fetching current user for socket join:', meErr);
       }
     });
-    
+
     socket.on('connect_error', (err) => {
       console.error('Notification socket connect_error', err);
     });
@@ -432,7 +432,7 @@ function NotificationBell({ small = true }) {
         const id = payload?.id || `${payload?.type || 'n'}-${payload?.taskId || payload?.clientId || Date.now()}`;
         if (receivedIdsRef.current.has(id)) return;
         receivedIdsRef.current.add(id);
-        
+
         // Add to notifications list
         if (window.appNotifications?.push) {
           window.appNotifications.push({
@@ -442,21 +442,21 @@ function NotificationBell({ small = true }) {
             type: payload.type || 'notification'
           });
         }
-        
+
         // Show browser notification if permission granted
         if (notificationSupported && permissionStatus === 'granted') {
           try {
-            new window.Notification(payload.title || 'Notification', { 
-              body: payload.body || '', 
-              tag: payload.id, 
-              icon: '/sonashi_logo.png' 
+            new window.Notification(payload.title || 'Notification', {
+              body: payload.body || '',
+              tag: payload.id,
+              icon: '/sonashi_logo.png'
             });
           } catch (err) {
             console.warn('Failed to show browser notification:', err);
           }
         }
-      } catch (e) { 
-        console.error('Error handling socket notification', e); 
+      } catch (e) {
+        console.error('Error handling socket notification', e);
       }
     });
 
@@ -464,13 +464,13 @@ function NotificationBell({ small = true }) {
     socket.on('event-reminder', (payload) => {
       console.log('🎯 [LIVE] Received event-reminder:', payload);
       try {
-        const perm = (typeof window !== 'undefined' && window.Notification) ? 
+        const perm = (typeof window !== 'undefined' && window.Notification) ?
           window.Notification.permission : 'unsupported';
         console.log('🔍 reminder diagnostics: permissionStatus=', perm);
 
         // Show browser notification
         const shown = triggerBrowserReminder(payload);
-        
+
         // Always add to notifications list
         if (window.appNotifications?.push) {
           window.appNotifications.push({
@@ -484,8 +484,8 @@ function NotificationBell({ small = true }) {
 
         if (!shown) {
           const reason = (typeof window !== 'undefined' && window.Notification)
-            ? (window.Notification.permission === 'denied' ? 'blocked (denied by browser)' : 
-               (window.isSecureContext ? 'permission not granted' : 'insecure context (requires HTTPS)'))
+            ? (window.Notification.permission === 'denied' ? 'blocked (denied by browser)' :
+              (window.isSecureContext ? 'permission not granted' : 'insecure context (requires HTTPS)'))
             : 'notifications API unavailable';
           setPermissionBannerMsg(`Reminder received, but native notifications are ${reason}.`);
           setShowPermissionBanner(true);
@@ -498,11 +498,11 @@ function NotificationBell({ small = true }) {
               body: payload.body || '',
               meta: payload.meta || payload
             }, ...prev].slice(0, 6);
-            
+
             setTimeout(() => {
               setInAppReminders(cur => cur.filter(r => r.id !== payload.id));
             }, 10000);
-            
+
             return next;
           });
           playBeep();
@@ -517,7 +517,7 @@ function NotificationBell({ small = true }) {
         console.log('client-event received:', payload);
         const ev = payload.event || payload;
         scheduleLocalReminders(ev);
-        
+
         if (window.appNotifications?.push) {
           window.appNotifications.push({
             title: payload.title || 'Client Event',
@@ -530,13 +530,13 @@ function NotificationBell({ small = true }) {
         console.warn('client-event error:', err);
       }
     });
-    
+
     socket.on('employee-event', (payload) => {
       try {
         console.log('employee-event received:', payload);
         const ev = payload.event || payload;
         scheduleLocalReminders(ev);
-        
+
         if (window.appNotifications?.push) {
           window.appNotifications.push({
             title: payload.title || 'Employee Event',
@@ -554,10 +554,10 @@ function NotificationBell({ small = true }) {
       try {
         const id = payload?.id;
         if (id && scheduledTimersRef.current.has(id)) {
-          try { clearTimeout(scheduledTimersRef.current.get(id)); } catch (err) {}
+          try { clearTimeout(scheduledTimersRef.current.get(id)); } catch (err) { }
           scheduledTimersRef.current.delete(id);
         }
-        
+
         if (window.appNotifications?.push) {
           window.appNotifications.push({
             title: payload.title || 'Reminder',
@@ -566,23 +566,23 @@ function NotificationBell({ small = true }) {
             type: 'task-reminder'
           });
         }
-        
+
         const shown = (typeof window !== 'undefined' && window.Notification && window.Notification.permission === 'granted');
-        if (!shown) { 
-          setInAppReminders(prev => { 
-            const next = [{ 
-              id: payload.id, 
-              title: payload.title, 
-              body: payload.body, 
-              meta: payload.meta 
-            }, ...prev].slice(0,6); 
-            setTimeout(()=> setInAppReminders(cur => cur.filter(r=>r.id !== payload.id)),10000); 
-            return next; 
-          }); 
-          playBeep(); 
+        if (!shown) {
+          setInAppReminders(prev => {
+            const next = [{
+              id: payload.id,
+              title: payload.title,
+              body: payload.body,
+              meta: payload.meta
+            }, ...prev].slice(0, 6);
+            setTimeout(() => setInAppReminders(cur => cur.filter(r => r.id !== payload.id)), 10000);
+            return next;
+          });
+          playBeep();
         }
-      } catch (e) { 
-        console.warn('task-reminder handler error', e); 
+      } catch (e) {
+        console.warn('task-reminder handler error', e);
       }
     });
 
@@ -608,7 +608,7 @@ function NotificationBell({ small = true }) {
     if (notificationSupported && permissionStatus === "default") {
       await requestNotificationPermission();
     }
-    
+
     const newState = !isOpen;
     setIsOpen(newState);
 
@@ -723,7 +723,7 @@ function NotificationBell({ small = true }) {
               </div>
               <div className={styles.inAppReminderAction}>
                 <button onClick={() => {
-                  try { window.open(r.meta?.url || r.meta?.link || '/', '_blank'); } catch (e) {}
+                  try { window.open(r.meta?.url || r.meta?.link || '/', '_blank'); } catch (e) { }
                 }} className={styles.inAppReminderButton}>
                   Open
                 </button>
@@ -739,15 +739,15 @@ function NotificationBell({ small = true }) {
             <div className={styles.title}>
               Notifications
               {unreadCount > 0 && (
-                <span style={{ 
-                  marginLeft: 8, 
-                  background: '#ef4444', 
-                  color: 'white', 
-                  borderRadius: '50%', 
-                  width: 20, 
-                  height: 20, 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
+                <span style={{
+                  marginLeft: 8,
+                  background: '#ef4444',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: 20,
+                  height: 20,
+                  display: 'inline-flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 12
                 }}>
@@ -758,8 +758,8 @@ function NotificationBell({ small = true }) {
             <div className={styles.actions}>
               <PermissionHint />
               {notifications.length > 0 && (
-                <button 
-                  className={styles.actionBtn} 
+                <button
+                  className={styles.actionBtn}
                   onClick={clearAll}
                   style={{ marginLeft: 8 }}
                 >
@@ -790,8 +790,8 @@ function NotificationBell({ small = true }) {
               <div className={styles.empty}>No notifications yet</div>
             ) : (
               notifications.map((n) => (
-                <div 
-                  key={n.id} 
+                <div
+                  key={n.id}
                   className={`${styles.item} ${n.read ? styles.read : styles.unread}`}
                   onClick={() => markAsRead(n.id)}
                   style={{ cursor: 'pointer' }}
@@ -814,10 +814,10 @@ function NotificationBell({ small = true }) {
                     <div className={styles.itemMeta}>
                       {n.type && (
                         <span className={styles.itemType} style={{
-                          background: n.type.includes('reminder') ? '#fee2e2' : 
-                                    n.type.includes('event') ? '#dbeafe' : '#f0f9ff',
-                          color: n.type.includes('reminder') ? '#991b1b' : 
-                                n.type.includes('event') ? '#1e40af' : '#0c4a6e',
+                          background: n.type.includes('reminder') ? '#fee2e2' :
+                            n.type.includes('event') ? '#dbeafe' : '#f0f9ff',
+                          color: n.type.includes('reminder') ? '#991b1b' :
+                            n.type.includes('event') ? '#1e40af' : '#0c4a6e',
                           padding: '2px 8px',
                           borderRadius: 12,
                           fontSize: 11,
@@ -827,9 +827,9 @@ function NotificationBell({ small = true }) {
                         </span>
                       )}
                       <span className={styles.itemTime}>
-                        {n.timestamp ? new Date(n.timestamp).toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
+                        {n.timestamp ? new Date(n.timestamp).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
                         }) : 'Just now'}
                       </span>
                     </div>
@@ -838,7 +838,7 @@ function NotificationBell({ small = true }) {
               ))
             )}
           </div>
-          
+
           {notifications.length > 0 && (
             <div className={styles.dropdownFooter}>
               {/* <button 

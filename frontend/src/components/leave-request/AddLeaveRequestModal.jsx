@@ -55,6 +55,25 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
         if (isOpen) {
             fetchEmployees();
             fetchDepartmentOptions();
+            
+            const r = String(localStorage.getItem("role") || "").toLowerCase();
+            const isM = r === "admin" || r === "hr";
+            
+            setFormData({
+                employeeId: isM ? "" : (localStorage.getItem("userId") || ""),
+                employeeName: isM ? "" : (localStorage.getItem("username") || ""),
+                company: "Sonashi",
+                department: "",
+                reportingManager: "",
+                leaveType: "Personal Leave",
+                startDate: "",
+                endDate: "",
+                reason: "",
+                requestAirfare: false,
+                visaExpiryDate: ""
+            });
+            setError("");
+            setSelectedYearDetails(null);
         }
     }, [isOpen]);
 
@@ -110,7 +129,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                 employeeId: userId,
                 employeeName: username,
                 department: me?.department || prev.department,
-                reportingManager: me?.reportingManager || prev.reportingManager
+                reportingManager: me?.reportingManager || prev.reportingManager,
+                visaExpiryDate: me?.visaExpiryDate ? new Date(me.visaExpiryDate).toISOString().split('T')[0] : ""
             }));
         }
     }, [isOpen, employees, userRole]);
@@ -128,7 +148,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
     if (!isOpen) return null;
 
     const handleBackdropClick = (e) => {
-        if (e.target === e.currentTarget) onClose();
+        // Do nothing on backdrop click as requested by user
     };
 
     const handleInputChange = (field, value) => {
@@ -159,7 +179,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                 employeeId: selectedId,
                 employeeName: selectedEmployee ? (selectedEmployee.employeeName || selectedEmployee.name || "") : "",
                 department: (selectedEmployee?.department || "").trim(),
-                reportingManager: (selectedEmployee?.reportingManager || "").trim()
+                reportingManager: (selectedEmployee?.reportingManager || "").trim(),
+                visaExpiryDate: selectedEmployee?.visaExpiryDate ? new Date(selectedEmployee.visaExpiryDate).toISOString().split('T')[0] : ""
             };
             console.log("UPDATED FORM STATE:", updated);
             return updated;
@@ -259,7 +280,9 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
 
     const departmentOptions = dynamicDepartmentOptions;
 
-    const employeeOptions = employees.map(emp => ({
+    const activeEmployees = employees.filter(emp => String(emp.employeeStatus || "Active").toLowerCase() === "active");
+
+    const employeeOptions = activeEmployees.map(emp => ({
         value: emp._id,
         label: `${emp.employeeName || emp.name || "Unknown"} (${emp.employeeId || "N/A"})`
     }));
@@ -330,6 +353,42 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                                         required
                                     />
                                 </div>
+
+                            </div>
+
+                            <div className="full-width">
+                                <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+                                    <div className="input-field">
+                                        <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Joining Date</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-field-input" 
+                                            disabled 
+                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString() : 'N/A'} 
+                                            style={{ background: "#f8fafc" }} 
+                                        />
+                                    </div>
+                                    <div className="input-field">
+                                        <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Total Experience</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-field-input" 
+                                            disabled 
+                                            value={selectedEmp ? `${leaveStats.workingYears} Years` : 'N/A'} 
+                                            style={{ background: "#f8fafc" }} 
+                                        />
+                                    </div>
+                                    <div className="input-field">
+                                        <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Visa Expiry Date</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-field-input" 
+                                            disabled 
+                                            value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString() : 'Not Set'} 
+                                            style={{ background: "#f8fafc" }} 
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="full-width">
@@ -372,14 +431,14 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                                         <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f172a" }}>Airfare Request</div>
                                         <div style={{ fontSize: "12px", color: "#64748b" }}>
                                             Eligibility: <span style={{ 
-                                                color: leaveStats.airfareEligible ? "#16a34a" : "#ef4444", 
+                                                color: leaveStats.airfareAvailable ? "#16a34a" : "#ef4444", 
                                                 fontWeight: "800",
                                                 padding: "2px 6px",
-                                                background: leaveStats.airfareEligible ? "#f0fdf4" : "#fef2f2",
+                                                background: leaveStats.airfareAvailable ? "#f0fdf4" : "#fef2f2",
                                                 borderRadius: "4px",
                                                 marginLeft: "4px"
                                             }}>
-                                                {leaveStats.airfareEligible ? "YES (Benefit Active)" : "NO (Not in Profile)"}
+                                                {(leaveStats?.airfareStatus || "N/A").toUpperCase()}
                                             </span>
                                         </div>
                                     </div>
@@ -577,7 +636,6 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                 onClose={() => setDatePickerOpen(false)}
                 onSelectDate={handleDateSelect}
                 selectedDate={datePickerField === "start" ? formData.startDate : formData.endDate}
-                disabledDates={OFFICIAL_HOLIDAYS_2026}
             />
         </div>
     );

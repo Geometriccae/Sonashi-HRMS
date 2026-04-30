@@ -25,9 +25,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
   const [employeeDocuments, setEmployeeDocuments] = useState({
-    passport: null,
+    passportPage1: null,
+    passportPage2: null,
     idCard: null,
-    labourCard: null
+    labourCard: null,
+    medicalCard: null,
+    visaPage: null
   });
 
 
@@ -109,7 +112,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         OptionService.getOptions('role'),
         OptionService.getOptions('department')
       ]);
-      
+
       setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles));
       setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts));
     } catch (err) {
@@ -178,7 +181,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
-      onClose();
+      // Backdrop click no longer closes the modal
     }
   };
 
@@ -203,7 +206,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const removeToast = (id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
-  
+
   const handleDocumentChange = (field, file) => {
     setEmployeeDocuments((prev) => ({
       ...prev,
@@ -343,9 +346,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         const uploadedBy = localStorage.getItem("username") || "";
         const userRole = localStorage.getItem("role") || "";
         const docUploads = [
-          { file: employeeDocuments.passport, type: "Passport" },
+          { file: employeeDocuments.passportPage1, type: "Passport Page 1" },
+          { file: employeeDocuments.passportPage2, type: "Passport Page 2" },
           { file: employeeDocuments.idCard, type: "ID Card" },
           { file: employeeDocuments.labourCard, type: "Labour Card" },
+          { file: employeeDocuments.medicalCard, type: "Medical Card" },
+          { file: employeeDocuments.visaPage, type: "Visa Page" },
         ];
         for (const { file, type } of docUploads) {
           if (!file) continue;
@@ -410,7 +416,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       });
 
       setProfileImage(null);
-      setEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+      setEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
       addToast("Employee created successfully!", "success");
     } catch (err) {
       console.error("Error creating employee:", err);
@@ -585,14 +591,27 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               <div className="documents-section">
                 <h3 className="section-subtitle">Documents</h3>
                 <div className="documents-grid">
-                  <DocumentUploadField
-                    label="Passport"
-                    field="passport"
-                    file={employeeDocuments.passport}
-                    hasError={validationErrors.passport}
-                    onUpload={handleDocumentChange}
-                    optional
-                  />
+                  <div style={{ gridColumn: "span 2", border: "1px dashed #cbd5e0", padding: "12px", borderRadius: "8px", background: "#f8fafc" }}>
+                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#4a5568", marginBottom: "12px" }}>Passport Documents</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <DocumentUploadField
+                        label="Page 1"
+                        field="passportPage1"
+                        file={employeeDocuments.passportPage1}
+                        hasError={validationErrors.passportPage1}
+                        onUpload={handleDocumentChange}
+                        optional
+                      />
+                      <DocumentUploadField
+                        label="Page 2"
+                        field="passportPage2"
+                        file={employeeDocuments.passportPage2}
+                        hasError={validationErrors.passportPage2}
+                        onUpload={handleDocumentChange}
+                        optional
+                      />
+                    </div>
+                  </div>
                   <DocumentUploadField
                     label="ID Card"
                     field="idCard"
@@ -606,6 +625,22 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                     field="labourCard"
                     file={employeeDocuments.labourCard}
                     hasError={validationErrors.labourCard}
+                    onUpload={handleDocumentChange}
+                    optional
+                  />
+                  <DocumentUploadField
+                    label="Medical Card"
+                    field="medicalCard"
+                    file={employeeDocuments.medicalCard}
+                    hasError={validationErrors.medicalCard}
+                    onUpload={handleDocumentChange}
+                    optional
+                  />
+                  <DocumentUploadField
+                    label="Visa Page"
+                    field="visaPage"
+                    file={employeeDocuments.visaPage}
+                    hasError={validationErrors.visaPage}
                     onUpload={handleDocumentChange}
                     optional
                   />
@@ -635,10 +670,10 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 value={(() => {
                   if (!formData.doj) return "0.0";
                   const start = new Date(formData.doj);
-                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay) 
-                    ? new Date(formData.lastWorkingDay) 
+                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay)
+                    ? new Date(formData.lastWorkingDay)
                     : new Date();
-                  
+
                   const diffMs = Math.max(0, end - start);
                   const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
                   return years.toFixed(1);
@@ -802,11 +837,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   const other = parseFloat(formData.other) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    basicSalary: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    basicSalary: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -822,11 +857,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   const other = parseFloat(formData.other) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    houseRent: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    houseRent: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -842,11 +877,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   const other = parseFloat(formData.other) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    travelExp: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    travelExp: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -862,11 +897,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   const travel = parseFloat(formData.travelExp) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    other: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    other: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -879,10 +914,10 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   const deduct = parseFloat(e.target.value) || 0;
                   const basic = parseFloat(formData.basicSalary) || 0;
                   const totalAllow = parseFloat(formData.totalAllowance) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    deduction: e.target.value, 
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                  setFormData(prev => ({
+                    ...prev,
+                    deduction: e.target.value,
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />

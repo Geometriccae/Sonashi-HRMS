@@ -28,7 +28,7 @@ const employeeSchema = new mongoose.Schema({
     default: "Active"
   },
 
-   attendance: {
+  attendance: {
     type: String,
     enum: ["Onsite", "Leave"],
     default: "Onsite"
@@ -69,7 +69,7 @@ const employeeSchema = new mongoose.Schema({
   assignedProjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Client" }], // multiple projects can be assigned
 
   events: [assignEventSchema],
-  
+
   increments: [{
     date: { type: Date, default: Date.now },
     previousSalary: { type: Number, default: 0 },

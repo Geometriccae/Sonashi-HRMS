@@ -490,15 +490,19 @@ main {
   .profile-container {
     padding: 0 0 1rem 0;
   }
+
   .profile-content {
     margin-top: 0rem !important;
   }
+
   .form-row {
     margin-bottom: 0rem;
   }
+
   .header-content {
     margin: 1.25rem auto;
   }
+
   .profile-content {
     margin-top: 3rem;
   }
@@ -644,13 +648,16 @@ main {
   .dashboard-header {
     padding: 0.75rem;
   }
+
   .breadcrumb-section {
     padding: 0.5rem 0.75rem;
   }
+
   /* Show logout button on mobile */
   .logout-button {
     display: flex;
   }
+
   .header-actions {
     flex-wrap: wrap;
   }

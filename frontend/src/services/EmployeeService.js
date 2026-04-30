@@ -166,6 +166,43 @@ class EmployeeService {
     }
   }
 
+  // Update an increment for an employee. Requires Admin/HOD.
+  async updateEmployeeIncrement(employeeId, incrementId, incrementData) {
+    try {
+      const response = await fetch(`${this.baseURL}/${employeeId}/increments/${incrementId}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(incrementData),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating employee increment:', error);
+      throw error;
+    }
+  }
+
+  // Delete an increment for an employee. Requires Admin/HOD.
+  async deleteEmployeeIncrement(employeeId, incrementId) {
+    try {
+      const response = await fetch(`${this.baseURL}/${employeeId}/increments/${incrementId}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting employee increment:', error);
+      throw error;
+    }
+  }
+
   // Create new employee
   async createEmployee(employeeData) {
     try {

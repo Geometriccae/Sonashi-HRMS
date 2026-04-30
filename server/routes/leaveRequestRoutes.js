@@ -208,7 +208,8 @@ router.get('/', authMiddleware, async (req, res) => {
             .populate('employee', 'username emailId employeeId')
             .populate('hodApprovedBy', 'username')
             .populate('adminApprovedBy', 'username')
-            .sort({ appliedOn: -1 });
+            .sort({ appliedOn: -1 })
+            .lean();
 
         res.json(leaveRequests);
     } catch (error) {
@@ -222,9 +223,6 @@ router.post('/', authMiddleware, async (req, res) => {
     try {
         const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
 
-        if (hasHolidayInRange(startDate, endDate)) {
-            return res.status(400).json({ message: 'This is a government holiday. You should not apply for a leave request.' });
-        }
 
         let targetUserId = req.user.id; // Fallback to current acting user
         if (employeeId) {
@@ -362,9 +360,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
         const effectiveEnd = updateData.endDate || oldRequest.endDate;
         const startStr = effectiveStart && (effectiveStart.toISOString ? effectiveStart.toISOString().split('T')[0] : effectiveStart);
         const endStr = effectiveEnd && (effectiveEnd.toISOString ? effectiveEnd.toISOString().split('T')[0] : effectiveEnd);
-        if (startStr && endStr && hasHolidayInRange(startStr, endStr)) {
-            return res.status(400).json({ message: 'This is a government holiday. You should not apply for a leave request.' });
-        }
+
 
         const updatedRequest = await LeaveRequest.findByIdAndUpdate(
             req.params.id,
