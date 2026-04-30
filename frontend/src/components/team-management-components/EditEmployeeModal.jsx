@@ -28,14 +28,20 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const [profileImage, setProfileImage] = useState(null);
   const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState(null);
   const [employeeDocuments, setEmployeeDocuments] = useState({
-    passport: null,
+    passportPage1: null,
+    passportPage2: null,
     idCard: null,
     labourCard: null,
+    medicalCard: null,
+    visaPage: null,
   });
   const [existingEmployeeDocuments, setExistingEmployeeDocuments] = useState({
-    passport: null,
+    passportPage1: null,
+    passportPage2: null,
     idCard: null,
     labourCard: null,
+    medicalCard: null,
+    visaPage: null,
   });
 
   const [formData, setFormData] = useState({
@@ -95,9 +101,12 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
   const mapStoredTypeToField = (type) => {
     const s = String(type || "").trim().toLowerCase();
-    if (s === "passport") return "passport";
+    if (s === "passport" || s === "passport page 1") return "passportPage1";
+    if (s === "passport page 2") return "passportPage2";
     if (s === "id card" || s === "idcard" || s === "emirates id") return "idCard";
     if (s === "labour card" || s === "labor card" || s === "labourcard") return "labourCard";
+    if (s === "medical card") return "medicalCard";
+    if (s === "visa page") return "visaPage";
     return null;
   };
 
@@ -134,7 +143,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         OptionService.getOptions('role'),
         OptionService.getOptions('department')
       ]);
-      
+
       setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles));
       setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts));
     } catch (err) {
@@ -214,7 +223,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setExistingEmployeeDocuments(typed);
     } catch (err) {
       console.warn("Failed to fetch employee documents:", err);
-      setExistingEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+      setExistingEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
     }
   };
 
@@ -241,7 +250,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         doj: employee.doj ? String(employee.doj).slice(0, 10) : "",
         totalYearsExperience:
           employee.totalYearsExperience !== undefined &&
-          employee.totalYearsExperience !== null
+            employee.totalYearsExperience !== null
             ? String(employee.totalYearsExperience)
             : "",
         dateOfBirth: employee.dateOfBirth ? String(employee.dateOfBirth).slice(0, 10) : "",
@@ -277,7 +286,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       // Reset form state
       setCurrentStep(1);
       setProfileImage(null);
-      setEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+      setEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
       setValidationErrors({});
       fetchEmployeeDocuments(employee._id || employee.id);
     }
@@ -290,8 +299,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setProfileImage(null);
       setCurrentProfileImageUrl(null);
       setValidationErrors({});
-      setEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
-      setExistingEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+      setEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
+      setExistingEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
       setFormData({
         workPermitNo: "",
         employeeId: "",
@@ -338,8 +347,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
-      onClose();
-      setValidationErrors({});
+      // Backdrop click no longer closes the modal
     }
   };
 
@@ -474,9 +482,12 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         const uploadedBy = localStorage.getItem("username") || "";
         const userRole = localStorage.getItem("role") || "";
         const docUploads = [
-          { file: employeeDocuments.passport, type: "Passport" },
+          { file: employeeDocuments.passportPage1, type: "Passport Page 1" },
+          { file: employeeDocuments.passportPage2, type: "Passport Page 2" },
           { file: employeeDocuments.idCard, type: "ID Card" },
           { file: employeeDocuments.labourCard, type: "Labour Card" },
+          { file: employeeDocuments.medicalCard, type: "Medical Card" },
+          { file: employeeDocuments.visaPage, type: "Visa Page" },
         ];
         for (const { file, type } of docUploads) {
           if (!file) continue;
@@ -507,7 +518,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       }
 
       onClose();
-      setEmployeeDocuments({ passport: null, idCard: null, labourCard: null });
+      setEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
       await fetchEmployeeDocuments(employee._id || employee.id);
     } catch (err) {
       console.error("Error updating employee:", err);
@@ -532,7 +543,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         errorMessage =
           "Duplicate entry found. Please check the information and try again.";
       }
-      
+
       addToast(err.message || "Failed to update employee. Please try again.", "error");
     } finally {
       setIsSubmitting(false);
@@ -695,15 +706,29 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               <div className="documents-section">
                 <h3 className="section-subtitle">Documents</h3>
                 <div className="documents-grid">
-                  <DocumentUploadField
-                    label="Passport"
-                    field="passport"
-                    file={employeeDocuments.passport}
-                    existingDocument={existingEmployeeDocuments.passport}
-                    hasError={validationErrors.passport}
-                    onUpload={handleDocumentChange}
-                    optional
-                  />
+                  <div style={{ gridColumn: "span 2", border: "1px dashed #cbd5e0", padding: "12px", borderRadius: "8px", background: "#f8fafc" }}>
+                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#4a5568", marginBottom: "12px" }}>Passport Documents</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <DocumentUploadField
+                        label="Page 1"
+                        field="passportPage1"
+                        file={employeeDocuments.passportPage1}
+                        existingDocument={existingEmployeeDocuments.passportPage1}
+                        hasError={validationErrors.passportPage1}
+                        onUpload={handleDocumentChange}
+                        optional
+                      />
+                      <DocumentUploadField
+                        label="Page 2"
+                        field="passportPage2"
+                        file={employeeDocuments.passportPage2}
+                        existingDocument={existingEmployeeDocuments.passportPage2}
+                        hasError={validationErrors.passportPage2}
+                        onUpload={handleDocumentChange}
+                        optional
+                      />
+                    </div>
+                  </div>
                   <DocumentUploadField
                     label="ID Card"
                     field="idCard"
@@ -719,6 +744,24 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                     file={employeeDocuments.labourCard}
                     existingDocument={existingEmployeeDocuments.labourCard}
                     hasError={validationErrors.labourCard}
+                    onUpload={handleDocumentChange}
+                    optional
+                  />
+                  <DocumentUploadField
+                    label="Medical Card"
+                    field="medicalCard"
+                    file={employeeDocuments.medicalCard}
+                    existingDocument={existingEmployeeDocuments.medicalCard}
+                    hasError={validationErrors.medicalCard}
+                    onUpload={handleDocumentChange}
+                    optional
+                  />
+                  <DocumentUploadField
+                    label="Visa Page"
+                    field="visaPage"
+                    file={employeeDocuments.visaPage}
+                    existingDocument={existingEmployeeDocuments.visaPage}
+                    hasError={validationErrors.visaPage}
                     onUpload={handleDocumentChange}
                     optional
                   />
@@ -746,10 +789,10 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 value={(() => {
                   if (!formData.doj) return "0.0";
                   const start = new Date(formData.doj);
-                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay) 
-                    ? new Date(formData.lastWorkingDay) 
+                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay)
+                    ? new Date(formData.lastWorkingDay)
                     : new Date();
-                  
+
                   const diffMs = Math.max(0, end - start);
                   const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
                   return years.toFixed(1);
@@ -924,11 +967,11 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   const other = parseFloat(formData.other) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    basicSalary: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    basicSalary: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -944,11 +987,11 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   const other = parseFloat(formData.other) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    houseRent: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    houseRent: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -964,11 +1007,11 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   const other = parseFloat(formData.other) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    travelExp: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    travelExp: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -984,11 +1027,11 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   const travel = parseFloat(formData.travelExp) || 0;
                   const totalAllow = hra + travel + other;
                   const deduct = parseFloat(formData.deduction) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    other: e.target.value, 
+                  setFormData(prev => ({
+                    ...prev,
+                    other: e.target.value,
                     totalAllowance: totalAllow.toString(),
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />
@@ -1001,10 +1044,10 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   const deduct = parseFloat(e.target.value) || 0;
                   const basic = parseFloat(formData.basicSalary) || 0;
                   const totalAllow = parseFloat(formData.totalAllowance) || 0;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    deduction: e.target.value, 
-                    totalSalary: (basic + totalAllow - deduct).toString() 
+                  setFormData(prev => ({
+                    ...prev,
+                    deduction: e.target.value,
+                    totalSalary: (basic + totalAllow - deduct).toString()
                   }));
                 }}
               />

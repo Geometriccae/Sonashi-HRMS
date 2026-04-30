@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import styles from "./TeamManagementSalesLeads.module.css";
 import Side from "../sidebar/Sidebar";
 import employeeService from "../../services/EmployeeService";
+import leaveRequestService from "../../services/LeaveRequestService";
 import DocumentsService from "../../services/EmployeeDocumentService";
 import EditEmployeeModal from "../../components/team-management-components/EditEmployeeModal";
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
@@ -18,6 +19,7 @@ import AddIncrementModal from "../../components/team-management-components/AddIn
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useSidebar } from "../../context/SidebarContext";
+import { useToast } from "../../context/ToastContext";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -32,7 +34,43 @@ import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
 import NotificationBell from "../../components/NotificationBell";
 import MobileBottomNavigation from "../../components/MobileBottomNavigation";
-import { useToast } from "../../context/ToastContext";
+const EditIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 30 29"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M15.1136 6.0089H8.02525C7.48812 6.0089 6.97299 6.22227 6.59318 6.60208C6.21337 6.98189 6 7.49702 6 8.03415V22.2109C6 22.748 6.21337 23.2632 6.59318 23.643C6.97299 24.0228 7.48812 24.2361 8.02525 24.2361H22.202C22.7391 24.2361 23.2543 24.0228 23.6341 23.643C24.0139 23.2632 24.2272 22.748 24.2272 22.2109V15.1225M21.5691 5.62916C21.972 5.22632 22.5183 5 23.088 5C23.6578 5 24.2041 5.22632 24.607 5.62916C25.0098 6.03201 25.2361 6.57839 25.2361 7.1481C25.2361 7.71781 25.0098 8.26419 24.607 8.66704L15.4802 17.7948C15.2397 18.0351 14.9427 18.2109 14.6164 18.3062L11.7072 19.1568C11.62 19.1822 11.5277 19.1838 11.4397 19.1612C11.3518 19.1387 11.2715 19.093 11.2074 19.0288C11.1432 18.9646 11.0974 18.8843 11.0749 18.7964C11.0524 18.7085 11.0539 18.6161 11.0793 18.529L11.9299 15.6197C12.0256 15.2937 12.2019 14.997 12.4423 14.757L21.5691 5.62916Z"
+      stroke="#8C8E90"
+      strokeWidth="2.02525"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const DeleteIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 29 29"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M5 8.0505H23.2272M21.202 8.0505V22.2272C21.202 23.2399 20.1894 24.2525 19.1767 24.2525H9.0505C8.03787 24.2525 7.02525 23.2399 7.02525 22.2272V8.0505M10.0631 8.0505V6.02525C10.0631 5.01262 11.0757 4 12.0884 4H16.1389C17.1515 4 18.1641 5.01262 18.1641 6.02525V8.0505M12.0884 13.1136V19.1894M16.1389 13.1136V19.1894"
+      stroke="#8C8E90"
+      strokeWidth="2.02525"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+
 
 function TeamManagementSalesLeads() {
   const { toggleSidebar } = useSidebar();
@@ -41,6 +79,7 @@ function TeamManagementSalesLeads() {
   const basicInfoRef = useRef(null);
   const salaryRef = useRef(null);
   const incrementsRef = useRef(null);
+  const leaveTabRef = useRef(null);
   const documentsRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
   const [remarks, setRemarks] = useState([]);
@@ -49,7 +88,9 @@ function TeamManagementSalesLeads() {
   const [remarkError, setRemarkError] = useState("");
   const [addingRemark, setAddingRemark] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deleteType, setDeleteType] = useState(""); // 'entry' or 'data'
+  const [deleteType, setDeleteType] = useState(""); // 'entry', 'data', or 'increment'
+  const [selectedIncrement, setSelectedIncrement] = useState(null);
+  const [employeeLeaves, setEmployeeLeaves] = useState([]);
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -85,6 +126,33 @@ function TeamManagementSalesLeads() {
       fetchEmployeeData();
     }
   }, [employeeId]);
+
+  const fetchEmployeeLeaves = async (currentEmployee) => {
+    try {
+      const leaves = await leaveRequestService.getLeaveRequests();
+      const allLeaves = Array.isArray(leaves) ? leaves : leaves.data || [];
+      const empLeaves = allLeaves.filter(req => {
+        const reqEmpIdObj = req.employee?._id || req.employee;
+        const reqUserEmpId = req.employee?.employeeId;
+
+        const isIdMatch =
+          String(reqEmpIdObj) === String(employeeId) ||
+          String(reqUserEmpId) === String(employeeId) ||
+          String(req.employeeId) === String(employeeId);
+
+        let isNameMatch = false;
+        if (currentEmployee && currentEmployee.employeeName && req.employeeName) {
+          isNameMatch = String(req.employeeName).toLowerCase().trim() === String(currentEmployee.employeeName).toLowerCase().trim();
+        }
+
+        const isMatch = isIdMatch || isNameMatch;
+        return isMatch && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Pending");
+      });
+      setEmployeeLeaves(empLeaves.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)));
+    } catch (err) {
+      console.error("Failed to fetch leaves", err);
+    }
+  };
 
   // const fetchEmployeeData = async () => {
   //   try {
@@ -124,6 +192,7 @@ function TeamManagementSalesLeads() {
         setEmployee(null);
       } else {
         setEmployee(employeeData);
+        fetchEmployeeLeaves(employeeData);
       }
     } catch (err) {
       console.error("Error fetching employee:", err);
@@ -193,6 +262,9 @@ function TeamManagementSalesLeads() {
         case "increments":
           activeElement = incrementsRef.current;
           break;
+        case "leave":
+          activeElement = leaveTabRef.current;
+          break;
         default:
           activeElement = basicInfoRef.current;
       }
@@ -238,6 +310,10 @@ function TeamManagementSalesLeads() {
         // For now, simply refresh documents list key
         setDocumentsKey(prev => prev + 1);
         showToast("Data deleted successfully.", 'success');
+      } else if (deleteType === "increment") {
+        const updatedEmployee = await employeeService.deleteEmployeeIncrement(employeeId, selectedIncrement._id);
+        setEmployee(updatedEmployee);
+        showToast("Increment deleted successfully.", 'success');
       }
     } catch (e) {
       console.error("Delete failed", e);
@@ -245,12 +321,14 @@ function TeamManagementSalesLeads() {
     } finally {
       setIsDeleteModalOpen(false);
       setDeleteType("");
+      setSelectedIncrement(null);
     }
   };
 
   const handleDeleteCancel = () => {
     setIsDeleteModalOpen(false);
     setDeleteType("");
+    setSelectedIncrement(null);
   };
 
   const handleNewEvent = () => {
@@ -286,13 +364,31 @@ function TeamManagementSalesLeads() {
 
   const handleAddIncrement = async (incrementData) => {
     try {
-      const updatedEmployee = await employeeService.addEmployeeIncrement(employeeId, incrementData);
+      let updatedEmployee;
+      if (selectedIncrement) {
+        updatedEmployee = await employeeService.updateEmployeeIncrement(employeeId, selectedIncrement._id, incrementData);
+        showToast("Salary increment updated successfully.", 'success');
+      } else {
+        updatedEmployee = await employeeService.addEmployeeIncrement(employeeId, incrementData);
+        showToast("Salary increment added successfully.", 'success');
+      }
       setEmployee(updatedEmployee);
-      showToast("Salary increment added successfully.", 'success');
+      setSelectedIncrement(null);
     } catch (err) {
-      console.error("Error adding increment:", err);
-      showToast(err.message || "Failed to add increment.", 'error');
+      console.error("Error saving increment:", err);
+      showToast(err.message || "Failed to save increment.", 'error');
     }
+  };
+
+  const handleEditIncrementClick = (inc) => {
+    setSelectedIncrement(inc);
+    setIsIncrementModalOpen(true);
+  };
+
+  const handleDeleteIncrementClick = (inc) => {
+    setSelectedIncrement(inc);
+    setDeleteType("increment");
+    setIsDeleteModalOpen(true);
   };
 
   const handleFileUpload = () => {
@@ -670,6 +766,14 @@ function TeamManagementSalesLeads() {
                     <span className={styles.text8}>{"Increments"}</span>
                   </div>
                   <div
+                    ref={leaveTabRef}
+                    className={`${styles.view2} ${activeTab === "leave" ? styles.active : ""
+                      }`}
+                    onClick={() => setActiveTab("leave")}
+                  >
+                    <span className={styles.text8}>{"Leave Entitlement"}</span>
+                  </div>
+                  <div
                     className={styles.box}
                     style={{
                       width: `${indicatorStyle.width}px`,
@@ -728,10 +832,10 @@ function TeamManagementSalesLeads() {
                             {(() => {
                               if (!employee.doj) return "0";
                               const start = new Date(employee.doj);
-                              const end = (employee.employeeStatus === "InActive" && employee.lastWorkingDay) 
-                                ? new Date(employee.lastWorkingDay) 
+                              const end = (employee.employeeStatus === "InActive" && employee.lastWorkingDay)
+                                ? new Date(employee.lastWorkingDay)
                                 : new Date();
-                              
+
                               const diffMs = Math.max(0, end - start);
                               const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
                               return years.toFixed(1);
@@ -811,6 +915,7 @@ function TeamManagementSalesLeads() {
                           <th>Increment</th>
                           <th>New Salary</th>
                           <th>Reason</th>
+                          {(userRole === "admin" || userRole === "hod") && <th>Actions</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -825,12 +930,67 @@ function TeamManagementSalesLeads() {
                                 <td style={{ color: "#34C759", fontWeight: "600" }}>+AED {inc.incrementAmount?.toLocaleString() || 0}</td>
                                 <td style={{ fontWeight: "600" }}>AED {inc.newSalary?.toLocaleString() || 0}</td>
                                 <td>{inc.reason || "-"}</td>
+                                {(userRole === "admin" || userRole === "hod") && (
+                                  <td style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+                                    <button
+                                      style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}
+                                      onClick={() => handleEditIncrementClick(inc)}
+                                      title="Edit Increment"
+                                    >
+                                      <EditIcon />
+                                    </button>
+                                    <button
+                                      style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}
+                                      onClick={() => handleDeleteIncrementClick(inc)}
+                                      title="Delete Increment"
+                                    >
+                                      <DeleteIcon />
+                                    </button>
+                                  </td>
+                                )}
                               </tr>
                             ))
                         ) : (
                           <tr>
-                            <td colSpan="5" style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
+                            <td colSpan={(userRole === "admin" || userRole === "hod") ? "6" : "5"} style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
                               No increment history found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "leave" && (
+                <div style={{ padding: "0 36px", width: "100%" }}>
+                  <div className={styles.increments_table_container}>
+                    <table className={styles.increments_table}>
+                      <thead>
+                        <tr>
+                          <th>Start Date</th>
+                          <th>End Date</th>
+                          <th>Leave Type</th>
+                          <th>Status</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employeeLeaves && employeeLeaves.length > 0 ? (
+                          employeeLeaves.map((leave, index) => (
+                            <tr key={index}>
+                              <td>{new Date(leave.startDate).toLocaleDateString()}</td>
+                              <td>{new Date(leave.endDate).toLocaleDateString()}</td>
+                              <td>{leave.leaveType}</td>
+                              <td>{leave.status}</td>
+                              <td>{leave.reason || "-"}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="5" style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
+                              No leave history found.
                             </td>
                           </tr>
                         )}
@@ -860,12 +1020,14 @@ function TeamManagementSalesLeads() {
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title={
-          deleteType === "entry" ? "Delete this Entry?" : "Delete this Data?"
+          deleteType === "increment" ? "Delete this Increment?" :
+            deleteType === "entry" ? "Delete this Entry?" : "Delete this Data?"
         }
         description={
-          deleteType === "entry"
-            ? "Are you sure you want to delete this entry? This action cannot be undone."
-            : "Are you sure you want to delete this data? This action cannot be undone."
+          deleteType === "increment" ? "Are you sure you want to delete this increment? This action cannot be undone." :
+            deleteType === "entry"
+              ? "Are you sure you want to delete this entry? This action cannot be undone."
+              : "Are you sure you want to delete this data? This action cannot be undone."
         }
       />
 
@@ -893,9 +1055,10 @@ function TeamManagementSalesLeads() {
 
       <AddIncrementModal
         isOpen={isIncrementModalOpen}
-        onClose={() => setIsIncrementModalOpen(false)}
+        onClose={() => { setIsIncrementModalOpen(false); setSelectedIncrement(null); }}
         onSubmit={handleAddIncrement}
         employee={employee}
+        initialData={selectedIncrement}
       />
 
       <DropDownList

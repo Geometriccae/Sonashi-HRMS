@@ -140,7 +140,7 @@ function TeamManagement() {
         {/* Stats Cards Section */}
         <section className={styles["stats-container"]}>
 
-          <div className={styles.cardbox}>
+          <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
                 <h4>Total Employees</h4>
@@ -152,7 +152,7 @@ function TeamManagement() {
             </div>
           </div>
 
-          <div className={styles.cardbox}>
+          <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
                 <h4>Active Employees</h4>
@@ -164,7 +164,7 @@ function TeamManagement() {
             </div>
           </div>
 
-          <div className={styles.cardbox}>
+          <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
             <div className={styles.cardboxcontent}>
               <div className={styles.cardheader}>
                 <h4>Inactive Employees</h4>

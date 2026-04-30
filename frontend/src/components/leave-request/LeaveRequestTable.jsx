@@ -9,6 +9,7 @@ import LeaveApplicationFormModal from "./LeaveApplicationFormModal";
 import ImportLeaveExcelModal from "./ImportLeaveExcelModal";
 import { useToast } from "../../context/ToastContext";
 import OptionService from "../../services/OptionService";
+import Select from "react-select";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 
 const EditIcon = () => (
@@ -376,27 +377,57 @@ function LeaveRequestTable({ onUpdate }) {
                     </div>
 
                     <div className={styles.selectSection}>
-                        <select 
-                            className={styles.filterSelect}
-                            value={selectedDept}
-                            onChange={(e) => setSelectedDept(e.target.value)}
-                        >
-                            <option value="All">Department</option>
-                            {departments.map(dept => (
-                                <option key={dept} value={dept}>{dept}</option>
-                            ))}
-                        </select>
+                        <Select
+                            placeholder="Department"
+                            options={[
+                                { value: "All", label: "Department" },
+                                ...departments.map(dept => ({ value: dept, label: dept }))
+                            ]}
+                            value={{ value: selectedDept, label: selectedDept === "All" ? "Department" : selectedDept }}
+                            onChange={(opt) => setSelectedDept(opt.value)}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    minHeight: '42px',
+                                    borderRadius: '8px',
+                                    borderColor: '#e4e4e4',
+                                    fontSize: '0.875rem',
+                                    minWidth: '160px',
+                                    cursor: 'pointer'
+                                }),
+                                menu: (base) => ({
+                                    ...base,
+                                    zIndex: 100
+                                })
+                            }}
+                            maxMenuHeight={200}
+                        />
 
-                        <select 
-                            className={styles.filterSelect}
-                            value={selectedManager}
-                            onChange={(e) => setSelectedManager(e.target.value)}
-                        >
-                            <option value="All">Manager</option>
-                            {managers.map(manager => (
-                                <option key={manager} value={manager}>{manager}</option>
-                            ))}
-                        </select>
+                        <Select
+                            placeholder="Manager"
+                            options={[
+                                { value: "All", label: "Manager" },
+                                ...managers.map(manager => ({ value: manager, label: manager }))
+                            ]}
+                            value={{ value: selectedManager, label: selectedManager === "All" ? "Manager" : selectedManager }}
+                            onChange={(opt) => setSelectedManager(opt.value)}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    minHeight: '42px',
+                                    borderRadius: '8px',
+                                    borderColor: '#e4e4e4',
+                                    fontSize: '0.875rem',
+                                    minWidth: '160px',
+                                    cursor: 'pointer'
+                                }),
+                                menu: (base) => ({
+                                    ...base,
+                                    zIndex: 100
+                                })
+                            }}
+                            maxMenuHeight={200}
+                        />
                     </div>
 
                     <div className={styles.dateSection}>

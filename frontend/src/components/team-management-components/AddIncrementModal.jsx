@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import styles from "./AddIncrementModal.module.css";
 import config from "../../config/config";
 
-const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee }) => {
+const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee, initialData }) => {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     previousSalary: 0,
@@ -14,17 +14,27 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen && employee) {
-      const currentSalary = employee.salaryDetails?.totalSalary || 0;
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        previousSalary: currentSalary,
-        incrementAmount: 0,
-        newSalary: currentSalary,
-        reason: "",
-      });
+    if (isOpen) {
+      if (initialData) {
+        setFormData({
+          date: initialData.date ? new Date(initialData.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          previousSalary: initialData.previousSalary || 0,
+          incrementAmount: initialData.incrementAmount || 0,
+          newSalary: initialData.newSalary || 0,
+          reason: initialData.reason || "",
+        });
+      } else if (employee) {
+        const currentSalary = employee.salaryDetails?.totalSalary || 0;
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          previousSalary: currentSalary,
+          incrementAmount: 0,
+          newSalary: currentSalary,
+          reason: "",
+        });
+      }
     }
-  }, [isOpen, employee]);
+  }, [isOpen, employee, initialData]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => {
@@ -64,7 +74,7 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee }) => {
     <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
         <div className={styles.header}>
-          <h2>Add Salary Increment</h2>
+          <h2>{initialData ? "Edit Salary Increment" : "Add Salary Increment"}</h2>
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
         
@@ -126,7 +136,7 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee }) => {
               Cancel
             </button>
             <button type="submit" className={styles.submitBtn} disabled={loading}>
-              {loading ? "Saving..." : "Add Increment"}
+              {loading ? "Saving..." : (initialData ? "Save Changes" : "Add Increment")}
             </button>
           </div>
         </form>

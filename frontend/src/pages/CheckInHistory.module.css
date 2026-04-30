@@ -3,7 +3,7 @@
   width: 100%;
   min-height: 100vh;
   display: flex;
-  
+
   position: relative;
   background-color: #FAFBFB;
 }
@@ -175,7 +175,9 @@ main {
   font-size: clamp(1.25rem, 1.5vw, 1.5rem);
 }
 
-.loading, .error, .no-data {
+.loading,
+.error,
+.no-data {
   padding: 1.25rem;
   text-align: center;
   color: #666;
@@ -193,10 +195,12 @@ main {
 .checkin-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 600px; /* Ensure table doesn't squash too much */
+  min-width: 600px;
+  /* Ensure table doesn't squash too much */
 }
 
-.checkin-table th, .checkin-table td {
+.checkin-table th,
+.checkin-table td {
   padding: clamp(0.5rem, 0.75vw, 0.75rem) clamp(0.75rem, 1vw, 1rem);
   text-align: left;
   border-bottom: 0.0625rem solid #eee;
@@ -428,16 +432,17 @@ main {
   .dashboard-header {
     padding: 1rem 1.5rem;
   }
-  
+
   .dashboard-title {
     font-size: 1.5rem;
   }
-  
+
   .checkin-history-container {
     padding: 1.25rem;
   }
-  
-  .checkin-table th, .checkin-table td {
+
+  .checkin-table th,
+  .checkin-table td {
     padding: 0.625rem 0.875rem;
     font-size: 0.95rem;
   }
@@ -448,16 +453,17 @@ main {
   .dashboard-header {
     padding: 0.875rem 1.25rem;
   }
-  
+
   .dashboard-title {
     font-size: 1.35rem;
   }
-  
+
   .checkin-history-container h2 {
     font-size: 1.35rem;
   }
-  
-  .checkin-table th, .checkin-table td {
+
+  .checkin-table th,
+  .checkin-table td {
     padding: 0.5rem 0.75rem;
     font-size: 0.9rem;
   }
@@ -468,12 +474,13 @@ main {
   .main-content {
     padding: 1rem;
   }
-  
+
   .checkin-history-container {
     padding: 1rem;
   }
-  
-  .checkin-table th, .checkin-table td {
+
+  .checkin-table th,
+  .checkin-table td {
     padding: 0.5rem 0.625rem;
   }
 }
@@ -483,20 +490,22 @@ main {
   .dashboard-header {
     padding: 0.75rem 1rem;
   }
-  
+
   .dashboard-title {
     font-size: 1.25rem;
   }
-  
+
   .checkin-history-container h2 {
     font-size: 1.25rem;
   }
-  
-  .checkin-table th, .checkin-table td {
+
+  .checkin-table th,
+  .checkin-table td {
     font-size: 0.875rem;
   }
-  
-  .view-button, .delete-button {
+
+  .view-button,
+  .delete-button {
     padding: 0.25rem 0.5rem;
     font-size: 0.8125rem;
   }
@@ -512,17 +521,17 @@ main {
   .desktop-sidebar {
     display: none;
   }
-  
+
   .dashboard-header {
     padding: 1rem;
   }
-  
+
   .checkin-history-container {
     margin: 0;
     border-radius: 0;
     box-shadow: none;
   }
-  
+
   .checkin-table {
     display: block;
     overflow-x: auto;
@@ -545,11 +554,11 @@ main {
   .dashboard-header {
     padding: 0.75rem;
   }
-  
+
   .breadcrumb-section {
     padding: 0.5rem 0.75rem;
   }
-  
+
   .checkin-history-container {
     padding: 0.75rem;
   }

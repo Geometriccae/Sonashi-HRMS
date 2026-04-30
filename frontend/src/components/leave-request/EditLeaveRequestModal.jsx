@@ -35,6 +35,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
+    const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
 
     const currentRole = String(userRole || "").toLowerCase();
     const isAdmin = currentRole === "admin";
@@ -103,8 +104,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     useEffect(() => {
         if (leaveRequest) {
-            const empId = leaveRequest.employee?._id || leaveRequest.employee || "";
-            const empName = leaveRequest.employee?.username || leaveRequest.employeeName || "";
+            const empId = leaveRequest.employee?._id || leaveRequest.employee || leaveRequest.employeeId || leaveRequest.employeeName || "";
+            const empName = leaveRequest.employeeName || leaveRequest.employee?.employeeName || leaveRequest.employee?.username || leaveRequest.employee?.name || "";
             
             setFormData({
                 employeeId: empId,
@@ -117,10 +118,13 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 endDate: leaveRequest.endDate ? new Date(leaveRequest.endDate).toISOString().split('T')[0] : "",
                 reason: leaveRequest.reason || "",
                 status: leaveRequest.status || "Pending",
-                requestAirfare: leaveRequest.requestAirfare || false
+                requestAirfare: leaveRequest.requestAirfare || false,
+                visaExpiryDate: (leaveRequest.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate) ? new Date(leaveRequest.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate).toISOString().split('T')[0] : ""
             });
+            setError("");
+            setSelectedYearDetails(null);
         }
-    }, [leaveRequest]);
+    }, [leaveRequest, isOpen]);
 
     const fetchEmployees = async () => {
         try {
@@ -134,9 +138,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     if (!isOpen) return null;
 
     const handleBackdropClick = (e) => {
-        if (e.target === e.currentTarget) {
+        // Disabled backdrop click to close, forcing use of X or Cancel button
+        /* if (e.target === e.currentTarget) {
             onClose();
-        }
+        } */
     };
 
     const handleInputChange = (field, value) => {
@@ -154,21 +159,29 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         setFormData((prev) => ({
             ...prev,
             employeeId: selectedId,
-            employeeName: selectedEmployee ? (selectedEmployee.employeeName || selectedEmployee.name || "") : ""
+            employeeName: selectedEmployee ? (selectedEmployee.employeeName || selectedEmployee.name || "") : "",
+            visaExpiryDate: selectedEmployee?.visaExpiryDate ? new Date(selectedEmployee.visaExpiryDate).toISOString().split('T')[0] : ""
         }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.employeeName || !formData.company || !formData.department || !formData.reportingManager || !formData.startDate || !formData.endDate || !formData.reason) {
+        // Remove strict validation for fields that might be missing in historical imported data
+        if (!formData.employeeName || !formData.startDate || !formData.endDate) {
             setError("Please fill in all required fields marked with *");
             return;
+        }
+
+        const payload = { ...formData };
+        // Prevent sending invalid ObjectIds to the backend for historical records
+        if (!payload.employeeId || payload.employeeId === "unknown" || (typeof payload.employeeId === 'string' && payload.employeeId.length !== 24)) {
+            delete payload.employeeId;
         }
 
         setError("");
         setIsSubmitting(true);
         try {
-            const result = await leaveRequestService.updateLeaveRequest(leaveRequest._id, formData);
+            const result = await leaveRequestService.updateLeaveRequest(leaveRequest._id, payload);
             showToast("Leave request updated successfully.", "success");
             onSubmit(result);
             onClose();
@@ -215,16 +228,61 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         reportingManagerOptions.push({ value: formData.reportingManager, label: formData.reportingManager });
     }
 
+    // Calculate History Logic
+    const selectedEmp = employees.find(e => e._id === formData.employeeId) || 
+                        (formData.employeeName && employees.find(e => {
+                            const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+                            const fName = String(formData.employeeName || "").toLowerCase().trim();
+                            return eName === fName && fName !== "";
+                        })) || 
+                        leaveRequest?.employee;
+                        
+    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
+    const years = [2026, 2025, 2024, 2023, 2022];
+    const employeeLeaves = (allLeaveRequests || []).filter(req => {
+        const reqName = String(req.employeeName || "").toLowerCase().trim();
+        let empNameSearch = "";
+        if (selectedEmp && selectedEmp.employeeName) empNameSearch = String(selectedEmp.employeeName).toLowerCase().trim();
+        else if (selectedEmp && selectedEmp.name) empNameSearch = String(selectedEmp.name).toLowerCase().trim();
+        else empNameSearch = String(formData.employeeName || "").toLowerCase().trim();
+        
+        return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Imported");
+    });
+
+    const getYearlyLeaves = (year) => {
+        return employeeLeaves.filter(req => new Date(req.startDate).getFullYear() === year);
+    };
+
+    const getYearlyTotal = (year) => {
+        return getYearlyLeaves(year)
+            .reduce((total, req) => {
+                const s = new Date(req.startDate);
+                const e = new Date(req.endDate);
+                return total + (Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1);
+            }, 0);
+    };
+
+    const handleYearClick = (year) => {
+        if (selectedYearDetails?.year === year) {
+            setSelectedYearDetails(null);
+        } else {
+            setSelectedYearDetails({
+                year,
+                leaves: getYearlyLeaves(year)
+            });
+        }
+    };
+
     return (
         <div className="modal-backdrop" onClick={handleBackdropClick} style={{ zIndex: 100000 }}>
-            <div className="leave-modal-container">
+            <div className="leave-modal-container" style={{ maxWidth: "800px" }}>
                 <div className="leave-modal-header">
                     <h2 className="leave-modal-title">Edit Leave Request</h2>
                     <button className="leave-modal-close" onClick={onClose}>&times;</button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-                    <div className="leave-modal-content">
+                <div className="leave-modal-content" style={{ background: "#f8fafc" }}>
+                    <form onSubmit={handleSubmit} className="leave-main-form">
                         <div className="leave-form-grid">
                             <div className="full-width">
                                 {isManager ? (
@@ -234,7 +292,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         </label>
                                         <Select
                                             options={employeeOptions}
-                                            value={employeeOptions.find(opt => opt.value === formData.employeeId) || null}
+                                            value={
+                                                employeeOptions.find(opt => opt.value === formData.employeeId) || 
+                                                (formData.employeeName && employeeOptions.find(opt => opt.label.toLowerCase().includes(formData.employeeName.toLowerCase()))) ||
+                                                (formData.employeeName ? { value: formData.employeeId || "unknown", label: formData.employeeName } : null)
+                                            }
                                             onChange={handleEmployeeChange}
                                             placeholder="Select employee..."
                                             isSearchable
@@ -262,58 +324,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 )}
                             </div>
 
-                            {(() => {
-                                const selectedEmp = employees.find(e => e._id === formData.employeeId) || leaveRequest?.employee;
-                                if (selectedEmp && typeof selectedEmp === 'object') {
-                                    const { balance, totalTaken, expiredDays, airfareEligible } = calculateLeaveBalance(selectedEmp, allLeaveRequests);
-                                    let requestedDays = 0;
-                                    if (formData.startDate && formData.endDate) {
-                                        const s = new Date(formData.startDate);
-                                        const e = new Date(formData.endDate);
-                                        if (!isNaN(s) && !isNaN(e) && e >= s) requestedDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
-                                    }
 
-                                    return (
-                                        <div className="leave-balance-card" style={{
-                                            background: balance > 0 ? "#f0fdf4" : (balance < 0 ? "#fef2f2" : "#f8fafc"),
-                                            border: `1px solid ${balance > 0 ? "#bbf7d0" : (balance < 0 ? "#fecaca" : "#e2e8f0")}`,
-                                            color: balance > 0 ? "#166534" : (balance < 0 ? "#991b1b" : "#334155")
-                                        }}>
-                                            <div className="leave-balance-row">
-                                                <div className="leave-balance-item">
-                                                    <span className="leave-balance-label">Current Taken:</span>
-                                                    <span>{totalTaken} Days</span>
-                                                </div>
-                                                <div className="leave-balance-item">
-                                                    <span className="leave-balance-label">Current Balance:</span>
-                                                    <span>{balance} Days</span>
-                                                </div>
-                                                {expiredDays > 0 && (
-                                                    <div className="leave-balance-item">
-                                                        <span className="leave-balance-label" style={{ color: "#9a3412" }}>Expired/Unavailable:</span>
-                                                        <span style={{ color: "#7c2d12", fontWeight: "700" }}>{expiredDays} Days</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {requestedDays > 0 && (
-                                                <div className="leave-balance-row" style={{ paddingTop: "12px", borderTop: "1px dashed currentColor" }}>
-                                                    <div className="leave-balance-item">
-                                                        <span className="leave-balance-label">This Request:</span>
-                                                        <span style={{ color: "#007aff" }}>{requestedDays} Days</span>
-                                                    </div>
-                                                    <div className="leave-balance-item">
-                                                        <span className="leave-balance-label">Remaining:</span>
-                                                        <span style={{ color: (balance - requestedDays) < 0 ? "#ef4444" : "inherit" }}>
-                                                            {balance - requestedDays} Days
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })()}
 
                             <InputField
                                 label="Company *"
@@ -391,6 +402,41 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 </div>
                             )}
 
+                            <div className="full-width">
+                                <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+                                    <div className="input-field">
+                                        <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Joining Date</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-field-input" 
+                                            disabled 
+                                            value={leaveRequest?.employee?.doj ? new Date(leaveRequest.employee.doj).toLocaleDateString() : 'N/A'} 
+                                            style={{ background: "#f8fafc" }} 
+                                        />
+                                    </div>
+                                    <div className="input-field">
+                                        <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Total Experience</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-field-input" 
+                                            disabled 
+                                            value={leaveStats.workingYears ? `${leaveStats.workingYears} Years` : 'N/A'} 
+                                            style={{ background: "#f8fafc" }} 
+                                        />
+                                    </div>
+                                    <div className="input-field">
+                                        <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Visa Expiry Date</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-field-input" 
+                                            disabled 
+                                            value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString() : 'Not Set'} 
+                                            style={{ background: "#f8fafc" }} 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
                              <div className="full-width">
                                 <InputField
                                     label="Reason *"
@@ -402,17 +448,23 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                             </div>
 
                             {(() => {
-                                const selectedEmp = employees.find(e => e._id === formData.employeeId) || leaveRequest?.employee;
-                                const { airfareEligible } = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { airfareEligible: false };
+                                const { airfareEligible } = leaveStats;
                                 
                                 return (
                                     <div className="full-width" style={{ background: "#fff", padding: "16px", borderRadius: "12px", border: "1px solid #e2e8f0", marginTop: "12px" }}>
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                             <div>
                                                 <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f172a" }}>Airfare Request</div>
-                                                <div style={{ fontSize: "12px", color: "#64748b" }}>
-                                                    Eligibility: <span style={{ color: airfareEligible ? "#16a34a" : "#ef4444", fontWeight: "700" }}>{airfareEligible ? "Yes" : "No"}</span>
-                                                </div>
+                                                    Eligibility: <span style={{ 
+                                                        color: leaveStats.airfareAvailable ? "#16a34a" : "#ef4444", 
+                                                        fontWeight: "800",
+                                                        padding: "2px 6px",
+                                                        background: leaveStats.airfareAvailable ? "#f0fdf4" : "#fef2f2",
+                                                        borderRadius: "4px",
+                                                        marginLeft: "4px"
+                                                    }}>
+                                                        {(leaveStats?.airfareStatus || "N/A").toUpperCase()}
+                                                    </span>
                                             </div>
                                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                                 <input 
@@ -433,7 +485,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
                         {error && (
                             <div style={{ 
-                                margin: "16px 24px 0", 
+                                margin: "16px 0", 
                                 padding: "12px 16px", 
                                 background: "#fef2f2", 
                                 border: "1px solid #fecaca", 
@@ -449,15 +501,145 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 {error}
                             </div>
                         )}
-                    </div>
 
-                    <div className="leave-modal-footer">
-                        <button type="button" className="leave-btn-secondary" onClick={onClose}>Cancel</button>
-                        <button type="submit" className="leave-btn-primary" disabled={isSubmitting}>
-                            {isSubmitting ? "Updating..." : "Update Request"}
-                        </button>
+                        <div className="leave-modal-footer" style={{ padding: "0", border: "none", marginTop: "12px" }}>
+                            <button type="button" className="leave-btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+                            <button type="submit" className="leave-btn-primary" disabled={isSubmitting} style={{ flex: 2 }}>
+                                {isSubmitting ? "Updating..." : "Update Request"}
+                            </button>
+                        </div>
+                    </form>
+
+                {/* Employee Leave Overview Section - Side Panel */}
+                {selectedEmp || formData.employeeName ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <div style={{ background: "#fff", padding: "24px", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+                            <h3 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "20px", color: "#0f172a" }}>Employee Leave Summary</h3>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
+                                <div style={{ padding: "12px", background: "#f0fdf4", borderRadius: "12px", border: "1px solid #bbf7d0", textAlign: "center" }}>
+                                    <div style={{ fontSize: "10px", color: "#166534", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Entitlement</div>
+                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#14532d" }}>{leaveStats.entitlement} Days</div>
+                                </div>
+                                <div style={{ padding: "12px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecaca", textAlign: "center" }}>
+                                    <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Taken</div>
+                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
+                                </div>
+                                <div style={{ padding: "12px", background: "#fff7ed", borderRadius: "12px", border: "1px solid #fed7aa", textAlign: "center" }}>
+                                    <div style={{ fontSize: "10px", color: "#9a3412", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Expired</div>
+                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#7c2d12" }}>{leaveStats.expiredDays} Days</div>
+                                </div>
+                                <div style={{ padding: "12px", background: "#eff6ff", borderRadius: "12px", border: "1px solid #bfdbfe", textAlign: "center" }}>
+                                    <div style={{ fontSize: "10px", color: "#1e40af", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Available</div>
+                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#1e3a8a" }}>{leaveStats.balance} Days</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                            <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                                <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History (Last 5 Years)</h3>
+                            </div>
+                            <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "400px" }}>
+                                    <thead>
+                                        <tr style={{ background: "#f8fafc" }}>
+                                            <th style={{ textAlign: "left", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>YEAR</th>
+                                            <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>TAKEN</th>
+                                            <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>STATUS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {years.map(year => {
+                                            const total = getYearlyTotal(year);
+                                            const isSelected = selectedYearDetails?.year === year;
+                                            return (
+                                                <React.Fragment key={year}>
+                                                    <tr 
+                                                        style={{ 
+                                                            borderBottom: "1px solid #f1f5f9", 
+                                                            cursor: "pointer",
+                                                            background: isSelected ? "#f8fafc" : "transparent"
+                                                        }}
+                                                        onClick={() => handleYearClick(year)}
+                                                    >
+                                                        <td style={{ padding: "14px 24px", fontSize: "14px", fontWeight: "600", color: "#334155" }}>{year}</td>
+                                                        <td style={{ padding: "14px 24px", fontSize: "14px", textAlign: "right", color: "#2563eb", fontWeight: "700", textDecoration: "underline" }}>
+                                                            {total} Days
+                                                        </td>
+                                                        <td style={{ padding: "14px 24px", textAlign: "right" }}>
+                                                            <span style={{
+                                                                padding: "4px 10px",
+                                                                borderRadius: "6px",
+                                                                fontSize: "11px",
+                                                                fontWeight: "700",
+                                                                background: total > 30 ? "#fef2f2" : "#f0fdf4",
+                                                                color: total > 30 ? "#ef4444" : "#16a34a"
+                                                            }}>
+                                                                {total > 30 ? "EXCEEDED" : "WITHIN LIMIT"}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                    {isSelected && (
+                                                        <tr>
+                                                            <td colSpan="3" style={{ padding: "0" }}>
+                                                                <div style={{ background: "#f8fafc", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
+                                                                    <div style={{ fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "12px", textTransform: "uppercase" }}>
+                                                                        Leave Details for {year}
+                                                                    </div>
+                                                                    {selectedYearDetails.leaves.length > 0 ? (
+                                                                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                                                            {selectedYearDetails.leaves.map((req, idx) => (
+                                                                                <div key={idx} style={{ 
+                                                                                    background: "#fff", 
+                                                                                    padding: "12px", 
+                                                                                    borderRadius: "8px", 
+                                                                                    border: "1px solid #e2e8f0",
+                                                                                    display: "flex",
+                                                                                    justifyContent: "space-between",
+                                                                                    alignItems: "center"
+                                                                                }}>
+                                                                                    <div>
+                                                                                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                                                                                            {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                                                                                        </div>
+                                                                                        <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                                                            {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div style={{ textAlign: "right" }}>
+                                                                                        <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b" }}>AIRFARE</div>
+                                                                                        <div style={{ 
+                                                                                            fontSize: "12px", 
+                                                                                            fontWeight: "700", 
+                                                                                            color: req.requestAirfare ? "#16a34a" : "#94a3b8" 
+                                                                                        }}>
+                                                                                            {req.requestAirfare ? "YES" : "NO"}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div style={{ fontSize: "13px", color: "#94a3b8", fontStyle: "italic" }}>No approved leaves found for this year.</div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                </form>
+                ) : (
+                    <div style={{ padding: "40px", background: "#fff", borderRadius: "16px", border: "1px dashed #cbd5e1", textAlign: "center", color: "#94a3b8" }}>
+                        Select an employee to view their leave history and balance summary.
+                    </div>
+                )}
+                </div>
             </div>
             {isEditable && (
                 <DatePickerModal
@@ -465,7 +647,6 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                     onClose={() => setDatePickerOpen(false)}
                     onSelectDate={handleDateSelect}
                     selectedDate={datePickerField === "start" ? formData.startDate : formData.endDate}
-                    disabledDates={OFFICIAL_HOLIDAYS_2026}
                 />
             )}
         </div>

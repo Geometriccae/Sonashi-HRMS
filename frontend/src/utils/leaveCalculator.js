@@ -1,26 +1,37 @@
 export const calculateLeaveBalance = (employee, allLeaveRequests) => {
     if (!employee) {
-        return { workingMonths: 0, workingYears: 0, entitlement: 0, totalTaken: 0, balance: 0 };
+        return { 
+            workingMonths: 0, 
+            workingYears: 0, 
+            entitlement: 0, 
+            totalTaken: 0, 
+            balance: 0, 
+            airfareStatus: "N/A", 
+            airfareEligible: false, 
+            airfareAvailable: false 
+        };
     }
 
     // 1. Tenure & Entitlement
     const joinDate = employee.doj ? new Date(employee.doj) : new Date();
     const today = new Date();
     
-    // Policy: 30 days flat per year
-    const startYear = joinDate.getFullYear();
-    const currentYear = today.getFullYear();
-    const totalYearsOfService = Math.max(1, currentYear - startYear + 1);
-    
-    // Capped at last 5 years (150 days)
-    const activeYears = Math.min(totalYearsOfService, 5);
-    const entitlement = activeYears * 30;
-    const expiredDays = Math.max(0, (totalYearsOfService - activeYears) * 30);
-    
     // Work stats for display
     const diffTime = Math.abs(today - joinDate);
     const workingYears = (diffTime / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1);
     const workingMonths = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44));
+    const currentYear = today.getFullYear();
+
+    // Policy: 2.5 days per month (strictly based on a 30-day month)
+    const totalWorkingDays = diffTime / (1000 * 60 * 60 * 24);
+    const exactEntitlement = (totalWorkingDays / 30) * 2.5;
+    
+    // Capped at last 5 years (150 days)
+    const activeEntitlement = Math.min(exactEntitlement, 150);
+    const expiredEntitlement = Math.max(0, exactEntitlement - 150);
+    
+    const entitlement = Math.floor(activeEntitlement);
+    const expiredDays = Math.floor(expiredEntitlement);
 
     // 2. Calculate Total Taken (only in last 5 years)
     let totalTaken = 0;
@@ -59,10 +70,44 @@ export const calculateLeaveBalance = (employee, allLeaveRequests) => {
         });
     }
 
-    // 3. Airfare Eligibility
-    // Simple check based on employee's eligibility field
-    let airfareEligible = employee.airFare === true || employee.airFare === "true" || employee.airFare === "Yes";
-    let airfareStatus = airfareEligible ? "Eligible" : "Not Eligible";
+    // 3. Airfare Eligibility & Availability
+    // First, check if the benefit is even offered to this employee in their profile
+    const benefitActiveInProfile = employee.airFare === true || employee.airFare === "true" || employee.airFare === "Yes";
+    
+    let lastAirfareDate = null;
+    let airfareUsedRecently = false;
+    const twoYearsAgo = new Date(today);
+    twoYearsAgo.setFullYear(today.getFullYear() - 2);
+
+    if (allLeaveRequests && Array.isArray(allLeaveRequests)) {
+        allLeaveRequests.forEach(req => {
+            if (req.status !== "Approved" && req.status !== "HOD Approved") return;
+            if (!req.requestAirfare) return;
+
+            const reqName = String(req.employeeName || "").toLowerCase().trim();
+            if (reqName === empName) {
+                const airfareDate = new Date(req.startDate);
+                if (!lastAirfareDate || airfareDate > lastAirfareDate) {
+                    lastAirfareDate = airfareDate;
+                }
+                if (airfareDate > twoYearsAgo) {
+                    airfareUsedRecently = true;
+                }
+            }
+        });
+    }
+
+    let airfareEligible = benefitActiveInProfile;
+    let airfareAvailable = benefitActiveInProfile && !airfareUsedRecently;
+    
+    let airfareStatus = "";
+    if (!benefitActiveInProfile) {
+        airfareStatus = "Not in Profile";
+    } else if (airfareUsedRecently) {
+        airfareStatus = `Used on ${lastAirfareDate.toLocaleDateString()}`;
+    } else {
+        airfareStatus = "Available";
+    }
 
     return {
         workingMonths,
@@ -72,6 +117,8 @@ export const calculateLeaveBalance = (employee, allLeaveRequests) => {
         totalTaken,
         balance: entitlement - totalTaken,
         airfareStatus,
-        airfareEligible
+        airfareEligible,
+        airfareAvailable,
+        lastAirfareDate
     };
 };

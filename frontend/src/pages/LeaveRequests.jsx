@@ -96,7 +96,7 @@ function LeaveRequests() {
                 </section>
 
                 <section className={styles.cardcontainer}>
-                    <div className={styles.cardbox}>
+                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Rejected</h4>
@@ -105,7 +105,7 @@ function LeaveRequests() {
                         </div>
                     </div>
 
-                    <div className={styles.cardbox}>
+                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Total Requests</h4>
@@ -114,7 +114,7 @@ function LeaveRequests() {
                         </div>
                     </div>
 
-                    <div className={styles.cardbox}>
+                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Pending</h4>
@@ -123,7 +123,7 @@ function LeaveRequests() {
                         </div>
                     </div>
 
-                    <div className={styles.cardbox}>
+                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Approved</h4>
