@@ -62,6 +62,11 @@ const updateMe = async ({ username, phoneNumber, newPassword, emailId, profilePi
 };
 
 const uploadProfilePicture = async (file) => {
+  // If it's a base64 string, just use the updateMe method
+  if (typeof file === 'string' && file.startsWith('data:')) {
+    return updateMe({ profilePicture: file });
+  }
+
   const formData = new FormData();
   formData.append('profilePicture', file);
   const response = await fetch(`${baseUrl}/me/profile-picture`, {

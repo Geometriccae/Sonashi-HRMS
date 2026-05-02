@@ -273,6 +273,12 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
     // Clean the data
     const dataToSend = { ...employeeData };
     
+    // If profileImageFile is a base64 string, include it in the data payload
+    if (typeof profileImageFile === 'string' && profileImageFile.startsWith('data:')) {
+      dataToSend.profilePhoto = profileImageFile;
+      profileImageFile = null;
+    }
+    
     // Make sure assignedProjects is an array
     if (dataToSend.assignedProjects) {
       if (!Array.isArray(dataToSend.assignedProjects)) {
@@ -281,13 +287,6 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
       // Remove any null/undefined values
       dataToSend.assignedProjects = dataToSend.assignedProjects.filter(Boolean);
     }
-    
-    console.log('📤 Sending employee data:', {
-      id,
-      dataKeys: Object.keys(dataToSend),
-      assignedProjects: dataToSend.assignedProjects,
-      assignedProjectsLength: dataToSend.assignedProjects?.length || 0
-    });
     
     formData.append('data', JSON.stringify(dataToSend));
 
@@ -442,6 +441,12 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
     const dataToSend = { ...employeeData };
     delete dataToSend.profilePhotoFile;
     
+    // If profileImageFile is a base64 string, include it in the data payload
+    if (typeof profileImageFile === 'string' && profileImageFile.startsWith('data:')) {
+      dataToSend.profilePhoto = profileImageFile;
+      profileImageFile = null;
+    }
+    
     formData.append('data', JSON.stringify(dataToSend));
 
     if (profileImageFile) {
@@ -500,7 +505,12 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
       const formDataToSend = new FormData();
 
       // Append employee data as JSON string
-      formDataToSend.append("data", JSON.stringify(employeeData));
+      const dataToSend = { ...employeeData };
+      if (typeof profileImage === 'string' && profileImage.startsWith('data:')) {
+        dataToSend.profilePhoto = profileImage;
+        profileImage = null;
+      }
+      formDataToSend.append("data", JSON.stringify(dataToSend));
 
       // Append profile image if provided
       if (profileImage) {

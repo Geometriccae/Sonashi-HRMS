@@ -217,8 +217,8 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
     }
   };
 
-  const handlePhotoUpload = (file) => {
-    setProfileImage(file);
+  const handlePhotoUpload = (file, base64) => {
+    setProfileImage(base64 || file);
   };
 
   const handleEditPhoto = () => {
@@ -414,7 +414,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
       case 1:
         return (
           <div className="add-client-content">
-            <ProfilePhotoUpload onUpload={handlePhotoUpload} />
+            <ProfilePhotoUpload onUpload={handlePhotoUpload} initialImage={profileImage} />
             <div className="form-fields-grid">
               <InputField
                 label="Company Name *"
@@ -879,7 +879,7 @@ function AddClientModal({ isOpen, onClose, onSubmit }) {
               <div className="company-info">
                 {profileImage ? (
                   <img
-                    src={URL.createObjectURL(profileImage)}
+                    src={typeof profileImage === 'string' ? profileImage : URL.createObjectURL(profileImage)}
                     alt="Company logo"
                     className="company-logo"
                   />

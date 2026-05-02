@@ -820,12 +820,12 @@ function TeamManagementSalesLeads() {
                       </div>
                       <div className={styles.row_view6}>
 
-                        <div className={styles.column4}><span className={styles.text9}>Date of Birth</span><span className={styles.text10}>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Date of Birth</span><span className={styles.text10}>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Gender</span><span className={styles.text10}>{employee.gender || "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Nationality</span><span className={styles.text10}>{employee.nationality || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}><span className={styles.text9}>Date of Join (DOJ)</span><span className={styles.text10}>{employee.doj ? new Date(employee.doj).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Date of Join (DOJ)</span><span className={styles.text10}>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Total Exp (Yrs)</span>
                           <span className={styles.text10}>
@@ -846,9 +846,9 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column5}><span className={styles.text9}>Passport No</span><span className={styles.text10}>{employee.passportNo || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}><span className={styles.text9}>Passport Expiry</span><span className={styles.text10}>{employee.passportExpiryDate ? new Date(employee.passportExpiryDate).toLocaleDateString() : "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Labour Card Expiry</span><span className={styles.text10}>{employee.labourCardExpiryDate ? new Date(employee.labourCardExpiryDate).toLocaleDateString() : "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Visa Expiry</span><span className={styles.text10}>{employee.visaExpiryDate ? new Date(employee.visaExpiryDate).toLocaleDateString() : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Passport Expiry</span><span className={styles.text10}>{employee.passportExpiryDate ? new Date(employee.passportExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Labour Card Expiry</span><span className={styles.text10}>{employee.labourCardExpiryDate ? new Date(employee.labourCardExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Visa Expiry</span><span className={styles.text10}>{employee.visaExpiryDate ? new Date(employee.visaExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Office</span><span className={styles.text10}>{employee.office || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
@@ -859,7 +859,7 @@ function TeamManagementSalesLeads() {
                           <div className={styles.column5}>
                             <span className={styles.text9}>Last Working Day</span>
                             <span className={styles.text10}>
-                              {employee.lastWorkingDay ? new Date(employee.lastWorkingDay).toLocaleDateString() : "Not provided"}
+                              {employee.lastWorkingDay ? new Date(employee.lastWorkingDay).toLocaleDateString('en-GB') : "Not provided"}
                             </span>
                           </div>
                         ) : (
@@ -925,7 +925,7 @@ function TeamManagementSalesLeads() {
                             .sort((a, b) => new Date(b.date) - new Date(a.date))
                             .map((inc, index) => (
                               <tr key={index}>
-                                <td>{new Date(inc.date).toLocaleDateString()}</td>
+                                <td>{new Date(inc.date).toLocaleDateString('en-GB')}</td>
                                 <td>AED {inc.previousSalary?.toLocaleString() || 0}</td>
                                 <td style={{ color: "#34C759", fontWeight: "600" }}>+AED {inc.incrementAmount?.toLocaleString() || 0}</td>
                                 <td style={{ fontWeight: "600" }}>AED {inc.newSalary?.toLocaleString() || 0}</td>
@@ -980,8 +980,8 @@ function TeamManagementSalesLeads() {
                         {employeeLeaves && employeeLeaves.length > 0 ? (
                           employeeLeaves.map((leave, index) => (
                             <tr key={index}>
-                              <td>{new Date(leave.startDate).toLocaleDateString()}</td>
-                              <td>{new Date(leave.endDate).toLocaleDateString()}</td>
+                               <td>{new Date(leave.startDate).toLocaleDateString('en-GB')}</td>
+                              <td>{new Date(leave.endDate).toLocaleDateString('en-GB')}</td>
                               <td>{leave.leaveType}</td>
                               <td>{leave.status}</td>
                               <td>{leave.reason || "-"}</td>

@@ -8,6 +8,7 @@ const path = require('path');
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const Notification = require('../models/Notification');
+const fs = require('fs');
 
 
 let otpStore = {}; // TEMP store (better use Redis or DB)
@@ -256,9 +257,26 @@ router.post('/me/profile-picture', upload.single('profilePicture'), async (req, 
     const userId = getUserIdFromReq(req);
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    const relativePath = `/uploads/${req.file.filename}`;
-    const user = await User.findByIdAndUpdate(userId, { profilePicture: relativePath }, { new: true }).select('-password');
-    res.json(user);
+
+    try {
+      const fileContent = fs.readFileSync(req.file.path);
+      const base64Image = fileContent.toString('base64');
+      const dataUri = `data:${req.file.mimetype};base64,${base64Image}`;
+      
+      const user = await User.findByIdAndUpdate(userId, { profilePicture: dataUri }, { new: true }).select('-password');
+      
+      // Delete the temporary file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      res.json(user);
+    } catch (convErr) {
+      console.error("Error converting profile picture to base64:", convErr);
+      const relativePath = `/uploads/${req.file.filename}`;
+      const user = await User.findByIdAndUpdate(userId, { profilePicture: relativePath }, { new: true }).select('-password');
+      res.json(user);
+    }
   } catch (e) {
     res.status(500).json({ message: e.message });
   }

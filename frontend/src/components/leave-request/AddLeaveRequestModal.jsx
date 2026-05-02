@@ -364,7 +364,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString() : 'N/A'} 
+                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString('en-GB') : 'N/A'} 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -384,7 +384,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString() : 'Not Set'} 
+                                            value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -589,7 +589,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests }) {
                                                                                     }}>
                                                                                         <div>
                                                                                             <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
-                                                                                                {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                                                                                                {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
                                                                                             </div>
                                                                                             <div style={{ fontSize: "11px", color: "#64748b" }}>
                                                                                                 {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
