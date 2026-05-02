@@ -347,8 +347,8 @@ function DashboardOverview() {
                         <td>{item.employeeId || "-"}</td>
                         {selectedCategory.includes("Vacation") ? (
                           <>
-                            <td>{new Date(item.startDate).toLocaleDateString()}</td>
-                            <td>{new Date(item.endDate).toLocaleDateString()}</td>
+                            <td>{new Date(item.startDate).toLocaleDateString('en-GB')}</td>
+                            <td>{new Date(item.endDate).toLocaleDateString('en-GB')}</td>
                             {selectedCategory === "On Vacation" && (
                               <td>
                                 <button
@@ -375,7 +375,7 @@ function DashboardOverview() {
                             <td>{item.department || "-"}</td>
                             <td>
                               {selectedCategory === "Visa Expiry"
-                                ? <span style={{ color: "#ef4444", fontWeight: "600" }}>{new Date(item.visaExpiryDate).toLocaleDateString()}</span>
+                                ? <span style={{ color: "#ef4444", fontWeight: "600" }}>{new Date(item.visaExpiryDate).toLocaleDateString('en-GB')}</span>
                                 : item.role || item.employeeStatus || "-"}
                             </td>
                           </>

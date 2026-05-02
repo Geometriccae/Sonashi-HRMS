@@ -214,7 +214,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                                                                         <tr key={leave._id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>{leave.leaveType || 'Annual'}</td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>
-                                                                                {new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}
+                                                                                {new Date(leave.startDate).toLocaleDateString('en-GB')} - {new Date(leave.endDate).toLocaleDateString('en-GB')}
                                                                             </td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155", textAlign: "right" }}>
                                                                                 {Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
@@ -247,7 +247,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                     </div>
 
                     <div style={{ marginTop: "20px", padding: "16px", background: "#fffbeb", borderRadius: "12px", border: "1px solid #fef3c7", fontSize: "13px", color: "#92400e" }}>
-                        <strong>Note:</strong> Records are calculated from the joined date (<strong>{employee.doj ? new Date(employee.doj).toLocaleDateString() : 'N/A'}</strong>). 
+                        <strong>Note:</strong> Records are calculated from the joined date (<strong>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : 'N/A'}</strong>). 
                         The standard entitlement is 30 days per calendar year.
                     </div>
                 </div>

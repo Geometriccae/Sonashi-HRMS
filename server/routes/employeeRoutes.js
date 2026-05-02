@@ -452,7 +452,17 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
     }
 
     if (req.file) {
-      employeeData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+      try {
+        const fileContent = fs.readFileSync(req.file.path);
+        const base64Image = fileContent.toString('base64');
+        employeeData.profilePhoto = `data:${req.file.mimetype};base64,${base64Image}`;
+        // Delete the temporary file
+        fs.unlinkSync(req.file.path);
+      } catch (err) {
+        console.error("Error converting profile photo to base64:", err);
+        // Fallback to relative path if conversion fails
+        employeeData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+      }
     }
 
     const employee = new Employee(employeeData);
@@ -552,15 +562,16 @@ router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, re
 
     // Handle profile photo
     if (req.file) {
-      // Delete old photo if exists
-      const currentEmployee = await Employee.findById(req.params.id);
-      if (currentEmployee && currentEmployee.profilePhoto) {
-        const oldPhotoPath = path.join(__dirname, '..', currentEmployee.profilePhoto);
-        if (fs.existsSync(oldPhotoPath)) {
-          fs.unlinkSync(oldPhotoPath);
-        }
+      try {
+        const fileContent = fs.readFileSync(req.file.path);
+        const base64Image = fileContent.toString('base64');
+        updateData.profilePhoto = `data:${req.file.mimetype};base64,${base64Image}`;
+        // Delete the temporary file
+        fs.unlinkSync(req.file.path);
+      } catch (err) {
+        console.error("Error converting profile photo to base64 during update:", err);
+        updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
       }
-      updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
     }
 
     const updatedEmployee = await Employee.findByIdAndUpdate(

@@ -551,8 +551,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   };
 
 
-  const handlePhotoUpload = (file) => {
-    setProfileImage(file);
+  const handlePhotoUpload = (file, base64) => {
+    setProfileImage(base64 || file);
     setCurrentProfileImageUrl(null); // Clear current URL when new file is uploaded
   };
 
@@ -584,7 +584,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
           <div className="add-client-content">
             <ProfilePhotoUpload
               onUpload={handlePhotoUpload}
-              initialImage={currentProfileImageUrl}
+              initialImage={profileImage || currentProfileImageUrl}
               onImageError={handleImageError}
             />
             <div className="form-fields-grid">
@@ -1177,7 +1177,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               <div className="company-info">
                 {profileImage ? (
                   <img
-                    src={URL.createObjectURL(profileImage)}
+                    src={typeof profileImage === 'string' ? profileImage : URL.createObjectURL(profileImage)}
                     alt="Employee"
                     className="company-logo"
                   />

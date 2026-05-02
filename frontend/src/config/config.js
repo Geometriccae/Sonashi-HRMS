@@ -31,8 +31,8 @@ export function getApiBaseUrl() {
 export function buildImageUrl(path) {
   if (!path) return '';
   
-  // If it's already a full URL, return it
-  if (/^https?:\/\//i.test(path)) return path;
+  // If it's already a full URL or base64 data, return it
+  if (String(path).startsWith('data:') || /^https?:\/\//i.test(path)) return path;
   
   const base = getApiBaseUrl();
   

@@ -14,6 +14,13 @@ function ProfilePhotoUpload({ onUpload, initialImage, clientData, onImageError: 
     }
   }, [clientData]);
 
+  // Update preview if initialImage changes (Persistence during navigation)
+  useEffect(() => {
+    if (initialImage) {
+      setPreviewImage(initialImage);
+    }
+  }, [initialImage]);
+
   const onImageError = (e) => {
     if (externalOnError) {
       externalOnError(e);
@@ -46,10 +53,16 @@ function ProfilePhotoUpload({ onUpload, initialImage, clientData, onImageError: 
       setPreviewImage(previewUrl);
       setProfileImageUrl(null); // Clear existing image URL
 
-      // Call onUpload with the file
-      if (onUpload) {
-        onUpload(file);
-      }
+      // Convert to Base64 for database storage (Persistence)
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        // Call onUpload with both file and base64
+        if (onUpload) {
+          onUpload(file, base64String);
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 

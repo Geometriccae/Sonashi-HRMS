@@ -768,7 +768,7 @@ function LeaveRequestTable({ onUpdate }) {
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                                 <span style={{ fontSize: "13px", color: "#64748b" }}>Leave Duration:</span>
                                 <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
-                                    {new Date(approvalAction.request.startDate).toLocaleDateString()} - {new Date(approvalAction.request.endDate).toLocaleDateString()}
+                                    {new Date(approvalAction.request.startDate).toLocaleDateString('en-GB')} - {new Date(approvalAction.request.endDate).toLocaleDateString('en-GB')}
                                 </span>
                             </div>
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
