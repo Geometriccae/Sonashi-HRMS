@@ -114,9 +114,6 @@ const HEADER_ALIASES = {
   'medical insurance': 'medicalInsurance',
   airfare: 'airFare',
   'air fare': 'airFare',
-  profilephoto: 'profilePhoto',
-  'profile photo': 'profilePhoto',
-  photo: 'profilePhoto',
   bankname: 'bankName',
   'bank name': 'bankName',
   bank: 'bankName',
@@ -271,7 +268,6 @@ function buildEmployeePayload(row, nameToId) {
     passportNo: String(pickRaw(map, 'passportNo') || '').trim(),
     remarks: String(pickRaw(map, 'remarks') || '').trim(),
     department,
-    profilePhoto: String(pickRaw(map, 'profilePhoto') || '').trim(),
     salaryDetails: {
       bankName: String(pickRaw(map, 'bankName') || '').trim(),
       accountNumber: String(pickRaw(map, 'accountNumber') || '').trim(),

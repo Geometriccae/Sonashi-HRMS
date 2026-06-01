@@ -11,6 +11,8 @@ const employeeSchema = new mongoose.Schema({
   gender: { type: String, default: "" },
   doj: { type: Date, default: null },
   lastWorkingDay: { type: Date, default: null },
+  travellingDate: { type: Date, default: null },
+  firstWorkingDay: { type: Date, default: null },
   totalYearsExperience: { type: Number, default: null },
   dateOfBirth: { type: Date, default: null },
   passportNo: { type: String, default: "" },
@@ -28,6 +30,12 @@ const employeeSchema = new mongoose.Schema({
     default: "Active"
   },
 
+  vacationStatus: {
+    type: String,
+    enum: ["Not on Vacation", "On Vacation", "Vacation Approved", "Vacation Pending", "Onboarding"],
+    default: "Not on Vacation"
+  },
+
   attendance: {
     type: String,
     enum: ["Onsite", "Leave"],
@@ -38,7 +46,23 @@ const employeeSchema = new mongoose.Schema({
   /** Optional; sparse unique allows many employees with no email (field omitted or null). */
   emailId: { type: String },
 
-  profilePhoto: { type: String, default: "" }, // URL or path to photo
+  emergencyContact: {
+    uae: {
+      name: { type: String, default: "" },
+      address: { type: String, default: "" },
+      contactNo: { type: String, default: "" }
+    },
+    homeCountry: {
+      name: { type: String, default: "" },
+      address: { type: String, default: "" },
+      contactNo: { type: String, default: "" }
+    },
+    homeCountry2: {
+      name: { type: String, default: "" },
+      address: { type: String, default: "" },
+      contactNo: { type: String, default: "" }
+    }
+  },
 
   role: { type: String, required: true }, // e.g., Operations Manager, Sales Executive
   designation: { type: String }, // same or different from role if needed
@@ -75,6 +99,10 @@ const employeeSchema = new mongoose.Schema({
     previousSalary: { type: Number, default: 0 },
     incrementAmount: { type: Number, default: 0 },
     newSalary: { type: Number, default: 0 },
+    basicSalaryIncrement: { type: Number, default: 0 },
+    houseRentIncrement: { type: Number, default: 0 },
+    travelExpIncrement: { type: Number, default: 0 },
+    otherIncrement: { type: Number, default: 0 },
     reason: { type: String, default: "" }
   }]
 

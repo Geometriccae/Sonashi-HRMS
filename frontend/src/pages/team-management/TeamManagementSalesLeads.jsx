@@ -16,10 +16,12 @@ import AssignTaskModal from "../../components/team-management-components/AssignT
 import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
 import AddIncrementModal from "../../components/team-management-components/AddIncrementModal";
+import AddLeaveRequestModal from "../../components/leave-request/AddLeaveRequestModal";
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useSidebar } from "../../context/SidebarContext";
 import { useToast } from "../../context/ToastContext";
+import { calculateLeaveBalance } from "../../utils/leaveCalculator";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -81,6 +83,7 @@ function TeamManagementSalesLeads() {
   const incrementsRef = useRef(null);
   const leaveTabRef = useRef(null);
   const documentsRef = useRef(null);
+
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
   const [remarks, setRemarks] = useState([]);
   const [remarksLoading, setRemarksLoading] = useState(false);
@@ -91,6 +94,8 @@ function TeamManagementSalesLeads() {
   const [deleteType, setDeleteType] = useState(""); // 'entry', 'data', or 'increment'
   const [selectedIncrement, setSelectedIncrement] = useState(null);
   const [employeeLeaves, setEmployeeLeaves] = useState([]);
+  const [allLeaveRequests, setAllLeaveRequests] = useState([]);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -120,6 +125,8 @@ function TeamManagementSalesLeads() {
     setUserRole(localStorage.getItem("role") || "");
   }, []);
 
+  const isAdmin = userRole === "admin" || userRole === "hod";
+
   // Fetch employee data when component mounts or employeeId changes
   useEffect(() => {
     if (employeeId) {
@@ -131,6 +138,7 @@ function TeamManagementSalesLeads() {
     try {
       const leaves = await leaveRequestService.getLeaveRequests();
       const allLeaves = Array.isArray(leaves) ? leaves : leaves.data || [];
+      setAllLeaveRequests(allLeaves);
       const empLeaves = allLeaves.filter(req => {
         const reqEmpIdObj = req.employee?._id || req.employee;
         const reqUserEmpId = req.employee?.employeeId;
@@ -146,7 +154,7 @@ function TeamManagementSalesLeads() {
         }
 
         const isMatch = isIdMatch || isNameMatch;
-        return isMatch && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Pending");
+        return isMatch && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Pending" || req.status === "Imported");
       });
       setEmployeeLeaves(empLeaves.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)));
     } catch (err) {
@@ -265,6 +273,7 @@ function TeamManagementSalesLeads() {
         case "leave":
           activeElement = leaveTabRef.current;
           break;
+
         default:
           activeElement = basicInfoRef.current;
       }
@@ -306,10 +315,9 @@ function TeamManagementSalesLeads() {
         navigate("/teammanagement");
         return; // no further cleanup needed, leaving page
       } else if (deleteType === "data") {
-        // Optional: implement bulk document delete for this client in backend later
-        // For now, simply refresh documents list key
+        await DocumentsService.removeAll(employeeId);
         setDocumentsKey(prev => prev + 1);
-        showToast("Data deleted successfully.", 'success');
+        showToast("All documents deleted successfully.", 'success');
       } else if (deleteType === "increment") {
         const updatedEmployee = await employeeService.deleteEmployeeIncrement(employeeId, selectedIncrement._id);
         setEmployee(updatedEmployee);
@@ -520,6 +528,17 @@ function TeamManagementSalesLeads() {
       case "salary":
         return (
           <div className={styles.row_view5}>
+            {canEdit && (
+              <button
+                className={`${styles.button_row_view} ${styles.editbutton}`}
+                onClick={() => setIsEditEmployeeModalOpen(true)}
+              >
+                <span className={`${styles.text3} ${styles.editbuttontext}`}>
+                  Edit Salary
+                </span>
+                <img src={pencillineblue} className={styles.image3} alt="edit" />
+              </button>
+            )}
             <button
               ref={exportButtonRef}
               className={styles.button_row_view2}
@@ -548,6 +567,15 @@ function TeamManagementSalesLeads() {
               <span className={styles.text4}>Export</span>
               <img src={upload} className={styles.image3} alt="export" />
             </button>
+            {isAdmin && (
+              <button
+                className={styles.button_row_view3}
+                onClick={handleDeleteData}
+              >
+                <span className={styles.text5}>Delete All</span>
+                <img src={deletewhite} className={styles.image3} alt="delete" />
+              </button>
+            )}
           </div>
         );
       case "increments":
@@ -562,6 +590,19 @@ function TeamManagementSalesLeads() {
             </button>
           </div>
         ) : null;
+      case "leave":
+        return isAdmin ? (
+          <div className={styles.row_view5}>
+            <button
+              className={styles.button_row_view}
+              onClick={() => setIsLeaveModalOpen(true)}
+            >
+              <span className={styles.text3}>Add Leave Entitlement</span>
+              <img src={plus} className={styles.image3} alt="plus" />
+            </button>
+          </div>
+        ) : null;
+
       default:
         return null;
     }
@@ -684,12 +725,9 @@ function TeamManagementSalesLeads() {
                           : employee?.employeeName || "Employee Name"}
                       </span>
                     </div>
-                    <button
-                      className={styles.button}
-                      onClick={() => alert("Pressed!")}
-                    >
+                    <button className={styles.button}>
                       <span className={styles.text2}>
-                        {loading ? "..." : employee?.attendance || "On Site"}
+                        {loading ? "..." : employee?.attendance || "Onsite"}
                       </span>
                     </button>
                   </div>
@@ -773,6 +811,7 @@ function TeamManagementSalesLeads() {
                   >
                     <span className={styles.text8}>{"Leave Entitlement"}</span>
                   </div>
+
                   <div
                     className={styles.box}
                     style={{
@@ -866,11 +905,84 @@ function TeamManagementSalesLeads() {
                           <div className={styles.column5}></div>
                         )}
                       </div>
+                      {employee.employeeStatus !== "InActive" && (
+                        <div className={styles.row_view6}>
+                          <div className={styles.column4}>
+                            <span className={styles.text9}>Vacation Status</span>
+                            <span className={styles.text10}>
+                              {(() => {
+                                const vs = employee.vacationStatus || "Not on Vacation";
+                                const colorMap = {
+                                  "On Vacation": { bg: "#fff7ed", color: "#c2410c" },
+                                  "Vacation Approved": { bg: "#f0fdf4", color: "#15803d" },
+                                  "Vacation Pending": { bg: "#fffbeb", color: "#b45309" },
+                                  "Not on Vacation": { bg: "#f0fdf4", color: "#15803d" },
+                                };
+                                const style = colorMap[vs] || colorMap["Not on Vacation"];
+                                const labelMap = {
+                                  "On Vacation": "On vacation",
+                                  "Vacation Approved": "Returned back from vacation",
+                                  "Vacation Pending": "Yet to go",
+                                };
+                                const displayLabel = labelMap[vs] || vs;
+                                return (
+                                  <span style={{
+                                    display: "inline-flex",
+                                    padding: "3px 10px",
+                                    borderRadius: "20px",
+                                    fontSize: "12px",
+                                    fontWeight: "600",
+                                    background: style.bg,
+                                    color: style.color,
+                                    marginTop: "4px"
+                                  }}>
+                                    {displayLabel}
+                                  </span>
+                                );
+                              })()}
+                            </span>
+                          </div>
+                          <div className={styles.column4}></div>
+                          <div className={styles.column4}></div>
+                          <div className={styles.column5}></div>
+                        </div>
+                      )}
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Life Insurance</span><span className={styles.text10}>{employee.lifeInsurance ? "Yes" : "No"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Medical Insurance</span><span className={styles.text10}>{employee.medicalInsurance ? "Yes" : "No"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Air Fare</span><span className={styles.text10}>{employee.airFare ? "Yes" : "No"}</span></div>
                         <div className={styles.column5}></div>
+                      </div>
+                      
+                      {/* Emergency Contact details */}
+                      <div className={styles.row_view6} style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+                        <div className={styles.column4} style={{ flex: '1 1 50%' }}>
+                          <span className={styles.text9} style={{ fontWeight: 'bold', fontSize: '15px', color: '#1a1a1a', marginBottom: '10px' }}>Emergency Contact - UAE</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Name</span><span className={styles.text10}>{employee.emergencyContact?.uae?.name || "Not provided"}</span></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Address</span><span className={styles.text10}>{employee.emergencyContact?.uae?.address || "Not provided"}</span></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Contact No.</span><span className={styles.text10}>{employee.emergencyContact?.uae?.contactNo || "Not provided"}</span></div>
+                          </div>
+                        </div>
+                        <div className={styles.column4} style={{ flex: '1 1 50%' }}>
+                          <span className={styles.text9} style={{ fontWeight: 'bold', fontSize: '15px', color: '#1a1a1a', marginBottom: '10px' }}>Emergency Contact - Home Country</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Name</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry?.name || "Not provided"}</span></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Address</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry?.address || "Not provided"}</span></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Contact No.</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry?.contactNo || "Not provided"}</span></div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Second Home Country Emergency Contact */}
+                      <div className={styles.row_view6} style={{ marginTop: '16px', borderTop: '1px dashed #eee', paddingTop: '16px' }}>
+                        <div className={styles.column4} style={{ flex: '1 1 100%' }}>
+                          <span className={styles.text9} style={{ fontWeight: 'bold', fontSize: '15px', color: '#1a1a1a', marginBottom: '10px' }}>Emergency Contact - Home Country 2</span>
+                          <div style={{ display: 'flex', flexDirection: 'row', gap: '40px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Name</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry2?.name || "Not provided"}</span></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Address</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry2?.address || "Not provided"}</span></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Contact No.</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry2?.contactNo || "Not provided"}</span></div>
+                          </div>
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -882,17 +994,17 @@ function TeamManagementSalesLeads() {
               )}
 
               {activeTab === "salary" && (
-                <div style={{ padding: "16px 36px" }}>
+                <>
                   <div className={styles.row_view6}>
-                    <div className={styles.column4}><span className={styles.text9}>BASIC</span><span className={styles.text10}>{employee?.salaryDetails?.basicSalary ? `AED ${employee.salaryDetails.basicSalary}` : "0"}</span></div>
-                    <div className={styles.column4}><span className={styles.text9}>HOUSE RENT</span><span className={styles.text10}>{employee?.salaryDetails?.houseRent ? `AED ${employee.salaryDetails.houseRent}` : "0"}</span></div>
-                    <div className={styles.column4}><span className={styles.text9}>TRAVEL EXP</span><span className={styles.text10}>{employee?.salaryDetails?.travelExp ? `AED ${employee.salaryDetails.travelExp}` : "0"}</span></div>
-                    <div className={styles.column5}><span className={styles.text9}>OTHER</span><span className={styles.text10}>{employee?.salaryDetails?.other ? `AED ${employee.salaryDetails.other}` : "0"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>Basic</span><span className={styles.text10}>{employee?.salaryDetails?.basicSalary ? `AED ${employee.salaryDetails.basicSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "AED 0.00"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>House Rent</span><span className={styles.text10}>{employee?.salaryDetails?.houseRent ? `AED ${employee.salaryDetails.houseRent.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "AED 0.00"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>Travel Exp</span><span className={styles.text10}>{employee?.salaryDetails?.travelExp ? `AED ${employee.salaryDetails.travelExp.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "AED 0.00"}</span></div>
+                    <div className={styles.column5}><span className={styles.text9}>Other</span><span className={styles.text10}>{employee?.salaryDetails?.other ? `AED ${employee.salaryDetails.other.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "AED 0.00"}</span></div>
                   </div>
                   <div className={styles.row_view6}>
-                    <div className={styles.column4}><span className={styles.text9}>Total Allowance</span><span className={styles.text10}>{employee?.salaryDetails?.totalAllowance ? `AED ${employee.salaryDetails.totalAllowance}` : "0"}</span></div>
-                    <div className={styles.column4}><span className={styles.text9}>DEDUCTION</span><span className={styles.text10}>{employee?.salaryDetails?.deduction ? `AED ${employee.salaryDetails.deduction}` : "0"}</span></div>
-                    <div className={styles.column4}><span className={styles.text9}>Net Salary</span><span className={styles.text10}>{employee?.salaryDetails?.totalSalary ? `AED ${employee.salaryDetails.totalSalary}` : "0"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>Total Allowance</span><span className={styles.text10}>{employee?.salaryDetails?.totalAllowance ? `AED ${employee.salaryDetails.totalAllowance.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "AED 0.00"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>Deduction</span><span className={styles.text10}>{employee?.salaryDetails?.deduction ? `AED ${employee.salaryDetails.deduction.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "AED 0.00"}</span></div>
+                    <div className={styles.column4}><span className={styles.text9}>Net Salary</span><span className={styles.text10}>{employee?.salaryDetails?.totalSalary ? `AED ${employee.salaryDetails.totalSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "AED 0.00"}</span></div>
                     <div className={styles.column5}></div>
                   </div>
                   <div className={styles.row_view6}>
@@ -901,7 +1013,7 @@ function TeamManagementSalesLeads() {
                     <div className={styles.column4}><span className={styles.text9}>IBAN Number</span><span className={styles.text10}>{employee?.salaryDetails?.ibanNumber || "Not provided"}</span></div>
                     <div className={styles.column5}><span className={styles.text9}>Bank SORT Code</span><span className={styles.text10}>{employee?.salaryDetails?.bankSortCode || "Not provided"}</span></div>
                   </div>
-                </div>
+                </>
               )}
 
               {activeTab === "increments" && (
@@ -910,7 +1022,7 @@ function TeamManagementSalesLeads() {
                     <table className={styles.increments_table}>
                       <thead>
                         <tr>
-                          <th>Date</th>
+                          <th>Effective Date</th>
                           <th>Previous Salary</th>
                           <th>Increment</th>
                           <th>New Salary</th>
@@ -1000,6 +1112,8 @@ function TeamManagementSalesLeads() {
                 </div>
               )}
 
+
+
               {activeTab === "documents" && (
                 <div>
                   <section className="documents-table-section">
@@ -1059,6 +1173,14 @@ function TeamManagementSalesLeads() {
         onSubmit={handleAddIncrement}
         employee={employee}
         initialData={selectedIncrement}
+      />
+
+      <AddLeaveRequestModal
+        isOpen={isLeaveModalOpen}
+        onClose={() => setIsLeaveModalOpen(false)}
+        onSubmit={() => fetchEmployeeLeaves(employee)}
+        allLeaveRequests={allLeaveRequests}
+        initialEmployeeId={employeeId}
       />
 
       <DropDownList

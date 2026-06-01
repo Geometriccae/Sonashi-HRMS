@@ -151,22 +151,24 @@ function DataTable({ data, onDelete, onOpen }) {
           </div>
 
           {/* Actions Column */}
-          <div className="table-column actions-column">
-            <div className="table-header">
-              <div className="table-header-cell"></div>
-            </div>
-            {data.map((item) => (
-              <div key={item.id} className="table-cell actions-cell">
-                <button
-                  className="delete-button"
-                  onClick={() => handleDelete(item.id)}
-                  aria-label="Delete item"
-                >
-                  <TrashIcon />
-                </button>
+          {onDelete && (
+            <div className="table-column actions-column">
+              <div className="table-header">
+                <div className="table-header-cell"></div>
               </div>
-            ))}
-          </div>
+              {data.map((item) => (
+                <div key={item.id} className="table-cell actions-cell">
+                  <button
+                    className="delete-button"
+                    onClick={() => handleDelete(item.id)}
+                    aria-label="Delete item"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -14,7 +14,9 @@ const { sendEventAssignedTemplate } = require('../services/interaktWhatsAppServi
 // Storage config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/clients'); // save inside /uploads/clients
+    const dir = path.join(__dirname, '../../uploads/clients');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname)); // unique filename

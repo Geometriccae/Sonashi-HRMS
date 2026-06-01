@@ -3,6 +3,7 @@ const router = express.Router();
 const nodemailer = require('nodemailer');
 const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
+const Employee = require('../models/Employee');
 const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 
@@ -235,6 +236,42 @@ router.post('/', authMiddleware, async (req, res) => {
             }
         }
 
+        // Validate dates against Employee's Joining Date (DOJ)
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                let employeeObj = null;
+                if (employeeId) {
+                    employeeObj = await Employee.findById(employeeId);
+                } else if (req.user && req.user.employeeId) {
+                    employeeObj = await Employee.findById(req.user.employeeId);
+                } else if (req.user) {
+                    employeeObj = await Employee.findOne({
+                        $or: [
+                            { employeeName: req.user.username },
+                            { emailId: req.user.emailId }
+                        ]
+                    });
+                }
+
+                if (employeeObj && employeeObj.doj) {
+                    const joiningDate = new Date(employeeObj.doj);
+                    joiningDate.setHours(0, 0, 0, 0);
+                    start.setHours(0, 0, 0, 0);
+                    end.setHours(0, 0, 0, 0);
+
+                    if (start < joiningDate || end < joiningDate) {
+                        return res.status(400).json({
+                            message: `Leave dates cannot be before the Employee's Joining Date (${joiningDate.toLocaleDateString('en-GB')})`
+                        });
+                    }
+                }
+            }
+        }
+
+        const isPastLeave = req.body.isPastLeave === true;
+
         const newLeaveRequest = new LeaveRequest({
             employee: targetUserId,
             employeeName: employeeName || req.user.username,
@@ -245,7 +282,9 @@ router.post('/', authMiddleware, async (req, res) => {
             startDate: new Date(startDate),
             endDate: new Date(endDate),
             reason,
-            status: 'Pending',
+            status: isPastLeave ? 'Approved' : 'Pending',
+            adminApprovedBy: isPastLeave ? req.user.id : undefined,
+            adminApprovedAt: isPastLeave ? new Date() : undefined,
             requestAirfare: req.body.requestAirfare === true || req.body.requestAirfare === 'true'
         });
 
@@ -358,6 +397,47 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
         const effectiveStart = updateData.startDate || oldRequest.startDate;
         const effectiveEnd = updateData.endDate || oldRequest.endDate;
+
+        // Validate dates against Employee's Joining Date (DOJ)
+        if (effectiveStart && effectiveEnd) {
+            const start = new Date(effectiveStart);
+            const end = new Date(effectiveEnd);
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                let employeeObj = null;
+                if (employeeId) {
+                    employeeObj = await Employee.findById(employeeId);
+                } else if (oldRequest.employee) {
+                    const user = await User.findById(oldRequest.employee).populate('employeeId');
+                    if (user && user.employeeId) {
+                        employeeObj = user.employeeId;
+                    } else {
+                        const usr = await User.findById(oldRequest.employee);
+                        if (usr) {
+                            employeeObj = await Employee.findOne({
+                                $or: [
+                                    { employeeName: usr.username },
+                                    { emailId: usr.emailId }
+                                ]
+                            });
+                        }
+                    }
+                }
+
+                if (employeeObj && employeeObj.doj) {
+                    const joiningDate = new Date(employeeObj.doj);
+                    joiningDate.setHours(0, 0, 0, 0);
+                    start.setHours(0, 0, 0, 0);
+                    end.setHours(0, 0, 0, 0);
+
+                    if (start < joiningDate || end < joiningDate) {
+                        return res.status(400).json({
+                            message: `Leave dates cannot be before the Employee's Joining Date (${joiningDate.toLocaleDateString('en-GB')})`
+                        });
+                    }
+                }
+            }
+        }
+
         const startStr = effectiveStart && (effectiveStart.toISOString ? effectiveStart.toISOString().split('T')[0] : effectiveStart);
         const endStr = effectiveEnd && (effectiveEnd.toISOString ? effectiveEnd.toISOString().split('T')[0] : effectiveEnd);
 

@@ -10,6 +10,8 @@ function Documents({ clientId, refreshKey }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const userRole = localStorage.getItem("role") || "";
+  const isAdmin = userRole === "admin" || userRole === "hod";
 
   useEffect(() => {
     if (!clientId) return;
@@ -47,11 +49,11 @@ function Documents({ clientId, refreshKey }) {
       <section className="documents-table-section">
         <DataTable 
           data={documents}
-          onDelete={async (docId) => {
+          onDelete={isAdmin ? async (docId) => {
             await DocumentsService.remove(docId);
             // refresh list locally
             setDocuments(prev => prev.filter(d => d.id !== docId));
-          }}
+          } : undefined}
         />
       </section>
        {/* Mobile Bottom Navigation */}

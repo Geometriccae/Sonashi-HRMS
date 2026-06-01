@@ -11,10 +11,12 @@ const listByEmployee = async (employeeId) => {
 
 const uploadForEmployee = async (employeeId, file, { uploadedBy, userRole, type } = {}) => {
   const formData = new FormData();
-  formData.append("file", file);
+  // IMPORTANT: type, uploadedBy, userRole must be appended BEFORE file
+  // so that req.body.type is available in multer's destination callback
+  if (type) formData.append("type", type);
   if (uploadedBy) formData.append("uploadedBy", uploadedBy);
   if (userRole) formData.append("userRole", userRole);
-  if (type) formData.append("type", type);
+  formData.append("file", file);
 
   const response = await fetch(`${baseUrl}/${employeeId}`, {
     method: "POST",
@@ -30,7 +32,13 @@ const remove = async (docId) => {
   return response.json();
 };
 
-const DocumentsService = { listByEmployee, uploadForEmployee, remove };
+const removeAll = async (employeeId) => {
+  const response = await fetch(`${baseUrl}/all/${employeeId}`, { method: "DELETE" });
+  if (!response.ok) throw new Error("Failed to delete all documents");
+  return response.json();
+};
+
+const DocumentsService = { listByEmployee, uploadForEmployee, remove, removeAll };
 export default DocumentsService;
 
 

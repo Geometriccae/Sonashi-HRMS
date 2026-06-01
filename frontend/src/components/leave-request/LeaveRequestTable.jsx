@@ -50,6 +50,8 @@ function LeaveRequestTable({ onUpdate }) {
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [selectedManager, setSelectedManager] = useState("All");
+    const [selectedMonth, setSelectedMonth] = useState("All");
+    const [selectedYear, setSelectedYear] = useState("All");
     const [departments, setDepartments] = useState([]);
     const [managers, setManagers] = useState([]);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
@@ -183,6 +185,38 @@ function LeaveRequestTable({ onUpdate }) {
         }
     };
 
+    const currentYear = new Date().getFullYear();
+    const uniqueYears = [...new Set([
+        currentYear - 1,
+        currentYear,
+        currentYear + 1,
+        ...leaveRequests.map(req => {
+            const d = new Date(req.startDate);
+            return isNaN(d.getTime()) ? null : d.getUTCFullYear();
+        }).filter(Boolean)
+    ])].sort((a, b) => b - a);
+
+    const yearOptions = [
+        { value: "All", label: "Year" },
+        ...uniqueYears.map(year => ({ value: String(year), label: String(year) }))
+    ];
+
+    const monthOptions = [
+        { value: "All", label: "Month" },
+        { value: "0", label: "January" },
+        { value: "1", label: "February" },
+        { value: "2", label: "March" },
+        { value: "3", label: "April" },
+        { value: "4", label: "May" },
+        { value: "5", label: "June" },
+        { value: "6", label: "July" },
+        { value: "7", label: "August" },
+        { value: "8", label: "September" },
+        { value: "9", label: "October" },
+        { value: "10", label: "November" },
+        { value: "11", label: "December" }
+    ];
+
     const filteredRequests = leaveRequests.filter(req => {
         // Status Filter (Segmented Control)
         if (activeFilter !== "All") {
@@ -219,6 +253,18 @@ function LeaveRequestTable({ onUpdate }) {
             if (reqEnd > filterEnd) return false;
         }
 
+        // Month Filter
+        if (selectedMonth !== "All") {
+            const reqMonth = new Date(req.startDate).getUTCMonth(); // 0 to 11
+            if (reqMonth !== parseInt(selectedMonth)) return false;
+        }
+
+        // Year Filter
+        if (selectedYear !== "All") {
+            const reqYear = new Date(req.startDate).getUTCFullYear();
+            if (reqYear !== parseInt(selectedYear)) return false;
+        }
+
         return true;
     }).sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
 
@@ -250,7 +296,7 @@ function LeaveRequestTable({ onUpdate }) {
     // Reset to page 1 when filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [activeFilter, searchQuery, selectedDept, startDate, endDate, selectedManager]);
+    }, [activeFilter, searchQuery, selectedDept, startDate, endDate, selectedManager, selectedMonth, selectedYear]);
 
     // Handle page change
     const handlePageChange = (page) => {
@@ -428,6 +474,52 @@ function LeaveRequestTable({ onUpdate }) {
                             }}
                             maxMenuHeight={200}
                         />
+
+                        <Select
+                            placeholder="Month"
+                            options={monthOptions}
+                            value={monthOptions.find(opt => opt.value === selectedMonth)}
+                            onChange={(opt) => setSelectedMonth(opt.value)}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    minHeight: '42px',
+                                    borderRadius: '8px',
+                                    borderColor: '#e4e4e4',
+                                    fontSize: '0.875rem',
+                                    minWidth: '140px',
+                                    cursor: 'pointer'
+                                }),
+                                menu: (base) => ({
+                                    ...base,
+                                    zIndex: 100
+                                })
+                            }}
+                            maxMenuHeight={200}
+                        />
+
+                        <Select
+                            placeholder="Year"
+                            options={yearOptions}
+                            value={yearOptions.find(opt => opt.value === selectedYear)}
+                            onChange={(opt) => setSelectedYear(opt.value)}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    minHeight: '42px',
+                                    borderRadius: '8px',
+                                    borderColor: '#e4e4e4',
+                                    fontSize: '0.875rem',
+                                    minWidth: '140px',
+                                    cursor: 'pointer'
+                                }),
+                                menu: (base) => ({
+                                    ...base,
+                                    zIndex: 100
+                                })
+                            }}
+                            maxMenuHeight={200}
+                        />
                     </div>
 
                     <div className={styles.dateSection}>
@@ -457,6 +549,8 @@ function LeaveRequestTable({ onUpdate }) {
                                 setSelectedManager("All");
                                 setStartDate("");
                                 setEndDate("");
+                                setSelectedMonth("All");
+                                setSelectedYear("All");
                             }}
                         >
                             Reset
@@ -504,13 +598,14 @@ function LeaveRequestTable({ onUpdate }) {
                                     <th>Reason</th>
                                     <th>Days</th>
                                     <th>Dates</th>
-                                    <th>Airfare</th>
+                                    <th>Ticket</th>
                                     <th>Status</th>
                                 </>
                             ) : (
                                 <>
+                                    <th>Days</th>
                                     <th>Duration</th>
-                                    <th>Airfare</th>
+                                    <th>Ticket</th>
                                     <th>Status</th>
                                 </>
                             )}
@@ -554,10 +649,13 @@ function LeaveRequestTable({ onUpdate }) {
                                         <td style={{ textAlign: "center" }}>
                                             <span style={{ 
                                                 fontWeight: "700", 
-                                                color: req.requestAirfare ? "#16a34a" : "#94a3b8",
-                                                fontSize: "12px"
+                                                color: req.requestAirfare ? "#15803d" : "#9a3412",
+                                                fontSize: "11px",
+                                                padding: "3px 8px",
+                                                borderRadius: "6px",
+                                                background: req.requestAirfare ? "#f0fdf4" : "#fff7ed"
                                             }}>
-                                                {req.requestAirfare ? "YES" : "NO"}
+                                                {req.requestAirfare ? "COMPANY" : "PERSONAL"}
                                             </span>
                                         </td>
                                         <td>
@@ -568,16 +666,20 @@ function LeaveRequestTable({ onUpdate }) {
                                     </>
                                 ) : (
                                     <>
+                                        <td>{calculateDays(req.startDate, req.endDate)} Days</td>
                                         <td>
                                             {formatDisplayDate(req.startDate)} - {formatDisplayDate(req.endDate)}
                                         </td>
                                         <td style={{ textAlign: "center" }}>
                                             <span style={{ 
                                                 fontWeight: "700", 
-                                                color: req.requestAirfare ? "#16a34a" : "#94a3b8",
-                                                fontSize: "12px"
+                                                color: req.requestAirfare ? "#15803d" : "#9a3412",
+                                                fontSize: "11px",
+                                                padding: "3px 8px",
+                                                borderRadius: "6px",
+                                                background: req.requestAirfare ? "#f0fdf4" : "#fff7ed"
                                             }}>
-                                                {req.requestAirfare ? "YES" : "NO"}
+                                                {req.requestAirfare ? "COMPANY" : "PERSONAL"}
                                             </span>
                                         </td>
                                         <td>

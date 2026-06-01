@@ -44,6 +44,27 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const isEditable = isManager || leaveRequest?.status === "Pending";
 
     const handleDateSelect = (date) => {
+        if (error) setError("");
+        const selected = new Date(date);
+        selected.setHours(0, 0, 0, 0);
+
+        const currentSelectedEmp = employees.find(e => e._id === formData.employeeId) || 
+                                   (formData.employeeName && employees.find(e => {
+                                       const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+                                       const fName = String(formData.employeeName || "").toLowerCase().trim();
+                                       return eName === fName && fName !== "";
+                                   })) || 
+                                   leaveRequest?.employee;
+
+        if (currentSelectedEmp && currentSelectedEmp.doj) {
+            const joiningDate = new Date(currentSelectedEmp.doj);
+            joiningDate.setHours(0, 0, 0, 0);
+            if (selected < joiningDate) {
+                setError(`Start date and End date cannot be before the Employee's Joining Date (${joiningDate.toLocaleDateString('en-GB')}).`);
+                return;
+            }
+        }
+
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, "0");
         const d = String(date.getDate()).padStart(2, "0");
@@ -178,6 +199,28 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             delete payload.employeeId;
         }
 
+        const start = new Date(formData.startDate);
+        const end = new Date(formData.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+
+        const currentSelectedEmp = employees.find(e => e._id === formData.employeeId) || 
+                                   (formData.employeeName && employees.find(e => {
+                                       const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+                                       const fName = String(formData.employeeName || "").toLowerCase().trim();
+                                       return eName === fName && fName !== "";
+                                   })) || 
+                                   leaveRequest?.employee;
+
+        if (currentSelectedEmp && currentSelectedEmp.doj) {
+            const joiningDate = new Date(currentSelectedEmp.doj);
+            joiningDate.setHours(0, 0, 0, 0);
+            if (start < joiningDate || end < joiningDate) {
+                setError(`Start date and End date cannot be before the Employee's Joining Date (${joiningDate.toLocaleDateString('en-GB')}).`);
+                return;
+            }
+        }
+
         setError("");
         setIsSubmitting(true);
         try {
@@ -237,7 +280,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                         })) || 
                         leaveRequest?.employee;
                         
-    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
+    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     const years = [2026, 2025, 2024, 2023, 2022];
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
@@ -272,6 +315,42 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             });
         }
     };
+
+    const getSelectedDaysCount = () => {
+        if (!formData.startDate || !formData.endDate) return null;
+        const s = new Date(formData.startDate);
+        const e = new Date(formData.endDate);
+        if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+        
+        s.setHours(0, 0, 0, 0);
+        e.setHours(0, 0, 0, 0);
+        
+        if (s > e) {
+            return { error: "Start date must be before or equal to End date" };
+        }
+        
+        const calendarDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
+        
+        let workingDays = 0;
+        const tempDate = new Date(s);
+        const holidaysSet = new Set(OFFICIAL_HOLIDAYS_2026 || []);
+        
+        while (tempDate <= e) {
+            const day = tempDate.getDay();
+            const y = tempDate.getFullYear();
+            const m = String(tempDate.getMonth() + 1).padStart(2, '0');
+            const d = String(tempDate.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${d}`;
+            if (day !== 0 && day !== 6 && !holidaysSet.has(dateStr)) {
+                workingDays++;
+            }
+            tempDate.setDate(tempDate.getDate() + 1);
+        }
+        
+        return { calendarDays, workingDays };
+    };
+
+    const daysCount = getSelectedDaysCount();
 
     return (
         <div className="modal-backdrop" onClick={handleBackdropClick} style={{ zIndex: 100000 }}>
@@ -390,6 +469,49 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 </>
                             )}
 
+                            {daysCount && (
+                                <div className="full-width" style={{ marginTop: "-8px", marginBottom: "8px" }}>
+                                    {daysCount.error ? (
+                                        <div style={{ color: "#ef4444", fontSize: "13px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                            {daysCount.error}
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            background: "#f0f9ff",
+                                            border: "1px solid #bae6fd",
+                                            padding: "12px 16px",
+                                            borderRadius: "10px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            gap: "12px"
+                                        }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                                </svg>
+                                                <span style={{ fontSize: "14px", fontWeight: "700", color: "#0369a1" }}>Selected Leave Duration:</span>
+                                            </div>
+                                            <div style={{ display: "flex", gap: "16px" }}>
+                                                <div style={{ textAlign: "right" }}>
+                                                    <div style={{ fontSize: "11px", color: "#0369a1", fontWeight: "600", textTransform: "uppercase" }}>Calendar Days</div>
+                                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#0284c7" }}>{daysCount.calendarDays} {daysCount.calendarDays === 1 ? "Day" : "Days"}</div>
+                                                </div>
+                                                <div style={{ borderLeft: "1px solid #bae6fd" }} />
+                                                <div style={{ textAlign: "right" }}>
+                                                    <div style={{ fontSize: "11px", color: "#0369a1", fontWeight: "600", textTransform: "uppercase" }}>Working Days</div>
+                                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#0284c7" }}>{daysCount.workingDays} {daysCount.workingDays === 1 ? "Day" : "Days"}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {isAdmin && (
                                 <div className="full-width">
                                     <Dropdown
@@ -447,40 +569,49 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 />
                             </div>
 
-                            {(() => {
-                                const { airfareEligible } = leaveStats;
-                                
-                                return (
-                                    <div className="full-width" style={{ background: "#fff", padding: "16px", borderRadius: "12px", border: "1px solid #e2e8f0", marginTop: "12px" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <div>
-                                                <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f172a" }}>Airfare Request</div>
-                                                    Eligibility: <span style={{ 
-                                                        color: leaveStats.airfareAvailable ? "#16a34a" : "#ef4444", 
-                                                        fontWeight: "800",
-                                                        padding: "2px 6px",
-                                                        background: leaveStats.airfareAvailable ? "#f0fdf4" : "#fef2f2",
-                                                        borderRadius: "4px",
-                                                        marginLeft: "4px"
-                                                    }}>
-                                                        {(leaveStats?.airfareStatus || "N/A").toUpperCase()}
-                                                    </span>
-                                            </div>
-                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                                <input 
-                                                    type="checkbox" 
-                                                    id="requestAirfareEdit"
-                                                    checked={formData.requestAirfare}
-                                                    onChange={(e) => handleInputChange("requestAirfare", e.target.checked)}
-                                                    disabled={!isEditable}
-                                                    style={{ width: "20px", height: "20px", cursor: "pointer" }}
-                                                />
-                                                <label htmlFor="requestAirfareEdit" style={{ cursor: "pointer", fontSize: "14px", fontWeight: "600" }}>Request Airfare</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
+                             {(() => {
+                                 return (
+                                     <div className="full-width animated-ticket-container" style={{ marginTop: "12px" }}>
+                                         <label className="ticket-label-title">
+                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                 <path d="M22 2L2 22" /><path d="M17 2l5 5" /><path d="M2 12l5 5" /><path d="M7 17l-5 5" /><path d="M12 12l5-5" /><path d="M17 7l5 5v5" /><path d="M2 12l10-10" />
+                                             </svg>
+                                             Ticket Type
+                                         </label>
+                                         <div className="ticket-cards-wrapper">
+                                             {/* Company Ticket Card */}
+                                             <div 
+                                                 className={`ticket-card company-ticket ${formData.requestAirfare ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
+                                                 onClick={() => isAdmin && handleInputChange("requestAirfare", true)}
+                                             >
+                                                 <div className="ticket-card-icon">
+                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                         <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4.5 19.5 3c-1.5-1.5-3-1.5-4.5.5L11.5 7 3.3 5.2c-.9-.2-1.7.4-1.5 1.3l1.4 4.7 5.7 2.9-2.9 5.7-4.7-1.4c-.9-.2-1.5.6-1.3 1.5L2 22l8.2-1.8 5.7 2.9 2.9-5.7-1-.2z" />
+                                                     </svg>
+                                                 </div>
+                                                 <div className="ticket-card-title">Company Ticket</div>
+                                                 <div className="ticket-card-desc">Travel expenses fully sponsored and arranged by the company.</div>
+                                             </div>
+
+                                             {/* Personal Ticket Card */}
+                                             <div 
+                                                 className={`ticket-card personal-ticket ${!formData.requestAirfare ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
+                                                 onClick={() => isAdmin && handleInputChange("requestAirfare", false)}
+                                             >
+                                                 <div className="ticket-card-icon">
+                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                         <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                                                         <line x1="12" y1="4" x2="12" y2="20" />
+                                                         <line x1="2" y1="12" x2="22" y2="12" />
+                                                     </svg>
+                                                 </div>
+                                                 <div className="ticket-card-title">Personal Ticket</div>
+                                                 <div className="ticket-card-desc">Travel expenses paid by the employee (self-expense / own ticket).</div>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 );
+                             })()}
                         </div>
 
                         {error && (
@@ -531,6 +662,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 <div style={{ padding: "12px", background: "#eff6ff", borderRadius: "12px", border: "1px solid #bfdbfe", textAlign: "center" }}>
                                     <div style={{ fontSize: "10px", color: "#1e40af", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Available</div>
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#1e3a8a" }}>{leaveStats.balance} Days</div>
+                                </div>
+                                <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
+                                    <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
+                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>{leaveStats.workingYears || 0} Years</div>
                                 </div>
                             </div>
                         </div>
@@ -607,13 +742,13 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                                         </div>
                                                                                     </div>
                                                                                     <div style={{ textAlign: "right" }}>
-                                                                                        <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b" }}>AIRFARE</div>
+                                                                                        <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b" }}>TICKET</div>
                                                                                         <div style={{ 
-                                                                                            fontSize: "12px", 
+                                                                                            fontSize: "11px", 
                                                                                             fontWeight: "700", 
-                                                                                            color: req.requestAirfare ? "#16a34a" : "#94a3b8" 
+                                                                                            color: req.requestAirfare ? "#15803d" : "#9a3412" 
                                                                                         }}>
-                                                                                            {req.requestAirfare ? "YES" : "NO"}
+                                                                                            {req.requestAirfare ? "COMPANY" : "PERSONAL"}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>

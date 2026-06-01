@@ -17,7 +17,7 @@ import FileUploadModal from "../components/FileUploadModal";
 import DropDownList from "../components/DropDownList";
 import TaskBoard from "../components/sales-and-leads/TaskBoard";
 import clientService from "../services/ClientService"; // Import your client service
-import config from "../config/config";
+import config, { getApiBaseUrl } from "../config/config";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import belldot from "../assets/dashboard/bell-dot.svg";
 import admindemo from "../assets/dashboard/admin-demo.jpg";
@@ -226,11 +226,10 @@ function SalesAndLeadsClient(clientId ) {
   useEffect(() => {
     if (!id) return;
 
-    const raw = config.API_BASE_URL || '';
-    const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
+    const socketUrl = getApiBaseUrl();
     const socket = ioClient(socketUrl, {
       path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true
     });
 

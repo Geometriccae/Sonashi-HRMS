@@ -108,7 +108,7 @@ const requireAdmin = async (req, res, next) => {
 
 // Multer setup
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
+  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
     filename: (req, file, cb) => cb(null, `salary-import-${Date.now()}${path.extname(file.originalname)}`)
 });
 const upload = multer({ storage });
@@ -340,38 +340,6 @@ router.post('/import', requireStrictAdmin, upload.single('file'), async (req, re
     }
 });
 
-// Helper: enrich slips with profile photo by emailId (case-insensitive)
-// Uses Employee.profilePhoto first, then User.profilePicture (Settings profile) as fallback
-async function enrichSlipsWithProfilePhoto(slips) {
-    if (!slips || slips.length === 0) return slips;
-    const emails = [...new Set(slips.map((s) => String(s.emailId || '').trim().toLowerCase()).filter(Boolean))];
-    if (emails.length === 0) return slips.map((s) => ({ ...s.toObject(), profilePhoto: '' }));
-    const employees = await Employee.aggregate([
-        { $match: { $expr: { $in: [{ $toLower: { $ifNull: ["$emailId", ""] } }, emails] } } },
-        { $project: { emailId: 1, profilePhoto: 1 } }
-    ]);
-    const photoByEmail = {};
-    employees.forEach((e) => {
-        const key = String(e.emailId || '').trim().toLowerCase();
-        photoByEmail[key] = e.profilePhoto || '';
-    });
-    const missingEmails = emails.filter((e) => !photoByEmail[e]);
-    if (missingEmails.length > 0) {
-        const users = await User.aggregate([
-            { $match: { $expr: { $in: [{ $toLower: { $ifNull: ["$emailId", ""] } }, missingEmails] } } },
-            { $project: { emailId: 1, profilePicture: 1 } }
-        ]);
-        users.forEach((u) => {
-            const key = String(u.emailId || '').trim().toLowerCase();
-            if (u.profilePicture) photoByEmail[key] = u.profilePicture;
-        });
-    }
-    return slips.map((s) => {
-        const o = s.toObject();
-        o.profilePhoto = photoByEmail[String(s.emailId || '').trim().toLowerCase()] || '';
-        return o;
-    });
-}
 
 // Admin/HR: Get all
 router.get('/all', async (req, res) => {
@@ -393,8 +361,7 @@ router.get('/all', async (req, res) => {
         if (month && month !== 'All' && month !== '') filter.month = { $regex: new RegExp(`^${String(month).trim()}$`, 'i') };
         if (year && year !== 'All' && year !== '') filter.year = String(year).trim();
         const slips = await SalarySlip.find(filter).sort({ createdAt: -1 });
-        const enriched = await enrichSlipsWithProfilePhoto(slips);
-        res.json(enriched);
+        res.json(slips);
     } catch (e) {
         res.status(500).json({ message: e.message });
     }
@@ -413,8 +380,7 @@ router.get('/my-slips', async (req, res) => {
         if (!userEmail) return res.status(400).json({ message: 'No linked email found' });
 
         const slips = await SalarySlip.find({ emailId: String(userEmail).trim().toLowerCase() }).sort({ year: -1, month: -1 });
-        const enriched = await enrichSlipsWithProfilePhoto(slips);
-        res.json(enriched);
+        res.json(slips);
     } catch (e) {
         res.status(500).json({ message: e.message });
     }

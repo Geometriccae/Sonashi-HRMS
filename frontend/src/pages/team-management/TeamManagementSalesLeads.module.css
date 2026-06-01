@@ -15,7 +15,7 @@ main {
   display: flex;
   flex-direction: column;
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Header */
@@ -198,7 +198,7 @@ main {
   flex-direction: column;
   font-family: Inter, sans-serif;
   background: #fff;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .scroll_view {
@@ -465,12 +465,13 @@ main {
 .text9 {
   color: #7a7a7a;
   font-size: 1rem;
+  font-weight: bold;
 }
 
 .text10 {
   color: #212121;
   font-size: 1rem;
-  font-weight: bold;
+  font-weight: normal;
   word-break: break-word;
 }
 

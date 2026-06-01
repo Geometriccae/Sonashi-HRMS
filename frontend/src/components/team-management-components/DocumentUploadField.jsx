@@ -7,6 +7,7 @@ function DocumentUploadField({
   existingDocument,
   hasError,
   onUpload,
+  onRemove,
   optional,
 }) {
   const fileInputRef = React.useRef(null);
@@ -87,23 +88,70 @@ function DocumentUploadField({
           </span>
         </div>
       </div>
-      {existingDocument?.filePath && !file && (
-        <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", gap: 8 }}>
+      {file && (
+        <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#10b981", fontWeight: "600" }}>✓ Selected for upload</span>
           <button
             type="button"
-            onClick={handleViewCurrent}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (onRemove) onRemove();
+            }}
             style={{
               background: "transparent",
               border: "none",
-              color: "#2563eb",
+              color: "#ef4444",
               fontSize: 12,
+              fontWeight: "600",
               cursor: "pointer",
               padding: 0,
               textDecoration: "underline",
             }}
           >
-            View current document
+            Remove file
           </button>
+        </div>
+      )}
+      {existingDocument?.filePath && !file && (
+        <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              type="button"
+              onClick={handleViewCurrent}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#2563eb",
+                fontSize: 12,
+                cursor: "pointer",
+                padding: 0,
+                textDecoration: "underline",
+              }}
+            >
+              View current document
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onRemove) onRemove();
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#ef4444",
+                fontSize: 12,
+                fontWeight: "600",
+                cursor: "pointer",
+                padding: 0,
+                textDecoration: "underline",
+              }}
+            >
+              Remove
+            </button>
+          </div>
           <span style={{ fontSize: 12, color: "#6b7280" }}>Click box to replace</span>
         </div>
       )}

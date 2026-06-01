@@ -15,6 +15,7 @@ import DocumentsService from "../../services/EmployeeDocumentService";
 import OptionService from "../../services/OptionService";
 import {
   ACTIVE_OPTIONS,
+  VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
   ROLE_OPTIONS_DEFAULT,
@@ -46,6 +47,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     emailId: "",
     emiratesId: "",
     nationality: "",
+    emergencyUaeName: "",
+    emergencyUaeAddress: "",
+    emergencyUaeContactNo: "",
+    emergencyHomeName: "",
+    emergencyHomeAddress: "",
+    emergencyHomeContactNo: "",
+    emergencyHomeName2: "",
+    emergencyHomeAddress2: "",
+    emergencyHomeContactNo2: "",
 
     // 2. Employment Details
     role: "",
@@ -61,6 +71,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     visaExpiryDate: "",
     remarks: "",
     employeeStatus: "Active",
+    vacationStatus: "Not on Vacation",
     attendance: "Onsite",
     lifeInsurance: false,
     medicalInsurance: false,
@@ -335,6 +346,23 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         ibanNumber: formData.ibanNumber || "",
         bankSortCode: formData.bankSortCode || ""
       };
+      payload.emergencyContact = {
+        uae: {
+          name: formData.emergencyUaeName || "",
+          address: formData.emergencyUaeAddress || "",
+          contactNo: formData.emergencyUaeContactNo || ""
+        },
+        homeCountry: {
+          name: formData.emergencyHomeName || "",
+          address: formData.emergencyHomeAddress || "",
+          contactNo: formData.emergencyHomeContactNo || ""
+        },
+        homeCountry2: {
+          name: formData.emergencyHomeName2 || "",
+          address: formData.emergencyHomeAddress2 || "",
+          contactNo: formData.emergencyHomeContactNo2 || ""
+        }
+      };
 
       const savedEmployee = await employeeService.createEmployeeWithFile(
         payload,
@@ -387,6 +415,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         emailId: "",
         emiratesId: "",
         nationality: "",
+        emergencyUaeName: "",
+        emergencyUaeAddress: "",
+        emergencyUaeContactNo: "",
+        emergencyHomeName: "",
+        emergencyHomeAddress: "",
+        emergencyHomeContactNo: "",
+        emergencyHomeName2: "",
+        emergencyHomeAddress2: "",
+        emergencyHomeContactNo2: "",
         role: "",
         designation: "",
         department: "",
@@ -399,6 +436,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         visaExpiryDate: "",
         remarks: "",
         employeeStatus: "Active",
+        vacationStatus: "Not on Vacation",
         attendance: "Onsite",
         lifeInsurance: false,
         medicalInsurance: false,
@@ -458,6 +496,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   };
 
   const activeOptions = ACTIVE_OPTIONS;
+  const vacationStatusOptions = VACATION_STATUS_OPTIONS;
   const genderOptions = GENDER_OPTIONS;
 
   const clientOptions = clients.map((client) => ({
@@ -587,6 +626,75 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
+              {/* Emergency Contacts Section */}
+              <div style={{ gridColumn: "span 2", marginTop: "10px" }}>
+                <h3 className="section-subtitle">Emergency Contact - UAE</h3>
+                <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <InputField
+                    label="Name"
+                    placeholder="Contact Name"
+                    value={formData.emergencyUaeName}
+                    onChange={(e) => handleInputChange("emergencyUaeName", e.target.value)}
+                  />
+                  <InputField
+                    label="Address"
+                    placeholder="UAE Address"
+                    value={formData.emergencyUaeAddress}
+                    onChange={(e) => handleInputChange("emergencyUaeAddress", e.target.value)}
+                  />
+                  <InputField
+                    label="Contact No."
+                    placeholder="Contact Number"
+                    value={formData.emergencyUaeContactNo}
+                    onChange={(e) => handleInputChange("emergencyUaeContactNo", e.target.value)}
+                  />
+                </div>
+
+                <h3 className="section-subtitle" style={{ marginTop: "20px" }}>Emergency Contact - Home Country</h3>
+                <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <InputField
+                    label="Name"
+                    placeholder="Contact Name"
+                    value={formData.emergencyHomeName}
+                    onChange={(e) => handleInputChange("emergencyHomeName", e.target.value)}
+                  />
+                  <InputField
+                    label="Address"
+                    placeholder="Home Country Address"
+                    value={formData.emergencyHomeAddress}
+                    onChange={(e) => handleInputChange("emergencyHomeAddress", e.target.value)}
+                  />
+                  <InputField
+                    label="Contact No."
+                    placeholder="Contact Number"
+                    value={formData.emergencyHomeContactNo}
+                    onChange={(e) => handleInputChange("emergencyHomeContactNo", e.target.value)}
+                  />
+                </div>
+
+                <h3 className="section-subtitle" style={{ marginTop: "20px" }}>Emergency Contact - Home Country 2</h3>
+                <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <InputField
+                    label="Name"
+                    placeholder="Contact Name"
+                    value={formData.emergencyHomeName2}
+                    onChange={(e) => handleInputChange("emergencyHomeName2", e.target.value)}
+                  />
+                  <InputField
+                    label="Address"
+                    placeholder="Home Country Address"
+                    value={formData.emergencyHomeAddress2}
+                    onChange={(e) => handleInputChange("emergencyHomeAddress2", e.target.value)}
+                  />
+                  <InputField
+                    label="Contact No."
+                    placeholder="Contact Number"
+                    value={formData.emergencyHomeContactNo2}
+                    onChange={(e) => handleInputChange("emergencyHomeContactNo2", e.target.value)}
+                  />
+                </div>
+              </div>
+
               {/* Documents Section */}
               <div className="documents-section">
                 <h3 className="section-subtitle">Documents</h3>
@@ -600,6 +708,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                         file={employeeDocuments.passportPage1}
                         hasError={validationErrors.passportPage1}
                         onUpload={handleDocumentChange}
+                        onRemove={() => handleDocumentChange("passportPage1", null)}
                         optional
                       />
                       <DocumentUploadField
@@ -608,6 +717,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                         file={employeeDocuments.passportPage2}
                         hasError={validationErrors.passportPage2}
                         onUpload={handleDocumentChange}
+                        onRemove={() => handleDocumentChange("passportPage2", null)}
                         optional
                       />
                     </div>
@@ -618,6 +728,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                     file={employeeDocuments.idCard}
                     hasError={validationErrors.idCard}
                     onUpload={handleDocumentChange}
+                    onRemove={() => handleDocumentChange("idCard", null)}
                     optional
                   />
                   <DocumentUploadField
@@ -626,6 +737,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                     file={employeeDocuments.labourCard}
                     hasError={validationErrors.labourCard}
                     onUpload={handleDocumentChange}
+                    onRemove={() => handleDocumentChange("labourCard", null)}
                     optional
                   />
                   <DocumentUploadField
@@ -634,6 +746,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                     file={employeeDocuments.medicalCard}
                     hasError={validationErrors.medicalCard}
                     onUpload={handleDocumentChange}
+                    onRemove={() => handleDocumentChange("medicalCard", null)}
                     optional
                   />
                   <DocumentUploadField
@@ -642,6 +755,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                     file={employeeDocuments.visaPage}
                     hasError={validationErrors.visaPage}
                     onUpload={handleDocumentChange}
+                    onRemove={() => handleDocumentChange("visaPage", null)}
                     optional
                   />
                 </div>
@@ -767,6 +881,18 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   type="date"
                   value={formData.lastWorkingDay}
                   onChange={(e) => handleInputChange("lastWorkingDay", e.target.value)}
+                />
+              )}
+
+              {formData.employeeStatus === "Active" && (
+                <Dropdown
+                  label="Vacation Status"
+                  placeholder="Select vacation status"
+                  options={vacationStatusOptions}
+                  value={formData.vacationStatus}
+                  onChange={(e) =>
+                    handleInputChange("vacationStatus", e.target.value)
+                  }
                 />
               )}
 

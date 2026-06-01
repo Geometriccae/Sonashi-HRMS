@@ -1,4 +1,4 @@
-export const calculateLeaveBalance = (employee, allLeaveRequests) => {
+export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDate = null) => {
     if (!employee) {
         return { 
             workingMonths: 0, 
@@ -14,7 +14,7 @@ export const calculateLeaveBalance = (employee, allLeaveRequests) => {
 
     // 1. Tenure & Entitlement
     const joinDate = employee.doj ? new Date(employee.doj) : new Date();
-    const today = new Date();
+    const today = calculationDate ? new Date(calculationDate) : new Date();
     
     // Work stats for display
     const diffTime = Math.abs(today - joinDate);
@@ -97,17 +97,13 @@ export const calculateLeaveBalance = (employee, allLeaveRequests) => {
         });
     }
 
-    let airfareEligible = benefitActiveInProfile;
-    let airfareAvailable = benefitActiveInProfile && !airfareUsedRecently;
+    const experienceYears = parseFloat(workingYears);
+    const hasMinExperience = experienceYears >= 2.0;
+
+    let airfareEligible = hasMinExperience;
+    let airfareAvailable = hasMinExperience;
     
-    let airfareStatus = "";
-    if (!benefitActiveInProfile) {
-        airfareStatus = "Not in Profile";
-    } else if (airfareUsedRecently) {
-        airfareStatus = `Used on ${lastAirfareDate.toLocaleDateString()}`;
-    } else {
-        airfareStatus = "Available";
-    }
+    let airfareStatus = hasMinExperience ? "Available" : "Personal Ticket Only";
 
     return {
         workingMonths,

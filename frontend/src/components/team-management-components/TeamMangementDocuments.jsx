@@ -28,6 +28,8 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [previewImageName, setPreviewImageName] = useState("");
   const apiHost = (config.API_BASE_URL || "").replace(/\/api\/?$/, "");
+  const userRole = localStorage.getItem("role") || "";
+  const isAdmin = userRole === "admin" || userRole === "hod";
 
   const buildDocumentUrl = (path) => {
     if (!path) return "";
@@ -95,11 +97,11 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
             }
             window.open(item.filePath, "_blank", "noopener,noreferrer");
           }}
-          onDelete={async (docId) => {
+          onDelete={isAdmin ? async (docId) => {
             await DocumentsService.remove(docId);
             // Refresh list locally
             setDocuments(prev => prev.filter(d => d.id !== docId));
-          }}
+          } : undefined}
         // You can add additional props for employee-specific actions
         />
       </section>

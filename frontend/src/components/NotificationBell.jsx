@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import styles from "./NotificationBell.module.css";
 import belldot from "../assets/dashboard/bell-dot.svg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
-import config from '../config/config';
+import config, { getApiBaseUrl } from '../config/config';
 import { io as ioClient } from "socket.io-client";
 
 const REMINDER_NOTIFICATION_TYPES = new Set([
@@ -283,12 +283,11 @@ function NotificationBell({ small = true }) {
   }, []);
 
   useEffect(() => {
-    const raw = config.API_BASE_URL || '';
-    const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
+    const socketUrl = getApiBaseUrl();
 
     const socket = ioClient(socketUrl, {
       path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 10,
       timeout: 20000

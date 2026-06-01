@@ -8,7 +8,7 @@ import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 import FilterDropdown from "../FilterDropdown";
 import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
-import config, { buildImageUrl, handleImageError } from "../../config/config";
+import config, { buildImageUrl, handleImageError, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
 
@@ -214,11 +214,10 @@ function TeamMembersTable() {
     fetchClients();
 
     // Listen for real-time employee creations so UI updates without manual refresh
-    const raw = config.API_BASE_URL || '';
-    const socketUrl = raw.replace(/\/api\/?$/, '') || window.location.origin;
+    const socketUrl = getApiBaseUrl();
     const socket = ioClient(socketUrl, {
       path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true
     });
 
@@ -736,6 +735,62 @@ function TeamMembersTable() {
                       </div>
                     </div>
                   ))}
+                </div>
+
+
+
+                {/* Vacation Status Column */}
+                <div className={`${styles["table-column"]} ${styles["type-column"]}`}>
+                  <div className={styles["table-header"]}>
+                    <div className={styles["table-header-cell"]}>
+                      <div className={styles["header-content"]}>
+                        <span className={styles["header-text"]}>Vacation Status</span>
+                        <SortIcon />
+                      </div>
+                    </div>
+                  </div>
+                  {paginatedData.map((member) => {
+                    const isActive = member.employeeStatus !== "InActive";
+                    const vs = member.vacationStatus || "Not on Vacation";
+                    const getVacBadgeStyle = (status) => {
+                      switch (status) {
+                        case "On Vacation":
+                          return { background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa" };
+                        case "Vacation Approved":
+                          return { background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" };
+                        case "Vacation Pending":
+                          return { background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" };
+                        default:
+                          return { background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" };
+                      }
+                    };
+                    const getVacLabel = (status) => {
+                      if (status === "On Vacation") return "On vacation";
+                      if (status === "Vacation Approved") return "Returned back from vacation";
+                      if (status === "Vacation Pending") return "Yet to go";
+                      return status;
+                    };
+                    return (
+                      <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["type-cell"]}`}>
+                        {isActive ? (
+                          <div style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "4px 10px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            whiteSpace: "nowrap",
+                            ...getVacBadgeStyle(vs)
+                          }}>
+                            {getVacLabel(vs)}
+                          </div>
+                        ) : (
+                          <span style={{ color: "#9ca3af", fontSize: "13px" }}>—</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Email Column */}

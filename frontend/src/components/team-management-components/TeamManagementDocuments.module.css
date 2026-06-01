@@ -2,8 +2,11 @@
   flex: 1;
   background-color: RGB(255, 255, 255);
   position: relative;
-  /* Removed negative positioning to fit layout naturally */
   margin-top: clamp(1rem, 1.25vw, 1.25rem);
+  width: 100%;
+}
+
+.container {
   width: 100%;
 }
 

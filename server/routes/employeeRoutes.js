@@ -88,35 +88,10 @@ const deriveEventDateTime = (dateValue, timeValue) => {
   return new Date(baseDateStr);
 };
 
-// Storage config for employee profile photos
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/employees'); // save inside /uploads/employees
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // unique filename
-  }
-});
-
-// File filter (only images allowed)
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files allowed'), false);
-  }
-};
-
-// ========== CREATE UPLOAD MIDDLEWARE ==========
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
-});
 
 const importStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads'));
+    cb(null, path.join(__dirname, '../../uploads'));
   },
   filename: (req, file, cb) => {
     cb(null, `employee-import-${Date.now()}${path.extname(file.originalname)}`);
@@ -312,7 +287,7 @@ router.post('/import', authMiddleware, uploadEmployeeImport.single('file'), asyn
 
         ensureEmployeeEmailForDb(payload, `r${rowIndex}`);
 
-        if (payload.profilePhoto === '') delete payload.profilePhoto;
+
 
         if (payload.employeeStatus && !['Active', 'InActive'].includes(payload.employeeStatus)) {
           delete payload.employeeStatus;
@@ -402,8 +377,8 @@ router.post('/import', authMiddleware, uploadEmployeeImport.single('file'), asyn
   }
 });
 
-// Create new employee with profile photo support
-router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res) => {
+// Create new employee
+router.post('/', authMiddleware, async (req, res) => {
   try {
     console.log("Incoming employee body:", req.body);
     console.log("Incoming employee file:", req.file);
@@ -451,19 +426,6 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
       }
     }
 
-    if (req.file) {
-      try {
-        const fileContent = fs.readFileSync(req.file.path);
-        const base64Image = fileContent.toString('base64');
-        employeeData.profilePhoto = `data:${req.file.mimetype};base64,${base64Image}`;
-        // Delete the temporary file
-        fs.unlinkSync(req.file.path);
-      } catch (err) {
-        console.error("Error converting profile photo to base64:", err);
-        // Fallback to relative path if conversion fails
-        employeeData.profilePhoto = `/uploads/employees/${req.file.filename}`;
-      }
-    }
 
     const employee = new Employee(employeeData);
     const savedEmployee = await employee.save();
@@ -501,7 +463,7 @@ router.post('/', authMiddleware, upload.single('profilePhoto'), async (req, res)
   }
 });
 // Update employee
-router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, res) => {
+router.put('/:id', authMiddleware, async (req, res) => {
   try {
     console.log('🔧 UPDATE EMPLOYEE - START');
     console.log('Employee ID:', req.params.id);
@@ -560,19 +522,6 @@ router.put('/:id', authMiddleware, upload.single('profilePhoto'), async (req, re
       }
     }
 
-    // Handle profile photo
-    if (req.file) {
-      try {
-        const fileContent = fs.readFileSync(req.file.path);
-        const base64Image = fileContent.toString('base64');
-        updateData.profilePhoto = `data:${req.file.mimetype};base64,${base64Image}`;
-        // Delete the temporary file
-        fs.unlinkSync(req.file.path);
-      } catch (err) {
-        console.error("Error converting profile photo to base64 during update:", err);
-        updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
-      }
-    }
 
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
@@ -647,25 +596,6 @@ router.post('/bulk-delete', authMiddleware, async (req, res) => {
 
 // ====== PARAMETERIZED ROUTES (With :id or other parameters) ======
 
-// Get profile photo by email (for salary slip; auth: admin/hod or same email)
-// Uses Employee.profilePhoto (Team Management) first, then falls back to User.profilePicture from Settings
-router.get('/profile-photo', authMiddleware, async (req, res) => {
-  try {
-    const email = (req.query.email || '').toString().trim();
-    if (!email) return res.status(400).json({ profilePhoto: '' });
-    const user = req.user;
-    const isAdmin = user && (user.role === 'admin' || user.role === 'hod');
-    const sameUser = user && user.emailId && String(user.emailId).trim().toLowerCase() === email.toLowerCase();
-    if (!isAdmin && !sameUser) return res.status(403).json({ profilePhoto: '' });
-    const emailRegex = new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
-    const employee = await Employee.findOne({ emailId: emailRegex }).select('profilePhoto').lean();
-    if (employee && employee.profilePhoto) return res.json({ profilePhoto: employee.profilePhoto });
-    const userByEmail = await User.findOne({ emailId: emailRegex }).select('profilePicture').lean();
-    return res.json({ profilePhoto: (userByEmail && userByEmail.profilePicture) || '' });
-  } catch (e) {
-    res.status(500).json({ profilePhoto: '' });
-  }
-});
 
 // Get employee by email
 router.get('/by-email/:email', authMiddleware, async (req, res) => {
@@ -681,55 +611,6 @@ router.get('/by-email/:email', authMiddleware, async (req, res) => {
   }
 });
 
-// Stream profile photo image file by email (for salary slip PDF; auth: admin/hod or same email)
-// Prefers Employee.profilePhoto (Team Management), then User.profilePicture
-router.get('/profile-photo-image', authMiddleware, async (req, res) => {
-  try {
-    const email = (req.query.email || '').toString().trim();
-    if (!email) {
-      console.log('Profile photo image: No email provided');
-      return res.status(400).end();
-    }
-    const user = req.user;
-    const isAdmin = user && (user.role === 'admin' || user.role === 'hod');
-    const sameUser = user && user.emailId && String(user.emailId).trim().toLowerCase() === email.toLowerCase();
-    if (!isAdmin && !sameUser) {
-      console.log('Profile photo image: Unauthorized access attempt');
-      return res.status(403).end();
-    }
-    const emailRegex = new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
-    const employee = await Employee.findOne({ emailId: emailRegex }).select('profilePhoto').lean();
-    let photoPath = (employee && employee.profilePhoto) || null;
-    if (!photoPath) {
-      const userByEmail = await User.findOne({ emailId: emailRegex }).select('profilePicture').lean();
-      photoPath = (userByEmail && userByEmail.profilePicture) || null;
-    }
-    if (!photoPath) {
-      console.log(`Profile photo image: No photo found for email ${email}`);
-      return res.status(404).end();
-    }
-    // Handle both absolute paths starting with /uploads and relative paths
-    const normalizedPath = photoPath.startsWith('/uploads') ? photoPath.substring(1) : photoPath;
-    const filePath = path.join(__dirname, '..', normalizedPath);
-    if (!fs.existsSync(filePath)) {
-      console.log(`Profile photo image: File not found at ${filePath} (original path: ${photoPath})`);
-      return res.status(404).end();
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const contentType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.sendFile(path.resolve(filePath), (err) => {
-      if (err) {
-        console.error('Profile photo image: Error sending file:', err);
-        if (!res.headersSent) res.status(500).end();
-      }
-    });
-  } catch (e) {
-    console.error('Profile photo image: Server error:', e);
-    if (!res.headersSent) res.status(500).end();
-  }
-});
 
 // ---- Employee Remarks (must be before /:id) ----
 // Middleware: only admin or hod can add/view remarks
@@ -784,7 +665,17 @@ router.post('/:id/remarks', authMiddleware, requireAdminOrHod, async (req, res) 
 router.post('/:id/increments', authMiddleware, requireAdminOrHod, async (req, res) => {
   try {
     const { id } = req.params;
-    const { date, previousSalary, incrementAmount, newSalary, reason } = req.body;
+    const { 
+      date, 
+      previousSalary, 
+      incrementAmount, 
+      newSalary, 
+      basicSalaryIncrement, 
+      houseRentIncrement, 
+      travelExpIncrement, 
+      otherIncrement, 
+      reason 
+    } = req.body;
 
     const employee = await Employee.findById(id);
     if (!employee) {
@@ -796,6 +687,10 @@ router.post('/:id/increments', authMiddleware, requireAdminOrHod, async (req, re
       previousSalary: Number(previousSalary) || 0,
       incrementAmount: Number(incrementAmount) || 0,
       newSalary: Number(newSalary) || 0,
+      basicSalaryIncrement: Number(basicSalaryIncrement) || 0,
+      houseRentIncrement: Number(houseRentIncrement) || 0,
+      travelExpIncrement: Number(travelExpIncrement) || 0,
+      otherIncrement: Number(otherIncrement) || 0,
       reason: reason || ""
     };
 
@@ -805,11 +700,16 @@ router.post('/:id/increments', authMiddleware, requireAdminOrHod, async (req, re
     
     employee.increments.push(newIncrement);
 
-    // Update the main salary details to reflect the new salary
+    // Update the main salary details to reflect the increments
+    employee.salaryDetails.basicSalary = (employee.salaryDetails.basicSalary || 0) + Number(basicSalaryIncrement || 0);
+    employee.salaryDetails.houseRent = (employee.salaryDetails.houseRent || 0) + Number(houseRentIncrement || 0);
+    employee.salaryDetails.travelExp = (employee.salaryDetails.travelExp || 0) + Number(travelExpIncrement || 0);
+    employee.salaryDetails.other = (employee.salaryDetails.other || 0) + Number(otherIncrement || 0);
+    
     if (newSalary) {
       employee.salaryDetails.totalSalary = Number(newSalary);
-      // We can also adjust basicSalary if we want to maintain the breakdown, 
-      // but without specific breakdown info, we just update the total.
+    } else {
+      employee.salaryDetails.totalSalary = (employee.salaryDetails.totalSalary || 0) + Number(incrementAmount || 0);
     }
 
     await employee.save();
@@ -823,7 +723,17 @@ router.post('/:id/increments', authMiddleware, requireAdminOrHod, async (req, re
 router.put('/:id/increments/:incrementId', authMiddleware, requireAdminOrHod, async (req, res) => {
   try {
     const { id, incrementId } = req.params;
-    const { date, previousSalary, incrementAmount, newSalary, reason } = req.body;
+    const { 
+      date, 
+      previousSalary, 
+      incrementAmount, 
+      newSalary, 
+      basicSalaryIncrement, 
+      houseRentIncrement, 
+      travelExpIncrement, 
+      otherIncrement, 
+      reason 
+    } = req.body;
 
     const employee = await Employee.findById(id);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
@@ -831,13 +741,30 @@ router.put('/:id/increments/:incrementId', authMiddleware, requireAdminOrHod, as
     const increment = employee.increments.id(incrementId);
     if (!increment) return res.status(404).json({ message: 'Increment not found' });
 
+    // Calculate changes (difference between new values and old saved values)
+    const diffBasic = (Number(basicSalaryIncrement) || 0) - (increment.basicSalaryIncrement || 0);
+    const diffHouseRent = (Number(houseRentIncrement) || 0) - (increment.houseRentIncrement || 0);
+    const diffTravelExp = (Number(travelExpIncrement) || 0) - (increment.travelExpIncrement || 0);
+    const diffOther = (Number(otherIncrement) || 0) - (increment.otherIncrement || 0);
+    const diffTotal = (Number(incrementAmount) || 0) - (increment.incrementAmount || 0);
+
+    // Apply differences to salary details
+    employee.salaryDetails.basicSalary = Math.max(0, (employee.salaryDetails.basicSalary || 0) + diffBasic);
+    employee.salaryDetails.houseRent = Math.max(0, (employee.salaryDetails.houseRent || 0) + diffHouseRent);
+    employee.salaryDetails.travelExp = Math.max(0, (employee.salaryDetails.travelExp || 0) + diffTravelExp);
+    employee.salaryDetails.other = Math.max(0, (employee.salaryDetails.other || 0) + diffOther);
+    employee.salaryDetails.totalSalary = Math.max(0, (employee.salaryDetails.totalSalary || 0) + diffTotal);
+
     if (date) increment.date = date;
     if (previousSalary !== undefined) increment.previousSalary = Number(previousSalary);
     if (incrementAmount !== undefined) increment.incrementAmount = Number(incrementAmount);
-    if (newSalary !== undefined) {
-      increment.newSalary = Number(newSalary);
-      employee.salaryDetails.totalSalary = Number(newSalary);
-    }
+    if (newSalary !== undefined) increment.newSalary = Number(newSalary);
+    
+    if (basicSalaryIncrement !== undefined) increment.basicSalaryIncrement = Number(basicSalaryIncrement);
+    if (houseRentIncrement !== undefined) increment.houseRentIncrement = Number(houseRentIncrement);
+    if (travelExpIncrement !== undefined) increment.travelExpIncrement = Number(travelExpIncrement);
+    if (otherIncrement !== undefined) increment.otherIncrement = Number(otherIncrement);
+    
     if (reason !== undefined) increment.reason = reason;
 
     await employee.save();
@@ -853,6 +780,16 @@ router.delete('/:id/increments/:incrementId', authMiddleware, requireAdminOrHod,
     const { id, incrementId } = req.params;
     const employee = await Employee.findById(id);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    const increment = employee.increments.id(incrementId);
+    if (increment) {
+      // Revert the main salary details (subtracting the saved increment amounts)
+      employee.salaryDetails.basicSalary = Math.max(0, (employee.salaryDetails.basicSalary || 0) - (increment.basicSalaryIncrement || 0));
+      employee.salaryDetails.houseRent = Math.max(0, (employee.salaryDetails.houseRent || 0) - (increment.houseRentIncrement || 0));
+      employee.salaryDetails.travelExp = Math.max(0, (employee.salaryDetails.travelExp || 0) - (increment.travelExpIncrement || 0));
+      employee.salaryDetails.other = Math.max(0, (employee.salaryDetails.other || 0) - (increment.otherIncrement || 0));
+      employee.salaryDetails.totalSalary = Math.max(0, (employee.salaryDetails.totalSalary || 0) - (increment.incrementAmount || 0));
+    }
 
     employee.increments.pull({ _id: incrementId });
     await employee.save();

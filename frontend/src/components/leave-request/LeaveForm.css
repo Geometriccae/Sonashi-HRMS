@@ -294,3 +294,172 @@
     gap: 12px;
   }
 }
+
+/* ==========================================
+   Premium Animated Ticket Type Card Styles
+   ========================================== */
+.animated-ticket-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ticket-label-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ticket-cards-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .ticket-cards-wrapper {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.ticket-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+.ticket-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+}
+
+/* Company Ticket Card Selected */
+.ticket-card.company-ticket.selected {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
+  animation: pulseGreen 2.5s infinite;
+}
+
+/* Personal Ticket Card Selected */
+.ticket-card.personal-ticket.selected {
+  background: #fff7ed;
+  border-color: #f97316;
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
+  animation: pulseOrange 2.5s infinite;
+}
+
+/* Icon & Label Styles */
+.ticket-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.company-ticket .ticket-card-icon {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.company-ticket.selected .ticket-card-icon {
+  background: #22c55e;
+  color: #ffffff;
+  transform: scale(1.1) rotate(15deg);
+}
+
+.personal-ticket .ticket-card-icon {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.personal-ticket.selected .ticket-card-icon {
+  background: #f97316;
+  color: #ffffff;
+  transform: scale(1.1) rotate(-15deg);
+}
+
+.ticket-card-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.ticket-card-desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* Read-Only State for Non-Admin */
+.ticket-card.readonly {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Pulsing Badge Animations */
+@keyframes pulseGreen {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes pulseOrange {
+  0% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(249, 115, 22, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+}
+
+/* Swipe-in indicator for selected state */
+.ticket-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 20px 20px 0;
+  border-color: transparent transparent transparent transparent;
+  transition: all 0.3s;
+}
+
+.ticket-card.company-ticket.selected::after {
+  border-color: transparent #22c55e transparent transparent;
+}
+
+.ticket-card.personal-ticket.selected::after {
+  border-color: transparent #f97316 transparent transparent;
+}

@@ -45,7 +45,10 @@ let allowedOrigins = [
   "https://backend.sonashi.in",
   "https://hrms.sonashi.in",
   "https://firebrick-dolphin-412303.hostingersite.com",
-  "http://localhost:3000"
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5000",
+  "http://127.0.0.1:5000"
 ];
 if (FRONTEND_URL && !allowedOrigins.includes(FRONTEND_URL)) {
   allowedOrigins.unshift(FRONTEND_URL);
@@ -208,6 +211,7 @@ app.set('io', io);
 // ====== CORS CONFIG ======
 app.use(cors({
   origin: (origin, cb) => {
+    console.log('[CORS DEBUG] Request from origin:', origin);
     if (!origin || allowedOrigins.indexOf(origin) !== -1 || ALLOW_ALL) return cb(null, true);
     console.warn('HTTP CORS blocked origin:', origin);
     return cb(new Error('Not allowed by CORS'), false);
@@ -218,7 +222,9 @@ app.use(cors({
 // ====== MIDDLEWARE ======
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/employeeDocuments', express.static(path.join(__dirname, '../uploads/employeeDocuments')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/Uploades', express.static(path.join(__dirname, '../Uploades')));
 
 /* health check moved to top */
 
