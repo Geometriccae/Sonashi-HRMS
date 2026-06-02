@@ -283,12 +283,19 @@ router.post('/', authMiddleware, async (req, res) => {
             endDate: new Date(endDate),
             reason,
             status: isPastLeave ? 'Approved' : 'Pending',
+            isPastLeave: isPastLeave,
             adminApprovedBy: isPastLeave ? req.user.id : undefined,
             adminApprovedAt: isPastLeave ? new Date() : undefined,
             requestAirfare: req.body.requestAirfare === true || req.body.requestAirfare === 'true'
         });
 
         const savedRequest = await newLeaveRequest.save();
+
+        if (isPastLeave && req.body.visaExpiryDate && employeeId) {
+            await Employee.findByIdAndUpdate(employeeId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
+            console.log(`[Leave] Updated Employee ${employeeId} visaExpiryDate to ${req.body.visaExpiryDate}`);
+        }
+
         res.status(201).json(savedRequest);
 
         const leaveSnapshot = {
@@ -391,8 +398,40 @@ router.put('/:id', authMiddleware, async (req, res) => {
         if (startDate) updateData.startDate = new Date(startDate);
         if (endDate) updateData.endDate = new Date(endDate);
         if (reason) updateData.reason = reason;
+        if (req.body.isPastLeave !== undefined) {
+            updateData.isPastLeave = req.body.isPastLeave === true || req.body.isPastLeave === 'true';
+        }
         if (req.body.requestAirfare !== undefined) {
             updateData.requestAirfare = req.body.requestAirfare === true || req.body.requestAirfare === 'true';
+        }
+
+        if (req.body.visaExpiryDate) {
+            let employeeObjId = null;
+            if (employeeId) {
+                employeeObjId = employeeId;
+            } else if (oldRequest.employee) {
+                const user = await User.findById(oldRequest.employee).populate('employeeId');
+                if (user && user.employeeId) {
+                    employeeObjId = user.employeeId._id || user.employeeId;
+                } else {
+                    const usr = await User.findById(oldRequest.employee);
+                    if (usr) {
+                        const emp = await Employee.findOne({
+                            $or: [
+                                { employeeName: usr.username },
+                                { emailId: usr.emailId }
+                            ]
+                        });
+                        if (emp) {
+                            employeeObjId = emp._id;
+                        }
+                    }
+                }
+            }
+            if (employeeObjId) {
+                await Employee.findByIdAndUpdate(employeeObjId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
+                console.log(`[Leave] Updated Employee ${employeeObjId} visaExpiryDate to ${req.body.visaExpiryDate} on leave update`);
+            }
         }
 
         const effectiveStart = updateData.startDate || oldRequest.startDate;
@@ -596,6 +635,7 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
                     endDate: endDate,
                     reason: row.reason || 'Imported from Excel',
                     status: row.status || 'Approved', // Defaults to Approved for imported history
+                    isPastLeave: true,
                     requestAirfare: row.requestAirfare === true || String(row.requestAirfare).toLowerCase() === 'yes' || String(row.requestAirfare).toLowerCase() === 'true',
                     appliedOn: row.appliedOn ? new Date(row.appliedOn) : new Date(),
                     adminApprovedBy: req.user.id,

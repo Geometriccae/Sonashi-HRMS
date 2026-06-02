@@ -499,13 +499,22 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                     </div>
                                     <div className="input-field">
                                         <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Visa Expiry Date</label>
-                                        <input 
-                                            type="text" 
-                                            className="input-field-input" 
-                                            disabled 
-                                            value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
-                                            style={{ background: "#f8fafc" }} 
-                                        />
+                                        {leaveEntitlementType === 'Past Leave' ? (
+                                            <input 
+                                                type="date" 
+                                                className="input-field-input" 
+                                                value={formData.visaExpiryDate || ""} 
+                                                onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)} 
+                                            />
+                                        ) : (
+                                            <input 
+                                                type="text" 
+                                                className="input-field-input" 
+                                                disabled 
+                                                value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
+                                                style={{ background: "#f8fafc" }} 
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -589,47 +598,45 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                 <InputField label="Reason *" placeholder="Reason for leave" value={formData.reason} onChange={(e) => handleInputChange("reason", e.target.value)} />
                             </div>
 
-                            {leaveEntitlementType === 'New Leave' && (
-                                <div className="full-width animated-ticket-container">
-                                    <label className="ticket-label-title">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M22 2L2 22" /><path d="M17 2l5 5" /><path d="M2 12l5 5" /><path d="M7 17l-5 5" /><path d="M12 12l5-5" /><path d="M17 7l5 5v5" /><path d="M2 12l10-10" />
-                                        </svg>
-                                        Ticket Type
-                                    </label>
-                                    <div className="ticket-cards-wrapper">
-                                        {/* Company Ticket Card */}
-                                        <div 
-                                            className={`ticket-card company-ticket ${formData.requestAirfare || (!isAdmin && leaveStats.airfareAvailable) ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
-                                            onClick={() => isAdmin && handleInputChange("requestAirfare", true)}
-                                        >
-                                            <div className="ticket-card-icon">
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4.5 19.5 3c-1.5-1.5-3-1.5-4.5.5L11.5 7 3.3 5.2c-.9-.2-1.7.4-1.5 1.3l1.4 4.7 5.7 2.9-2.9 5.7-4.7-1.4c-.9-.2-1.5.6-1.3 1.5L2 22l8.2-1.8 5.7 2.9 2.9-5.7-1-.2z" />
-                                                </svg>
-                                            </div>
-                                            <div className="ticket-card-title">Company Ticket</div>
-                                            <div className="ticket-card-desc">Travel expenses fully sponsored and arranged by the company.</div>
+                            <div className="full-width animated-ticket-container">
+                                <label className="ticket-label-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 2L2 22" /><path d="M17 2l5 5" /><path d="M2 12l5 5" /><path d="M7 17l-5 5" /><path d="M12 12l5-5" /><path d="M17 7l5 5v5" /><path d="M2 12l10-10" />
+                                    </svg>
+                                    Ticket Type
+                                </label>
+                                <div className="ticket-cards-wrapper">
+                                    {/* Company Ticket Card */}
+                                    <div 
+                                        className={`ticket-card company-ticket ${formData.requestAirfare || (!isAdmin && leaveStats.airfareAvailable) ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
+                                        onClick={() => isAdmin && handleInputChange("requestAirfare", true)}
+                                    >
+                                        <div className="ticket-card-icon">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4.5 19.5 3c-1.5-1.5-3-1.5-4.5.5L11.5 7 3.3 5.2c-.9-.2-1.7.4-1.5 1.3l1.4 4.7 5.7 2.9-2.9 5.7-4.7-1.4c-.9-.2-1.5.6-1.3 1.5L2 22l8.2-1.8 5.7 2.9 2.9-5.7-1-.2z" />
+                                            </svg>
                                         </div>
+                                        <div className="ticket-card-title">Company Ticket</div>
+                                        <div className="ticket-card-desc">Travel expenses fully sponsored and arranged by the company.</div>
+                                    </div>
 
-                                        {/* Personal Ticket Card */}
-                                        <div 
-                                            className={`ticket-card personal-ticket ${(!formData.requestAirfare && isAdmin) || (!isAdmin && !leaveStats.airfareAvailable) ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
-                                            onClick={() => isAdmin && handleInputChange("requestAirfare", false)}
-                                        >
-                                            <div className="ticket-card-icon">
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
-                                                    <line x1="12" y1="4" x2="12" y2="20" />
-                                                    <line x1="2" y1="12" x2="22" y2="12" />
-                                                </svg>
-                                            </div>
-                                            <div className="ticket-card-title">Personal Ticket</div>
-                                            <div className="ticket-card-desc">Travel expenses paid by the employee (self-expense / own ticket).</div>
+                                    {/* Personal Ticket Card */}
+                                    <div 
+                                        className={`ticket-card personal-ticket ${(!formData.requestAirfare && isAdmin) || (!isAdmin && !leaveStats.airfareAvailable) ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
+                                        onClick={() => isAdmin && handleInputChange("requestAirfare", false)}
+                                    >
+                                        <div className="ticket-card-icon">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                                                <line x1="12" y1="4" x2="12" y2="20" />
+                                                <line x1="2" y1="12" x2="22" y2="12" />
+                                            </svg>
                                         </div>
+                                        <div className="ticket-card-title">Personal Ticket</div>
+                                        <div className="ticket-card-desc">Travel expenses paid by the employee (self-expense / own ticket).</div>
                                     </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
 
                         {error && (

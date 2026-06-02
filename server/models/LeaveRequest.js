@@ -76,6 +76,10 @@ const leaveRequestSchema = new mongoose.Schema({
         type: String,
         enum: ['Pending', 'Approved', 'Rejected', 'Not Applicable'],
         default: 'Not Applicable'
+    },
+    isPastLeave: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

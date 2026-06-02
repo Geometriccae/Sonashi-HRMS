@@ -106,6 +106,31 @@ const uploadEmployeeImport = multer({
     else cb(new Error('Only .xlsx or .xls files are allowed'));
   },
 });
+
+const profilePhotoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../../uploads/employees');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const uploadProfilePhoto = multer({
+  storage: profilePhotoStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images (.jpg, .jpeg, .png, .gif, .webp) are allowed'));
+    }
+  }
+});
 // =============================================
 
 // ?? Email sending helper
@@ -192,6 +217,23 @@ router.get('/', authMiddleware, async (req, res) => {
     res.json(employees);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
+  }
+});
+
+// Get profile photo URL by employee email
+router.get('/profile-photo', authMiddleware, async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ message: 'Email query param is required' });
+    }
+    const employee = await Employee.findOne({ emailId: new RegExp(`^${email.trim()}$`, 'i') }).select('profilePhoto').lean();
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    res.json({ profilePhoto: employee.profilePhoto || '' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching profile photo', error: error.message });
   }
 });
 
@@ -378,14 +420,26 @@ router.post('/import', authMiddleware, uploadEmployeeImport.single('file'), asyn
 });
 
 // Create new employee
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
   try {
     console.log("Incoming employee body:", req.body);
     console.log("Incoming employee file:", req.file);
 
-    let employeeData = req.body.data
-      ? JSON.parse(req.body.data)
-      : {};
+    let employeeData = {};
+    if (req.body && req.body.data) {
+      try {
+        employeeData = JSON.parse(req.body.data);
+      } catch (parseErr) {
+        console.error('JSON parse error in POST /:', parseErr);
+        return res.status(400).json({ message: 'Invalid JSON data' });
+      }
+    } else {
+      employeeData = req.body || {};
+    }
+
+    if (req.file) {
+      employeeData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+    }
 
     // Defensive: strip any incoming id fields to avoid duplicate _id insertion
     delete employeeData._id;
@@ -463,7 +517,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 // Update employee
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
   try {
     console.log('🔧 UPDATE EMPLOYEE - START');
     console.log('Employee ID:', req.params.id);
@@ -471,7 +525,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     console.log('Request file:', req.file);
 
     let updateData = {};
-    if (req.body.data) {
+    if (req.body && req.body.data) {
       try {
         updateData = JSON.parse(req.body.data);
         console.log('Parsed updateData:', updateData);
@@ -490,7 +544,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
         return res.status(400).json({ message: 'Invalid JSON data' });
       }
     } else {
-      updateData = req.body;
+      updateData = req.body || {};
+    }
+
+    if (req.file) {
+      updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
     }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'mobile') && updateData.mobile != null) {

@@ -42,6 +42,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const isHR = currentRole === "hr";
     const isManager = isAdmin || isHR;
     const isEditable = isManager || leaveRequest?.status === "Pending";
+    const isPastLeaveRequest = leaveRequest?.isPastLeave || (leaveRequest?.status === 'Approved' && leaveRequest?.startDate && new Date(leaveRequest.startDate) < new Date());
 
     const handleDateSelect = (date) => {
         if (error) setError("");
@@ -548,13 +549,22 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                     </div>
                                     <div className="input-field">
                                         <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Visa Expiry Date</label>
-                                        <input 
-                                            type="text" 
-                                            className="input-field-input" 
-                                            disabled 
-                                            value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
-                                            style={{ background: "#f8fafc" }} 
-                                        />
+                                        {(isPastLeaveRequest && isEditable) ? (
+                                            <input 
+                                                type="date" 
+                                                className="input-field-input" 
+                                                value={formData.visaExpiryDate || ""} 
+                                                onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)} 
+                                            />
+                                        ) : (
+                                            <input 
+                                                type="text" 
+                                                className="input-field-input" 
+                                                disabled 
+                                                value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
+                                                style={{ background: "#f8fafc" }} 
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             </div>

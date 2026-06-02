@@ -223,6 +223,7 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads/employeeDocuments', express.static(path.join(__dirname, '../uploads/employeeDocuments')));
+app.use('/uploads/employeedocuments', express.static(path.join(__dirname, '../uploads/employeedocuments')));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/Uploades', express.static(path.join(__dirname, '../Uploades')));
 

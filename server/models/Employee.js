@@ -45,6 +45,7 @@ const employeeSchema = new mongoose.Schema({
   mobile: { type: String, default: "" },
   /** Optional; sparse unique allows many employees with no email (field omitted or null). */
   emailId: { type: String },
+  profilePhoto: { type: String, default: "" },
 
   emergencyContact: {
     uae: {

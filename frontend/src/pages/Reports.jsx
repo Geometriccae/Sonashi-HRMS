@@ -4,14 +4,10 @@ import Side from "./sidebar/Sidebar";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
-
-
-import chevrondown from "../assets/dashboard/chevron-down.svg";
 import chevrondright from "../assets/dashboard/chevron-right.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
-import config from "../config/config";
 import NotificationBell from "../components/NotificationBell";
 
 function Reports() {
@@ -19,21 +15,25 @@ function Reports() {
   const [userRole, setUserRole] = useState("");
   const [reportType, setReportType] = useState("");
   const [format, setFormat] = useState("");
-  
+
   // Filters
   const [leadType, setLeadType] = useState("All");
   const [followupStatus, setFollowupStatus] = useState("All");
   const [employeeStatus, setEmployeeStatus] = useState("All");
-  
+  const [filterDepartment, setFilterDepartment] = useState("All");
+  const [filterRole, setFilterRole] = useState("All");
+  const [filterOffice, setFilterOffice] = useState("All");
+  const [filterCountry, setFilterCountry] = useState("All");
+  const [minExperience, setMinExperience] = useState("");
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // Dropdown states
-  const [isReportTypeDropdownOpen, setIsReportTypeDropdownOpen] = useState(false);
-  const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
-  const [isLeadTypeDropdownOpen, setIsLeadTypeDropdownOpen] = useState(false);
-  const [isFollowupStatusDropdownOpen, setIsFollowupStatusDropdownOpen] = useState(false);
-  const [isEmployeeStatusDropdownOpen, setIsEmployeeStatusDropdownOpen] = useState(false);
+  // Dynamic dropdown list selectors
+  const [uniqueDepartments, setUniqueDepartments] = useState(["All"]);
+  const [uniqueRoles, setUniqueRoles] = useState(["All"]);
+  const [uniqueOffices, setUniqueOffices] = useState(["All"]);
+  const [uniqueCountries, setUniqueCountries] = useState(["All"]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -41,22 +41,41 @@ function Reports() {
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
     setUserRole(localStorage.getItem("role") || "");
+
+    const loadEmployees = async () => {
+      try {
+        const data = await employeeService.getEmployees();
+        const empList = Array.isArray(data)
+          ? data
+          : data.employees || data.data || [];
+
+        // Extract unique options — sort first, then prepend "All"
+        const depts = ["All", ...[...new Set(empList.map(e => e.department).filter(Boolean))].sort()];
+        const roles  = ["All", ...[...new Set(empList.map(e => e.role).filter(Boolean))].sort()];
+        const offices = ["All", ...[...new Set(empList.map(e => e.office).filter(Boolean))].sort()];
+        const countries = ["All", ...[...new Set(empList.map(e => e.nationality).filter(Boolean))].sort()];
+
+        setUniqueDepartments(depts);
+        setUniqueRoles(roles);
+        setUniqueOffices(offices);
+        setUniqueCountries(countries);
+      } catch (err) {
+        console.error("Failed to load employees for report filters:", err);
+      }
+    };
+    loadEmployees();
   }, []);
 
   const reportTypes = ["Sales Report", "Employee Report"];
-  const formats = ["Excel", "CSV"]; // Focused on Excel as requested
+  const formats = ["Excel", "CSV"];
 
-  // Options from AddClientModal
   const leadTypeOptions = ["All", "Lead", "Client"];
   const followupStatusOptions = [
-    "All", "Completed", "Contacted", "Demo Scheduled", "Lost", 
+    "All", "Completed", "Contacted", "Demo Scheduled", "Lost",
     "Needs Analysis", "Pending", "Progress", "Proposal Sent", "Won"
   ];
-  
-  // Options from AddEmployeeModal
   const employeeStatusOptions = ["All", "Active", "InActive"];
 
-  // Full options for Excel "Legend" or reference
   const clientDropdownOptions = {
     clientType: ["Agent", "Barge Operator", "Barge Owners", "Broker", "CHA", "Consignee", "Freigt Forwarder", "Other", "Ship Owners", "Shipper", "Transporter"],
     leadType: ["Client", "Lead"],
@@ -84,20 +103,19 @@ function Reports() {
     setLeadType("All");
     setFollowupStatus("All");
     setEmployeeStatus("All");
+    setFilterDepartment("All");
+    setFilterRole("All");
+    setFilterOffice("All");
+    setFilterCountry("All");
+    setMinExperience("");
     setStartDate("");
     setEndDate("");
     setError("");
   };
 
   const handleGenerateReport = async () => {
-    if (!reportType) {
-      alert("Please select a report type.");
-      return;
-    }
-    if (!format) {
-      alert("Please select a format.");
-      return;
-    }
+    if (!reportType) { alert("Please select a report type."); return; }
+    if (!format) { alert("Please select a format."); return; }
 
     setLoading(true);
     setError("");
@@ -117,34 +135,23 @@ function Reports() {
   };
 
   const generateSalesReport = async () => {
-    // Fetch all clients/leads
     let data = await clientService.getClients();
     let clients = Array.isArray(data) ? data : (data.clients || data.data || []);
 
-    // Apply Filters
-    if (leadType !== "All") {
-      clients = clients.filter(c => c.leadType === leadType);
-    }
-    if (followupStatus !== "All") {
-      clients = clients.filter(c => c.followupStatus === followupStatus);
-    }
+    if (leadType !== "All") clients = clients.filter(c => c.leadType === leadType);
+    if (followupStatus !== "All") clients = clients.filter(c => c.followupStatus === followupStatus);
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       clients = clients.filter(c => {
-        const date = new Date(c.createdAt); // Assuming filtering by creation date or followUpDate? Usually creation for general report
+        const date = new Date(c.createdAt);
         return date >= start && date <= end;
       });
     }
 
-    if (clients.length === 0) {
-      alert("No data found for the selected filters.");
-      return;
-    }
+    if (clients.length === 0) { alert("No data found for the selected filters."); return; }
 
-    // Prepare Data for Excel
-    // Include ALL columns from AddClientModal
     const exportData = clients.map(c => ({
       "Company Name": c.companyName || "",
       "Client Type": c.clientType || "",
@@ -196,32 +203,31 @@ function Reports() {
   };
 
   const generateEmployeeReport = async () => {
-    // Fetch all employees
     let data = await employeeService.getEmployees();
-    let employees = Array.isArray(data) ? data : (data.employees || data.data || []);
+    let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
-    // Apply Filters
-    if (employeeStatus !== "All") {
-      employees = employees.filter(e => e.attendance === employeeStatus);
+    if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+    if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
+    if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
+    if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
+    if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
+    if (minExperience !== "") {
+      const minYears = parseFloat(minExperience);
+      if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
     }
-    // Date filter for employees? Usually joining date (createdAt)
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      employees = employees.filter(e => {
-        const date = new Date(e.createdAt);
+      empList = empList.filter(e => {
+        const date = e.doj ? new Date(e.doj) : new Date(e.createdAt);
         return date >= start && date <= end;
       });
     }
 
-    if (employees.length === 0) {
-      alert("No data found for the selected filters.");
-      return;
-    }
+    if (empList.length === 0) { alert("No data found for the selected filters."); return; }
 
-    // Prepare Data for Excel
-    const exportData = employees.map(e => ({
+    const exportData = empList.map(e => ({
       "Employee ID": e.employeeId || "",
       "Name": e.employeeName || "",
       "Mobile": e.mobile || "",
@@ -229,7 +235,11 @@ function Reports() {
       "Role": e.role || "",
       "Designation": e.designation || "",
       "Department": e.department || "",
-      "Status": e.attendance || "",
+      "Office Location": e.office || "",
+      "Country (Nationality)": e.nationality || "",
+      "DOJ (Date of Joining)": e.doj ? new Date(e.doj).toLocaleDateString('en-GB') : "",
+      "Years of Experience": e.totalYearsExperience != null ? e.totalYearsExperience : 0,
+      "Status": e.employeeStatus || e.attendance || "",
       "Created At": e.createdAt ? new Date(e.createdAt).toLocaleDateString() : ""
     }));
 
@@ -238,43 +248,22 @@ function Reports() {
 
   const exportToExcel = (data, fileName, dropdownOptions) => {
     const wb = XLSX.utils.book_new();
-    
-    // 1. Main Data Sheet
     const ws = XLSX.utils.json_to_sheet(data);
 
-    // Map headers to dropdown options keys (kept for reference or future use, but comments removed)
-    /* 
-    const headerOptionMap = {
-      "Client Type": "clientType",
-      ...
-    };
-    */
-
-    // Comments removed as per user request to prevent overlaying data
-    // The AutoFilter below provides the interactive dropdowns instead.
-
-    // Enable AutoFilter for the header row
-    if (ws['!ref']) {
-      ws['!autofilter'] = { ref: ws['!ref'] };
-    }
-
+    if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
     XLSX.utils.book_append_sheet(wb, ws, "Report Data");
 
-    // 2. Legend Sheet (to show dropdown options)
     if (dropdownOptions) {
       const legendRows = [];
       Object.keys(dropdownOptions).forEach(key => {
-        legendRows.push({ "Field": key.toUpperCase(), "Options": "" }); // Header for section
-        dropdownOptions[key].forEach(opt => {
-          legendRows.push({ "Field": "", "Options": opt });
-        });
-        legendRows.push({ "Field": "", "Options": "" }); // Spacer
+        legendRows.push({ "Field": key.toUpperCase(), "Options": "" });
+        dropdownOptions[key].forEach(opt => legendRows.push({ "Field": "", "Options": opt }));
+        legendRows.push({ "Field": "", "Options": "" });
       });
       const wsLegend = XLSX.utils.json_to_sheet(legendRows);
       XLSX.utils.book_append_sheet(wb, wsLegend, "Dropdown Options");
     }
 
-    // Generate file
     const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
     saveAs(dataBlob, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -297,7 +286,6 @@ function Reports() {
                     <div className={styles["profile-type"]}>{userRole?.toUpperCase()}</div>
                   </div>
                 </div>
-                {/* <img src={chevrondown} alt="" /> */}
               </div>
             </div>
           </div>
@@ -326,120 +314,123 @@ function Reports() {
 
           <div className={styles["report-form"]}>
             <div className={styles["form-section"]}>
-              
-              {/* Report Type Selection */}
+
+              {/* Report Type */}
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Select Type of Report</div>
                 <div className={styles["form-field"]}>
-                  <div className={styles["dropdown-field"]} onClick={() => setIsReportTypeDropdownOpen(!isReportTypeDropdownOpen)}>
-                    <span className={reportType ? styles["field-text"] : styles["field-placeholder"]}>
-                      {reportType || "Select type"}
-                    </span>
-                    <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    {isReportTypeDropdownOpen && (
-                      <div className={styles["dropdown-menu"]}>
-                        {reportTypes.map((type) => (
-                          <div key={type} className={styles["dropdown-item"]} onClick={() => {
-                            setReportType(type);
-                            setIsReportTypeDropdownOpen(false);
-                            // Reset filters when type changes
-                            setLeadType("All");
-                            setFollowupStatus("All");
-                            setEmployeeStatus("All");
-                          }}>
-                            {type}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <select
+                    className={styles["select-field"]}
+                    value={reportType}
+                    onChange={e => {
+                      setReportType(e.target.value);
+                      setLeadType("All");
+                      setFollowupStatus("All");
+                      setEmployeeStatus("All");
+                      setFilterDepartment("All");
+                      setFilterRole("All");
+                      setFilterOffice("All");
+                      setFilterCountry("All");
+                      setMinExperience("");
+                    }}
+                  >
+                    <option value="">Select type</option>
+                    {reportTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
               </div>
 
               <div className={styles["divider-line"]}></div>
 
-              {/* Conditional Filters for Sales Report */}
+              {/* Sales Report Filters */}
               {reportType === "Sales Report" && (
                 <>
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Lead Type</div>
                     <div className={styles["form-field"]}>
-                      <div className={styles["dropdown-field"]} onClick={() => setIsLeadTypeDropdownOpen(!isLeadTypeDropdownOpen)}>
-                        <span className={styles["field-text"]}>{leadType}</span>
-                        <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
-                          <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        {isLeadTypeDropdownOpen && (
-                          <div className={styles["dropdown-menu"]}>
-                            {leadTypeOptions.map((opt) => (
-                              <div key={opt} className={styles["dropdown-item"]} onClick={() => {
-                                setLeadType(opt);
-                                setIsLeadTypeDropdownOpen(false);
-                              }}>
-                                {opt}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <select className={styles["select-field"]} value={leadType} onChange={e => setLeadType(e.target.value)}>
+                        {leadTypeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
                     </div>
                   </div>
-
                   <div className={styles["divider-line"]}></div>
 
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Follow-up Status</div>
                     <div className={styles["form-field"]}>
-                      <div className={styles["dropdown-field"]} onClick={() => setIsFollowupStatusDropdownOpen(!isFollowupStatusDropdownOpen)}>
-                        <span className={styles["field-text"]}>{followupStatus}</span>
-                        <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
-                          <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        {isFollowupStatusDropdownOpen && (
-                          <div className={styles["dropdown-menu"]}>
-                            {followupStatusOptions.map((opt) => (
-                              <div key={opt} className={styles["dropdown-item"]} onClick={() => {
-                                setFollowupStatus(opt);
-                                setIsFollowupStatusDropdownOpen(false);
-                              }}>
-                                {opt}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <select className={styles["select-field"]} value={followupStatus} onChange={e => setFollowupStatus(e.target.value)}>
+                        {followupStatusOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
                     </div>
                   </div>
                   <div className={styles["divider-line"]}></div>
                 </>
               )}
 
-              {/* Conditional Filters for Employee Report */}
+              {/* Employee Report Filters */}
               {reportType === "Employee Report" && (
                 <>
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Status</div>
                     <div className={styles["form-field"]}>
-                      <div className={styles["dropdown-field"]} onClick={() => setIsEmployeeStatusDropdownOpen(!isEmployeeStatusDropdownOpen)}>
-                        <span className={styles["field-text"]}>{employeeStatus}</span>
-                        <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
-                          <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        {isEmployeeStatusDropdownOpen && (
-                          <div className={styles["dropdown-menu"]}>
-                            {employeeStatusOptions.map((opt) => (
-                              <div key={opt} className={styles["dropdown-item"]} onClick={() => {
-                                setEmployeeStatus(opt);
-                                setIsEmployeeStatusDropdownOpen(false);
-                              }}>
-                                {opt}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <select className={styles["select-field"]} value={employeeStatus} onChange={e => setEmployeeStatus(e.target.value)}>
+                        {employeeStatusOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className={styles["divider-line"]}></div>
+
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Department</div>
+                    <div className={styles["form-field"]}>
+                      <select className={styles["select-field"]} value={filterDepartment} onChange={e => setFilterDepartment(e.target.value)}>
+                        {uniqueDepartments.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className={styles["divider-line"]}></div>
+
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Role</div>
+                    <div className={styles["form-field"]}>
+                      <select className={styles["select-field"]} value={filterRole} onChange={e => setFilterRole(e.target.value)}>
+                        {uniqueRoles.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className={styles["divider-line"]}></div>
+
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Office Location</div>
+                    <div className={styles["form-field"]}>
+                      <select className={styles["select-field"]} value={filterOffice} onChange={e => setFilterOffice(e.target.value)}>
+                        {uniqueOffices.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className={styles["divider-line"]}></div>
+
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Country (Nationality)</div>
+                    <div className={styles["form-field"]}>
+                      <select className={styles["select-field"]} value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
+                        {uniqueCountries.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className={styles["divider-line"]}></div>
+
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Min Years of Experience</div>
+                    <div className={styles["form-field"]}>
+                      <input
+                        type="number"
+                        className={styles["date-field"]}
+                        style={{ width: "100%" }}
+                        placeholder="e.g. 2"
+                        value={minExperience}
+                        onChange={e => setMinExperience(e.target.value)}
+                      />
                     </div>
                   </div>
                   <div className={styles["divider-line"]}></div>
@@ -450,51 +441,25 @@ function Reports() {
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Choose a date range</div>
                 <div className={styles["form-field"]} style={{ display: 'flex', gap: '8px' }}>
-                  <input 
-                    className={styles["date-field"]} 
-                    type="date" 
-                    value={startDate} 
-                    onChange={e => setStartDate(e.target.value)} 
-                  />
-                  <input 
-                    className={styles["date-field"]} 
-                    type="date" 
-                    value={endDate} 
-                    onChange={e => setEndDate(e.target.value)} 
-                  />
+                  <input className={styles["date-field"]} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <input className={styles["date-field"]} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
                 </div>
               </div>
 
               <div className={styles["divider-line"]}></div>
 
-              {/* Format Selection */}
+              {/* Format */}
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Select Format</div>
                 <div className={styles["form-field"]}>
-                  <div className={styles["dropdown-field"]} onClick={() => setIsFormatDropdownOpen(!isFormatDropdownOpen)}>
-                    <span className={format ? styles["field-text"] : styles["field-placeholder"]}>
-                      {format || "Select a format"}
-                    </span>
-                    <svg className={styles["dropdown-icon"]} width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 6L8 10L12 6" stroke="#98A1B0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    {isFormatDropdownOpen && (
-                      <div className={styles["dropdown-menu"]}>
-                        {formats.map((fmt) => (
-                          <div key={fmt} className={styles["dropdown-item"]} onClick={() => {
-                            setFormat(fmt);
-                            setIsFormatDropdownOpen(false);
-                          }}>
-                            {fmt}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <select className={styles["select-field"]} value={format} onChange={e => setFormat(e.target.value)}>
+                    <option value="">Select a format</option>
+                    {formats.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
                 </div>
               </div>
 
-              {error && <div className={styles["error-message"]} style={{color: 'red', marginTop: '10px'}}>{error}</div>}
+              {error && <div className={styles["error-message"]} style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
 
             </div>
           </div>

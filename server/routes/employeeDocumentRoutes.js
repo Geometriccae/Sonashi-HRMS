@@ -14,7 +14,7 @@ const storage = multer.diskStorage({
     // Sanitize document type to use as safe folder name (e.g. "Passport Page 1" -> "Passport_Page_1")
     const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : "Other";
     const docType = rawType.replace(/[^a-zA-Z0-9_\- ]/g, "").replace(/\s+/g, "_") || "Other";
-    const uploadDir = path.join(__dirname, "../../uploads/employeeDocuments", employeeId, docType);
+    const uploadDir = path.join(__dirname, "../../uploads/employeedocuments", employeeId, docType);
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -57,7 +57,7 @@ router.get("/file/:docId", async (req, res) => {
     // Serve filesystem file
     if (doc.filePath) {
       let diskPath;
-      if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/")) {
+      if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/") || doc.filePath.startsWith("/uploads/employeedocuments/")) {
         diskPath = path.join(__dirname, "..", "..", doc.filePath);
       } else {
         diskPath = path.join(__dirname, "..", doc.filePath);
@@ -91,7 +91,7 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
       fileName: req.file.originalname,
       fileType: req.file.mimetype,
       fileSize: req.file.size,
-      filePath: `/uploads/employeeDocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
+      filePath: `/uploads/employeedocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
       uploadedBy: req.body.uploadedBy,
       userRole: req.body.userRole,
       type: req.body.type || "Extra",
@@ -111,7 +111,7 @@ router.delete("/:docId", async (req, res) => {
     const doc = await Document.findById(req.params.docId);
     if (doc && doc.filePath) {
       let diskPath;
-      if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/")) {
+      if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/") || doc.filePath.startsWith("/uploads/employeedocuments/")) {
         diskPath = path.join(__dirname, "..", "..", doc.filePath);
       } else {
         diskPath = path.join(__dirname, "..", doc.filePath);
@@ -138,7 +138,7 @@ router.delete("/all/:employeeId", async (req, res) => {
     for (const doc of docs) {
       if (doc.filePath) {
         let diskPath;
-        if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/")) {
+        if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/") || doc.filePath.startsWith("/uploads/employeedocuments/")) {
           diskPath = path.join(__dirname, "..", "..", doc.filePath);
         } else {
           diskPath = path.join(__dirname, "..", doc.filePath);

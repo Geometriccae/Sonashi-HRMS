@@ -163,6 +163,17 @@ function Sidebar() {
                 </Link>
               </li>
 
+              <li className={isActive("/reports") ? styles.active : ""}>
+                <Link to="/reports" className={styles["sidebar-link"]} onClick={closeSidebar}>
+                  <img
+                    src={filechartcolumn}
+                    alt="Reports"
+                    className={styles.icon}
+                  />
+                  Reports
+                </Link>
+              </li>
+
 
               {/* User Management - Admin & HOD Only */}
               {["admin", "hod"].includes(userRole) && (
