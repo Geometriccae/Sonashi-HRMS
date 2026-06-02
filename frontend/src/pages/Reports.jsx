@@ -3,11 +3,15 @@ import styles from "./Reports.module.css";
 import Side from "./sidebar/Sidebar";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
 
 import chevrondright from "../assets/dashboard/chevron-right.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
+import leaveRequestService from "../services/LeaveRequestService";
 import NotificationBell from "../components/NotificationBell";
 
 function Reports() {
@@ -38,6 +42,11 @@ function Reports() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Preview States
+  const [previewData, setPreviewData] = useState([]);
+  const [previewHeaders, setPreviewHeaders] = useState([]);
+  const [showPreview, setShowPreview] = useState(false);
+
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
     setUserRole(localStorage.getItem("role") || "");
@@ -66,8 +75,14 @@ function Reports() {
     loadEmployees();
   }, []);
 
-  const reportTypes = ["Sales Report", "Employee Report"];
-  const formats = ["Excel", "CSV"];
+  const reportTypes = [
+    "Leave Report",
+    "Airfare Report",
+    "Increment report",
+    "Document expiry",
+    "Salary report"
+  ];
+  const formats = ["Excel", "PDF"];
 
   const leadTypeOptions = ["All", "Lead", "Client"];
   const followupStatusOptions = [
@@ -111,6 +126,274 @@ function Reports() {
     setStartDate("");
     setEndDate("");
     setError("");
+    setPreviewData([]);
+    setPreviewHeaders([]);
+    setShowPreview(false);
+  };
+
+  const fetchReportData = async (type) => {
+    if (type === "Leave Report") {
+      let leaves = await leaveRequestService.getLeaveRequests();
+      leaves = Array.isArray(leaves) ? leaves : (leaves.data || []);
+
+      if (filterDepartment !== "All") {
+        leaves = leaves.filter(l => l.department === filterDepartment);
+      }
+
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        leaves = leaves.filter(l => {
+          const appliedDate = new Date(l.appliedOn || l.createdAt);
+          return appliedDate >= start && appliedDate <= end;
+        });
+      }
+
+      return leaves.map(l => {
+        const start = new Date(l.startDate);
+        const end = new Date(l.endDate);
+        const durationDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+        return {
+          "Employee Name": l.employeeName || "",
+          "Company": l.company || "",
+          "Department": l.department || "",
+          "Reporting Manager": l.reportingManager || "",
+          "Leave Type": l.leaveType || "",
+          "Start Date": l.startDate ? new Date(l.startDate).toLocaleDateString('en-GB') : "",
+          "End Date": l.endDate ? new Date(l.endDate).toLocaleDateString('en-GB') : "",
+          "Duration (Days)": isNaN(durationDays) ? 0 : durationDays,
+          "Status": l.status || "",
+          "Applied On": l.appliedOn ? new Date(l.appliedOn).toLocaleDateString('en-GB') : "",
+          "Request Airfare": l.requestAirfare ? "Yes" : "No",
+          "Airfare Status": l.airfareStatus || "",
+          "Reason": l.reason || ""
+        };
+      });
+    }
+
+    if (type === "Airfare Report") {
+      let data = await employeeService.getEmployees();
+      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+
+      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
+      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
+      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
+      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
+      if (minExperience !== "") {
+        const minYears = parseFloat(minExperience);
+        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
+      }
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        empList = empList.filter(e => {
+          if (!e.travellingDate) return false;
+          const travDate = new Date(e.travellingDate);
+          return travDate >= start && travDate <= end;
+        });
+      }
+
+      return empList.map(e => ({
+        "Employee ID": e.employeeId || "",
+        "Name": e.employeeName || "",
+        "Department": e.department || "",
+        "Role": e.role || "",
+        "Office Location": e.office || "",
+        "Airfare Eligible": e.airFare ? "Yes" : "No",
+        "Travelling Date": e.travellingDate ? new Date(e.travellingDate).toLocaleDateString('en-GB') : "Not set",
+        "First Working Day": e.firstWorkingDay ? new Date(e.firstWorkingDay).toLocaleDateString('en-GB') : "",
+        "Passport No": e.passportNo || "",
+        "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : ""
+      }));
+    }
+
+    if (type === "Increment report") {
+      let data = await employeeService.getEmployees();
+      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+
+      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
+      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
+      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
+      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
+      if (minExperience !== "") {
+        const minYears = parseFloat(minExperience);
+        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
+      }
+
+      let incrementRows = [];
+      empList.forEach(e => {
+        if (Array.isArray(e.increments) && e.increments.length > 0) {
+          e.increments.forEach(inc => {
+            incrementRows.push({
+              employeeId: e.employeeId,
+              name: e.employeeName,
+              department: e.department,
+              role: e.role,
+              date: inc.date,
+              previousSalary: inc.previousSalary,
+              incrementAmount: inc.incrementAmount,
+              newSalary: inc.newSalary,
+              reason: inc.reason
+            });
+          });
+        }
+      });
+
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        incrementRows = incrementRows.filter(row => {
+          if (!row.date) return false;
+          const incDate = new Date(row.date);
+          return incDate >= start && incDate <= end;
+        });
+      }
+
+      return incrementRows.map(row => ({
+        "Employee ID": row.employeeId || "",
+        "Name": row.name || "",
+        "Department": row.department || "",
+        "Role": row.role || "",
+        "Increment Date": row.date ? new Date(row.date).toLocaleDateString('en-GB') : "",
+        "Previous Salary": row.previousSalary || 0,
+        "Increment Amount": row.incrementAmount || 0,
+        "New Salary": row.newSalary || 0,
+        "Reason/Remarks": row.reason || ""
+      }));
+    }
+
+    if (type === "Document expiry") {
+      let data = await employeeService.getEmployees();
+      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+
+      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
+      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
+      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
+      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
+      if (minExperience !== "") {
+        const minYears = parseFloat(minExperience);
+        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
+      }
+
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        empList = empList.filter(e => {
+          const passExp = e.passportExpiryDate ? new Date(e.passportExpiryDate) : null;
+          const visaExp = e.visaExpiryDate ? new Date(e.visaExpiryDate) : null;
+          const laborExp = e.labourCardExpiryDate ? new Date(e.labourCardExpiryDate) : null;
+
+          const passMatch = passExp && passExp >= start && passExp <= end;
+          const visaMatch = visaExp && visaExp >= start && visaExp <= end;
+          const laborMatch = laborExp && laborExp >= start && laborExp <= end;
+
+          return passMatch || visaMatch || laborMatch;
+        });
+      }
+
+      const today = new Date();
+      const getStatus = (expiryDate) => {
+        if (!expiryDate) return "N/A";
+        const exp = new Date(expiryDate);
+        const diffTime = exp - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) return "EXPIRED";
+        if (diffDays <= 30) return "Expiring in < 30 Days";
+        if (diffDays <= 90) return "Expiring in < 90 Days";
+        return "Active / Valid";
+      };
+
+      return empList.map(e => {
+        const passportStatus = getStatus(e.passportExpiryDate);
+        const visaStatus = getStatus(e.visaExpiryDate);
+        const laborStatus = getStatus(e.labourCardExpiryDate);
+
+        return {
+          "Employee ID": e.employeeId || "",
+          "Name": e.employeeName || "",
+          "Department": e.department || "",
+          "Role": e.role || "",
+          "Passport No": e.passportNo || "",
+          "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : "Not set",
+          "Passport Status": passportStatus,
+          "Visa Expiry": e.visaExpiryDate ? new Date(e.visaExpiryDate).toLocaleDateString('en-GB') : "Not set",
+          "Visa Status": visaStatus,
+          "Labour Card Expiry": e.labourCardExpiryDate ? new Date(e.labourCardExpiryDate).toLocaleDateString('en-GB') : "Not set",
+          "Labour Card Status": laborStatus
+        };
+      });
+    }
+
+    if (type === "Salary report") {
+      let data = await employeeService.getEmployees();
+      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+
+      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
+      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
+      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
+      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
+      if (minExperience !== "") {
+        const minYears = parseFloat(minExperience);
+        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
+      }
+
+      return empList.map(e => {
+        const sal = e.salaryDetails || {};
+        return {
+          "Employee ID": e.employeeId || "",
+          "Name": e.employeeName || "",
+          "Department": e.department || "",
+          "Role": e.role || "",
+          "Basic Salary": sal.basicSalary || 0,
+          "House Rent Allowance": sal.houseRent || 0,
+          "Travel Allowance": sal.travelExp || 0,
+          "Other Allowance": sal.other || 0,
+          "Total Allowance": sal.totalAllowance || 0,
+          "Deduction": sal.deduction || 0,
+          "Total / Net Salary": sal.totalSalary || 0,
+          "Bank Name": sal.bankName || "",
+          "Account Number": sal.accountNumber || "",
+          "IBAN": sal.ibanNumber || "",
+          "Sort Code": sal.bankSortCode || ""
+        };
+      });
+    }
+
+    return [];
+  };
+
+  const handlePreview = async () => {
+    if (!reportType) { alert("Please select a report type."); return; }
+    setLoading(true);
+    setError("");
+    setPreviewData([]);
+    setPreviewHeaders([]);
+    setShowPreview(false);
+
+    try {
+      const data = await fetchReportData(reportType);
+      if (data.length === 0) {
+        alert("No data found for the selected filters.");
+        return;
+      }
+      setPreviewData(data);
+      setPreviewHeaders(Object.keys(data[0]));
+      setShowPreview(true);
+    } catch (err) {
+      console.error("Preview generation failed:", err);
+      setError("Failed to load preview. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGenerateReport = async () => {
@@ -121,10 +404,16 @@ function Reports() {
     setError("");
 
     try {
-      if (reportType === "Sales Report") {
-        await generateSalesReport();
-      } else if (reportType === "Employee Report") {
-        await generateEmployeeReport();
+      if (reportType === "Leave Report") {
+        await generateLeaveReport();
+      } else if (reportType === "Airfare Report") {
+        await generateAirfareReport();
+      } else if (reportType === "Increment report") {
+        await generateIncrementReport();
+      } else if (reportType === "Document expiry") {
+        await generateDocumentExpiryReport();
+      } else if (reportType === "Salary report") {
+        await generateSalaryReport();
       }
     } catch (err) {
       console.error("Report generation failed:", err);
@@ -134,116 +423,54 @@ function Reports() {
     }
   };
 
-  const generateSalesReport = async () => {
-    let data = await clientService.getClients();
-    let clients = Array.isArray(data) ? data : (data.clients || data.data || []);
-
-    if (leadType !== "All") clients = clients.filter(c => c.leadType === leadType);
-    if (followupStatus !== "All") clients = clients.filter(c => c.followupStatus === followupStatus);
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      clients = clients.filter(c => {
-        const date = new Date(c.createdAt);
-        return date >= start && date <= end;
-      });
+  const generateLeaveReport = async () => {
+    const exportData = await fetchReportData("Leave Report");
+    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
+    if (format === "Excel") {
+      exportToExcel(exportData, "Leave_Report");
+    } else if (format === "PDF") {
+      exportToPDF(exportData, "Leave_Report");
     }
-
-    if (clients.length === 0) { alert("No data found for the selected filters."); return; }
-
-    const exportData = clients.map(c => ({
-      "Company Name": c.companyName || "",
-      "Client Type": c.clientType || "",
-      "Lead Type": c.leadType || "",
-      "Address": c.address || "",
-      "Country": c.country || "",
-      "Tax ID": c.taxId || "",
-      "Website": c.website || "",
-      "Primary Contact": c.primaryContactName || "",
-      "Designation": c.designation || "",
-      "Phone": c.phone || "",
-      "Mobile": c.mobile || "",
-      "Email": c.email || "",
-      "Social Links": c.socialLinks || "",
-      "Industry Type": c.industryType || "",
-      "Cargo Type": c.cargoType || "",
-      "Decision Maker": c.decisionMaker || "",
-      "Relationship Status": c.relationshipStatus || "",
-      "Account Manager": c.accountManager || "",
-      "Typical Cargoes": c.typicalCargoes || "",
-      "Avg Shipment Size": c.averageShipmentSize || "",
-      "Shipment Freq": c.shipmentFrequency || "",
-      "Trading Routes": c.tradingRoutes || "",
-      "Contract Type": c.contractType || "",
-      "Historical Volume": c.historicalVolume || "",
-      "Competitors": c.competitors || "",
-      "Project Name": c.projectName || "",
-      "Project Start": c.projectTimelineStart ? new Date(c.projectTimelineStart).toLocaleDateString() : "",
-      "Project End": c.projectTimelineEnd ? new Date(c.projectTimelineEnd).toLocaleDateString() : "",
-      "EPC Contractor": c.epcContractor || "",
-      "Special Reqs": c.specialRequirements || "",
-      "Risk Notes": c.riskNotes || "",
-      "Lead Source": c.leadSource || "",
-      "Current Status": c.currentStatus || "",
-      "Opportunity Value": c.opportunityValue || "",
-      "Follow-up Date": c.followUpDate ? new Date(c.followUpDate).toLocaleDateString() : "",
-      "Notes": c.notes || "",
-      "Follow-up Status": c.followupStatus || "",
-      "Pref Load Ports": c.preferredLoadPorts || "",
-      "Pref Discharge Ports": c.preferredDischargePorts || "",
-      "Demurrage Terms": c.demurrageTerms || "",
-      "Pref Agents": c.preferredAgents || "",
-      "Incoterms": c.incoterms || "",
-      "Category": c.category || "",
-      "Created At": c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ""
-    }));
-
-    exportToExcel(exportData, "Sales_Report", clientDropdownOptions);
   };
 
-  const generateEmployeeReport = async () => {
-    let data = await employeeService.getEmployees();
-    let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
-
-    if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
-    if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
-    if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
-    if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
-    if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-    if (minExperience !== "") {
-      const minYears = parseFloat(minExperience);
-      if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
+  const generateAirfareReport = async () => {
+    const exportData = await fetchReportData("Airfare Report");
+    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
+    if (format === "Excel") {
+      exportToExcel(exportData, "Airfare_Report");
+    } else if (format === "PDF") {
+      exportToPDF(exportData, "Airfare_Report");
     }
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      empList = empList.filter(e => {
-        const date = e.doj ? new Date(e.doj) : new Date(e.createdAt);
-        return date >= start && date <= end;
-      });
+  };
+
+  const generateIncrementReport = async () => {
+    const exportData = await fetchReportData("Increment report");
+    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
+    if (format === "Excel") {
+      exportToExcel(exportData, "Increment_Report");
+    } else if (format === "PDF") {
+      exportToPDF(exportData, "Increment_Report");
     }
+  };
 
-    if (empList.length === 0) { alert("No data found for the selected filters."); return; }
+  const generateDocumentExpiryReport = async () => {
+    const exportData = await fetchReportData("Document expiry");
+    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
+    if (format === "Excel") {
+      exportToExcel(exportData, "Document_Expiry_Report");
+    } else if (format === "PDF") {
+      exportToPDF(exportData, "Document_Expiry_Report");
+    }
+  };
 
-    const exportData = empList.map(e => ({
-      "Employee ID": e.employeeId || "",
-      "Name": e.employeeName || "",
-      "Mobile": e.mobile || "",
-      "Email": e.emailId || "",
-      "Role": e.role || "",
-      "Designation": e.designation || "",
-      "Department": e.department || "",
-      "Office Location": e.office || "",
-      "Country (Nationality)": e.nationality || "",
-      "DOJ (Date of Joining)": e.doj ? new Date(e.doj).toLocaleDateString('en-GB') : "",
-      "Years of Experience": e.totalYearsExperience != null ? e.totalYearsExperience : 0,
-      "Status": e.employeeStatus || e.attendance || "",
-      "Created At": e.createdAt ? new Date(e.createdAt).toLocaleDateString() : ""
-    }));
-
-    exportToExcel(exportData, "Employee_Report", employeeDropdownOptions);
+  const generateSalaryReport = async () => {
+    const exportData = await fetchReportData("Salary report");
+    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
+    if (format === "Excel") {
+      exportToExcel(exportData, "Salary_Report");
+    } else if (format === "PDF") {
+      exportToPDF(exportData, "Salary_Report");
+    }
   };
 
   const exportToExcel = (data, fileName, dropdownOptions) => {
@@ -267,6 +494,57 @@ function Reports() {
     const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
     saveAs(dataBlob, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const exportToPDF = (data, fileName) => {
+    const doc = new jsPDF({ orientation: "landscape" });
+    
+    // Add title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
+    doc.text(fileName.replace("_", " ").toUpperCase(), 14, 15);
+    
+    // Add subtitle / date
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')} | Total Records: ${data.length}`, 14, 21);
+
+    let filteredData = data;
+
+    const headers = Object.keys(filteredData[0]);
+    const rows = filteredData.map(item => 
+      headers.map(header => 
+        item[header] !== null && item[header] !== undefined ? String(item[header]) : ""
+      )
+    );
+
+    autoTable(doc, {
+      startY: 26,
+      head: [headers],
+      body: rows,
+      theme: 'grid',
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        overflow: 'linebreak',
+        halign: 'left',
+        valign: 'middle'
+      },
+      headStyles: {
+        fillColor: [22, 163, 74], // green color matching the UI #16a34a
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8.5
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252] // light grey for alternate rows
+      },
+      margin: { top: 25, bottom: 15, left: 14, right: 14 }
+    });
+
+    doc.save(`${fileName}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   return (
@@ -305,6 +583,9 @@ function Reports() {
               <div className={styles["report-title"]}>Generate Reports</div>
               <div className={styles["report-actions"]}>
                 <button className={styles["cancel-button"]} onClick={handleCancel}>Cancel</button>
+                <button className={styles["preview-button"]} onClick={handlePreview} disabled={loading}>
+                  {loading ? "Loading..." : "Preview"}
+                </button>
                 <button className={styles["generate-button"]} onClick={handleGenerateReport} disabled={loading}>
                   {loading ? "Generating..." : "Generate"}
                 </button>
@@ -342,44 +623,29 @@ function Reports() {
 
               <div className={styles["divider-line"]}></div>
 
-              {/* Sales Report Filters */}
-              {reportType === "Sales Report" && (
+              {/* Employee & Leave Report Filters */}
+              {(reportType === "Airfare Report" ||
+                reportType === "Increment report" ||
+                reportType === "Document expiry" ||
+                reportType === "Salary report" ||
+                reportType === "Leave Report") && (
                 <>
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Lead Type</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={leadType} onChange={e => setLeadType(e.target.value)}>
-                        {leadTypeOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles["divider-line"]}></div>
+                  {/* Status Filter (Only show for employee reports, not leave report) */}
+                  {(reportType !== "Leave Report") && (
+                    <>
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Status</div>
+                        <div className={styles["form-field"]}>
+                          <select className={styles["select-field"]} value={employeeStatus} onChange={e => setEmployeeStatus(e.target.value)}>
+                            {employeeStatusOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className={styles["divider-line"]}></div>
+                    </>
+                  )}
 
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Follow-up Status</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={followupStatus} onChange={e => setFollowupStatus(e.target.value)}>
-                        {followupStatusOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles["divider-line"]}></div>
-                </>
-              )}
-
-              {/* Employee Report Filters */}
-              {reportType === "Employee Report" && (
-                <>
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Status</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={employeeStatus} onChange={e => setEmployeeStatus(e.target.value)}>
-                        {employeeStatusOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles["divider-line"]}></div>
-
+                  {/* Department Filter (Show for all of them) */}
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Department</div>
                     <div className={styles["form-field"]}>
@@ -390,50 +656,55 @@ function Reports() {
                   </div>
                   <div className={styles["divider-line"]}></div>
 
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Role</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={filterRole} onChange={e => setFilterRole(e.target.value)}>
-                        {uniqueRoles.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles["divider-line"]}></div>
+                  {/* Role/Office/Country/Experience filters (Show only for non-leave reports) */}
+                  {(reportType !== "Leave Report") && (
+                    <>
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Role</div>
+                        <div className={styles["form-field"]}>
+                          <select className={styles["select-field"]} value={filterRole} onChange={e => setFilterRole(e.target.value)}>
+                            {uniqueRoles.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className={styles["divider-line"]}></div>
 
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Office Location</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={filterOffice} onChange={e => setFilterOffice(e.target.value)}>
-                        {uniqueOffices.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles["divider-line"]}></div>
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Office Location</div>
+                        <div className={styles["form-field"]}>
+                          <select className={styles["select-field"]} value={filterOffice} onChange={e => setFilterOffice(e.target.value)}>
+                            {uniqueOffices.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className={styles["divider-line"]}></div>
 
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Country (Nationality)</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
-                        {uniqueCountries.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles["divider-line"]}></div>
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Country (Nationality)</div>
+                        <div className={styles["form-field"]}>
+                          <select className={styles["select-field"]} value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
+                            {uniqueCountries.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className={styles["divider-line"]}></div>
 
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Min Years of Experience</div>
-                    <div className={styles["form-field"]}>
-                      <input
-                        type="number"
-                        className={styles["date-field"]}
-                        style={{ width: "100%" }}
-                        placeholder="e.g. 2"
-                        value={minExperience}
-                        onChange={e => setMinExperience(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className={styles["divider-line"]}></div>
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Min Years of Experience</div>
+                        <div className={styles["form-field"]}>
+                          <input
+                            type="number"
+                            className={styles["date-field"]}
+                            style={{ width: "100%" }}
+                            placeholder="e.g. 2"
+                            value={minExperience}
+                            onChange={e => setMinExperience(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className={styles["divider-line"]}></div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -463,6 +734,37 @@ function Reports() {
 
             </div>
           </div>
+
+          {showPreview && previewData.length > 0 && (
+            <div className={styles["preview-section"]}>
+              <div className={styles["preview-title-row"]}>
+                <div className={styles["report-title"]}>Report Preview ({reportType})</div>
+                <div className={styles["preview-subtitle"]}>Showing {previewData.length} records</div>
+              </div>
+              <div className={styles["preview-table-container"]}>
+                <table className={styles["preview-table"]}>
+                  <thead>
+                    <tr>
+                      {previewHeaders.map(h => <th key={h}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewData.slice(0, 15).map((row, idx) => (
+                      <tr key={idx}>
+                        {previewHeaders.map(h => <td key={h}>{row[h] !== null && row[h] !== undefined ? String(row[h]) : ""}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {previewData.length > 15 && (
+                <div className={styles["preview-subtitle"]} style={{ fontStyle: 'italic', marginTop: '0.5rem' }}>
+                  * Showing first 15 records in preview. Generate Excel/PDF to download all {previewData.length} records.
+                </div>
+              )}
+            </div>
+          )}
+
         </section>
       </main>
     </div>

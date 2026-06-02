@@ -3,6 +3,17 @@
  * Run from server folder: node scripts/seed.js
  * Requires: .env with MONGO_URI set.
  */
+// ====== DNS RESOLVER WORKAROUND FOR WINDOWS / SRV ISSUES ======
+const dns = require('dns');
+try {
+  const dnsServers = dns.getServers();
+  if (dnsServers.length === 0 || dnsServers[0] === '127.0.0.1') {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  }
+} catch (dnsErr) {
+  console.warn('⚠️ Failed to apply DNS workaround:', dnsErr.message);
+}
+
 require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');

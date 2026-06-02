@@ -1,3 +1,14 @@
+// ====== DNS RESOLVER WORKAROUND FOR WINDOWS / SRV ISSUES ======
+const dns = require('dns');
+try {
+  const dnsServers = dns.getServers();
+  if (dnsServers.length === 0 || dnsServers[0] === '127.0.0.1') {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  }
+} catch (dnsErr) {
+  console.warn('⚠️ Failed to apply DNS workaround:', dnsErr.message);
+}
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -292,18 +303,43 @@ app.use('/api/options', optionRoutes);
 
 
 // ====== DATABASE CONNECTION ======
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(async () => {
-    console.log('✅ MongoDB connected');
-    try {
-      await Employee.syncIndexes();
-      console.log('✅ Employee indexes synced (emailId sparse unique where supported)');
-    } catch (syncErr) {
-      console.warn('⚠️ Employee.syncIndexes skipped:', syncErr.message);
-    }
-  })
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+const connectWithRetry = () => {
+  mongoose
+    .connect(process.env.MONGO_URI)
+    .then(async () => {
+      console.log('✅ MongoDB connected');
+      try {
+        await Employee.syncIndexes();
+        console.log('✅ Employee indexes synced (emailId sparse unique where supported)');
+      } catch (syncErr) {
+        console.warn('⚠️ Employee.syncIndexes skipped:', syncErr.message);
+      }
+    })
+    .catch(async (err) => {
+      console.error('❌ MongoDB connection error:', err.message || err);
+      const errMsg = String(err.message || err);
+      if (errMsg.includes('querySrv ECONNREFUSED') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
+        console.log('🔄 Attempting DNS fallback workaround...');
+        try {
+          const dns = require('dns');
+          dns.setServers(['8.8.8.8', '1.1.1.1']);
+          console.log('👉 DNS servers set to 8.8.8.8, 1.1.1.1. Retrying connection...');
+          await mongoose.connect(process.env.MONGO_URI);
+          console.log('✅ MongoDB connected via DNS fallback workaround');
+          try {
+            await Employee.syncIndexes();
+            console.log('✅ Employee indexes synced (emailId sparse unique where supported)');
+          } catch (syncErr) {
+            console.warn('⚠️ Employee.syncIndexes skipped:', syncErr.message);
+          }
+        } catch (fallbackErr) {
+          console.error('❌ MongoDB fallback connection failed:', fallbackErr.message || fallbackErr);
+        }
+      }
+    });
+};
+
+connectWithRetry();
 
 // ====== SERVE FRONTEND ======
 const frontendPath = path.join(__dirname, '../frontend/build');
