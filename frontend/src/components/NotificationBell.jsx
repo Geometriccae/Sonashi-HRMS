@@ -374,6 +374,49 @@ function NotificationBell({ small = true }) {
             } catch (expErr) {
               console.warn('Could not check expiries:', expErr);
             }
+
+            try {
+              const docsResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/company-documents`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (docsResp.ok) {
+                const docs = await docsResp.json();
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const msPerDay = 1000 * 60 * 60 * 24;
+
+                (docs || []).forEach((doc) => {
+                  if (!doc.expiryDate) return;
+                  const expDate = new Date(doc.expiryDate);
+                  if (Number.isNaN(expDate.getTime())) return;
+                  expDate.setHours(0, 0, 0, 0);
+
+                  const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
+                  if (diffDays < 0 || diffDays > 30) return;
+
+                  let timeStr = "soon";
+                  if (diffDays === 0) timeStr = "today";
+                  else if (diffDays === 1) timeStr = "tomorrow";
+                  else timeStr = `in ${diffDays} days`;
+
+                  const docLabel = doc.docNumber
+                    ? `"${doc.particulars}" (${doc.docNumber})`
+                    : `"${doc.particulars}"`;
+
+                  if (window.appNotifications?.push) {
+                    window.appNotifications.push({
+                      id: `company-doc-expiry-${doc._id}-${doc.expiryDate}`,
+                      title: 'Company Document Expiry Reminder',
+                      body: `${docLabel} expires ${timeStr} (${expDate.toLocaleDateString('en-GB')})`,
+                      type: 'company-doc-expiry',
+                      meta: { url: '/company-document', docId: doc._id },
+                    });
+                  }
+                });
+              }
+            } catch (companyDocErr) {
+              console.warn('Could not check company document expiries:', companyDocErr);
+            }
           }
         }
       } catch (meErr) {
@@ -813,9 +856,9 @@ function NotificationBell({ small = true }) {
                     <div className={styles.itemMeta}>
                       {n.type && (
                         <span className={styles.itemType} style={{
-                          background: n.type.includes('reminder') ? '#fee2e2' :
+                          background: (n.type.includes('reminder') || n.type.includes('expiry')) ? '#fee2e2' :
                             n.type.includes('event') ? '#dbeafe' : '#f0f9ff',
-                          color: n.type.includes('reminder') ? '#991b1b' :
+                          color: (n.type.includes('reminder') || n.type.includes('expiry')) ? '#991b1b' :
                             n.type.includes('event') ? '#1e40af' : '#0c4a6e',
                           padding: '2px 8px',
                           borderRadius: 12,

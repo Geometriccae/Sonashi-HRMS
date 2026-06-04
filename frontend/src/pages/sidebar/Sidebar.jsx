@@ -174,6 +174,17 @@ function Sidebar() {
                 </Link>
               </li>
 
+              <li className={isActive("/company-document") ? styles.active : ""}>
+                <Link to="/company-document" className={styles["sidebar-link"]} onClick={closeSidebar}>
+                  <img
+                    src={cloud}
+                    alt="Company Document"
+                    className={styles.icon}
+                  />
+                  Company Document
+                </Link>
+              </li>
+
 
               {/* User Management - Admin & HOD Only */}
               {["admin", "hod"].includes(userRole) && (

@@ -2,6 +2,24 @@ const cron = require('node-cron');
 const nodemailer = require('nodemailer');
 const Employee = require('../models/Employee');
 const User = require('../models/User');
+const CompanyDocument = require('../models/CompanyDocument');
+const Notification = require('../models/Notification');
+
+const ALERT_DAYS = [30, 25, 20, 15, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+function getTimeStr(diffDays) {
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'tomorrow';
+    return `in ${diffDays} days`;
+}
+
+function getDiffDays(expiryDate, today) {
+    const expDate = new Date(expiryDate);
+    if (Number.isNaN(expDate.getTime())) return null;
+    expDate.setHours(0, 0, 0, 0);
+    return Math.round((expDate.getTime() - today.getTime()) / MS_PER_DAY);
+}
 
 /**
  * Configure the email transporter using environment variables.
@@ -86,10 +104,6 @@ async function checkExpiries() {
         const employees = await Employee.find({ employeeStatus: 'Active' });
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const msPerDay = 1000 * 60 * 60 * 24;
-
-        // Days we want to send notifications for
-        const alertDays = [30, 25, 20, 15, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0];
 
         for (const emp of employees) {
             const checks = [
@@ -104,9 +118,9 @@ async function checkExpiries() {
                 if (isNaN(expDate.getTime())) continue;
                 expDate.setHours(0, 0, 0, 0);
 
-                const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
+                const diffDays = getDiffDays(check.date, today);
 
-                if (alertDays.includes(diffDays)) {
+                if (diffDays !== null && ALERT_DAYS.includes(diffDays)) {
                     await sendExpiryEmail(emp, check.name, check.date, diffDays);
                 }
             }
@@ -117,15 +131,74 @@ async function checkExpiries() {
     }
 }
 
+async function sendCompanyDocExpiryNotification(doc, diffDays, io, today) {
+    const expiryStr = new Date(doc.expiryDate).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+    const timeStr = getTimeStr(diffDays);
+    const docLabel = doc.docNumber
+        ? `"${doc.particulars}" (${doc.docNumber})`
+        : `"${doc.particulars}"`;
+    const todayStr = today.toISOString().slice(0, 10);
+
+    const payload = {
+        id: `company-doc-expiry-${doc._id}-${todayStr}`,
+        title: 'Company Document Expiry Reminder',
+        body: `${docLabel} is expiring ${timeStr} on ${expiryStr}`,
+        type: 'company-doc-expiry',
+        meta: { url: '/company-document', docId: String(doc._id) },
+    };
+
+    if (io) {
+        io.to('role-admin').to('role-hod').emit('notification', payload);
+    }
+
+    for (const role of ['admin', 'hod']) {
+        const existing = await Notification.findOne({
+            'payload.id': payload.id,
+            role,
+        }).lean();
+        if (existing) continue;
+
+        await Notification.create({
+            title: payload.title,
+            body: payload.body,
+            payload,
+            role,
+        });
+    }
+}
+
+async function checkCompanyDocumentExpiries(io) {
+    console.log('[Expiry] Running company document expiry check...');
+    try {
+        const docs = await CompanyDocument.find({ expiryDate: { $ne: null } });
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        for (const doc of docs) {
+            const diffDays = getDiffDays(doc.expiryDate, today);
+            if (diffDays !== null && diffDays >= 0 && diffDays <= 30) {
+                await sendCompanyDocExpiryNotification(doc, diffDays, io, today);
+            }
+        }
+        console.log('[Expiry] Company document check completed.');
+    } catch (error) {
+        console.error('[Expiry] Error during checkCompanyDocumentExpiries:', error);
+    }
+}
+
 /**
  * Initializes the expiry check cron job.
  * Runs once every morning at 9:00 AM.
  */
-function initExpiryCron() {
-    // Schedule: Minute (0), Hour (9), DayOfMonth (*), Month (*), DayOfWeek (*)
+function initExpiryCron(io) {
     cron.schedule('0 9 * * *', () => {
         checkExpiries();
+        checkCompanyDocumentExpiries(io);
     });
 }
 
-module.exports = { initExpiryCron, checkExpiries };
+module.exports = { initExpiryCron, checkExpiries, checkCompanyDocumentExpiries };
