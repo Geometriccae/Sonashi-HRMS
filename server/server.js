@@ -26,6 +26,7 @@ console.log('=== SERVER STARTING ===');
 const employeeRoutes = require('./routes/employeeRoutes');
 const employeeDocumentRoutes = require('./routes/employeeDocumentRoutes');
 const documentRoutes = require('./routes/documentRoutes');
+const companyDocumentRoutes = require('./routes/companyDocumentRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
@@ -294,6 +295,7 @@ app.use('/api', taskRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingsRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/company-documents', companyDocumentRoutes);
 app.use('/api/checkins', require('./routes/checkInRoutes'));
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/support', supportRoutes);
@@ -389,7 +391,7 @@ app.get('/teammanagement_salesleads/:id', (req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔌 Socket.io is enabled and listening for connections`);
-  initExpiryCron();
+  initExpiryCron(io);
 });
 
 module.exports = { app, server, io };

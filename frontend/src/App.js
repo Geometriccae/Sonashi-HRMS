@@ -22,6 +22,7 @@ import AttendanceManagement from "./pages/team-management/AttendanceManagement";
 import HelpSupport from "./pages/HelpSupport";
 import LeaveRequests from "./pages/LeaveRequests";
 import SalarySlips from "./pages/SalarySlips";
+import CompanyDocument from "./pages/CompanyDocument";
 
 
 
@@ -57,6 +58,10 @@ function App() {
 
           <Route path="/reports" element={
             <ProtectedRoute><Reports /></ProtectedRoute>
+          } />
+
+          <Route path="/company-document" element={
+            <ProtectedRoute><CompanyDocument /></ProtectedRoute>
           } />
 
           <Route path="/profile" element={
