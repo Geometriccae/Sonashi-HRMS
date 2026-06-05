@@ -32,6 +32,15 @@ function Reports() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [filterMonth, setFilterMonth] = useState("All");
+  const [filterYear, setFilterYear] = useState("All");
+
+  const monthsList = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const currentYear = new Date().getFullYear();
+  const yearsList = ["All"];
+  for (let i = 0; i < 15; i++) {
+    yearsList.push((currentYear - i).toString());
+  }
 
   // Dynamic dropdown list selectors
   const [uniqueDepartments, setUniqueDepartments] = useState(["All"]);
@@ -125,6 +134,8 @@ function Reports() {
     setMinExperience("");
     setStartDate("");
     setEndDate("");
+    setFilterMonth("All");
+    setFilterYear("All");
     setError("");
     setPreviewData([]);
     setPreviewHeaders([]);
@@ -132,6 +143,30 @@ function Reports() {
   };
 
   const fetchReportData = async (type) => {
+    const hasDateFilter = (startDate && endDate) || filterMonth !== "All" || filterYear !== "All";
+
+    const isDateMatch = (dateVal) => {
+      if (!dateVal) return false;
+      const date = new Date(dateVal);
+      if (isNaN(date.getTime())) return false;
+
+      let match = true;
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        if (date < start || date > end) match = false;
+      }
+      if (filterMonth !== "All") {
+        const monthMap = { "January": 0, "February": 1, "March": 2, "April": 3, "May": 4, "June": 5, "July": 6, "August": 7, "September": 8, "October": 9, "November": 10, "December": 11 };
+        if (date.getMonth() !== monthMap[filterMonth]) match = false;
+      }
+      if (filterYear !== "All") {
+        if (date.getFullYear().toString() !== filterYear) match = false;
+      }
+      return match;
+    };
+
     if (type === "Leave Report") {
       let leaves = await leaveRequestService.getLeaveRequests();
       leaves = Array.isArray(leaves) ? leaves : (leaves.data || []);
@@ -140,14 +175,8 @@ function Reports() {
         leaves = leaves.filter(l => l.department === filterDepartment);
       }
 
-      if (startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        leaves = leaves.filter(l => {
-          const appliedDate = new Date(l.appliedOn || l.createdAt);
-          return appliedDate >= start && appliedDate <= end;
-        });
+      if (hasDateFilter) {
+        leaves = leaves.filter(l => isDateMatch(l.appliedOn || l.createdAt));
       }
 
       return leaves.map(l => {
@@ -186,15 +215,8 @@ function Reports() {
         const minYears = parseFloat(minExperience);
         if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
       }
-      if (startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        empList = empList.filter(e => {
-          if (!e.travellingDate) return false;
-          const travDate = new Date(e.travellingDate);
-          return travDate >= start && travDate <= end;
-        });
+      if (hasDateFilter) {
+        empList = empList.filter(e => isDateMatch(e.travellingDate));
       }
 
       return empList.map(e => ({
@@ -244,15 +266,8 @@ function Reports() {
         }
       });
 
-      if (startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        incrementRows = incrementRows.filter(row => {
-          if (!row.date) return false;
-          const incDate = new Date(row.date);
-          return incDate >= start && incDate <= end;
-        });
+      if (hasDateFilter) {
+        incrementRows = incrementRows.filter(row => isDateMatch(row.date));
       }
 
       return incrementRows.map(row => ({
@@ -282,20 +297,9 @@ function Reports() {
         if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
       }
 
-      if (startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+      if (hasDateFilter) {
         empList = empList.filter(e => {
-          const passExp = e.passportExpiryDate ? new Date(e.passportExpiryDate) : null;
-          const visaExp = e.visaExpiryDate ? new Date(e.visaExpiryDate) : null;
-          const laborExp = e.labourCardExpiryDate ? new Date(e.labourCardExpiryDate) : null;
-
-          const passMatch = passExp && passExp >= start && passExp <= end;
-          const visaMatch = visaExp && visaExp >= start && visaExp <= end;
-          const laborMatch = laborExp && laborExp >= start && laborExp <= end;
-
-          return passMatch || visaMatch || laborMatch;
+          return isDateMatch(e.passportExpiryDate) || isDateMatch(e.visaExpiryDate) || isDateMatch(e.labourCardExpiryDate);
         });
       }
 
@@ -613,6 +617,8 @@ function Reports() {
                       setFilterOffice("All");
                       setFilterCountry("All");
                       setMinExperience("");
+                      setFilterMonth("All");
+                      setFilterYear("All");
                     }}
                   >
                     <option value="">Select type</option>
@@ -621,7 +627,7 @@ function Reports() {
                 </div>
               </div>
 
-              <div className={styles["divider-line"]}></div>
+
 
               {/* Employee & Leave Report Filters */}
               {(reportType === "Airfare Report" ||
@@ -641,7 +647,7 @@ function Reports() {
                           </select>
                         </div>
                       </div>
-                      <div className={styles["divider-line"]}></div>
+        
                     </>
                   )}
 
@@ -654,7 +660,7 @@ function Reports() {
                       </select>
                     </div>
                   </div>
-                  <div className={styles["divider-line"]}></div>
+    
 
                   {/* Role/Office/Country/Experience filters (Show only for non-leave reports) */}
                   {(reportType !== "Leave Report") && (
@@ -667,7 +673,7 @@ function Reports() {
                           </select>
                         </div>
                       </div>
-                      <div className={styles["divider-line"]}></div>
+        
 
                       <div className={styles["form-row"]}>
                         <div className={styles["form-label"]}>Office Location</div>
@@ -677,7 +683,7 @@ function Reports() {
                           </select>
                         </div>
                       </div>
-                      <div className={styles["divider-line"]}></div>
+        
 
                       <div className={styles["form-row"]}>
                         <div className={styles["form-label"]}>Country (Nationality)</div>
@@ -687,7 +693,7 @@ function Reports() {
                           </select>
                         </div>
                       </div>
-                      <div className={styles["divider-line"]}></div>
+        
 
                       <div className={styles["form-row"]}>
                         <div className={styles["form-label"]}>Min Years of Experience</div>
@@ -702,7 +708,7 @@ function Reports() {
                           />
                         </div>
                       </div>
-                      <div className={styles["divider-line"]}></div>
+        
                     </>
                   )}
                 </>
@@ -711,13 +717,33 @@ function Reports() {
               {/* Date Range */}
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Choose a date range</div>
-                <div className={styles["form-field"]} style={{ display: 'flex', gap: '8px' }}>
-                  <input className={styles["date-field"]} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                  <input className={styles["date-field"]} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                <div className={styles["form-field"]} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <input className={styles["date-field"]} style={{ flex: '1 1 120px' }} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <input className={styles["date-field"]} style={{ flex: '1 1 120px' }} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
                 </div>
               </div>
 
-              <div className={styles["divider-line"]}></div>
+              {/* Month */}
+              <div className={styles["form-row"]}>
+                <div className={styles["form-label"]}>Month</div>
+                <div className={styles["form-field"]}>
+                  <select className={styles["select-field"]} value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+                    {monthsList.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Year */}
+              <div className={styles["form-row"]}>
+                <div className={styles["form-label"]}>Year</div>
+                <div className={styles["form-field"]}>
+                  <select className={styles["select-field"]} value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+                    {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+
+
 
               {/* Format */}
               <div className={styles["form-row"]}>

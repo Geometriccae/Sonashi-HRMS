@@ -38,7 +38,20 @@ const removeAll = async (employeeId) => {
   return response.json();
 };
 
-const DocumentsService = { listByEmployee, uploadForEmployee, remove, removeAll };
+const replace = async (docId, file, type) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (type) formData.append("type", type);
+  const response = await fetch(`${baseUrl}/${docId}`, {
+    method: "PUT",
+    body: formData,
+  });
+  if (!response.ok) throw new Error("Failed to replace document");
+  return response.json();
+};
+
+const DocumentsService = { listByEmployee, uploadForEmployee, remove, removeAll, replace };
+
 export default DocumentsService;
 
 

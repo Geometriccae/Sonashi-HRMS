@@ -11,7 +11,6 @@ const router = express.Router();
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const employeeId = req.params.employeeId || "unknown";
-    // Sanitize document type to use as safe folder name (e.g. "Passport Page 1" -> "Passport_Page_1")
     const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : "Other";
     const docType = rawType.replace(/[^a-zA-Z0-9_\- ]/g, "").replace(/\s+/g, "_") || "Other";
     const uploadDir = path.join(__dirname, "../../uploads/employeedocuments", employeeId, docType);
@@ -25,6 +24,9 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage });
+
+// Memory-storage multer for replace (PUT) — we resolve the path after looking up employeeId from DB
+const memUpload = multer({ storage: multer.memoryStorage() });
 
 // Get all documents for an employee
 router.get("/:employeeId", async (req, res) => {
@@ -100,6 +102,65 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
 
     await newDoc.save();
     res.json(newDoc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Replace document file (re-upload) — deletes old file, saves new file to disk
+router.put("/:docId", memUpload.single("file"), async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.docId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    // Delete old file from disk
+    if (doc.filePath) {
+      let oldDiskPath;
+      if (
+        doc.filePath.startsWith("/Uploades/") ||
+        doc.filePath.startsWith("/uploads/employeeDocuments/") ||
+        doc.filePath.startsWith("/uploads/employeedocuments/")
+      ) {
+        oldDiskPath = path.join(__dirname, "..", "..", doc.filePath);
+      } else {
+        oldDiskPath = path.join(__dirname, "..", doc.filePath);
+      }
+      if (fs.existsSync(oldDiskPath)) {
+        try { fs.unlinkSync(oldDiskPath); } catch (e) { console.warn("Could not delete old file:", e.message); }
+      }
+    }
+
+    // Determine new type and folder
+    const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : (doc.type || "Other");
+    const docType = rawType.replace(/[^a-zA-Z0-9_\- ]/g, "").replace(/\s+/g, "_") || "Other";
+    const employeeId = String(doc.employeeId);
+
+    // Write new file to disk
+    const newFilename = Date.now() + "-" + req.file.originalname;
+    const uploadDir = path.join(__dirname, "../../uploads/employeedocuments", employeeId, docType);
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    fs.writeFileSync(path.join(uploadDir, newFilename), req.file.buffer);
+
+    const newFilePath = `/uploads/employeedocuments/${employeeId}/${docType}/${newFilename}`;
+
+    // Update DB record
+    const updated = await Document.findByIdAndUpdate(
+      req.params.docId,
+      {
+        $set: {
+          fileName: req.file.originalname,
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+          filePath: newFilePath,
+          type: rawType,
+          uploadedDate: new Date(),
+        }
+      },
+      { new: true }
+    );
+
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

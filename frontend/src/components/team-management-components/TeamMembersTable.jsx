@@ -808,15 +808,15 @@ function TeamMembersTable() {
                   </div>
                   {paginatedData.map((member) => {
                     const isActive = member.employeeStatus !== "InActive";
-                    const vs = member.vacationStatus || "Not on Vacation";
+                    const vs = member.vacationStatus || "Onsite";
 
                     const statusConfig = {
-                      "Not on Vacation": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", icon: "✓" },
+                      "Onsite": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", icon: "✓" },
                       "On Vacation": { bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", color: "#1e3a8a", dot: "#3b82f6", icon: "✈" },
                       "Vacation Approved": { bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", color: "#4c1d95", dot: "#7c3aed", icon: "✔" },
                       "Vacation Pending": { bg: "linear-gradient(135deg,#fef9c3,#fde68a)", color: "#713f12", dot: "#f59e0b", icon: "⏳" },
                     };
-                    const cfg = statusConfig[vs] || statusConfig["Not on Vacation"];
+                    const cfg = statusConfig[vs] || statusConfig["Onsite"];
 
                     const dateFieldMap = {
                       "On Vacation": "lastWorkingDay",
@@ -875,7 +875,7 @@ function TeamMembersTable() {
                                     handleStatusDropdownChange(member, newStatus);
                                   }}
                                 >
-                                  <option value="Not on Vacation">Not on Vacation</option>
+                                  <option value="Onsite">Onsite</option>
                                   <option value="On Vacation">On vacation</option>
                                   <option value="Vacation Approved">Returned back from vacation</option>
                                   <option value="Vacation Pending">Yet to go</option>

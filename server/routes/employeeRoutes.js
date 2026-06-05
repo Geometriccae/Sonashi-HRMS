@@ -581,6 +581,11 @@ router.put('/:id', authMiddleware, uploadProfilePhoto.single('profilePhoto'), as
     }
 
 
+    // Normalize legacy vacationStatus value -> remap old label to new
+    if (updateData.vacationStatus === 'Not on Vacation') {
+      updateData.vacationStatus = 'Onsite';
+    }
+
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -609,6 +614,9 @@ router.put('/:id', authMiddleware, uploadProfilePhoto.single('profilePhoto'), as
         error: `Duplicate ${field}`
       });
     }
+
+    const fs = require('fs');
+    try { fs.appendFileSync('c:/ReactWorkSpace/Sonashi-HRMS/server/update_error.log', new Date().toISOString() + ' ERROR: ' + error.message + '\n' + JSON.stringify(error) + '\n'); } catch(e){}
 
     res.status(500).json({
       message: 'Error updating employee',

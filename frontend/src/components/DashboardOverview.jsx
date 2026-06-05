@@ -63,8 +63,8 @@ function DashboardOverview() {
         // Map of empId -> vacationStatus for deduplication
         const empAttendanceMap = {};
         empList.forEach(emp => {
-          const vs = emp.vacationStatus || "Not on Vacation";
-          if (vs !== "Not on Vacation") {
+          const vs = emp.vacationStatus || "Onsite";
+          if (vs !== "Onsite") {
             empAttendanceMap[emp._id] = vs;
           }
         });
@@ -79,7 +79,7 @@ function DashboardOverview() {
 
         empList.forEach(emp => {
           const status = String(emp.employeeStatus || "Active").toLowerCase();
-          const vs = emp.vacationStatus || "Not on Vacation";
+          const vs = emp.vacationStatus || "Onsite";
 
           if (status === "active") active++;
           else if (status === "inactive") inactive++;
@@ -193,7 +193,7 @@ function DashboardOverview() {
       // Recompute counts from updated list
       let attOnVacation = 0, attUpcoming = 0, attVacReturn = 0;
       updatedEmployees.forEach(e => {
-        const vs = e.vacationStatus || "Not on Vacation";
+        const vs = e.vacationStatus || "Onsite";
 
         if (vs === "On Vacation") attOnVacation++;
         else if (vs === "Vacation Pending") attUpcoming++;
@@ -520,14 +520,14 @@ function DashboardOverview() {
                               </td>
                               <td>
                                 {(localStorage.getItem("role") === "admin" || localStorage.getItem("role") === "hod") && selectedCategory === "Active Employees" ? (() => {
-                                  const vs = item.vacationStatus || "Not on Vacation";
+                                  const vs = item.vacationStatus || "Onsite";
                                   const statusConfig = {
-                                    "Not on Vacation": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", icon: "✓" },
+                                    "Onsite": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", icon: "✓" },
                                     "On Vacation": { bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", color: "#1e3a8a", dot: "#3b82f6", icon: "✈" },
                                     "Vacation Approved": { bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", color: "#4c1d95", dot: "#7c3aed", icon: "✔" },
                                     "Vacation Pending": { bg: "linear-gradient(135deg,#fef9c3,#fde68a)", color: "#713f12", dot: "#f59e0b", icon: "⏳" },
                                   };
-                                  const cfg = statusConfig[vs] || statusConfig["Not on Vacation"];
+                                  const cfg = statusConfig[vs] || statusConfig["Onsite"];
                                   return (
                                     <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }} onClick={e => e.stopPropagation()}>
                                       {/* Pill badge display */}
@@ -577,7 +577,7 @@ function DashboardOverview() {
                                           handleStatusDropdownChange(item, newStatus);
                                         }}
                                       >
-                                        <option value="Not on Vacation">Not on Vacation</option>
+                                        <option value="Onsite">Onsite</option>
                                         <option value="On Vacation">On vacation</option>
                                         <option value="Vacation Approved">Returned back from vacation</option>
                                         <option value="Vacation Pending">Yet to go</option>
@@ -586,7 +586,7 @@ function DashboardOverview() {
                                   );
                                 })() : (
                                   (() => {
-                                    const vs = item.vacationStatus || "Not on Vacation";
+                                    const vs = item.vacationStatus || "Onsite";
                                     const dotColor = vs === "On Vacation" ? "#3b82f6" : vs === "Vacation Approved" ? "#7c3aed" : vs === "Vacation Pending" ? "#f59e0b" : "#10b981";
                                     return (
                                       <span style={{
@@ -604,7 +604,7 @@ function DashboardOverview() {
                               </td>
                               <td onClick={e => e.stopPropagation()}>
                                 {(() => {
-                                  const vs = item.vacationStatus || "Not on Vacation";
+                                  const vs = item.vacationStatus || "Onsite";
                                   const dateFieldMap = {
                                     "On Vacation": { key: "lastWorkingDay" },
                                     "Vacation Pending": { key: "travellingDate" },

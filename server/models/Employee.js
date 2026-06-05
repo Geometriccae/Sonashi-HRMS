@@ -32,8 +32,8 @@ const employeeSchema = new mongoose.Schema({
 
   vacationStatus: {
     type: String,
-    enum: ["Not on Vacation", "On Vacation", "Vacation Approved", "Vacation Pending", "Onboarding"],
-    default: "Not on Vacation"
+    enum: ["Onsite", "On Vacation", "Vacation Approved", "Vacation Pending", "Onboarding"],
+    default: "Onsite"
   },
 
   attendance: {

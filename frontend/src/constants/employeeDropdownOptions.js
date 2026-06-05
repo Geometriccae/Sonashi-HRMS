@@ -12,7 +12,7 @@ export const ATTENDANCE_OPTIONS = [
 
 export const VACATION_STATUS_OPTIONS = [
   { value: "", label: "-Select-" },
-  { value: "Not on Vacation", label: "Not on Vacation" },
+  { value: "Onsite", label: "Onsite" },
   { value: "On Vacation", label: "On vacation" },
   { value: "Vacation Approved", label: "Returned back from vacation" },
   { value: "Vacation Pending", label: "Yet to go" },

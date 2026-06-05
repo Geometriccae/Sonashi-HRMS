@@ -17,6 +17,7 @@ import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
 import AddIncrementModal from "../../components/team-management-components/AddIncrementModal";
 import AddLeaveRequestModal from "../../components/leave-request/AddLeaveRequestModal";
+import EditLeaveRequestModal from "../../components/leave-request/EditLeaveRequestModal";
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useSidebar } from "../../context/SidebarContext";
@@ -96,6 +97,8 @@ function TeamManagementSalesLeads() {
   const [employeeLeaves, setEmployeeLeaves] = useState([]);
   const [allLeaveRequests, setAllLeaveRequests] = useState([]);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isEditLeaveModalOpen, setIsEditLeaveModalOpen] = useState(false);
+  const [selectedLeave, setSelectedLeave] = useState(null);
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -727,7 +730,16 @@ function TeamManagementSalesLeads() {
                     </div>
                     <button className={styles.button}>
                       <span className={styles.text2}>
-                        {loading ? "..." : employee?.attendance || "Onsite"}
+                        {(() => {
+                          if (loading) return "...";
+                          const vs = employee?.vacationStatus || "Onsite";
+                          const labelMap = {
+                            "On Vacation": "On vacation",
+                            "Vacation Approved": "Returned back from vacation",
+                            "Vacation Pending": "Yet to go",
+                          };
+                          return labelMap[vs] || vs;
+                        })()}
                       </span>
                     </button>
                   </div>
@@ -911,14 +923,14 @@ function TeamManagementSalesLeads() {
                             <span className={styles.text9}>Vacation Status</span>
                             <span className={styles.text10}>
                               {(() => {
-                                const vs = employee.vacationStatus || "Not on Vacation";
+                                const vs = employee.vacationStatus || "Onsite";
                                 const colorMap = {
                                   "On Vacation": { bg: "#fff7ed", color: "#c2410c" },
                                   "Vacation Approved": { bg: "#f0fdf4", color: "#15803d" },
                                   "Vacation Pending": { bg: "#fffbeb", color: "#b45309" },
-                                  "Not on Vacation": { bg: "#f0fdf4", color: "#15803d" },
+                                  "Onsite": { bg: "#f0fdf4", color: "#15803d" },
                                 };
-                                const style = colorMap[vs] || colorMap["Not on Vacation"];
+                                const style = colorMap[vs] || colorMap["Onsite"];
                                 const labelMap = {
                                   "On Vacation": "On vacation",
                                   "Vacation Approved": "Returned back from vacation",
@@ -1084,24 +1096,57 @@ function TeamManagementSalesLeads() {
                           <th>Start Date</th>
                           <th>End Date</th>
                           <th>Leave Type</th>
+                          <th>Ticket Type</th>
                           <th>Status</th>
                           <th>Reason</th>
+                          {isAdmin && <th>Actions</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {employeeLeaves && employeeLeaves.length > 0 ? (
                           employeeLeaves.map((leave, index) => (
                             <tr key={index}>
-                               <td>{new Date(leave.startDate).toLocaleDateString('en-GB')}</td>
+                              <td>{new Date(leave.startDate).toLocaleDateString('en-GB')}</td>
                               <td>{new Date(leave.endDate).toLocaleDateString('en-GB')}</td>
                               <td>{leave.leaveType}</td>
+                              <td style={{ textAlign: "center" }}>
+                                <span style={{
+                                  fontWeight: "700",
+                                  color: leave.requestAirfare ? "#15803d" : "#9a3412",
+                                  fontSize: "11px",
+                                  padding: "3px 8px",
+                                  borderRadius: "6px",
+                                  background: leave.requestAirfare ? "#f0fdf4" : "#fff7ed",
+                                  whiteSpace: "nowrap"
+                                }}>
+                                  {leave.requestAirfare ? "Company Ticket" : "Personal Ticket"}
+                                </span>
+                              </td>
                               <td>{leave.status}</td>
                               <td>{leave.reason || "-"}</td>
+                              {isAdmin && (
+                                <td style={{ textAlign: "center" }}>
+                                  <button
+                                    title="Edit Leave"
+                                    onClick={() => { setSelectedLeave(leave); setIsEditLeaveModalOpen(true); }}
+                                    style={{
+                                      background: "none", border: "none", cursor: "pointer",
+                                      color: "#2563eb", padding: "4px", borderRadius: "6px",
+                                      display: "inline-flex", alignItems: "center"
+                                    }}
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                    </svg>
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="5" style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
+                            <td colSpan={isAdmin ? "7" : "6"} style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
                               No leave history found.
                             </td>
                           </tr>
@@ -1111,8 +1156,6 @@ function TeamManagementSalesLeads() {
                   </div>
                 </div>
               )}
-
-
 
               {activeTab === "documents" && (
                 <div>
@@ -1181,6 +1224,14 @@ function TeamManagementSalesLeads() {
         onSubmit={() => fetchEmployeeLeaves(employee)}
         allLeaveRequests={allLeaveRequests}
         initialEmployeeId={employeeId}
+      />
+
+      <EditLeaveRequestModal
+        isOpen={isEditLeaveModalOpen}
+        onClose={() => { setIsEditLeaveModalOpen(false); setSelectedLeave(null); }}
+        onSubmit={() => fetchEmployeeLeaves(employee)}
+        leaveRequest={selectedLeave}
+        allLeaveRequests={allLeaveRequests}
       />
 
       <DropDownList

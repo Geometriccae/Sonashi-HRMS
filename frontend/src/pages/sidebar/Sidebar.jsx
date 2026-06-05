@@ -152,6 +152,17 @@ function Sidebar() {
                 </Link>
               </li>
 
+              <li className={isActive("/annual-vacations") ? styles.active : ""}>
+                <Link to="/annual-vacations" className={styles["sidebar-link"]} onClick={closeSidebar}>
+                  <img
+                    src={calendar}
+                    alt="Annual Vacations"
+                    className={styles.icon}
+                  />
+                  Annual Vacations
+                </Link>
+              </li>
+
               <li className={isActive("/salary-slips") ? styles.active : ""}>
                 <Link to="/salary-slips" className={styles["sidebar-link"]} onClick={closeSidebar}>
                   <img

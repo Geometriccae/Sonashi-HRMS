@@ -6,7 +6,14 @@ import SortIcon from "./SortIcon";
 import TrashIcon from "./TrashIcon";
 import DeleteModal from "./delete-modal/DeleteModal";
 
-function DataTable({ data, onDelete, onOpen }) {
+const EditPencilIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+function DataTable({ data, onDelete, onOpen, onEdit }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
@@ -151,20 +158,34 @@ function DataTable({ data, onDelete, onOpen }) {
           </div>
 
           {/* Actions Column */}
-          {onDelete && (
+          {(onDelete || onEdit) && (
             <div className="table-column actions-column">
               <div className="table-header">
                 <div className="table-header-cell"></div>
               </div>
               {data.map((item) => (
-                <div key={item.id} className="table-cell actions-cell">
-                  <button
-                    className="delete-button"
-                    onClick={() => handleDelete(item.id)}
-                    aria-label="Delete item"
-                  >
-                    <TrashIcon />
-                  </button>
+                <div key={item.id} className="table-cell actions-cell" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  {onEdit && (
+                    <button
+                      className="delete-button"
+                      onClick={() => onEdit(item)}
+                      aria-label="Edit item"
+                      title="Edit document"
+                      style={{ color: "#2563eb" }}
+                    >
+                      <EditPencilIcon />
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      className="delete-button"
+                      onClick={() => handleDelete(item.id)}
+                      aria-label="Delete item"
+                      title="Delete document"
+                    >
+                      <TrashIcon />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -184,3 +205,4 @@ function DataTable({ data, onDelete, onOpen }) {
 }
 
 export default DataTable;
+

@@ -244,59 +244,72 @@ main {
   align-items: flex-start;
   gap: 1.5rem;
   width: 100%;
-  max-width: 66.5rem;
+  max-width: 100%;
   padding: 0;
   box-sizing: border-box;
 }
 
 .form-section {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem 2rem;
   width: 100%;
+  align-items: start;
 }
 
 .form-row {
   display: flex;
+  flex-direction: column;
   width: 100%;
   align-items: flex-start;
-  gap: 2rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .form-label {
-  width: 16.25rem;
-  flex-shrink: 0;
+  width: 100%;
   color: #1E293B;
   letter-spacing: -0.005rem;
-  font: 700 1rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  line-height: 1.375rem;
+  font: 600 0.95rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  line-height: normal;
 }
 
 .form-field {
   display: flex;
-  flex: 1;
-  width: auto;
-  min-width: 15.75rem;
-  max-width: 32rem;
+  width: 100%;
 }
 
 .dropdown-field,
 .date-field {
   display: flex;
   width: 100%;
-  height: 2.5rem;
-  min-height: 2.5rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
   padding: 0 1rem;
   align-items: center;
   justify-content: space-between;
-  border-radius: 0.25rem;
-  border: 0.0625rem solid #C2C7D0;
+  border-radius: 0.5rem;
+  border: 1px solid #E2E8F0;
   box-sizing: border-box;
   position: relative;
-  background-color: #FFF;
+  background-color: #F8FAFC;
   cursor: pointer;
+  transition: all 0.2s ease;
+  font: 400 0.95rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  color: #1E293B;
+}
+
+.dropdown-field:hover,
+.date-field:hover {
+  background-color: #FFF;
+  border-color: #CBD5E1;
+}
+
+.dropdown-field:focus,
+.date-field:focus {
+  background-color: #FFF;
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  outline: none;
 }
 
 .dropdown-field {
@@ -306,23 +319,35 @@ main {
 .select-field {
   display: flex;
   width: 100%;
-  height: 2.5rem;
+  height: 2.75rem;
   padding: 0 1rem;
   align-items: center;
-  border-radius: 0.25rem;
-  border: 0.0625rem solid #C2C7D0;
+  border-radius: 0.5rem;
+  border: 1px solid #E2E8F0;
   box-sizing: border-box;
-  background-color: #FFF;
+  background-color: #F8FAFC;
   cursor: pointer;
-  font: 400 1rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
-  color: #000;
-  appearance: auto;
+  font: 400 0.95rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  color: #1E293B;
+  appearance: none;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+  /* Custom SVG dropdown arrow */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1em;
+}
+
+.select-field:hover {
+  background-color: #FFF;
+  border-color: #CBD5E1;
 }
 
 .select-field:focus {
-  border-color: #007AFF;
+  background-color: #FFF;
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 
