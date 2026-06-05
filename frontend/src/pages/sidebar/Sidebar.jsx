@@ -105,16 +105,18 @@ function Sidebar() {
         <div className={styles.mobileCloseBtn} onClick={closeSidebar}>
           ×
         </div>
-        <div className={styles["sidebar-content"]}>
-        <div className={styles["auxin-logo"]}>
-          <img
-            src={sonashi_logo}
-            alt="Sonashi Logo"
-            className={styles["auxinlogo-img"]}
-          />
+        <div className={styles["sidebar-header"]}>
+          <div className={styles["auxin-logo"]}>
+            <img
+              src={sonashi_logo}
+              alt="Sonashi Logo"
+              className={styles["auxinlogo-img"]}
+            />
+          </div>
+          <div className={styles["line"]}></div>
         </div>
-        <div className={styles["line"]}></div>
 
+        <div className={styles["sidebar-nav"]}>
         <div className={styles["menu-sections"]}>
           <div className={styles["menu-section-one"]}>
             <p className={styles["section-title"]}>MAIN</p>
@@ -241,7 +243,7 @@ function Sidebar() {
             </ul>
           </div>
         </div>
-      </div>
+        </div>
 
       <div className={styles["sidebar-footer-content"]}>
         {/* <div className={styles["view-as-executive"]}>

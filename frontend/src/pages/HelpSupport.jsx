@@ -1,20 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import styles from "./HelpSupport.module.css";
 import Side from "./sidebar/Sidebar";
 import { useToast } from "../context/ToastContext";
 import axios from "axios";
 import InputField from "../components/InputField";
-import NotificationBell from "../components/NotificationBell";
-import ProfileAvatar from "../components/ProfileAvatar";
-
-import chevrondown from "../assets/dashboard/chevron-down.svg";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 
 const HelpSupport = () => {
   const { showToast } = useToast();
-  const [username, setUsername] = useState("");
-  const [userRole, setUserRole] = useState("");
-
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -24,11 +17,6 @@ const HelpSupport = () => {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-
-  useEffect(() => {
-    setUsername(localStorage.getItem("username") || "");
-    setUserRole(localStorage.getItem("role") || "");
-  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -80,40 +68,12 @@ const HelpSupport = () => {
   };
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <Side />
-      <main>
-        {/* Header Section */}
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Help & Support</div>
-            <div className={styles["dashboard-profile"]}>
-              <NotificationBell />
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                    <div className={styles["profile-type"]}>{userRole?.toUpperCase()}</div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="Help & Support" breadcrumb="Help & Support" />
 
-        {/* Breadcrumb Section */}
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-one"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-two"]}>Help & Support</div>
-          </div>
-        </section>
-
-        {/* Main Content */}
-        <section className={styles["main-content"]}>
+        <PageBody as="section" className={styles["main-content"]}>
           <div className={styles["support-container"]}>
             <div className={styles["support-header"]}>
               <div>
@@ -200,7 +160,7 @@ const HelpSupport = () => {
               </button>
             </form>
           </div>
-        </section>
+        </PageBody>
       </main>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import styles from "./AttendanceManagement.module.css";
 import Side from "../sidebar/Sidebar";
-import chevrondright from "../../assets/dashboard/chevron-right.svg";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavbar";
 import EmployeeService from "../../services/EmployeeService";
 import AttendanceService from "../../services/AttendanceService";
 import AttendanceUpdateModal from "../../components/team-management-components/AttendanceUpdateModal";
@@ -232,25 +232,12 @@ function AttendanceManagement() {
   const reportTotalPages = Math.ceil(reportData.length / itemsPerPage);
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <Side />
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Attendance Management</div>
-          </div>
-        </header>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="Attendance Management" breadcrumb="Attendance Management" />
 
-        {/* breadcrumb */}
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-home"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-active"]}>Attendance Management</div>
-          </div>
-        </section>
-
-        {/* Attendance Controls */}
+        <PageBody>
         <section className={styles["section"]}>
           <div className={styles["section-header"]}>
             <h3>Mark Attendance</h3>
@@ -574,6 +561,7 @@ function AttendanceManagement() {
           employee={selectedEmployee}
           onSaved={handleModalSaved}
         />
+        </PageBody>
       </main>
     </div>
   );

@@ -31,7 +31,7 @@ import upload from "../assets/dashboard/upload.svg";
 import deletewhite from "../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import { io as ioClient } from 'socket.io-client';
-import NotificationBell from "../components/NotificationBell";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 
 function SalesAndLeadsClient(clientId ) {
   const [activeTab, setActiveTab] = useState("basicInfo");
@@ -598,52 +598,21 @@ const handleTaskCreated = (newTask) => {
 
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
      <div className={styles["desktop-sidebar"]}>
         <Side />
       </div>
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Sales & Leads</div>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar
+          title="Sales & Leads"
+          breadcrumbs={[
+            { label: "Home", path: "/dashboard" },
+            { label: "Sales and Leads", path: "/salesandleads" },
+            { label: clientData?.companyName || "Client" },
+          ]}
+        />
 
-            <div className={styles["dashboard-profile"]}>
-                <NotificationBell/>
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                  <div className={styles["profile-column"]}>
-                   <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                    <div className={styles["profile-type"]}>
-                                          {userRole?.toUpperCase()}
-                                        </div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* breadcrumb */}
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-notactive"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div
-              className={styles["breadcrumb-notactive"]}
-              onClick={() => navigate("/salesandleads")}
-              style={{ cursor: "pointer" }}
-            >
-              Sales and Leads
-            </div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-active"]}>
-                 {clientData?.companyName || "Client"}
-            </div>
-          </div>
-        </section>
-
+        <PageBody>
         <div className={styles.contain}>
           <div className={styles.scroll_view}>
             <div className={styles.column}>
@@ -1002,6 +971,7 @@ const handleTaskCreated = (newTask) => {
             </div>
           </div>
         </div>
+        </PageBody>
       </main>
 
        {/* Mobile Bottom Navigation */}

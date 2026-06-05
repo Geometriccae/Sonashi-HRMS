@@ -161,7 +161,7 @@ main {
   width: 100%;
   max-width: 96.25rem;
   height: auto;
-  min-height: calc(100vh - 10rem);
+  min-height: auto;
   margin: 1.25rem 0 0 1.25rem;
   border-radius: 0.75rem 0.75rem 0rem 0rem;
   display: flex;

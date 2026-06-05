@@ -4,50 +4,26 @@ import Side from "./sidebar/Sidebar";
 import DashboardOverview from "../components/DashboardOverview";
 import CheckIn from "../components/CheckIn";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
-import NotificationBell from "../components/NotificationBell";
-
-import belldot from "../assets/dashboard/bell-dot.svg";
-import chevrondown from "../assets/dashboard/chevron-down.svg";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
-import ProfileAvatar from "../components/ProfileAvatar";
-import { FaBars } from "react-icons/fa";
-import { useSidebar } from "../context/SidebarContext";
-import { useNavigate } from "react-router-dom";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 
 function Dashboard() {
-    const navigate = useNavigate();
-    const { toggleSidebar } = useSidebar();
-    const [username, setUsername] = useState("");
     const [userRole, setUserRole] = useState("");
   
     useEffect(() => {
-      setUsername(localStorage.getItem("username") || "");
        setUserRole(localStorage.getItem("role") || "");
     }, []);
-  
 
-  const getTimeGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good Morning";
-    if (hour < 17) return "Good Afternoon";
-    return "Good Evening";
-  };
-
-  const getCurrentDate = () => {
-    const now = new Date();
-    const options = {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    };
-    return `It's ${now.toLocaleDateString("en-US", options)}`;
-  };
+  const dashboardTitle =
+    userRole === "admin"
+      ? "Admin Dashboard"
+      : userRole === "hr"
+        ? "HR Dashboard"
+        : "Dashboard";
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <Side />
-      <main className={styles["main-container"]}>
+      <main className={`${styles["main-container"]} ${pageLayoutStyles.pageMain}`}>
         {/* Mobile Header */}
         {/* <div className={styles["mobile-header"]}>
           <div className={styles["mobile-header-content"]}>
@@ -70,50 +46,15 @@ function Dashboard() {
           </div>
         </div> */}
 
-        {/* Desktop Header */}
-        <header className={styles["desktop-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["header-left"]}>
-              <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
-                <FaBars />
-              </button>
-              <div className={styles["dashboard-title"]}>
-                {userRole === 'admin' ? 'Admin Dashboard' : userRole === 'hr' ? 'HR Dashboard' : 'Dashboard'}
-              </div>
-            </div>
+        <TopNavbar
+          title={dashboardTitle}
+          breadcrumb="Dashboard"
+          showGreeting
+        />
 
-            <div className={styles["dashboard-profile"]} onClick={() => navigate("/profile")} style={{ cursor: 'pointer' }}>
-              <NotificationBell />
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                    <div className={styles["profile-type"]}>
-                                         {userRole?.toUpperCase()}
-                                       </div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Desktop breadcrumb */}
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-one"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-two"]}>Dashboard</div>
-          </div>
-        </section>
-
-        {/* Main Content */}
-        <section className={styles["main-content"]}>
-          {/* Mobile Check In Section */}
+        <PageBody as="section" className={styles["main-content"]}>
           <DashboardOverview />
-        </section>
+        </PageBody>
       </main>
 
     </div>

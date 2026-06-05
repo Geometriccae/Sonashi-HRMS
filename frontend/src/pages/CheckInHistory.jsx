@@ -3,33 +3,26 @@ import axios from "axios";
 import styles from "./CheckInHistory.module.css";
 import Side from "./sidebar/Sidebar";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import ProfileAvatar from "../components/ProfileAvatar";
-import belldot from "../assets/dashboard/bell-dot.svg";
-import chevrondown from "../assets/dashboard/chevron-down.svg";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
 import CheckInService from "../services/CheckInService";
 import config from "../config/config";
 import DeleteModal from "../components/delete-modal/DeleteModal";
-import NotificationBell from "../components/NotificationBell";
 
 function CheckInHistory() {
   const [checkIns, setCheckIns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [username, setUsername] = useState("");
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
-  const [userRole, setUserRole] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [checkInToDelete, setCheckInToDelete] = useState(null);
 
   useEffect(() => {
-    setUsername(localStorage.getItem("username") || "");
-    setUserRole(localStorage.getItem("role") || "");
     // fetchCheckIns will compute pagination; ensure currentPage is valid
     fetchCheckIns(currentPage, itemsPerPage);
   }, [currentPage, itemsPerPage]);
@@ -196,57 +189,14 @@ function CheckInHistory() {
   };
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <div className={styles["desktop-sidebar"]}>
         <Side />
       </div>
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>CheckIn History</div>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="Check-in History" breadcrumb="Check-in History" />
 
-            <div className={styles["dashboard-profile"]}>
-                <NotificationBell/>
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  <ProfileAvatar
-                    size={40}
-                    className={styles["profile-picture"]}
-                  />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>
-                      {username?.toUpperCase()}
-                    </div>
-                    <div className={styles["profile-type"]}>
-                      {userRole?.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Desktop breadcrumb */}
-        {/* <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-one"]}>Home</div>
-            <img src={chevrondright} alt="separator" />
-            <div className={styles["breadcrumb-two"]}>Check-in History</div>
-          </div>
-        </section> */}
-
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-one"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-two"]}>CheckIn</div>
-          </div>
-        </section>
-
-        {/* Main Content */}
-        <section className={styles["main-content"]}>
+        <PageBody as="section" className={styles["main-content"]}>
           <div className={styles["checkin-history-container"]}>
             <h2>Employee Check-in Records</h2>
 
@@ -319,7 +269,7 @@ function CheckInHistory() {
             )}
             {!loading && !error && checkIns.length > 0 && renderPagination()}
           </div>
-        </section>
+        </PageBody>
       </main>
 
       {/* Mobile Bottom Navigation */}

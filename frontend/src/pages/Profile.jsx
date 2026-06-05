@@ -2,13 +2,11 @@ import React, { useState, useEffect } from "react";
 import styles from "./Profile.module.css";
 import Side from "./sidebar/Sidebar";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
-import chevrondown from "../assets/dashboard/chevron-down.svg";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
 import admindemo from "../assets/dashboard/admin-demo.jpg";
 import UserService from "../services/UserService";
 import config from "../config/config";
 import ProfileAvatar from "../components/ProfileAvatar";
-import NotificationBell from "../components/NotificationBell";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import LogoutModal from "../components/logout-modal/LogoutModal";
 
 function Profile() {
@@ -131,47 +129,14 @@ function Profile() {
   };
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <div className={styles["desktop-sidebar"]}>
         <Side />
       </div>
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Profile</div>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="Profile" breadcrumb="Profile" />
 
-            <div className={styles["dashboard-profile"]}>
-              <NotificationBell />
-
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  <ProfileAvatar
-                    size={40}
-                    className={styles["profile-picture"]}
-                  />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>
-                      {username?.toUpperCase()}
-                    </div>
-                    <div className={styles["profile-type"]}>
-                      {userRole?.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-one"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-two"]}>Profile</div>
-          </div>
-        </section>
-
+        <PageBody>
         <div className={styles["header-content"]}>
           <div className={styles["profile-container"]}>
             <div className={styles["profile-title"]}>Your Profile</div>
@@ -419,6 +384,7 @@ function Profile() {
             </div> */}
           </div>
         </section>
+        </PageBody>
       </main>
 
       {/* Mobile Bottom Navigation */}

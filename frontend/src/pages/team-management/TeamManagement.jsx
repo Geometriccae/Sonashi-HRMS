@@ -2,24 +2,14 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./TeamManagement.module.css";
 import Side from "../sidebar/Sidebar";
-import NotificationBell from "../../components/NotificationBell";
-import belldot from "../../assets/dashboard/bell-dot.svg";
-import chevrondown from "../../assets/dashboard/chevron-down.svg";
-import chevrondright from "../../assets/dashboard/chevron-right.svg";
-import admindemo from "../../assets/dashboard/admin-demo.jpg";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavbar";
 import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
 import TeamMembersTable from "../../components/team-management-components/TeamMembersTable";
-import ProfileAvatar from "../../components/ProfileAvatar";
 import EmployeeService from "../../services/EmployeeService";
 import AttendanceService from "../../services/AttendanceService";
-import { FaBars } from "react-icons/fa";
-import { useSidebar } from "../../context/SidebarContext";
 
 function TeamManagement() {
-  const { toggleSidebar } = useSidebar();
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
-  const [userRole, setUserRole] = useState("");
   
   // Stats state
   const [stats, setStats] = useState({
@@ -31,8 +21,6 @@ function TeamManagement() {
   });
 
   useEffect(() => {
-    setUsername(localStorage.getItem("username") || "");
-    setUserRole(localStorage.getItem("role") || "");
     fetchStats();
   }, []);
 
@@ -96,48 +84,12 @@ function TeamManagement() {
   };
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <Side />
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["header-left"]}>
-              <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
-                <FaBars />
-              </button>
-              <div className={styles["dashboard-title"]}>Team Management</div>
-            </div>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="Team Management" breadcrumb="Team Management" />
 
-            <div className={styles["dashboard-profile"]}>
-              <NotificationBell/>
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  
-                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>{username?.toUpperCase()}
-                    </div>
-                     <div className={styles["profile-type"]}>
-                                          {userRole?.toUpperCase()}
-                                        </div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* breadcrumb */}
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-home"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-active"]}>Team Management</div>
-          </div>
-        </section>
-
-        {/* Stats Cards Section */}
+        <PageBody>
         <section className={styles["stats-container"]}>
 
           <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
@@ -181,6 +133,7 @@ function TeamManagement() {
         <section className={styles["main-content"]}>
           <TeamMembersTable />
         </section>
+        </PageBody>
       </main>
     </div>
   );
