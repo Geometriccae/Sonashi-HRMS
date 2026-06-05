@@ -8,7 +8,15 @@ const initialForm = {
   expiryDate: "",
 };
 
-const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit }) => {
+const toInputDate = (dateString) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+};
+
+const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit, documentToEdit = null }) => {
+  const isEditMode = Boolean(documentToEdit);
   const [formData, setFormData] = useState(initialForm);
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -16,11 +24,20 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit }) => {
 
   useEffect(() => {
     if (isOpen) {
-      setFormData(initialForm);
+      if (documentToEdit) {
+        setFormData({
+          particulars: documentToEdit.particulars || "",
+          docNumber: documentToEdit.docNumber || "",
+          issueDate: toInputDate(documentToEdit.issueDate),
+          expiryDate: toInputDate(documentToEdit.expiryDate),
+        });
+      } else {
+        setFormData(initialForm);
+      }
       setFile(null);
       setError("");
     }
-  }, [isOpen]);
+  }, [isOpen, documentToEdit]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -40,15 +57,15 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit }) => {
       if (!formData.particulars.trim()) {
         throw new Error("Particulars is required");
       }
-      if (!file) {
+      if (!isEditMode && !file) {
         throw new Error("Please select a file to upload");
       }
 
-      await onSubmit({ ...formData, file });
+      await onSubmit({ ...formData, file, documentId: documentToEdit?._id });
       setFormData(initialForm);
       setFile(null);
     } catch (err) {
-      setError(err.message || "Failed to upload document");
+      setError(err.message || (isEditMode ? "Failed to update document" : "Failed to upload document"));
     } finally {
       setLoading(false);
     }
@@ -69,7 +86,7 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit }) => {
     <div className={styles.modalOverlay}>
       <div className={styles.modal}>
         <div className={styles.modalHeader}>
-          <h2>Upload Company Document</h2>
+          <h2>{isEditMode ? "Edit Company Document" : "Add Company Document"}</h2>
           <button
             className={styles.closeButton}
             onClick={handleClose}
@@ -135,7 +152,9 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit }) => {
           </div>
 
           <div className={styles.formGroup}>
-            <label htmlFor="file">Upload File *</label>
+            <label htmlFor="file">
+              {isEditMode ? "Replace File (optional)" : "Upload File *"}
+            </label>
             <input
               type="file"
               id="file"
@@ -147,6 +166,11 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit }) => {
             {file && (
               <small style={{ display: "block", marginTop: "6px", color: "#666" }}>
                 Selected: {file.name}
+              </small>
+            )}
+            {isEditMode && documentToEdit?.fileName && !file && (
+              <small style={{ display: "block", marginTop: "6px", color: "#666" }}>
+                Current file: {documentToEdit.fileName}
               </small>
             )}
           </div>
@@ -161,7 +185,7 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit }) => {
               Cancel
             </button>
             <button type="submit" disabled={loading} className={styles.submitButton}>
-              {loading ? "Uploading..." : "Upload"}
+              {loading ? (isEditMode ? "Saving..." : "Uploading...") : isEditMode ? "Save" : "Add"}
             </button>
           </div>
         </form>

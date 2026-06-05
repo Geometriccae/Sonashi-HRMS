@@ -6,6 +6,7 @@ import DeleteModal from "../components/delete-modal/DeleteModal";
 import UploadCompanyDocumentModal from "../components/UploadCompanyDocumentModal";
 import CompanyDocumentService from "../services/CompanyDocumentService";
 import { buildImageUrl } from "../config/config";
+import { useToast } from "../context/ToastContext";
 
 const formatDate = (dateString) => {
   if (!dateString) return "-";
@@ -18,10 +19,12 @@ const formatDate = (dateString) => {
 };
 
 const CompanyDocument = () => {
+  const { showToast } = useToast();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [docToEdit, setDocToEdit] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [docToDelete, setDocToDelete] = useState(null);
   const fetchDocuments = async () => {
@@ -42,17 +45,46 @@ const CompanyDocument = () => {
     fetchDocuments();
   }, []);
 
-  const handleUpload = async (formData) => {
-    await CompanyDocumentService.upload(formData.file, {
-      particulars: formData.particulars,
-      docNumber: formData.docNumber,
-      issueDate: formData.issueDate,
-      expiryDate: formData.expiryDate,
-      uploadedBy: localStorage.getItem("username") || "",
-      userRole: localStorage.getItem("role") || "",
-    });
-    await fetchDocuments();
+  const handleOpenAdd = () => {
+    setDocToEdit(null);
+    setIsUploadModalOpen(true);
+  };
+
+  const handleEditClick = (doc) => {
+    setDocToEdit(doc);
+    setIsUploadModalOpen(true);
+  };
+
+  const handleModalClose = () => {
     setIsUploadModalOpen(false);
+    setDocToEdit(null);
+  };
+
+  const handleSubmit = async (formData) => {
+    const isEdit = Boolean(formData.documentId);
+
+    if (isEdit) {
+      await CompanyDocumentService.update(formData.documentId, formData.file, {
+        particulars: formData.particulars,
+        docNumber: formData.docNumber,
+        issueDate: formData.issueDate,
+        expiryDate: formData.expiryDate,
+      });
+      showToast("Document updated successfully.", "success");
+    } else {
+      await CompanyDocumentService.upload(formData.file, {
+        particulars: formData.particulars,
+        docNumber: formData.docNumber,
+        issueDate: formData.issueDate,
+        expiryDate: formData.expiryDate,
+        uploadedBy: localStorage.getItem("username") || "",
+        userRole: localStorage.getItem("role") || "",
+      });
+      showToast("Document added successfully.", "success");
+    }
+
+    await fetchDocuments();
+    handleModalClose();
   };
 
   const handleDeleteClick = (doc) => {
@@ -100,9 +132,9 @@ const CompanyDocument = () => {
             <h1>Company Document</h1>
             <button
               className={styles.uploadButton}
-              onClick={() => setIsUploadModalOpen(true)}
+              onClick={handleOpenAdd}
             >
-              Upload
+              +Add
             </button>
           </div>
 
@@ -147,6 +179,12 @@ const CompanyDocument = () => {
                           </a>
                         )}
                         <button
+                          className={styles.editButton}
+                          onClick={() => handleEditClick(doc)}
+                        >
+                          Edit
+                        </button>
+                        <button
                           className={styles.deleteButton}
                           onClick={() => handleDeleteClick(doc)}
                         >
@@ -174,8 +212,9 @@ const CompanyDocument = () => {
 
           <UploadCompanyDocumentModal
             isOpen={isUploadModalOpen}
-            onClose={() => setIsUploadModalOpen(false)}
-            onSubmit={handleUpload}
+            onClose={handleModalClose}
+            onSubmit={handleSubmit}
+            documentToEdit={docToEdit}
           />
         </PageBody>
       </main>

@@ -176,24 +176,29 @@ main {
   letter-spacing: -0.0625rem;
 }
 
-.main-content {
-  flex: 1;
-  padding: clamp(1rem, 1.5vw, 1.5rem);
-  background-color: RGB(250 251 251);
-  overflow-y: auto;
-  overflow-x: hidden;
+.page-content {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  padding: clamp(1rem, 1.5vw, 1.5rem);
+  box-sizing: border-box;
+}
+
+.main-content {
+  flex: 1;
+  padding: 0;
+  background-color: transparent;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Stats Cards Section */
 .stats-container {
-  display: flex;
-  gap: clamp(1rem, 1.27vw, 1.27rem);
-  width: 97%;
-  margin: 0.9rem 0.9rem 0 1.1rem;
-  flex-wrap: wrap;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 /* Attendance Card */
@@ -481,10 +486,9 @@ main {
   .dashboard-title {
     font-size: 1.5rem;
   }
-  .stats-container {
-    gap: 1rem;
-    margin: 0.5rem 0.5rem 0 0.9rem;
-    width: 97%;
+  .page-content {
+    padding: 1rem 1.5rem;
+    gap: 1.25rem;
   }
 
   .attendance-card,
@@ -547,7 +551,7 @@ main {
 
 /* 1366px Breakpoint */
 @media (max-width: 1366px) {
-  .main-content {
+  .page-content {
     padding: 1rem;
     gap: 1rem;
   }
@@ -692,10 +696,9 @@ main {
     font-size: 1.5rem;
   }
 
-  .stats-container {
-    gap: 1rem;
-    margin: 0.5rem 0.5rem 0 0.9rem;
-    width: 97%;
+  .page-content {
+    padding: 1rem 1.5rem;
+    gap: 1.25rem;
   }
 
   .attendance-card,
@@ -887,9 +890,9 @@ main {
     display: none;
   }
 
-  .stats-container {
-    flex-direction: column;
+  .page-content {
     padding: 1rem;
+    gap: 1rem;
   }
 
   .attendance-card,

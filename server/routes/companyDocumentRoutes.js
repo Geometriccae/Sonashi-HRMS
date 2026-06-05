@@ -62,6 +62,51 @@ router.post("/", authMiddleware, upload.single("file"), async (req, res) => {
   }
 });
 
+router.put("/:docId", authMiddleware, upload.single("file"), async (req, res) => {
+  try {
+    const doc = await CompanyDocument.findById(req.params.docId);
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    const particulars = req.body.particulars ? String(req.body.particulars).trim() : "";
+    if (!particulars) {
+      return res.status(400).json({ error: "Particulars is required" });
+    }
+
+    const issueDate = req.body.issueDate ? new Date(req.body.issueDate) : null;
+    const expiryDate = req.body.expiryDate ? new Date(req.body.expiryDate) : null;
+
+    doc.particulars = particulars;
+    doc.docNumber = req.body.docNumber ? String(req.body.docNumber).trim() : "";
+    doc.issueDate = issueDate && !Number.isNaN(issueDate.getTime()) ? issueDate : null;
+    doc.expiryDate = expiryDate && !Number.isNaN(expiryDate.getTime()) ? expiryDate : null;
+
+    if (req.file) {
+      if (doc.filePath) {
+        const oldDiskPath = path.join(__dirname, "..", "..", doc.filePath);
+        if (fs.existsSync(oldDiskPath)) {
+          try {
+            fs.unlinkSync(oldDiskPath);
+          } catch (unlinkErr) {
+            console.warn("Failed to delete old file from disk:", unlinkErr);
+          }
+        }
+      }
+
+      doc.fileName = req.file.originalname;
+      doc.fileType = req.file.mimetype;
+      doc.fileSize = req.file.size;
+      doc.filePath = `/uploads/companydocuments/${req.file.filename}`;
+    }
+
+    await doc.save();
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete("/:docId", authMiddleware, async (req, res) => {
   try {
     const doc = await CompanyDocument.findById(req.params.docId);

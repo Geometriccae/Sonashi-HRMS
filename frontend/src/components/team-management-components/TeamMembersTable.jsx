@@ -1,26 +1,37 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import styles from "./TeamMembersTable.module.css";
+import {
+  Card,
+  Table,
+  Button,
+  Input,
+  Segmented,
+  Tag,
+  Avatar,
+  Space,
+  Typography,
+  Select,
+  Alert,
+  Empty,
+  Tooltip,
+} from "antd";
+import {
+  UserAddOutlined,
+  UploadOutlined,
+  SearchOutlined,
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddEmployeeModal from "./AddEmployeeModal";
 import EditEmployeeModal from "./EditEmployeeModal";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
-import FilterDropdown from "../FilterDropdown";
 import employeeService from "../../services/EmployeeService";
 import ClientService from "../../services/ClientService";
-import config, { buildImageUrl, handleImageError, getApiBaseUrl } from "../../config/config";
+import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
-
-// use shared handleImageError from config
-const onImageError = (e) => {
-  handleImageError(e);
-  // Also show initials if the fallback failed or if we want them as backup
-  if (e.target.style.display === 'none') {
-    const fallback = e.target.parentElement.querySelector('.avatar-initials');
-    if (fallback) fallback.style.display = 'flex';
-  }
-};
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -52,137 +63,19 @@ function isRowSelected(selectedIds, member) {
   return selectedIds.some((s) => String(s) === rid);
 }
 
-// SVG Components (reusing from ClientsTable)
-const UserPlusIcon = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 25 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={styles["button-icon"]}
-  >
-    <path
-      d="M16.5547 21V19C16.5547 17.9391 16.1333 16.9217 15.3831 16.1716C14.633 15.4214 13.6156 15 12.5547 15H6.55469C5.49382 15 4.47641 15.4214 3.72626 16.1716C2.97611 16.9217 2.55469 17.9391 2.55469 19V21M19.5547 8V14M22.5547 11H16.5547M13.5547 7C13.5547 9.20914 11.7638 11 9.55469 11C7.34555 11 5.55469 9.20914 5.55469 7C5.55469 4.79086 7.34555 3 9.55469 3C11.7638 3 13.5547 4.79086 13.5547 7Z"
-      stroke="white"
-      strokeOpacity="0.9"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+const vacationTagColor = {
+  Onsite: "success",
+  "On Vacation": "processing",
+  "Vacation Approved": "purple",
+  "Vacation Pending": "warning",
+};
 
-const SearchIcon = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 17 17"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={styles["search-icon"]}
-  >
-    <path
-      d="M14.4063 14.5938L11.5396 11.7271M13.0729 7.92708C13.0729 10.8726 10.6851 13.2604 7.73958 13.2604C4.79406 13.2604 2.40625 10.8726 2.40625 7.92708C2.40625 4.98156 4.79406 2.59375 7.73958 2.59375C10.6851 2.59375 13.0729 4.98156 13.0729 7.92708Z"
-      stroke="#98A1B0"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-const FilterIcon = () => (
-  <svg
-    width="32"
-    height="32"
-    viewBox="0 0 32 33"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={styles["filter-icon"]}
-  >
-    <path
-      d="M4 8.59375H28M9.33333 16.5938H22.6667M13.3333 24.5938H18.6667"
-      stroke="#98A1B0"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-const SortIcon = () => (
-  <svg
-    width="19"
-    height="19"
-    viewBox="0 0 20 20"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={styles["sort-icon"]}
-  >
-    <path
-      d="M2.23642 11.7338L4.93675 14.4341M4.93675 14.4341L7.63708 11.7338M4.93675 14.4341V3.63281M14.3879 6.33314L11.6876 3.63281M11.6876 3.63281L8.98725 6.33314M11.6876 3.63281V14.4341"
-      stroke="#808080"
-      strokeOpacity="0.7"
-      strokeWidth="1.01262"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-const EditIcon = () => (
-  <svg
-    width="29"
-    height="29"
-    viewBox="0 0 30 29"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={styles["edit-icon"]}
-  >
-    <path
-      d="M15.1136 6.0089H8.02525C7.48812 6.0089 6.97299 6.22227 6.59318 6.60208C6.21337 6.98189 6 7.49702 6 8.03415V22.2109C6 22.748 6.21337 23.2632 6.59318 23.643C6.97299 24.0228 7.48812 24.2361 8.02525 24.2361H22.202C22.7391 24.2361 23.2543 24.0228 23.6341 23.643C24.0139 23.2632 24.2272 22.748 24.2272 22.2109V15.1225M21.5691 5.62916C21.972 5.22632 22.5183 5 23.088 5C23.6578 5 24.2041 5.22632 24.607 5.62916C25.0098 6.03201 25.2361 6.57839 25.2361 7.1481C25.2361 7.71781 25.0098 8.26419 24.607 8.66704L15.4802 17.7948C15.2397 18.0351 14.9427 18.2109 14.6164 18.3062L11.7072 19.1568C11.62 19.1822 11.5277 19.1838 11.4397 19.1612C11.3518 19.1387 11.2715 19.093 11.2074 19.0288C11.1432 18.9646 11.0974 18.8843 11.0749 18.7964C11.0524 18.7085 11.0539 18.6161 11.0793 18.529L11.9299 15.6197C12.0256 15.2937 12.2019 14.997 12.4423 14.757L21.5691 5.62916Z"
-      stroke="#8C8E90"
-      strokeWidth="2.02525"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-const ViewIcon = () => (
-  <svg
-    width="29"
-    height="29"
-    viewBox="0 0 29 29"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={styles["view-icon"]}
-  >
-    <path
-      d="M2.5 14.5C4.65 10.2 8.71 7.5 14.5 7.5C20.29 7.5 24.35 10.2 26.5 14.5C24.35 18.8 20.29 21.5 14.5 21.5C8.71 21.5 4.65 18.8 2.5 14.5Z"
-      stroke="#8C8E90"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <circle cx="14.5" cy="14.5" r="3.5" stroke="#8C8E90" strokeWidth="2" />
-  </svg>
-);
-const DeleteIcon = () => (
-  <svg
-    width="29"
-    height="29"
-    viewBox="0 0 29 29"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={styles["delete-icon"]}
-  >
-    <path
-      d="M5 8.0505H23.2272M21.202 8.0505V22.2272C21.202 23.2399 20.1894 24.2525 19.1767 24.2525H9.0505C8.03787 24.2525 7.02525 23.2399 7.02525 22.2272V8.0505M10.0631 8.0505V6.02525C10.0631 5.01262 11.0757 4 12.0884 4H16.1389C17.1515 4 18.1641 5.01262 18.1641 6.02525V8.0505M12.0884 13.1136V19.1894M16.1389 13.1136V19.1894"
-      stroke="#8C8E90"
-      strokeWidth="2.02525"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+const vacationLabel = (vs) => {
+  if (vs === "On Vacation") return "On vacation";
+  if (vs === "Vacation Approved") return "Returned back";
+  if (vs === "Vacation Pending") return "Yet to go";
+  return vs;
+};
 
 function TeamMembersTable() {
   const { showToast } = useToast();
@@ -195,14 +88,10 @@ function TeamMembersTable() {
   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
   const [employeeToEdit, setEmployeeToEdit] = useState(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
-  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [employees, setEmployees] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const filterButtonRef = useRef(null);
-  const selectAllCheckboxRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const userRole = localStorage.getItem("role") || "";
@@ -263,31 +152,6 @@ function TeamMembersTable() {
     } catch (err) {
       console.error("Failed to fetch clients:", err);
     }
-  };
-
-  const handleSelectAll = (e) => {
-    const ids = filteredData.map((m) => empRowId(m)).filter(Boolean);
-    if (!ids.length) return;
-    const idSet = new Set(ids);
-    if (e.target.checked) {
-      setSelectedEmployeeIds((prev) => {
-        const merged = [...prev.map(String), ...ids];
-        return [...new Set(merged)];
-      });
-    } else {
-      setSelectedEmployeeIds((prev) => prev.filter((id) => !idSet.has(String(id))));
-    }
-  };
-
-  const handleSelectEmployee = (id) => {
-    const sid = empRowId(id);
-    if (!sid) return;
-    setSelectedEmployeeIds((prev) => {
-      if (prev.some((x) => String(x) === sid)) {
-        return prev.filter((eId) => String(eId) !== sid);
-      }
-      return [...prev, sid];
-    });
   };
 
   const handleSelectAllInListClick = () => {
@@ -463,25 +327,6 @@ function TeamMembersTable() {
     setDatePrompt(null);
   };
 
-  const handleFilterClick = (event) => {
-    if (filterButtonRef.current) {
-      const rect = filterButtonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + 8,
-        left: rect.left - 200
-      });
-    }
-    setIsFilterDropdownOpen(!isFilterDropdownOpen);
-  };
-
-  const handleFilterDropdownClose = () => {
-    setIsFilterDropdownOpen(false);
-  };
-
-  const handleFilterSelect = (option) => {
-    console.log("Filter selected:", option);
-  };
-
   // Filter employees first
   const filteredData = employees.filter((member) => {
     let matchesFilter = true;
@@ -522,529 +367,307 @@ function TeamMembersTable() {
     }
   }, [filteredData.length, currentPage]);
 
-  const startIndex = (currentPageSafe - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
-
   const allFilteredSelected =
     filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
 
-  useEffect(() => {
-    const el = selectAllCheckboxRef.current;
-    if (!el) return;
-    const some = filteredData.some((m) => isRowSelected(selectedEmployeeIds, m));
-    const all = filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
-    el.indeterminate = some && !all;
-  }, [filteredData, selectedEmployeeIds]);
-
-  // Debug: show pagination & filter state in console to help diagnose UI issues
-  useEffect(() => {
-    // small delay so logs reflect the latest state after renders
-    const id = setTimeout(() => {
-      console.debug("TeamMembersTable pagination debug:", {
-        activeFilter,
-        searchTerm,
-        employeesCount: employees.length,
-        filteredCount: filteredData.length,
-        itemsPerPage,
-        totalPages,
-        currentPage,
-        currentPageSafe,
-        paginatedCount: paginatedData.length,
-        startIndex
-      });
-    }, 0);
-    return () => clearTimeout(id);
-  }, [activeFilter, searchTerm, employees.length, filteredData.length, currentPage, currentPageSafe]);
-
-
-
-  // Inline top banners
   const isInitialLoading = loading && employees.length === 0 && !error;
 
-  const inlineBanner = (
-    <>
-      {loading && employees.length > 0 && (
-        <div className={styles["refresh-banner"]}>
-          Refreshing employees...
-        </div>
-      )}
-      {error && (
-        <div className={styles["error-banner"]}>
-          <span>{error}</span>
-          <button onClick={fetchEmployees} className={styles["retry-button"]}>Retry</button>
-        </div>
-      )}
-    </>
-  );
+  const columns = [
+      {
+        title: "S.No",
+        key: "sno",
+        width: 70,
+        align: "center",
+        render: (_, __, index) => (currentPageSafe - 1) * itemsPerPage + index + 1,
+      },
+      {
+        title: "Employee Name",
+        dataIndex: "employeeName",
+        key: "employeeName",
+        sorter: (a, b) => (a.employeeName || "").localeCompare(b.employeeName || ""),
+        render: (name, record) => (
+          <Link
+            to={`/teammanagement_salesleads/${record._id || record.id}`}
+            style={{ color: "inherit", textDecoration: "none" }}
+          >
+            <Space>
+              <Avatar
+                size={40}
+                src={record.profilePhoto ? buildImageUrl(record.profilePhoto) : undefined}
+                style={{ backgroundColor: "#007aff", flexShrink: 0 }}
+              >
+                {name ? name.charAt(0).toUpperCase() : "E"}
+              </Avatar>
+              <div>
+                <Typography.Text strong style={{ display: "block", textTransform: "capitalize" }}>
+                  {(name || "Unknown").toLowerCase()}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                  {record.role || "No Role"}
+                </Typography.Text>
+              </div>
+            </Space>
+          </Link>
+        ),
+      },
+      {
+        title: "Status",
+        dataIndex: "employeeStatus",
+        key: "employeeStatus",
+        width: 120,
+        sorter: (a, b) => (a.employeeStatus || "").localeCompare(b.employeeStatus || ""),
+        render: (status) => {
+          const isActive = status !== "InActive";
+          return (
+            <Tag color={isActive ? "success" : "default"} style={{ borderRadius: 20, fontWeight: 600 }}>
+              {status || "Active"}
+            </Tag>
+          );
+        },
+      },
+      {
+        title: "Vacation Status",
+        dataIndex: "vacationStatus",
+        key: "vacationStatus",
+        width: 200,
+        render: (_, record) => {
+          const isActive = record.employeeStatus !== "InActive";
+          if (!isActive) return <Typography.Text type="secondary">—</Typography.Text>;
+
+          const vs = record.vacationStatus || "Onsite";
+          const dateFieldMap = {
+            "On Vacation": "lastWorkingDay",
+            "Vacation Pending": "travellingDate",
+            "Vacation Approved": "firstWorkingDay",
+          };
+          const dateField = dateFieldMap[vs];
+          const dateVal = dateField ? record[dateField] : null;
+
+          if (isAdmin) {
+            return (
+              <Space direction="vertical" size={2}>
+                <Select
+                  size="small"
+                  value={vs}
+                  style={{ minWidth: 160 }}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(val) => handleStatusDropdownChange(record, val)}
+                  options={[
+                    { value: "Onsite", label: "Onsite" },
+                    { value: "On Vacation", label: "On vacation" },
+                    { value: "Vacation Approved", label: "Returned back from vacation" },
+                    { value: "Vacation Pending", label: "Yet to go" },
+                  ]}
+                />
+                {dateVal && (
+                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                    {new Date(dateVal).toLocaleDateString("en-GB")}
+                  </Typography.Text>
+                )}
+              </Space>
+            );
+          }
+
+          return (
+            <Space direction="vertical" size={2}>
+              <Tag color={vacationTagColor[vs] || "default"} style={{ borderRadius: 20 }}>
+                {vacationLabel(vs)}
+              </Tag>
+              {dateVal && (
+                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                  {new Date(dateVal).toLocaleDateString("en-GB")}
+                </Typography.Text>
+              )}
+            </Space>
+          );
+        },
+      },
+      {
+        title: "Email ID",
+        dataIndex: "emailId",
+        key: "emailId",
+        sorter: (a, b) => (a.emailId || "").localeCompare(b.emailId || ""),
+        render: (email) => {
+          const emailDisplay = displayEmployeeEmail(email);
+          return (
+            <Typography.Text type={emailDisplay.isEmpty ? "secondary" : undefined}>
+              {emailDisplay.text}
+            </Typography.Text>
+          );
+        },
+      },
+      {
+        title: "Phone Number",
+        dataIndex: "mobile",
+        key: "mobile",
+        width: 140,
+        render: (mobile) => (
+          <Typography.Text type={mobile ? undefined : "secondary"}>
+            {mobile || "—"}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        width: 130,
+        align: "center",
+        render: (_, record) => (
+          <Space size={4}>
+            <Tooltip title="View">
+              <Link to={`/teammanagement_salesleads/${record._id || record.id}`}>
+                <Button type="text" icon={<EyeOutlined />} size="small" />
+              </Link>
+            </Tooltip>
+            <Tooltip title="Edit">
+              <Button type="text" icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)} />
+            </Tooltip>
+            {isAdmin && (
+              <Tooltip title="Delete">
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  size="small"
+                  onClick={() => handleDelete(record)}
+                />
+              </Tooltip>
+            )}
+          </Space>
+        ),
+      },
+    ];
+
+  const rowSelection = {
+    selectedRowKeys: selectedEmployeeIds,
+    onChange: (keys) => setSelectedEmployeeIds(keys.map(String)),
+    onSelectAll: (selected) => {
+      const ids = filteredData.map((m) => empRowId(m)).filter(Boolean);
+      if (selected) {
+        setSelectedEmployeeIds((prev) => [...new Set([...prev.map(String), ...ids])]);
+      } else {
+        const idSet = new Set(ids);
+        setSelectedEmployeeIds((prev) => prev.filter((id) => !idSet.has(String(id))));
+      }
+    },
+    getCheckboxProps: (record) => ({
+      name: record.employeeName,
+    }),
+  };
 
   return (
-    <div className={styles["clients-table-container"]}>
-      {inlineBanner}
-      <div className={styles["table-header-section"]}>
-        <div className={styles["table-title-section"]}>
-          <h2 className={styles["table-title"]}>Team Members</h2>
-          <div className={styles["action-buttons"]}>
-            {filteredData.length > 0 && !allFilteredSelected && (
-              <button
-                type="button"
-                className={styles["secondary-button"]}
-                onClick={handleSelectAllInListClick}
-              >
-                Select all ({filteredData.length})
-              </button>
-            )}
-            {selectedEmployeeIds.length > 0 && (
-              <button
-                type="button"
-                className={styles["secondary-button"]}
-                onClick={handleClearSelection}
-              >
-                Clear selection
-              </button>
-            )}
-            {selectedEmployeeIds.length > 0 && (
-              <button
-                className={`${styles["secondary-button"]} ${styles["delete-btn"]}`}
-                onClick={() => setIsDeleteModalOpen(true)}
-              >
-                Delete selected ({selectedEmployeeIds.length})
-              </button>
-            )}
-            <button
-              type="button"
-              className={styles["secondary-button"]}
-              onClick={() => setIsBulkImportModalOpen(true)}
-            >
-              Bulk import
-            </button>
-            <button className={styles["primary-button"]} onClick={handleAddEmployee}>
-              Add Employee
-              <UserPlusIcon />
-            </button>
-          </div>
-        </div>
-        <div className={styles["controls-section"]}>
-          <div className={styles["segmented-control"]}>
-            <button
-              className={`${styles["toggle-button"]} ${activeFilter === "All" ? styles["active-all"] : ""}`}
-              onClick={() => setActiveFilter("All")}
-            >
-              All
-            </button>
-            <button
-              className={`${styles["toggle-button"]} ${activeFilter === "Active" ? styles["active"] : ""}`}
-              onClick={() => setActiveFilter("Active")}
-            >
-              Active
-            </button>
-            <button
-              className={`${styles["toggle-button"]} ${activeFilter === "Inactive" ? styles["active"] : ""}`}
-              onClick={() => setActiveFilter("Inactive")}
-            >
-              Inactive
-            </button>
-          </div>
-          <div className={styles["search-and-filter"]}>
-            <div className={styles["search-container"]}>
-              <input
-                type="text"
-                placeholder="Search by name, employee ID, email, role..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className={styles["search-input"]}
-              />
-              <SearchIcon />
-            </div>
-            <button
-              ref={filterButtonRef}
-              className={styles["filter-button"]}
-              onClick={handleFilterClick}
-            >
-              {/* <FilterIcon /> */}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {isInitialLoading ? (
-        <div className={styles["initial-loading"]}>
-          <div className={styles["spinner"]} aria-hidden="true"></div>
-          <p>Loading employees...</p>
-        </div>
-      ) : filteredData.length === 0 ? (
-        <div className={styles["empty-state"]}>
-          <p>No employees found.</p>
-          {searchTerm && (
-            <p className={styles["empty-state-hint"]}>
-              Try adjusting your search criteria.
-            </p>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className={styles["table-section"]}>
-            <div className={styles["table-wrapper"]}>
-              <div className={styles["table-columns"]}>
-                {/* Checkbox Column */}
-                <div className={`${styles["table-column"]} ${styles["checkbox-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={`${styles["header-content-center"]} ${styles["select-all-header"]}`}>
-                        <label className={styles["checkbox-label"]} title="Select or clear all rows in the current list (all pages)">
-                          <input
-                            ref={selectAllCheckboxRef}
-                            type="checkbox"
-                            className={styles["hidden-checkbox"]}
-                            onChange={handleSelectAll}
-                            checked={allFilteredSelected}
-                          />
-                          <span className={styles["custom-checkbox"]}></span>
-                        </label>
-                        <span className={styles["select-all-label"]}>All</span>
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => (
-                    <div key={empRowId(member)} className={`${styles["table-cell"]} ${styles["checkbox-cell"]}`}>
-                      <label className={styles["checkbox-label"]}>
-                        <input
-                          type="checkbox"
-                          className={styles["hidden-checkbox"]}
-                          checked={isRowSelected(selectedEmployeeIds, member)}
-                          onChange={() => handleSelectEmployee(member)}
-                        />
-                        <span className={styles["custom-checkbox"]}></span>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-
-                {/* S.No Column */}
-                <div className={`${styles["table-column"]} ${styles["s-no-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content-center"]}>
-                        <span className={styles["header-text"]}>S.No</span>
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member, index) => (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["s-no-cell"]}`}>
-                      {(currentPageSafe - 1) * itemsPerPage + index + 1}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Employee Name Column */}
-                <div className={`${styles["table-column"]} ${styles["company-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content"]}>
-                        <span className={styles["header-text"]}>Employee Name</span>
-                        <SortIcon />
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => (
-                    <Link
-                      key={member._id || member.id}
-                      to={`/teammanagement_salesleads/${member._id || member.id}`}
-                      className={`${styles["table-cell"]} ${styles["company-cell"]} ${styles["no-link-style"]}`}
-                    >
-                      <div className={styles["avatar"]}>
-                        {member.profilePhoto ? (
-                          <img
-                            src={buildImageUrl(member.profilePhoto)}
-                            alt={`${member.employeeName} profile`}
-                            className={styles["client-profile-image"]}
-                            onError={onImageError}
-                          />
-                        ) : null}
-                        <span 
-                          className="avatar-initials" 
-                          style={{ display: member.profilePhoto ? 'none' : 'flex' }}
-                        >
-                          {member.employeeName ? member.employeeName.charAt(0).toUpperCase() : 'E'}
-                        </span>
-                      </div>
-                      <div className={styles["companyinfo"]}>
-                        <div className={styles["company-name"]}>{member.employeeName || 'Unknown'}</div>
-                        <div className={styles["company-email"]}>{member.role || 'No Role'}</div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-
-                {/* employeeStatus Column */}
-                <div className={`${styles["table-column"]} ${styles["type-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content"]}>
-                        <span className={styles["header-text"]}>Status</span>
-                        <SortIcon />
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["type-cell"]}`}>
-                      <div className={`${styles["type-chip"]} ${styles[(member.employeeStatus || 'active').toLowerCase().replace(' ', '')] || ''}`}>
-                        <span className={styles["chip-text"]}>{member.employeeStatus || 'Active'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-
-
-                {/* Vacation Status Column */}
-                <div className={`${styles["table-column"]} ${styles["type-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content"]}>
-                        <span className={styles["header-text"]}>Vacation Status</span>
-                        <SortIcon />
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => {
-                    const isActive = member.employeeStatus !== "InActive";
-                    const vs = member.vacationStatus || "Onsite";
-
-                    const statusConfig = {
-                      "Onsite": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", icon: "✓" },
-                      "On Vacation": { bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", color: "#1e3a8a", dot: "#3b82f6", icon: "✈" },
-                      "Vacation Approved": { bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", color: "#4c1d95", dot: "#7c3aed", icon: "✔" },
-                      "Vacation Pending": { bg: "linear-gradient(135deg,#fef9c3,#fde68a)", color: "#713f12", dot: "#f59e0b", icon: "⏳" },
-                    };
-                    const cfg = statusConfig[vs] || statusConfig["Onsite"];
-
-                    const dateFieldMap = {
-                      "On Vacation": "lastWorkingDay",
-                      "Vacation Pending": "travellingDate",
-                      "Vacation Approved": "firstWorkingDay",
-                    };
-                    const dateField = dateFieldMap[vs];
-                    const dateVal = dateField ? member[dateField] : null;
-
-                    return (
-                      <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["type-cell"]}`} style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start", justifyContent: "center" }}>
-                        {isActive ? (
-                          <>
-                            {isAdmin ? (
-                              <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }} onClick={e => e.stopPropagation()}>
-                                <div style={{
-                                  display: "inline-flex", alignItems: "center", gap: "6px",
-                                  padding: "5px 12px 5px 8px",
-                                  borderRadius: "999px",
-                                  background: cfg.bg,
-                                  color: cfg.color,
-                                  fontSize: "12px",
-                                  fontWeight: "700",
-                                  whiteSpace: "nowrap",
-                                  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-                                  border: `1px solid ${cfg.dot}30`,
-                                  userSelect: "none",
-                                  cursor: "pointer",
-                                  minWidth: "140px",
-                                  justifyContent: "space-between",
-                                  letterSpacing: "0.01em",
-                                }}>
-                                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                    <span style={{
-                                      width: "7px", height: "7px", borderRadius: "50%",
-                                      background: cfg.dot,
-                                      flexShrink: 0,
-                                      boxShadow: `0 0 0 2px ${cfg.dot}30`,
-                                    }} />
-                                    <span style={{ fontSize: "11px" }}>{cfg.icon}</span>
-                                    {vs === "On Vacation" ? "On vacation" : vs === "Vacation Approved" ? "Returned back" : vs === "Vacation Pending" ? "Yet to go" : vs}
-                                  </span>
-                                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, marginLeft: "4px" }}>
-                                    <path d="M2 3.5L5 6.5L8 3.5" stroke={cfg.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                </div>
-                                <select
-                                  style={{
-                                    position: "absolute", inset: 0, opacity: 0,
-                                    cursor: "pointer", width: "100%", height: "100%",
-                                  }}
-                                  value={vs}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    const newStatus = e.target.value;
-                                    handleStatusDropdownChange(member, newStatus);
-                                  }}
-                                >
-                                  <option value="Onsite">Onsite</option>
-                                  <option value="On Vacation">On vacation</option>
-                                  <option value="Vacation Approved">Returned back from vacation</option>
-                                  <option value="Vacation Pending">Yet to go</option>
-                                </select>
-                              </div>
-                            ) : (
-                              <div style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                padding: "4px 10px",
-                                borderRadius: "20px",
-                                fontSize: "12px",
-                                fontWeight: "600",
-                                whiteSpace: "nowrap",
-                                background: cfg.bg,
-                                color: cfg.color,
-                                border: `1px solid ${cfg.dot}30`,
-                              }}>
-                                {vs === "On Vacation" ? "On vacation" : vs === "Vacation Approved" ? "Returned back from vacation" : vs === "Vacation Pending" ? "Yet to go" : vs}
-                              </div>
-                            )}
-
-                            {/* Date display below pill */}
-                            {dateVal && (
-                              <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "inline-block", marginTop: "2px" }}>
-                                {new Date(dateVal).toLocaleDateString('en-GB')}
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span style={{ color: "#9ca3af", fontSize: "13px" }}>—</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Email Column */}
-                <div className={`${styles["table-column"]} ${styles["assigned-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content"]}>
-                        <span className={styles["header-text"]}>Email ID</span>
-                        <SortIcon />
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => {
-                    const emailDisplay = displayEmployeeEmail(member.emailId);
-                    return (
-                      <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["assigned-cell"]}`}>
-                        <div className={styles["assigned-info"]}>
-                          <div
-                            className={`${styles["assigned-name"]} ${emailDisplay.isEmpty ? styles["email-empty"] : ""}`}
-                            title={emailDisplay.isEmpty ? "" : emailDisplay.text}
-                          >
-                            {emailDisplay.text}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Phone Number Column */}
-                <div className={`${styles["table-column"]} ${styles["categories-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content"]}>
-                        <span className={styles["header-text"]}>Phone Number</span>
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["categories-cell"]}`}>
-                      <div className={styles["category-info"]}>
-                        <div className={styles["category-text"]}>{member.mobile || 'No Phone'}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-
-
-                {/* Actions Column */}
-                <div className={`${styles["table-column"]} ${styles["actions-column"]}`}>
-                  <div className={styles["table-header"]}>
-                    <div className={styles["table-header-cell"]}>
-                      <div className={styles["header-content-center"]}>
-                        <span className={styles["header-text"]}>Actions</span>
-                      </div>
-                    </div>
-                  </div>
-                  {paginatedData.map((member) => (
-                    <div key={member._id || member.id} className={`${styles["table-cell"]} ${styles["actions-cell"]}`}>
-                      <Link
-                        to={`/teammanagement_salesleads/${member._id || member.id}`}
-                        className={`${styles["action-button"]} ${styles["view-button"]}`}
-                        aria-label="View team member"
-                      >
-                        <ViewIcon />
-                      </Link>
-                      <button
-                        className={`${styles["action-button"]} ${styles["edit-button"]}`}
-                        onClick={() => handleEdit(member)}
-                        aria-label="Edit team member"
-                      >
-                        <EditIcon />
-                      </button>
-                      {isAdmin && (
-                        <button
-                          className={`${styles["action-button"]} ${styles["delete-button"]}`}
-                          onClick={() => handleDelete(member)}
-                          aria-label="Delete team member"
-                        >
-                          <DeleteIcon />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
+    <Card
+      bordered={false}
+      style={{
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
+        borderRadius: 16,
+      }}
+      styles={{ body: { padding: "24px" } }}
+    >
+      {loading && employees.length > 0 && (
+        <Alert message="Refreshing employees..." type="info" showIcon style={{ marginBottom: 16 }} />
+      )}
+      {error && (
+        <Alert
+          message={error}
+          type="error"
+          showIcon
+          action={
+            <Button size="small" onClick={fetchEmployees}>
+              Retry
+            </Button>
+          }
+          style={{ marginBottom: 16 }}
+        />
       )}
 
-      {/* Pagination - ALWAYS RENDERED (like in ClientsTable) */}
-      <div className={styles["pagination-section"]} aria-hidden={filteredData.length === 0 || isInitialLoading}>
-        <div className={styles["rows-per-page"]}>
-          <span>Rows per page:</span>
-          <select 
-            value={itemsPerPage} 
-            onChange={(e) => {
-              setItemsPerPage(Number(e.target.value));
-              setCurrentPage(1); // Reset to first page when rows per page changes
-            }}
-            className={styles["rows-select"]}
-          >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={15}>15</option>
-          </select>
-        </div>
-
-        <div className={styles["pagination-controls"]}>
-          <button
-            className={styles["pagination-button"]}
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-            disabled={currentPageSafe === 1 || filteredData.length === 0 || isInitialLoading}
-            aria-label="Previous page"
-          >
-            <span>Previous</span>
-          </button>
-
-          <span className={styles["page-info"]} aria-live="polite">
-            Page {currentPageSafe} of {totalPages}
-          </span>
-
-          <button
-            className={styles["pagination-button"]}
-            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-            disabled={currentPageSafe === totalPages || filteredData.length === 0 || isInitialLoading}
-            aria-label="Next page"
-          >
-            <span>Next</span>
-          </button>
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          Team Members
+        </Typography.Title>
+        <Space wrap>
+          {filteredData.length > 0 && !allFilteredSelected && (
+            <Button onClick={handleSelectAllInListClick}>
+              Select all ({filteredData.length})
+            </Button>
+          )}
+          {selectedEmployeeIds.length > 0 && (
+            <Button onClick={handleClearSelection}>Clear selection</Button>
+          )}
+          {selectedEmployeeIds.length > 0 && (
+            <Button danger onClick={() => setIsDeleteModalOpen(true)}>
+              Delete selected ({selectedEmployeeIds.length})
+            </Button>
+          )}
+          <Button icon={<UploadOutlined />} onClick={() => setIsBulkImportModalOpen(true)}>
+            Bulk import
+          </Button>
+          <Button type="primary" icon={<UserAddOutlined />} onClick={handleAddEmployee}>
+            Add Employee
+          </Button>
+        </Space>
       </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 16,
+          marginBottom: 20,
+        }}
+      >
+        <Segmented
+          value={activeFilter}
+          onChange={setActiveFilter}
+          options={[
+            { label: "All", value: "All" },
+            { label: "Active", value: "Active" },
+            { label: "Inactive", value: "Inactive" },
+          ]}
+          style={{ background: "#f5f5f5", padding: 4, borderRadius: 24 }}
+        />
+        <Input
+          placeholder="Search by name, employee ID, email, role..."
+          prefix={<SearchOutlined style={{ color: "#98A1B0" }} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          allowClear
+          style={{ width: 320, borderRadius: 24 }}
+        />
+      </div>
+
+      <Table
+        rowKey={(record) => empRowId(record)}
+        columns={columns}
+        dataSource={filteredData}
+        rowSelection={rowSelection}
+        loading={isInitialLoading ? { tip: "Loading employees..." } : loading}
+        locale={{
+          emptyText: (
+            <Empty
+              description={
+                searchTerm ? "No employees match your search." : "No employees found."
+              }
+            />
+          ),
+        }}
+        pagination={{
+          current: currentPageSafe,
+          pageSize: itemsPerPage,
+          total: filteredData.length,
+          showSizeChanger: true,
+          pageSizeOptions: ["5", "10", "15"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`,
+          onChange: (page, size) => {
+            setCurrentPage(page);
+            if (size !== itemsPerPage) setItemsPerPage(size);
+          },
+        }}
+        scroll={{ x: 900 }}
+        size="middle"
+      />
 
       <DeleteModal
         isOpen={isDeleteModalOpen}
@@ -1297,13 +920,7 @@ function TeamMembersTable() {
         );
       })()}
 
-      <FilterDropdown
-        isOpen={isFilterDropdownOpen}
-        onClose={handleFilterDropdownClose}
-        onFilterSelect={handleFilterSelect}
-        position={dropdownPosition}
-      />
-    </div>
+    </Card>
   );
 }
 
