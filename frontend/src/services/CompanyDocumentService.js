@@ -52,6 +52,22 @@ const upload = async (file, { particulars, docNumber, issueDate, expiryDate, upl
   return parseResponse(response);
 };
 
+const update = async (docId, file, { particulars, docNumber, issueDate, expiryDate } = {}) => {
+  const formData = new FormData();
+  formData.append("particulars", particulars || "");
+  formData.append("docNumber", docNumber || "");
+  if (issueDate) formData.append("issueDate", issueDate);
+  if (expiryDate) formData.append("expiryDate", expiryDate);
+  if (file) formData.append("file", file);
+
+  const response = await fetch(`${baseUrl}/${docId}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+    body: formData,
+  });
+  return parseResponse(response);
+};
+
 const remove = async (docId) => {
   const response = await fetch(`${baseUrl}/${docId}`, {
     method: "DELETE",
@@ -60,5 +76,5 @@ const remove = async (docId) => {
   return parseResponse(response);
 };
 
-const CompanyDocumentService = { getAll, upload, remove };
+const CompanyDocumentService = { getAll, upload, update, remove };
 export default CompanyDocumentService;
