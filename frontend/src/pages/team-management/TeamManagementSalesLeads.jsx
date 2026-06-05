@@ -10,7 +10,7 @@ import Documents from "../../components/team-management-components/TeamMangement
 // import Calendar from "../../components/CalendarComponent";
 import Meetingstable from "../../components/team-management-components/MeetingsTable";
 import config, { buildImageUrl, handleImageError } from "../../config/config";
-import { FaBars } from "react-icons/fa";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavbar";
 import DeleteModal from "../../components/delete-modal/DeleteModal";
 import AssignTaskModal from "../../components/team-management-components/AssignTaskModal";
 import FileUploadModal from "../../components/FileUploadModal";
@@ -20,7 +20,6 @@ import AddLeaveRequestModal from "../../components/leave-request/AddLeaveRequest
 import EditLeaveRequestModal from "../../components/leave-request/EditLeaveRequestModal";
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
-import { useSidebar } from "../../context/SidebarContext";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
 
@@ -35,7 +34,6 @@ import pencillineblue from "../../assets/dashboard/pencil-line-blue.svg";
 import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
-import NotificationBell from "../../components/NotificationBell";
 import MobileBottomNavigation from "../../components/MobileBottomNavigation";
 const EditIcon = () => (
   <svg
@@ -76,7 +74,6 @@ const DeleteIcon = () => (
 
 
 function TeamManagementSalesLeads() {
-  const { toggleSidebar } = useSidebar();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState("basicInfo");
   const basicInfoRef = useRef(null);
@@ -613,60 +610,19 @@ function TeamManagementSalesLeads() {
 
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <Side />
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["header-left"]}>
-              <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
-                <FaBars />
-              </button>
-              <div className={styles["dashboard-title"]}>Team Management</div>
-            </div>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar
+          title="Team Management"
+          breadcrumbs={[
+            { label: "Home", path: "/dashboard" },
+            { label: "Team Management", path: "/teammanagement" },
+            { label: loading ? "Loading..." : employee?.employeeName || "Employee" },
+          ]}
+        />
 
-            <div className={styles["dashboard-profile"]}>
-              <NotificationBell />
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  <ProfileAvatar
-                    size={40}
-                    className={styles["profile-picture"]}
-                  />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>
-                      {username?.toUpperCase()}
-                    </div>
-                    <div className={styles["profile-type"]}>
-                      {userRole?.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* breadcrumb */}
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-notactive"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div
-              className={styles["breadcrumb-notactive"]}
-              onClick={() => navigate("/teammanagement")}
-              style={{ cursor: "pointer" }}
-            >
-              Team Management
-            </div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-active"]}>
-              {loading ? "Loading..." : employee?.employeeName || "Employee"}
-            </div>
-          </div>
-        </section>
-
+        <PageBody>
         <div className={styles.contain}>
           <div className={styles.scroll_view}>
             <div className={styles.column}>
@@ -1167,6 +1123,7 @@ function TeamManagementSalesLeads() {
             </div>
           </div>
         </div>
+        </PageBody>
       </main>
 
       {/* Mobile Bottom Navigation */}

@@ -29,7 +29,7 @@ import pencillineblue from "../../assets/dashboard/pencil-line-blue.svg";
 import upload from "../../assets/dashboard/upload.svg";
 import deletewhite from "../../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../../components/ProfileAvatar";
-import NotificationBell from "../../components/NotificationBell";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavbar";
 
 function YourCalendar() {
   const [activeTab, setActiveTab] = useState("meetings");
@@ -431,43 +431,15 @@ function YourCalendar() {
   };
 
   return (
-    <div className={styles["dashboard-layout"]}> 
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}> 
       <div className={styles["desktop-sidebar"]}>
         <Side />
       </div>
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Calendar</div>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="Calendar" breadcrumb="Your Calendar" />
 
-            <div className={styles["dashboard-profile"]}>
-                <NotificationBell />
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                     <div className={styles["profile-type"]}>
-                                          {userRole?.toUpperCase()}
-                                        </div>
-                  </div>
-                </div>
-                {/* <img src={chevrondown} alt="" /> */}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* breadcrumb */}
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-notactive"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-active"]}>Your Calendar</div>
-          </div>
-        </section>
-
-        <div className={styles.contain}style={{ borderBottom: "5px solid #E4E4E4" }}>
+        <PageBody>
+        <div className={styles.contain} style={{ borderBottom: "5px solid #E4E4E4" }}>
           <div className={styles.scroll_view}>
             <div className={styles.column}>
               <div className={styles.row_view}>
@@ -506,6 +478,7 @@ function YourCalendar() {
             </div>
           </div>
         </div>
+        </PageBody>
       </main>
 
       <DeleteModal

@@ -3,17 +3,11 @@ import styles from "./SalesAndLeads.module.css";
 import Side from "./sidebar/Sidebar";
 import LeaveRequestTable from "../components/leave-request/LeaveRequestTable";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
-import ProfileAvatar from "../components/ProfileAvatar";
-import NotificationBell from "../components/NotificationBell";
-import { FaBars } from "react-icons/fa";
-import { useSidebar } from "../context/SidebarContext";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import leaveRequestService from "../services/LeaveRequestService";
 import UserService from "../services/UserService";
 
 function LeaveRequests() {
-    const { toggleSidebar } = useSidebar();
-    const [username, setUsername] = useState("");
     const [userRole, setUserRole] = useState("");
     const [leaveBalance, setLeaveBalance] = useState("--");
     const [metrics, setMetrics] = useState({
@@ -25,7 +19,6 @@ function LeaveRequests() {
     const [isLoadingMetrics, setIsLoadingMetrics] = useState(true);
 
     useEffect(() => {
-        setUsername(localStorage.getItem("username") || "");
         setUserRole(localStorage.getItem("role") || "");
         fetchMetrics();
         fetchLeaveBalance();
@@ -59,42 +52,13 @@ function LeaveRequests() {
     };
 
     return (
-        <div className={styles["dashboard-layout"]}>
+        <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
             <Side />
 
-            <main className={styles["main-container"]}>
-                <header className={styles["dashboard-header"]}>
-                    <div className={styles["dashboard-row"]}>
-                        <div className={styles["header-left"]}>
-                            <button className={styles.menuToggleBtn} onClick={toggleSidebar}>
-                                <FaBars />
-                            </button>
-                            <div className={styles["dashboard-title"]}>Leave Management</div>
-                        </div>
+            <main className={`${styles["main-container"]} ${pageLayoutStyles.pageMain}`}>
+                <TopNavbar title="Leave Management" breadcrumb="Leave Management" />
 
-                        <div className={styles["dashboard-profile"]}>
-                            <NotificationBell />
-                            <div className={styles["profile-info"]}>
-                                <div className={styles["profile-row"]}>
-                                    <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                                    <div className={styles["profile-column"]}>
-                                        <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                                        <div className={styles["profile-type"]}>{userRole?.toUpperCase()}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </header>
-
-                <section className={styles["breadcrumb-section"]}>
-                    <div className={styles["breadcrumb"]}>
-                        <div className={styles["breadcrumb-one"]}>Home</div>
-                        <img src={chevrondright} alt="" />
-                        <div className={styles["breadcrumb-two"]}>Leave Management</div>
-                    </div>
-                </section>
-
+                <PageBody>
                 <section className={styles.cardcontainer}>
                     <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
                         <div className={styles.cardboxcontent}>
@@ -136,6 +100,7 @@ function LeaveRequests() {
                 <section className={styles["main-content"]}>
                     <LeaveRequestTable onUpdate={fetchMetrics} />
                 </section>
+                </PageBody>
             </main>
         </div>
     );

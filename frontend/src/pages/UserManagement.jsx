@@ -4,11 +4,7 @@ import UserService from '../services/UserService';
 import AddUserModal from '../components/AddUserModal';
 import EditUserModal from '../components/EditUserModal';
 import Side from "./sidebar/Sidebar";
-import ProfileAvatar from "../components/ProfileAvatar";
-import belldot from "../assets/dashboard/bell-dot.svg";
-import chevrondown from "../assets/dashboard/chevron-down.svg";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
-import NotificationBell from "../components/NotificationBell";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import DeleteModal from '../components/delete-modal/DeleteModal';
 
 const UserManagement = () => {
@@ -20,14 +16,6 @@ const UserManagement = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const [userToEdit, setUserToEdit] = useState(null); // New state for User to Edit
-  const [username, setUsername] = useState("");
-  const [role, setRole] = useState("");
-
-   useEffect(() => {
-      setUsername(localStorage.getItem("username") || "");
-      setRole(localStorage.getItem("role") || "");
-    }, []);
-
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -113,42 +101,13 @@ const UserManagement = () => {
   }
 
   return (
-     <div className={styles["dashboard-layout"]}>
+     <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
           <div className={styles["desktop-sidebar"]}>
         <Side />
       </div>
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>User</div>
-
-            <div className={styles["dashboard-profile"]}>
-              <NotificationBell />
-
-               <div className={styles["profile-info"]}>
-                 <div className={styles["profile-row"]}>
-                   <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                   <div className={styles["profile-column"]}>
-                     <div className={styles["profile-name"]}>
-                       {username?.toUpperCase()}
-                     </div>
-                     <div className={styles["profile-type"]}>{role || ""}</div>
-                   </div>
-                 </div>
-                 {/* <img src={chevrondown} alt="" /> */}
-               </div>
-             </div>
-           </div>
-         </header>
-
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-one"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-two"]}>UserManagement</div>
-          </div>
-        </section>
-    <div className={styles.container}>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="User Management" breadcrumb="User Management" />
+    <PageBody className={styles.container}>
       <div className={styles.header}>
         <h1>User Management</h1>
         <button 
@@ -239,7 +198,7 @@ const UserManagement = () => {
         onSubmit={handleEditUser}
         userToEdit={userToEdit}
       />
-    </div>
+    </PageBody>
       
       </main>
     </div>

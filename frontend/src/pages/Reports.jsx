@@ -7,16 +7,12 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 
-import chevrondright from "../assets/dashboard/chevron-right.svg";
-import ProfileAvatar from "../components/ProfileAvatar";
+import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
-import NotificationBell from "../components/NotificationBell";
 
 function Reports() {
-  const [username, setUsername] = useState("");
-  const [userRole, setUserRole] = useState("");
   const [reportType, setReportType] = useState("");
   const [format, setFormat] = useState("");
 
@@ -57,9 +53,6 @@ function Reports() {
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
-    setUsername(localStorage.getItem("username") || "");
-    setUserRole(localStorage.getItem("role") || "");
-
     const loadEmployees = async () => {
       try {
         const data = await employeeService.getEmployees();
@@ -552,45 +545,27 @@ function Reports() {
   };
 
   return (
-    <div className={styles["dashboard-layout"]}>
+    <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
       <Side />
-      <main>
-        <header className={styles["dashboard-header"]}>
-          <div className={styles["dashboard-row"]}>
-            <div className={styles["dashboard-title"]}>Generate a Report</div>
-            <div className={styles["dashboard-profile"]}>
-              <NotificationBell />
-              <div className={styles["profile-info"]}>
-                <div className={styles["profile-row"]}>
-                  <ProfileAvatar size={40} className={styles["profile-picture"]} />
-                  <div className={styles["profile-column"]}>
-                    <div className={styles["profile-name"]}>{username?.toUpperCase()}</div>
-                    <div className={styles["profile-type"]}>{userRole?.toUpperCase()}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+      <main className={pageLayoutStyles.pageMain}>
+        <TopNavbar title="Generate a Report" breadcrumb="Reports" />
 
-        <section className={styles["breadcrumb-section"]}>
-          <div className={styles["breadcrumb"]}>
-            <div className={styles["breadcrumb-one"]}>Home</div>
-            <img src={chevrondright} alt="" />
-            <div className={styles["breadcrumb-two"]}>Reports</div>
-          </div>
-        </section>
-
-        <section className={styles["main-content"]}>
+        <PageBody as="section" className={styles["main-content"]}>
+          <div className={styles.reportCard}>
           <div className={styles["report-container"]}>
             <div className={styles["report-header"]}>
-              <div className={styles["report-title"]}>Generate Reports</div>
+              <div className={styles.reportHeaderText}>
+                <div className={styles["report-title"]}>Generate Reports</div>
+                <p className={styles.reportSubtitle}>
+                  Configure filters below, then preview or download your report.
+                </p>
+              </div>
               <div className={styles["report-actions"]}>
-                <button className={styles["cancel-button"]} onClick={handleCancel}>Cancel</button>
-                <button className={styles["preview-button"]} onClick={handlePreview} disabled={loading}>
+                <button type="button" className={styles["cancel-button"]} onClick={handleCancel}>Cancel</button>
+                <button type="button" className={styles["preview-button"]} onClick={handlePreview} disabled={loading}>
                   {loading ? "Loading..." : "Preview"}
                 </button>
-                <button className={styles["generate-button"]} onClick={handleGenerateReport} disabled={loading}>
+                <button type="button" className={styles["generate-button"]} onClick={handleGenerateReport} disabled={loading}>
                   {loading ? "Generating..." : "Generate"}
                 </button>
               </div>
@@ -635,7 +610,7 @@ function Reports() {
                 reportType === "Document expiry" ||
                 reportType === "Salary report" ||
                 reportType === "Leave Report") && (
-                <>
+                <div className={styles.filtersPanel}>
                   {/* Status Filter (Only show for employee reports, not leave report) */}
                   {(reportType !== "Leave Report") && (
                     <>
@@ -700,8 +675,7 @@ function Reports() {
                         <div className={styles["form-field"]}>
                           <input
                             type="number"
-                            className={styles["date-field"]}
-                            style={{ width: "100%" }}
+                            className={`${styles["date-field"]} ${styles.fullWidthInput}`}
                             placeholder="e.g. 2"
                             value={minExperience}
                             onChange={e => setMinExperience(e.target.value)}
@@ -711,18 +685,21 @@ function Reports() {
         
                     </>
                   )}
-                </>
+                </div>
               )}
 
+              <div className={styles.datePeriodPanel}>
               {/* Date Range */}
-              <div className={styles["form-row"]}>
+              <div className={`${styles["form-row"]} ${styles.dateRangeRow}`}>
                 <div className={styles["form-label"]}>Choose a date range</div>
-                <div className={styles["form-field"]} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <input className={styles["date-field"]} style={{ flex: '1 1 120px' }} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                  <input className={styles["date-field"]} style={{ flex: '1 1 120px' }} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                <div className={`${styles["form-field"]} ${styles.dateRangeGroup}`}>
+                  <input className={styles["date-field"]} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <span className={styles.dateRangeSep}>to</span>
+                  <input className={styles["date-field"]} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
                 </div>
               </div>
 
+              <div className={styles.periodGroup}>
               {/* Month */}
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Month</div>
@@ -742,6 +719,8 @@ function Reports() {
                   </select>
                 </div>
               </div>
+              </div>
+              </div>
 
 
 
@@ -756,9 +735,10 @@ function Reports() {
                 </div>
               </div>
 
-              {error && <div className={styles["error-message"]} style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+              {error && <div className={styles.errorMessage}>{error}</div>}
 
             </div>
+          </div>
           </div>
 
           {showPreview && previewData.length > 0 && (
@@ -784,14 +764,14 @@ function Reports() {
                 </table>
               </div>
               {previewData.length > 15 && (
-                <div className={styles["preview-subtitle"]} style={{ fontStyle: 'italic', marginTop: '0.5rem' }}>
+                <div className={styles.previewNote}>
                   * Showing first 15 records in preview. Generate Excel/PDF to download all {previewData.length} records.
                 </div>
               )}
             </div>
           )}
 
-        </section>
+        </PageBody>
       </main>
     </div>
   );

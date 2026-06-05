@@ -280,11 +280,7 @@
 }
 
 .main-content {
-  flex: 1;
   background-color: #FAFBFB;
-  overflow-y: auto;
-  overflow-x: hidden;
-  height: 100%;
 }
 
 /* Custom scrollbar for webkit browsers */
