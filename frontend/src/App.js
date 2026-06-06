@@ -23,6 +23,7 @@ import HelpSupport from "./pages/HelpSupport";
 import LeaveRequests from "./pages/LeaveRequests";
 import SalarySlips from "./pages/SalarySlips";
 import CompanyDocument from "./pages/CompanyDocument";
+import AnnualVacations from "./pages/AnnualVacations";
 
 
 
@@ -87,6 +88,8 @@ function App() {
           <Route path="/help-support" element={<ProtectedRoute><HelpSupport /></ProtectedRoute>} />
 
           <Route path="/leave-requests" element={<ProtectedRoute><LeaveRequests /></ProtectedRoute>} />
+
+          <Route path="/annual-vacations" element={<ProtectedRoute><AnnualVacations /></ProtectedRoute>} />
 
           <Route path="/salary-slips" element={<ProtectedRoute><SalarySlips /></ProtectedRoute>} />
 
