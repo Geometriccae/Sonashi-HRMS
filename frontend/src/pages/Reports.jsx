@@ -738,38 +738,38 @@ function Reports() {
               {error && <div className={styles.errorMessage}>{error}</div>}
 
             </div>
-          </div>
-          </div>
 
-          {showPreview && previewData.length > 0 && (
-            <div className={styles["preview-section"]}>
-              <div className={styles["preview-title-row"]}>
-                <div className={styles["report-title"]}>Report Preview ({reportType})</div>
-                <div className={styles["preview-subtitle"]}>Showing {previewData.length} records</div>
-              </div>
-              <div className={styles["preview-table-container"]}>
-                <table className={styles["preview-table"]}>
-                  <thead>
-                    <tr>
-                      {previewHeaders.map(h => <th key={h}>{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewData.slice(0, 15).map((row, idx) => (
-                      <tr key={idx}>
-                        {previewHeaders.map(h => <td key={h}>{row[h] !== null && row[h] !== undefined ? String(row[h]) : ""}</td>)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {previewData.length > 15 && (
-                <div className={styles.previewNote}>
-                  * Showing first 15 records in preview. Generate Excel/PDF to download all {previewData.length} records.
+            {showPreview && previewData.length > 0 && (
+              <div className={styles["preview-section"]}>
+                <div className={styles["preview-title-row"]}>
+                  <div className={styles["report-title"]}>Report Preview ({reportType})</div>
+                  <div className={styles["preview-subtitle"]}>Showing {previewData.length} records</div>
                 </div>
-              )}
-            </div>
-          )}
+                <div className={styles["preview-table-container"]}>
+                  <table className={styles["preview-table"]}>
+                    <thead>
+                      <tr>
+                        {previewHeaders.map(h => <th key={h}>{h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewData.slice(0, 15).map((row, idx) => (
+                        <tr key={idx}>
+                          {previewHeaders.map(h => <td key={h}>{row[h] !== null && row[h] !== undefined ? String(row[h]) : ""}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {previewData.length > 15 && (
+                  <div className={styles.previewNote}>
+                    * Showing first 15 records in preview. Generate Excel/PDF to download all {previewData.length} records.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          </div>
 
         </PageBody>
       </main>

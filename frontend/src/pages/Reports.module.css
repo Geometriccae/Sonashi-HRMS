@@ -813,7 +813,7 @@ main {
   }
 
   .preview-section {
-    padding: 1.25rem;
+    padding: 1.25rem 0 0;
   }
 }
 
@@ -823,13 +823,9 @@ main {
   align-items: flex-start;
   gap: 1rem;
   width: 100%;
-  padding: 1.5rem 1.75rem;
-  border-radius: 1rem;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.04),
-    0 8px 24px rgba(15, 23, 42, 0.06);
+  padding: 1.5rem 0 0;
+  margin-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
   box-sizing: border-box;
   flex-shrink: 0;
 }
