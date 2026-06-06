@@ -78,6 +78,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     passportExpiryDate: "",
     labourCardExpiryDate: "",
     visaExpiryDate: "",
+    emiratesIdExpiryDate: "",
+    contractRenewalDate: "",
     remarks: "",
     employeeStatus: "Active",
     vacationStatus: "Onsite",
@@ -280,6 +282,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         passportExpiryDate: employee.passportExpiryDate ? String(employee.passportExpiryDate).slice(0, 10) : "",
         labourCardExpiryDate: employee.labourCardExpiryDate ? String(employee.labourCardExpiryDate).slice(0, 10) : "",
         visaExpiryDate: employee.visaExpiryDate ? String(employee.visaExpiryDate).slice(0, 10) : "",
+        emiratesIdExpiryDate: employee.emiratesIdExpiryDate ? String(employee.emiratesIdExpiryDate).slice(0, 10) : "",
+        contractRenewalDate: employee.contractRenewalDate ? String(employee.contractRenewalDate).slice(0, 10) : "",
         remarks: employee.remarks || "",
         employeeStatus: employee.employeeStatus || "Active",
         vacationStatus: employee.vacationStatus || "Onsite",
@@ -353,6 +357,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         passportExpiryDate: "",
         labourCardExpiryDate: "",
         visaExpiryDate: "",
+        emiratesIdExpiryDate: "",
+        contractRenewalDate: "",
         remarks: "",
         employeeStatus: "Active",
         vacationStatus: "Onsite",
@@ -992,6 +998,26 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 value={formData.visaExpiryDate}
                 onChange={(e) =>
                   handleInputChange("visaExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Emirates ID Expiry Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.emiratesIdExpiryDate}
+                onChange={(e) =>
+                  handleInputChange("emiratesIdExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Contract Renewal Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.contractRenewalDate}
+                onChange={(e) =>
+                  handleInputChange("contractRenewalDate", e.target.value)
                 }
               />
 

@@ -437,7 +437,7 @@ function SalarySlipTable({ userRole }) {
     useEffect(() => {
         const fetchDepartments = async () => {
             try {
-                const emps = await employeeService.getEmployees();
+                const emps = await employeeService.getEmployeesList();
                 const depts = [...new Set(emps.map(e => e.department).filter(Boolean))];
                 setDepartments(depts);
             } catch (err) {

@@ -44,7 +44,7 @@ function DashboardOverview() {
       setIsLoading(true);
       try {
         const [employees, leaveRequests] = await Promise.all([
-          employeeService.getEmployees(),
+          employeeService.getEmployeesList(),
           leaveRequestService.getLeaveRequests()
         ]);
 

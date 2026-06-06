@@ -1,5 +1,7 @@
 import config, { getApiBaseUrl } from '../config/config';
 
+const CACHE_TTL_MS = 30000;
+
 class EmployeeService {
   constructor() {
     const raw = (config.API_BASE_URL || '').trim();
@@ -16,7 +18,15 @@ class EmployeeService {
 
     this.baseURL = `${apiRoot}/employees`;
     this.attendanceURL = `${apiRoot}/attendance`;
-    console.log('EmployeeService initialized with baseURL:', this.baseURL);
+    this._cache = { list: null, full: null, stats: null, ts: 0 };
+  }
+
+  _isCacheValid() {
+    return this._cache.ts && (Date.now() - this._cache.ts) < CACHE_TTL_MS;
+  }
+
+  invalidateCache() {
+    this._cache = { list: null, full: null, stats: null, ts: 0 };
   }
 
   // Get auth token from localStorage
@@ -33,10 +43,58 @@ class EmployeeService {
     };
   }
 
-  // Get all employees
-  async getEmployees() {
+  // Lightweight list for tables, dashboards, dropdowns
+  async getEmployeesList({ force = false } = {}) {
+    if (!force && this._isCacheValid() && this._cache.list) {
+      return this._cache.list;
+    }
     try {
-      console.log('Fetching employees from:', this.baseURL);
+      const response = await fetch(`${this.baseURL}?view=list`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      this._cache.list = data;
+      this._cache.ts = Date.now();
+      return data;
+    } catch (error) {
+      console.error('Error fetching employee list:', error);
+      throw error;
+    }
+  }
+
+  // Stats only — counts for dashboard cards
+  async getEmployeeStats({ force = false } = {}) {
+    if (!force && this._isCacheValid() && this._cache.stats) {
+      return this._cache.stats;
+    }
+    try {
+      const response = await fetch(`${this.baseURL}/stats`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      this._cache.stats = data;
+      this._cache.ts = Date.now();
+      return data;
+    } catch (error) {
+      console.error('Error fetching employee stats:', error);
+      throw error;
+    }
+  }
+
+  // Get all employees (full records — use only when editing/detail views need everything)
+  async getEmployees({ force = false } = {}) {
+    if (!force && this._isCacheValid() && this._cache.full) {
+      return this._cache.full;
+    }
+    try {
       const response = await fetch(this.baseURL, {
         method: 'GET',
         headers: this.getAuthHeaders(),
@@ -46,7 +104,10 @@ class EmployeeService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      this._cache.full = data;
+      this._cache.ts = Date.now();
+      return data;
     } catch (error) {
       console.error('Error fetching employees:', error);
       throw error;
@@ -223,6 +284,7 @@ class EmployeeService {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
+      this.invalidateCache();
       return await response.json();
     } catch (error) {
       console.error('Error creating employee:', error);
@@ -320,6 +382,7 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
     }
 
     console.log('✅ Employee update successful:', responseData);
+    this.invalidateCache();
     return responseData.employee || responseData;
 
   } catch (error) {
@@ -360,6 +423,7 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
+      this.invalidateCache();
       return await response.json();
     } catch (error) {
       console.error('Error deleting employee:', error);
@@ -381,6 +445,7 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
+      this.invalidateCache();
       return await response.json();
     } catch (error) {
       console.error('Error bulk deleting employees:', error);
@@ -471,6 +536,7 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
       throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
     }
 
+    this.invalidateCache();
     return responseData;
   } catch (error) {
     console.error('Error creating employee:', error);
@@ -492,6 +558,7 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
     if (!response.ok) {
       throw new Error(data.message || `Import failed (${response.status})`);
     }
+    this.invalidateCache();
     return data;
   }
 
@@ -540,6 +607,7 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
       }
 
       const body = await response.json();
+      this.invalidateCache();
       return body.employee || body;
     } catch (error) {
       console.error('Error in updateEmployeeWithFile:', error);

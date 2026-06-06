@@ -97,7 +97,7 @@ function AnnualVacations() {
     setIsLoading(true);
     try {
       const [empRes, leaveRes] = await Promise.all([
-        employeeService.getEmployees(),
+        employeeService.getEmployeesList(),
         leaveRequestService.getLeaveRequests(),
       ]);
       const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
@@ -311,7 +311,7 @@ function AnnualVacations() {
         await employeeService.updateEmployee(item._id, { vacationStatus:"Vacation Approved", firstWorkingDay:today.toISOString() });
       }
       showToast(`${item.employeeName||item.name} marked as returned.`);
-      const [empRes, leaveRes] = await Promise.all([employeeService.getEmployees(), leaveRequestService.getLeaveRequests()]);
+      const [empRes, leaveRes] = await Promise.all([employeeService.getEmployeesList(), leaveRequestService.getLeaveRequests()]);
       const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
       const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
       setEmployees(empList); setLeaveRequests(leaveList);
@@ -330,7 +330,7 @@ function AnnualVacations() {
       }
       showToast("Status updated successfully.");
       setEditModal(null);
-      const [empRes, leaveRes] = await Promise.all([employeeService.getEmployees(), leaveRequestService.getLeaveRequests()]);
+      const [empRes, leaveRes] = await Promise.all([employeeService.getEmployeesList(), leaveRequestService.getLeaveRequests()]);
       const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
       const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
       setEmployees(empList); setLeaveRequests(leaveList);

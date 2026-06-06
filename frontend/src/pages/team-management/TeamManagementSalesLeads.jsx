@@ -856,6 +856,8 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4}><span className={styles.text9}>Passport Expiry</span><span className={styles.text10}>{employee.passportExpiryDate ? new Date(employee.passportExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Labour Card Expiry</span><span className={styles.text10}>{employee.labourCardExpiryDate ? new Date(employee.labourCardExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Visa Expiry</span><span className={styles.text10}>{employee.visaExpiryDate ? new Date(employee.visaExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Emirates ID Expiry</span><span className={styles.text10}>{employee.emiratesIdExpiryDate ? new Date(employee.emiratesIdExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Contract Renewal</span><span className={styles.text10}>{employee.contractRenewalDate ? new Date(employee.contractRenewalDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Office</span><span className={styles.text10}>{employee.office || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>

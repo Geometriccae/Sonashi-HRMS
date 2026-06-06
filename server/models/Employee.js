@@ -6,6 +6,8 @@ const employeeSchema = new mongoose.Schema({
   workPermitNo: { type: String, default: "" },
   office: { type: String, default: "" },
   emiratesId: { type: String, default: "" },
+  emiratesIdExpiryDate: { type: Date, default: null },
+  contractRenewalDate: { type: Date, default: null },
   nationality: { type: String, default: "" },
   reportingManager: { type: String, default: "" },
   gender: { type: String, default: "" },

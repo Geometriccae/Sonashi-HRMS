@@ -69,6 +69,8 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     passportExpiryDate: "",
     labourCardExpiryDate: "",
     visaExpiryDate: "",
+    emiratesIdExpiryDate: "",
+    contractRenewalDate: "",
     remarks: "",
     employeeStatus: "Active",
     vacationStatus: "Onsite",
@@ -434,6 +436,8 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         passportExpiryDate: "",
         labourCardExpiryDate: "",
         visaExpiryDate: "",
+        emiratesIdExpiryDate: "",
+        contractRenewalDate: "",
         remarks: "",
         employeeStatus: "Active",
         vacationStatus: "Onsite",
@@ -841,6 +845,26 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 value={formData.visaExpiryDate}
                 onChange={(e) =>
                   handleInputChange("visaExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Emirates ID Expiry Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.emiratesIdExpiryDate}
+                onChange={(e) =>
+                  handleInputChange("emiratesIdExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Contract Renewal Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.contractRenewalDate}
+                onChange={(e) =>
+                  handleInputChange("contractRenewalDate", e.target.value)
                 }
               />
 

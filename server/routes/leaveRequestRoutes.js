@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Employee = require('../models/Employee');
 const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
+const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
 
 function getLeaveTransporter() {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -314,6 +315,12 @@ router.post('/', authMiddleware, async (req, res) => {
         sendLeaveRequestToHodAndAdmin(leaveSnapshot)
             .then(() => console.log('[Leave] HOD/Admin email sent'))
             .catch(e => console.error('[Leave] HOD/Admin email error:', e));
+
+        if (!isPastLeave) {
+            const io = req.app.get('io');
+            notifyLeaveSubmitted(io, savedRequest)
+                .catch((e) => console.error('[Leave] Notification error:', e));
+        }
     } catch (error) {
         console.error('Error creating leave request:', error);
         res.status(400).json({ message: 'Error creating leave request', error: error.message });
@@ -505,6 +512,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
             sendLeaveStatusToEmployee(updatedRequest, updateData.status)
                 .then(() => console.log('[Leave] Employee status email sent'))
                 .catch(e => console.error('[Leave] Employee status email error:', e));
+
+            const io = req.app.get('io');
+            notifyLeaveStatusChange(io, updatedRequest, updateData.status, req.user.role)
+                .catch((e) => console.error('[Leave] Status notification error:', e));
         }
 
         res.json(updatedRequest);

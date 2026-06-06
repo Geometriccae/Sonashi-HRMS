@@ -11,6 +11,50 @@ const REMINDER_NOTIFICATION_TYPES = new Set([
   "task-reminder",
 ]);
 
+const TYPE_LABELS = {
+  "expiry-reminder": "Document Expiry",
+  "company-doc-expiry": "Company Doc Expiry",
+  "joining-reminder": "Joining Date",
+  "onboarding-reminder": "Onboarding",
+  "contract-renewal": "Contract Renewal",
+  "on-vacation": "On Vacation",
+  "vacation-overdue": "Vacation Overdue",
+  "leave-submitted": "Leave Submitted",
+  "leave-pending": "Leave Pending",
+  "leave-approved": "Leave Approved",
+  "leave-rejected": "Leave Rejected",
+  "pending-action": "Pending Action",
+  "user-created": "Account Created",
+};
+
+const getTypeStyle = (type = "") => {
+  if (type.includes("expiry") || type.includes("renewal") || type === "vacation-overdue") {
+    return { background: "#fee2e2", color: "#991b1b" };
+  }
+  if (type.startsWith("leave-") || type === "pending-action") {
+    return { background: "#fef3c7", color: "#92400e" };
+  }
+  if (type.includes("vacation") || type.includes("onboarding") || type.includes("joining")) {
+    return { background: "#ede9fe", color: "#5b21b6" };
+  }
+  if (type.includes("event")) {
+    return { background: "#dbeafe", color: "#1e40af" };
+  }
+  return { background: "#f0f9ff", color: "#0c4a6e" };
+};
+
+const pushNotification = (item) => {
+  if (!window.appNotifications?.push) return null;
+  return window.appNotifications.push({
+    id: item.id,
+    title: item.title,
+    body: item.body,
+    type: item.type || "notification",
+    meta: item.meta,
+    timestamp: item.timestamp || new Date().toISOString(),
+  });
+};
+
 function NotificationBell({ small = true }) {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -305,118 +349,40 @@ function NotificationBell({ small = true }) {
             const me = await resp.json();
             meRef.current = me;
 
-            try {
-              const eventsResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/clients/events`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              if (eventsResp.ok) {
-                const list = await eventsResp.json();
-                (list || []).forEach(ev => scheduleLocalReminders(ev));
-              }
-              const empEventsResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/employees/events`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              if (empEventsResp.ok) {
-                const list = await empEventsResp.json();
-                (list || []).forEach(ev => scheduleLocalReminders(ev));
-              }
-            } catch (evErr) {
-              console.debug('Could not prefetch events:', evErr);
-            }
+            // Defer heavy notification prefetch so page data loads first
+            setTimeout(async () => {
+              const apiRoot = config.API_BASE_URL.replace(/\/api\/?$/, '');
+              const headers = { Authorization: `Bearer ${token}` };
 
-            try {
-              if (me.role === 'admin' || me.role === 'hr' || me.role === 'viewer') {
-                const empResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/employees`, {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                if (empResp.ok) {
-                  const empData = await empResp.json();
-                  const empList = Array.isArray(empData) ? empData : (empData.employees || []);
-
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const msPerDay = 1000 * 60 * 60 * 24;
-
-                  const checkExpiry = (employeeName, docName, dateStr) => {
-                    if (!dateStr) return;
-                    const expDate = new Date(dateStr);
-                    if (isNaN(expDate.getTime())) return;
-                    expDate.setHours(0, 0, 0, 0);
-
-                    const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
-
-                    if (diffDays >= 0 && diffDays <= 30) {
-                      let timeStr = "soon";
-                      if (diffDays === 0) timeStr = "today";
-                      else if (diffDays === 1) timeStr = "tomorrow";
-                      else timeStr = `in ${diffDays} days`;
-
-                      const notifId = `expiry-${employeeName}-${docName}-${dateStr}`;
-
-                      if (window.appNotifications?.push) {
-                        window.appNotifications.push({
-                          id: notifId,
-                          title: `Document Expiry Reminder`,
-                          body: `${employeeName}'s ${docName} is expiring ${timeStr} (${expDate.toLocaleDateString()})`,
-                          type: 'expiry-reminder'
-                        });
-                      }
-                    }
-                  };
-
-                  empList.forEach(emp => {
-                    checkExpiry(emp.employeeName, 'Passport', emp.passportExpiryDate);
-                    checkExpiry(emp.employeeName, 'Labour Card', emp.labourCardExpiryDate);
-                    checkExpiry(emp.employeeName, 'Visa', emp.visaExpiryDate);
-                  });
+              try {
+                const [eventsResp, empEventsResp] = await Promise.all([
+                  fetch(`${apiRoot}/api/clients/events`, { headers }),
+                  fetch(`${apiRoot}/api/employees/events`, { headers }),
+                ]);
+                if (eventsResp.ok) {
+                  const list = await eventsResp.json();
+                  (list || []).forEach(ev => scheduleLocalReminders(ev));
                 }
+                if (empEventsResp.ok) {
+                  const list = await empEventsResp.json();
+                  (list || []).forEach(ev => scheduleLocalReminders(ev));
+                }
+              } catch (evErr) {
+                console.debug('Could not prefetch events:', evErr);
               }
-            } catch (expErr) {
-              console.warn('Could not check expiries:', expErr);
-            }
 
-            try {
-              const docsResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/company-documents`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              if (docsResp.ok) {
-                const docs = await docsResp.json();
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const msPerDay = 1000 * 60 * 60 * 24;
-
-                (docs || []).forEach((doc) => {
-                  if (!doc.expiryDate) return;
-                  const expDate = new Date(doc.expiryDate);
-                  if (Number.isNaN(expDate.getTime())) return;
-                  expDate.setHours(0, 0, 0, 0);
-
-                  const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
-                  if (diffDays < 0 || diffDays > 30) return;
-
-                  let timeStr = "soon";
-                  if (diffDays === 0) timeStr = "today";
-                  else if (diffDays === 1) timeStr = "tomorrow";
-                  else timeStr = `in ${diffDays} days`;
-
-                  const docLabel = doc.docNumber
-                    ? `"${doc.particulars}" (${doc.docNumber})`
-                    : `"${doc.particulars}"`;
-
-                  if (window.appNotifications?.push) {
-                    window.appNotifications.push({
-                      id: `company-doc-expiry-${doc._id}-${doc.expiryDate}`,
-                      title: 'Company Document Expiry Reminder',
-                      body: `${docLabel} expires ${timeStr} (${expDate.toLocaleDateString('en-GB')})`,
-                      type: 'company-doc-expiry',
-                      meta: { url: '/company-document', docId: doc._id },
-                    });
+              try {
+                if (['admin', 'hr', 'viewer', 'hod'].includes(me.role)) {
+                  const alertsResp = await fetch(`${apiRoot}/api/notifications/hr-alerts`, { headers });
+                  if (alertsResp.ok) {
+                    const hrAlerts = await alertsResp.json();
+                    (hrAlerts || []).forEach((alert) => pushNotification(alert));
                   }
-                });
+                }
+              } catch (hrAlertErr) {
+                console.warn('Could not fetch HR alerts:', hrAlertErr);
               }
-            } catch (companyDocErr) {
-              console.warn('Could not check company document expiries:', companyDocErr);
-            }
+            }, 3000);
           }
         }
       } catch (meErr) {
@@ -856,16 +822,13 @@ function NotificationBell({ small = true }) {
                     <div className={styles.itemMeta}>
                       {n.type && (
                         <span className={styles.itemType} style={{
-                          background: (n.type.includes('reminder') || n.type.includes('expiry')) ? '#fee2e2' :
-                            n.type.includes('event') ? '#dbeafe' : '#f0f9ff',
-                          color: (n.type.includes('reminder') || n.type.includes('expiry')) ? '#991b1b' :
-                            n.type.includes('event') ? '#1e40af' : '#0c4a6e',
+                          ...getTypeStyle(n.type),
                           padding: '2px 8px',
                           borderRadius: 12,
                           fontSize: 11,
                           marginRight: 8
                         }}>
-                          {n.type}
+                          {TYPE_LABELS[n.type] || n.type}
                         </span>
                       )}
                       <span className={styles.itemTime}>

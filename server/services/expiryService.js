@@ -4,6 +4,7 @@ const Employee = require('../models/Employee');
 const User = require('../models/User');
 const CompanyDocument = require('../models/CompanyDocument');
 const Notification = require('../models/Notification');
+const { runDailyHrAlerts } = require('./hrNotificationService');
 
 const ALERT_DAYS = [30, 25, 20, 15, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0];
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -109,7 +110,8 @@ async function checkExpiries() {
             const checks = [
                 { name: 'Passport', date: emp.passportExpiryDate },
                 { name: 'Labour Card', date: emp.labourCardExpiryDate },
-                { name: 'Visa', date: emp.visaExpiryDate }
+                { name: 'Visa', date: emp.visaExpiryDate },
+                { name: 'Emirates ID', date: emp.emiratesIdExpiryDate },
             ];
 
             for (const check of checks) {
@@ -152,10 +154,10 @@ async function sendCompanyDocExpiryNotification(doc, diffDays, io, today) {
     };
 
     if (io) {
-        io.to('role-admin').to('role-hod').emit('notification', payload);
+        io.to('role-admin').to('role-hod').to('role-hr').to('role-viewer').emit('notification', payload);
     }
 
-    for (const role of ['admin', 'hod']) {
+    for (const role of ['admin', 'hod', 'hr', 'viewer']) {
         const existing = await Notification.findOne({
             'payload.id': payload.id,
             role,
@@ -198,6 +200,7 @@ function initExpiryCron(io) {
     cron.schedule('0 9 * * *', () => {
         checkExpiries();
         checkCompanyDocumentExpiries(io);
+        runDailyHrAlerts(io);
     });
 }
 

@@ -59,19 +59,7 @@ function TeamManagement() {
 
   const fetchStats = async () => {
     try {
-      const employees = await EmployeeService.getEmployees();
-
-      const totalEmployees = employees.length;
-
-      let activeCount = 0;
-      let inactiveCount = 0;
-      employees.forEach((emp) => {
-        if (emp.employeeStatus && String(emp.employeeStatus).toLowerCase() === "active") {
-          activeCount++;
-        } else {
-          inactiveCount++;
-        }
-      });
+      const employeeStats = await EmployeeService.getEmployeeStats();
 
       const todayStr = new Date().toISOString().slice(0, 10);
       let presentCount = 0;
@@ -82,29 +70,18 @@ function TeamManagement() {
         }
       } catch (err) {
         console.warn("Failed to fetch today's attendance for stats:", err);
-        presentCount = employees.filter((emp) => emp.attendance === "Onsite").length;
       }
 
+      const totalEmployees = employeeStats.totalEmployees || 0;
       const attendancePercentage =
         totalEmployees > 0 ? Math.round((presentCount / totalEmployees) * 100) : 0;
 
-      const uniqueProjects = new Set();
-      employees.forEach((emp) => {
-        if (Array.isArray(emp.assignedProjects)) {
-          emp.assignedProjects.forEach((proj) => {
-            const projectId = typeof proj === "object" && proj !== null ? proj._id : proj;
-            if (projectId) uniqueProjects.add(projectId.toString());
-          });
-        }
-      });
-      const totalAssignedProjects = uniqueProjects.size;
-
       setStats({
         attendancePercentage,
-        totalAssignedProjects,
+        totalAssignedProjects: employeeStats.totalAssignedProjects || 0,
         totalEmployees,
-        activeEmployees: activeCount,
-        inactiveEmployees: inactiveCount,
+        activeEmployees: employeeStats.activeEmployees || 0,
+        inactiveEmployees: employeeStats.inactiveEmployees || 0,
       });
     } catch (error) {
       console.error("Error fetching team stats:", error);

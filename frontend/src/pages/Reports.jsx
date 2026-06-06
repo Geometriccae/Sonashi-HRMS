@@ -24,7 +24,7 @@ function Reports() {
   const [filterRole, setFilterRole] = useState("All");
   const [filterOffice, setFilterOffice] = useState("All");
   const [filterCountry, setFilterCountry] = useState("All");
-  const [minExperience, setMinExperience] = useState("");
+  const [minExperience, setMinExperience] = useState("All");
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -55,7 +55,7 @@ function Reports() {
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        const data = await employeeService.getEmployees();
+        const data = await employeeService.getEmployeesList();
         const empList = Array.isArray(data)
           ? data
           : data.employees || data.data || [];
@@ -92,6 +92,7 @@ function Reports() {
     "Needs Analysis", "Pending", "Progress", "Proposal Sent", "Won"
   ];
   const employeeStatusOptions = ["All", "Active", "InActive"];
+  const minExperienceOptions = ["All", ...Array.from({ length: 21 }, (_, i) => String(i))];
 
   const clientDropdownOptions = {
     clientType: ["Agent", "Barge Operator", "Barge Owners", "Broker", "CHA", "Consignee", "Freigt Forwarder", "Other", "Ship Owners", "Shipper", "Transporter"],
@@ -124,7 +125,7 @@ function Reports() {
     setFilterRole("All");
     setFilterOffice("All");
     setFilterCountry("All");
-    setMinExperience("");
+    setMinExperience("All");
     setStartDate("");
     setEndDate("");
     setFilterMonth("All");
@@ -196,7 +197,7 @@ function Reports() {
     }
 
     if (type === "Airfare Report") {
-      let data = await employeeService.getEmployees();
+      let data = await employeeService.getEmployeesList();
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
@@ -204,7 +205,7 @@ function Reports() {
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "") {
+      if (minExperience !== "All") {
         const minYears = parseFloat(minExperience);
         if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
       }
@@ -227,7 +228,7 @@ function Reports() {
     }
 
     if (type === "Increment report") {
-      let data = await employeeService.getEmployees();
+      let data = await employeeService.getEmployeesList();
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
@@ -235,7 +236,7 @@ function Reports() {
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "") {
+      if (minExperience !== "All") {
         const minYears = parseFloat(minExperience);
         if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
       }
@@ -277,7 +278,7 @@ function Reports() {
     }
 
     if (type === "Document expiry") {
-      let data = await employeeService.getEmployees();
+      let data = await employeeService.getEmployeesList();
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
@@ -285,7 +286,7 @@ function Reports() {
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "") {
+      if (minExperience !== "All") {
         const minYears = parseFloat(minExperience);
         if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
       }
@@ -330,7 +331,7 @@ function Reports() {
     }
 
     if (type === "Salary report") {
-      let data = await employeeService.getEmployees();
+      let data = await employeeService.getEmployeesList();
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
@@ -338,7 +339,7 @@ function Reports() {
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "") {
+      if (minExperience !== "All") {
         const minYears = parseFloat(minExperience);
         if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
       }
@@ -591,7 +592,7 @@ function Reports() {
                       setFilterRole("All");
                       setFilterOffice("All");
                       setFilterCountry("All");
-                      setMinExperience("");
+                      setMinExperience("All");
                       setFilterMonth("All");
                       setFilterYear("All");
                     }}
@@ -668,23 +669,39 @@ function Reports() {
                           </select>
                         </div>
                       </div>
-        
 
-                      <div className={styles["form-row"]}>
-                        <div className={styles["form-label"]}>Min Years of Experience</div>
-                        <div className={styles["form-field"]}>
-                          <input
-                            type="number"
-                            className={`${styles["date-field"]} ${styles.fullWidthInput}`}
-                            placeholder="e.g. 2"
-                            value={minExperience}
-                            onChange={e => setMinExperience(e.target.value)}
-                          />
+                      {reportType !== "Document expiry" && (
+                        <div className={styles["form-row"]}>
+                          <div className={styles["form-label"]}>Min Years of Experience</div>
+                          <div className={styles["form-field"]}>
+                            <select
+                              className={styles["select-field"]}
+                              value={minExperience}
+                              onChange={e => setMinExperience(e.target.value)}
+                            >
+                              {minExperienceOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          </div>
                         </div>
-                      </div>
+                      )}
         
                     </>
                   )}
+                </div>
+              )}
+
+              {reportType === "Document expiry" && (
+                <div className={styles["form-row"]}>
+                  <div className={styles["form-label"]}>Min Years of Experience</div>
+                  <div className={styles["form-field"]}>
+                    <select
+                      className={styles["select-field"]}
+                      value={minExperience}
+                      onChange={e => setMinExperience(e.target.value)}
+                    >
+                      {minExperienceOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
                 </div>
               )}
 
