@@ -148,7 +148,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     const fetchEmployees = async () => {
         try {
-            const data = await EmployeeService.getEmployees();
+            const data = await EmployeeService.getEmployeesList();
             const empList = Array.isArray(data) ? data : (data.employees || data.data || []);
             setEmployees(empList);
         } catch (error) {

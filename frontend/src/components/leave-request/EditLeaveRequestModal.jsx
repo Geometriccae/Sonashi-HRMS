@@ -150,7 +150,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const fetchEmployees = async () => {
         try {
-            const data = await EmployeeService.getEmployees();
+            const data = await EmployeeService.getEmployeesList();
             setEmployees(data);
         } catch (error) {
             console.error("Error fetching employees:", error);

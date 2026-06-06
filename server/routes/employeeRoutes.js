@@ -16,6 +16,7 @@ const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const Client = require('../models/Client');
 const { buildEmployeePayload } = require('../utils/employeeExcelImport');
+const { notifyEmployeeOnboarding } = require('../services/hrNotificationService');
 
 /** Import rows only require these four fields (mobile & email are optional). */
 function importRowRequiredFieldsMissing(payload) {
@@ -211,10 +212,58 @@ async function sendTaskEmailsInBackground(employee, eventData, assignedBy, actio
 
 // ====== STATIC ROUTES (No parameters) ======
 
-// Get all employees
+const EMPLOYEE_LIST_FIELDS = [
+  'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId', 'mobile',
+  'role', 'department', 'profilePhoto', 'attendance', 'doj', 'passportExpiryDate',
+  'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
+  'travellingDate', 'firstWorkingDay', 'lastWorkingDay', 'reportingManager', 'assignedProjects',
+  'nationality', 'office', 'passportNo', 'emiratesId', 'createdAt',
+].join(' ');
+
+// Lightweight stats for dashboard / team management cards
+router.get('/stats', authMiddleware, async (req, res) => {
+  try {
+    const [totalEmployees, activeEmployees, inactiveEmployees, projectRows] = await Promise.all([
+      Employee.countDocuments(),
+      Employee.countDocuments({ employeeStatus: 'Active' }),
+      Employee.countDocuments({ employeeStatus: 'InActive' }),
+      Employee.find({}, { assignedProjects: 1 }).lean(),
+    ]);
+
+    const uniqueProjects = new Set();
+    projectRows.forEach((emp) => {
+      if (Array.isArray(emp.assignedProjects)) {
+        emp.assignedProjects.forEach((proj) => {
+          const projectId = typeof proj === 'object' && proj !== null ? proj._id : proj;
+          if (projectId) uniqueProjects.add(String(projectId));
+        });
+      }
+    });
+
+    res.json({
+      totalEmployees,
+      activeEmployees,
+      inactiveEmployees,
+      totalAssignedProjects: uniqueProjects.size,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching employee stats', error: error.message });
+  }
+});
+
+// Get all employees (use ?view=list for lightweight table data)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const employees = await Employee.find().lean().sort({ createdAt: -1 });
+    const view = String(req.query.view || '').toLowerCase();
+    const query = Employee.find().sort({ createdAt: -1 });
+
+    if (view === 'list') {
+      query.select(EMPLOYEE_LIST_FIELDS).lean();
+    } else {
+      query.lean();
+    }
+
+    const employees = await query;
     res.json(employees);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
@@ -495,6 +544,14 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
       }
     } catch (emitErr) {
       console.warn('Failed to emit employee-created task:', emitErr);
+    }
+
+    try {
+      const io = req.app.get('io');
+      notifyEmployeeOnboarding(io, savedEmployee)
+        .catch((e) => console.error('[Employee] Onboarding notification error:', e));
+    } catch (notifErr) {
+      console.warn('Failed to send onboarding notification:', notifErr);
     }
 
     res.status(201).json(savedEmployee);

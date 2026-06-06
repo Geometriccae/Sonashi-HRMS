@@ -28,7 +28,6 @@ import AddEmployeeModal from "./AddEmployeeModal";
 import EditEmployeeModal from "./EditEmployeeModal";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 import employeeService from "../../services/EmployeeService";
-import ClientService from "../../services/ClientService";
 import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
@@ -89,7 +88,6 @@ function TeamMembersTable() {
   const [employeeToEdit, setEmployeeToEdit] = useState(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -100,10 +98,8 @@ function TeamMembersTable() {
   const canDeleteEmployees = userRole === "admin" || userRole === "hod";
   const [datePrompt, setDatePrompt] = useState(null);
 
-  // Fetch employees and clients from API
   useEffect(() => {
     fetchEmployees();
-    fetchClients();
 
     // Listen for real-time employee creations so UI updates without manual refresh
     const socketUrl = getApiBaseUrl();
@@ -134,8 +130,7 @@ function TeamMembersTable() {
     try {
       setLoading(true);
       setError(null);
-      const employeesData = await employeeService.getEmployees();
-      console.log("Fetched employees:", employeesData);
+      const employeesData = await employeeService.getEmployeesList();
       setEmployees(employeesData || []);
     } catch (err) {
       console.error("Error fetching employees:", err);
@@ -143,16 +138,6 @@ function TeamMembersTable() {
       setError("Failed to load employees. Please try again.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchClients = async () => {
-    try {
-      const data = await ClientService.getClients();
-      const clientList = Array.isArray(data) ? data : data.clients || [];
-      setClients(clientList);
-    } catch (err) {
-      console.error("Failed to fetch clients:", err);
     }
   };
 

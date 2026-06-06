@@ -36,6 +36,7 @@ const supportRoutes = require('./routes/supportRoutes');
 const leaveRequestRoutes = require('./routes/leaveRequestRoutes');
 const salarySlipRoutes = require('./routes/salarySlipRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const { initExpiryCron } = require('./services/expiryService');
 const Employee = require('./models/Employee');
 
@@ -300,6 +301,7 @@ app.use('/api/checkins', require('./routes/checkInRoutes'));
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/leave-requests', leaveRequestRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/options', optionRoutes);
 
