@@ -489,7 +489,7 @@ function TeamManagementSalesLeads() {
   // Render different buttons based on active tab
   const renderButtons = () => {
     const isAdmin = userRole === "admin" || userRole === "hod";
-    const canEdit = isAdmin || userRole === "hr";
+    const canEdit = userRole !== "viewer" && (isAdmin || userRole === "hr");
 
     switch (activeTab) {
       case "basicInfo":

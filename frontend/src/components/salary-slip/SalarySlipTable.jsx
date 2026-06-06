@@ -351,8 +351,9 @@ function SalarySlipTable({ userRole }) {
     const isHOD = currentRole === "hod";
     const isAdminRole = currentRole === "admin";
     const isHR = currentRole === "hr";
-    const isAdmin = isAdminRole || isHOD || isHR;
-    const canManageSlips = isAdminRole || isHOD; // HR can view, but not create/edit/delete
+    const isViewer = currentRole === "viewer";
+    const isAdmin = isAdminRole || isHOD || isHR || isViewer;
+    const canManageSlips = (isAdminRole || isHOD) && !isViewer;
     const { showToast } = useToast();
     const [salarySlips, setSalarySlips] = useState([]);
     const [isLoading, setIsLoading] = useState(true);

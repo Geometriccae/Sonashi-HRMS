@@ -16,6 +16,7 @@ const ROLE_LABELS = {
   admin: "Administrator",
   hr: "HR Manager",
   hod: "Head of Department",
+  viewer: "Viewer",
   sales_executive: "Sales Executive",
   sales_lead: "Sales Lead",
 };

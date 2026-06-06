@@ -46,7 +46,7 @@ router.get('/', authMiddleware, async (req, res) => {
     // If not admin, only return their own check-ins
     let query = {};
 
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'admin' && req.user.role !== 'viewer') {
       query.user = req.user._id;
     }
 
@@ -91,7 +91,7 @@ router.get('/user/:userId', authMiddleware, async (req, res) => {
     console.log('Fetching check-ins for user:', requestedUserId);
 
     // Only admin can fetch other users' check-ins
-    if (req.user.role !== 'admin' && String(req.user._id) !== String(requestedUserId)) {
+    if (req.user.role !== 'admin' && req.user.role !== 'viewer' && String(req.user._id) !== String(requestedUserId)) {
       return res.status(403).json({ message: 'Forbidden: not allowed to view other users check-ins' });
     }
 

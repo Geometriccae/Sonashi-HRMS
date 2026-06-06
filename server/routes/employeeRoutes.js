@@ -4,6 +4,7 @@ const Employee = require('../models/Employee');
 const User = require('../models/User');
 const EmployeeRemark = require('../models/EmployeeRemark');
 const authMiddleware = require('../middleware/authMiddleware');
+const { blockViewerWrites } = require('../middleware/permissionsMiddleware');
 const multer = require('multer');
 const path = require('path');
 const nodemailer = require("nodemailer");
@@ -275,7 +276,7 @@ router.get('/events', authMiddleware, async (req, res) => {
 });
 
 // Bulk import employees from Excel (first sheet; headers match Team Management / Add Employee fields)
-router.post('/import', authMiddleware, uploadEmployeeImport.single('file'), async (req, res) => {
+router.post('/import', authMiddleware, blockViewerWrites, uploadEmployeeImport.single('file'), async (req, res) => {
   let filePath = null;
   try {
     if (!req.file) {
@@ -420,7 +421,7 @@ router.post('/import', authMiddleware, uploadEmployeeImport.single('file'), asyn
 });
 
 // Create new employee
-router.post('/', authMiddleware, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
+router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
   try {
     console.log("Incoming employee body:", req.body);
     console.log("Incoming employee file:", req.file);
@@ -517,7 +518,7 @@ router.post('/', authMiddleware, uploadProfilePhoto.single('profilePhoto'), asyn
   }
 });
 // Update employee
-router.put('/:id', authMiddleware, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
+router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
   try {
     console.log('🔧 UPDATE EMPLOYEE - START');
     console.log('Employee ID:', req.params.id);
@@ -627,7 +628,7 @@ router.put('/:id', authMiddleware, uploadProfilePhoto.single('profilePhoto'), as
 });
 
 // Bulk delete employees
-router.post('/bulk-delete', authMiddleware, async (req, res) => {
+router.post('/bulk-delete', authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const { ids } = req.body;
 
@@ -881,7 +882,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 
 // Delete single employee
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -904,7 +905,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 // Remove project from employee
-router.delete('/:id/projects', authMiddleware, async (req, res) => {
+router.delete('/:id/projects', authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const { project } = req.body;
 
@@ -965,7 +966,7 @@ router.get('/search/:query', authMiddleware, async (req, res) => {
 // ====== NESTED PARAMETERIZED ROUTES (With multiple parameters) ======
 
 // Add event to an employee
-router.post('/:id/events', authMiddleware, async (req, res) => {
+router.post('/:id/events', authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const { id } = req.params;
     const eventData = req.body || {};
@@ -1133,7 +1134,7 @@ router.get('/:id/events', authMiddleware, async (req, res) => {
 
 // Update an event
 // Update an event
-router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
+router.put('/:id/events/:eventId', authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const { id, eventId } = req.params;
     const updatedData = req.body;
@@ -1264,7 +1265,7 @@ router.put('/:id/events/:eventId', authMiddleware, async (req, res) => {
 });
 
 // Update meeting (with email notifications)
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const update = req.body;
     const meeting = await Meeting.findById(req.params.id);
@@ -1411,7 +1412,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
 });
 
 // Delete an event
-router.delete('/:id/events/:eventId', authMiddleware, async (req, res) => {
+router.delete('/:id/events/:eventId', authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id);
     if (!employee) {

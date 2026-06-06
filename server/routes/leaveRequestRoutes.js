@@ -179,7 +179,7 @@ router.get('/', authMiddleware, async (req, res) => {
             if (employeeId) {
                 filter.employee = employeeId;
             }
-        } else if (req.user.role === 'admin' || req.user.role === 'hr') {
+        } else if (req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer') {
             // Admin and HR see Pending requests, HOD processed requests, and final ones
             const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected'];
 
@@ -222,6 +222,10 @@ router.get('/', authMiddleware, async (req, res) => {
 // Create a new leave request
 router.post('/', authMiddleware, async (req, res) => {
     try {
+        if (req.user.role === 'viewer') {
+            return res.status(403).json({ message: 'Viewer cannot create leave requests' });
+        }
+
         const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
 
 
@@ -328,6 +332,14 @@ router.put('/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Leave request not found' });
         }
 
+        if (req.user.role === 'viewer') {
+            const hasFieldEdits = employeeId || employeeName || company || leaveType || startDate || endDate || reason
+                || req.body.isPastLeave !== undefined || req.body.requestAirfare !== undefined || req.body.visaExpiryDate;
+            if (!status || hasFieldEdits) {
+                return res.status(403).json({ message: 'Viewer can only approve or reject leave requests' });
+            }
+        }
+
         // Handle status update (approval/rejection)
         if (status) {
             const userRole = req.user.role;
@@ -358,8 +370,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
                     updateData.hodApprovedAt = new Date();
                 }
             }
-            // Final Approval Logic: Only Admin can finalize.
-            else if (userRole === 'admin') {
+            // Final Approval Logic: Admin and Viewer can finalize.
+            else if (userRole === 'admin' || userRole === 'viewer') {
                 if (status === 'Approved') {
                     // Admin can approve Pending or HOD Approved requests
                     if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
@@ -505,6 +517,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // Delete leave request
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {
+        if (req.user.role === 'viewer') {
+            return res.status(403).json({ message: 'Viewer cannot delete leave requests' });
+        }
+
         const deletedRequest = await LeaveRequest.findByIdAndDelete(req.params.id);
         if (!deletedRequest) {
             return res.status(404).json({ message: 'Leave request not found' });

@@ -11,7 +11,7 @@ function Documents({ clientId, refreshKey }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const userRole = localStorage.getItem("role") || "";
-  const isAdmin = userRole === "admin" || userRole === "hod";
+  const isAdmin = userRole !== "viewer" && (userRole === "admin" || userRole === "hod");
 
   useEffect(() => {
     if (!clientId) return;

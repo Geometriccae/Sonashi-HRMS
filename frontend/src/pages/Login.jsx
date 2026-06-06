@@ -20,8 +20,8 @@ function Login() {
 
       console.log(res.data.username); 
 
-      if (res.data.user.role !== 'admin' && res.data.user.role !== 'hr') {
-        setError('Access Denied. Only Admin and HR can log in.');
+      if (res.data.user.role !== 'admin' && res.data.user.role !== 'hr' && res.data.user.role !== 'viewer') {
+        setError('Access Denied. Only Admin, HR, and Viewer can log in.');
         return;
       }
 

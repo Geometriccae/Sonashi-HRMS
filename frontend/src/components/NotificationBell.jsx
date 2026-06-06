@@ -325,7 +325,7 @@ function NotificationBell({ small = true }) {
             }
 
             try {
-              if (me.role === 'admin' || me.role === 'hr') {
+              if (me.role === 'admin' || me.role === 'hr' || me.role === 'viewer') {
                 const empResp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/employees`, {
                   headers: { Authorization: `Bearer ${token}` }
                 });
