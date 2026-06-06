@@ -22,7 +22,7 @@ function ProfileAvatar({ size = 32, className = "", userData = null }) {
 
   const onImageError = (e) => {
     const currentSrc = e.target.src;
-    const productionBase = 'https://backend.sonashi.in';
+    const productionBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
     if (!currentSrc.startsWith(productionBase)) {
       const path = new URL(currentSrc).pathname;
       e.target.src = `${productionBase}${path}`;
