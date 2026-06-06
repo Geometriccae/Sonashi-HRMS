@@ -255,6 +255,12 @@ main {
   background-color: #28a745;
   color: white;
 }
+
+.roleBadge.viewer {
+  background-color: #6366f1;
+  color: white;
+}
+
 .roleBadge {
   background-color: #0EA5E9;
   color: white;

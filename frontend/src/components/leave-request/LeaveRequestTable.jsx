@@ -11,6 +11,13 @@ import { useToast } from "../../context/ToastContext";
 import OptionService from "../../services/OptionService";
 import Select from "react-select";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
+import {
+    canManageLeaves as checkCanManageLeaves,
+    canApproveLeaves,
+    canCreateLeaves,
+    canEditLeaves,
+    getUserRole,
+} from "../../utils/permissions";
 
 const EditIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -63,7 +70,11 @@ function LeaveRequestTable({ onUpdate }) {
     const isHOD = String(userRole || "").toLowerCase() === "hod";
     const isAdminRole = String(userRole || "").toLowerCase() === "admin";
     const isHR = String(userRole || "").toLowerCase() === "hr";
-    const canManageLeaves = isAdminRole || isHOD || isHR;
+    const isViewerRole = String(userRole || "").toLowerCase() === "viewer";
+    const canManageLeaves = checkCanManageLeaves(userRole);
+    const canCreateLeaveRequests = canCreateLeaves(userRole);
+    const canEditLeaveRequests = canEditLeaves(userRole);
+    const canApproveLeaveRequests = canApproveLeaves(userRole);
 
     const fetchLeaveRequests = async () => {
         setIsLoading(true);
@@ -89,7 +100,7 @@ function LeaveRequestTable({ onUpdate }) {
     };
 
     useEffect(() => {
-        setUserRole(localStorage.getItem("role") || "");
+        setUserRole(getUserRole());
         fetchLeaveRequests();
     }, []);
 
@@ -270,9 +281,7 @@ function LeaveRequestTable({ onUpdate }) {
 
     // Determine which requests can be approved based on role
     const canApprove = (request) => {
-        // Only Admin can approve (Pending or HOD Approved). 
-        // HR can create/edit but NOT approve.
-        if (isAdminRole && (request.status === "Pending" || request.status === "HOD Approved")) return true;
+        if (canApproveLeaveRequests && (request.status === "Pending" || request.status === "HOD Approved")) return true;
         return false;
     };
 
@@ -371,7 +380,7 @@ function LeaveRequestTable({ onUpdate }) {
             <div className={styles.header}>
                 <h2 className={styles.title}>Leave Management</h2>
                 <div className={styles.actions}>
-                    {isHR && (
+                    {canCreateLeaveRequests && isHR && (
                         <>
                             {selectedRows.length > 0 && (
                                 <button 
@@ -389,13 +398,13 @@ function LeaveRequestTable({ onUpdate }) {
                             </button>
                         </>
                     )}
-                    {isHR && (
+                    {canCreateLeaveRequests && isHR && (
                         <button className={styles.addButton} onClick={() => setIsAddModalOpen(true)}>
                             <span>Request Leave</span>
                             <img src={plus} alt="" />
                         </button>
                     )}
-                    {!canManageLeaves && (
+                    {!canManageLeaves && canCreateLeaveRequests && (
                         <button className={styles.addButton} onClick={() => setIsAddModalOpen(true)}>
                             <span>Request Leave</span>
                             <img src={plus} alt="" />
@@ -578,7 +587,7 @@ function LeaveRequestTable({ onUpdate }) {
                 <table className={styles.table}>
                     <thead>
                         <tr>
-                            {isHR && (
+                            {canEditLeaveRequests && isHR && (
                                 <th style={{ width: "40px" }}>
                                     <input 
                                         type="checkbox" 
@@ -616,7 +625,7 @@ function LeaveRequestTable({ onUpdate }) {
                     <tbody>
                         {paginatedRequests.map(req => (
                             <tr key={req._id}>
-                                {isHR && (
+                                {canEditLeaveRequests && isHR && (
                                     <td>
                                         <input 
                                             type="checkbox" 
@@ -704,7 +713,7 @@ function LeaveRequestTable({ onUpdate }) {
                                                     <ViewIcon />
                                                 </button>
 
-                                                {isHR && (
+                                                {canEditLeaveRequests && isHR && (
                                                     <>
                                                         <button className={styles.iconButton} onClick={() => handleEdit(req)} title="Edit">
                                                             <EditIcon />
@@ -720,7 +729,7 @@ function LeaveRequestTable({ onUpdate }) {
                                                         <button
                                                             className={`${styles.iconButton} ${styles.approveButton}`}
                                                             onClick={() => handleApprove(req)}
-                                                            title={isHOD ? "Approve (Send to Admin)" : "Final Approve"}
+                                                            title={isViewerRole ? "Approve Leave" : (isHOD ? "Approve (Send to Admin)" : "Final Approve")}
                                                         >
                                                             <CheckIcon />
                                                         </button>
@@ -732,7 +741,7 @@ function LeaveRequestTable({ onUpdate }) {
                                                             <XIcon />
                                                         </button>
                                                     </div>
-                                                ) : (isAdminRole || isHOD ? <span className={styles.noAction}>—</span> : null)}
+                                                ) : ((isAdminRole || isHOD || isViewerRole) ? <span className={styles.noAction}>—</span> : null)}
                                             </>
                                         ) : (
                                             // Employee view

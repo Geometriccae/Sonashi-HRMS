@@ -21,7 +21,8 @@ const userSchema = new mongoose.Schema({
       "admin",
       "sales_executive",
       "hod",
-      "hr"
+      "hr",
+      "viewer"
     ],
     default: "sales_executive",
     required: true

@@ -7,6 +7,7 @@ import UploadCompanyDocumentModal from "../components/UploadCompanyDocumentModal
 import CompanyDocumentService from "../services/CompanyDocumentService";
 import { buildImageUrl } from "../config/config";
 import { useToast } from "../context/ToastContext";
+import { canEdit } from "../utils/permissions";
 
 const formatDate = (dateString) => {
   if (!dateString) return "-";
@@ -20,6 +21,7 @@ const formatDate = (dateString) => {
 
 const CompanyDocument = () => {
   const { showToast } = useToast();
+  const canEditDocuments = canEdit();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -130,12 +132,14 @@ const CompanyDocument = () => {
         <PageBody className={styles.container}>
           <div className={styles.header}>
             <h1>Company Document</h1>
-            <button
-              className={styles.uploadButton}
-              onClick={handleOpenAdd}
-            >
-              +Add
-            </button>
+            {canEditDocuments && (
+              <button
+                className={styles.uploadButton}
+                onClick={handleOpenAdd}
+              >
+                +Add
+              </button>
+            )}
           </div>
 
           {error && <div className={styles.error}>{error}</div>}
@@ -149,7 +153,7 @@ const CompanyDocument = () => {
                   <th>Number</th>
                   <th>Issue Date</th>
                   <th>Expiry Till</th>
-                  <th>Actions</th>
+                  <th>{canEditDocuments ? "Actions" : "View"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,18 +182,22 @@ const CompanyDocument = () => {
                             View
                           </a>
                         )}
-                        <button
-                          className={styles.editButton}
-                          onClick={() => handleEditClick(doc)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className={styles.deleteButton}
-                          onClick={() => handleDeleteClick(doc)}
-                        >
-                          Delete
-                        </button>
+                        {canEditDocuments && (
+                          <>
+                            <button
+                              className={styles.editButton}
+                              onClick={() => handleEditClick(doc)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={styles.deleteButton}
+                              onClick={() => handleDeleteClick(doc)}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))

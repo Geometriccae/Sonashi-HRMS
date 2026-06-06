@@ -196,7 +196,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   const [editItem, setEditItem] = useState(null);
   const apiHost = (config.API_BASE_URL || "").replace(/\/api\/?$/, "");
   const userRole = localStorage.getItem("role") || "";
-  const isAdmin = userRole === "admin" || userRole === "hod";
+  const isAdmin = userRole !== "viewer" && (userRole === "admin" || userRole === "hod");
 
   const buildDocumentUrl = (path) => {
     if (!path) return "";

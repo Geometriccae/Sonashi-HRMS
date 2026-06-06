@@ -62,7 +62,7 @@ const requireHODOrAdmin = async (req, res, next) => {
 
         const role = String(user.role || '').toLowerCase();
         // Allow HR to access read routes
-        if (role !== 'admin' && role !== 'hod' && role !== 'hr') {
+        if (role !== 'admin' && role !== 'hod' && role !== 'hr' && role !== 'viewer') {
             return res.status(403).json({ message: 'Administrative access required' });
         }
 
@@ -126,7 +126,7 @@ router.get('/all', async (req, res) => {
         if (!user) return res.status(401).json({ message: 'User not found' });
 
         const role = String(user.role || '').toLowerCase();
-        if (role !== 'admin' && role !== 'hod' && role !== 'hr') {
+        if (role !== 'admin' && role !== 'hod' && role !== 'hr' && role !== 'viewer') {
             return res.status(403).json({ message: 'Access denied' });
         }
 

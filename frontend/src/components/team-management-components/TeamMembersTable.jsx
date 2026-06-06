@@ -96,6 +96,8 @@ function TeamMembersTable() {
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
+  const canEditEmployees = userRole !== "viewer";
+  const canDeleteEmployees = userRole === "admin" || userRole === "hod";
   const [datePrompt, setDatePrompt] = useState(null);
 
   // Fetch employees and clients from API
@@ -519,10 +521,12 @@ function TeamMembersTable() {
                 <Button type="text" icon={<EyeOutlined />} size="small" />
               </Link>
             </Tooltip>
-            <Tooltip title="Edit">
-              <Button type="text" icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)} />
-            </Tooltip>
-            {isAdmin && (
+            {canEditEmployees && (
+              <Tooltip title="Edit">
+                <Button type="text" icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)} />
+              </Tooltip>
+            )}
+            {canDeleteEmployees && (
               <Tooltip title="Delete">
                 <Button
                   type="text"
@@ -594,17 +598,21 @@ function TeamMembersTable() {
           {selectedEmployeeIds.length > 0 && (
             <Button onClick={handleClearSelection}>Clear selection</Button>
           )}
-          {selectedEmployeeIds.length > 0 && (
+          {canDeleteEmployees && selectedEmployeeIds.length > 0 && (
             <Button danger onClick={() => setIsDeleteModalOpen(true)}>
               Delete selected ({selectedEmployeeIds.length})
             </Button>
           )}
-          <Button icon={<UploadOutlined />} onClick={() => setIsBulkImportModalOpen(true)}>
-            Bulk import
-          </Button>
-          <Button type="primary" icon={<UserAddOutlined />} onClick={handleAddEmployee}>
-            Add Employee
-          </Button>
+          {canEditEmployees && (
+            <>
+              <Button icon={<UploadOutlined />} onClick={() => setIsBulkImportModalOpen(true)}>
+                Bulk import
+              </Button>
+              <Button type="primary" icon={<UserAddOutlined />} onClick={handleAddEmployee}>
+                Add Employee
+              </Button>
+            </>
+          )}
         </Space>
       </div>
 

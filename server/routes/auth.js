@@ -63,9 +63,9 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    if (user.role !== 'admin' && user.role !== 'hr') {
+    if (user.role !== 'admin' && user.role !== 'hr' && user.role !== 'viewer') {
       console.log('Access denied for role:', user.role);
-      return res.status(403).json({ message: 'Access denied. Only Admin and HR can log in.' });
+      return res.status(403).json({ message: 'Access denied. Only Admin, HR, and Viewer can log in.' });
     }
 
     console.log('Password correct, generating token...');

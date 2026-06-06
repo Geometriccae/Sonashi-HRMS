@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const CompanyDocument = require("../models/CompanyDocument");
 const authMiddleware = require("../middleware/authMiddleware");
+const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.get("/", authMiddleware, async (_req, res) => {
   }
 });
 
-router.post("/", authMiddleware, upload.single("file"), async (req, res) => {
+router.post("/", authMiddleware, blockViewerWrites, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -62,7 +63,7 @@ router.post("/", authMiddleware, upload.single("file"), async (req, res) => {
   }
 });
 
-router.put("/:docId", authMiddleware, upload.single("file"), async (req, res) => {
+router.put("/:docId", authMiddleware, blockViewerWrites, upload.single("file"), async (req, res) => {
   try {
     const doc = await CompanyDocument.findById(req.params.docId);
     if (!doc) {
@@ -107,7 +108,7 @@ router.put("/:docId", authMiddleware, upload.single("file"), async (req, res) =>
   }
 });
 
-router.delete("/:docId", authMiddleware, async (req, res) => {
+router.delete("/:docId", authMiddleware, blockViewerWrites, async (req, res) => {
   try {
     const doc = await CompanyDocument.findById(req.params.docId);
     if (!doc) {
