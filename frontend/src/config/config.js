@@ -10,7 +10,8 @@ const isLocalhost = typeof window !== 'undefined' &&
 
 const config = {
   API_BASE_URL: process.env.REACT_APP_API_URL || 
-    (isLocalhost ? `http://${window.location.hostname}:5000/api` : 'https://backend.sonashi.in/api'),
+    // (isLocalhost ? `http://${window.location.hostname}:5000/api` : 'https://backend.sonashi.in/api'),
+    'http://localhost:5000/api',
 };
 
 /**
@@ -21,7 +22,8 @@ export function getApiBaseUrl() {
   if (env) {
     return String(env).replace(/\/api\/?$/, '');
   }
-  return isLocalhost ? `http://${window.location.hostname}:5000` : 'https://backend.sonashi.in';
+  // return isLocalhost ? `http://${window.location.hostname}:5000` : 'https://backend.sonashi.in';
+  return 'http://localhost:5000';
 }
 
 /**
@@ -65,7 +67,7 @@ export function getAuthApiUrl(path) {
  */
 export const handleImageError = (e) => {
   const currentSrc = e.target.src;
-  const productionBase = 'https://backend.sonashi.in';
+  const productionBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
   
   if (currentSrc && !currentSrc.startsWith(productionBase) && !currentSrc.startsWith('blob:')) {
     // Try production fallback

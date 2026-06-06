@@ -214,7 +214,7 @@ async function sendTaskEmailsInBackground(employee, eventData, assignedBy, actio
 
 const EMPLOYEE_LIST_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId', 'mobile',
-  'role', 'department', 'profilePhoto', 'attendance', 'doj', 'passportExpiryDate',
+  'role', 'department', 'attendance', 'doj', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
   'travellingDate', 'firstWorkingDay', 'lastWorkingDay', 'reportingManager', 'assignedProjects',
   'nationality', 'office', 'passportNo', 'emiratesId', 'createdAt',
@@ -260,7 +260,7 @@ router.get('/', authMiddleware, async (req, res) => {
     if (view === 'list') {
       query.select(EMPLOYEE_LIST_FIELDS).lean();
     } else {
-      query.lean();
+      query.select('-profilePhoto').lean();
     }
 
     const employees = await query;
