@@ -175,14 +175,14 @@ router.get('/', authMiddleware, async (req, res) => {
                 filter.status = status;
             } else {
                 // Default: show Pending (for approval) and completed ones
-                filter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected'] };
+                filter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
             }
             if (employeeId) {
                 filter.employee = employeeId;
             }
         } else if (req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer') {
             // Admin and HR see Pending requests, HOD processed requests, and final ones
-            const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected'];
+            const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'];
 
             if (status && status !== 'All') {
                 if (visibleStatuses.includes(status)) {
@@ -522,6 +522,71 @@ router.put('/:id', authMiddleware, async (req, res) => {
     } catch (error) {
         console.error('Error updating leave request:', error);
         res.status(400).json({ message: 'Error updating leave request', error: error.message });
+    }
+});
+
+// Revert (cancel) an unavailed approved leave — credits balance back by excluding from entitlement calculations
+router.post('/:id/revert', authMiddleware, async (req, res) => {
+    try {
+        const allowedRoles = ['admin', 'hr', 'hod', 'viewer'];
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ message: 'You do not have permission to revert leave requests' });
+        }
+
+        const leaveRequest = await LeaveRequest.findById(req.params.id);
+        if (!leaveRequest) {
+            return res.status(404).json({ message: 'Leave request not found' });
+        }
+
+        if (!['Approved', 'HOD Approved'].includes(leaveRequest.status)) {
+            return res.status(400).json({
+                message: 'Only approved leave requests can be reverted',
+            });
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const start = new Date(leaveRequest.startDate);
+        start.setHours(0, 0, 0, 0);
+
+        if (start <= today) {
+            return res.status(400).json({
+                message: 'Leave cannot be reverted once it has started or been availed. Revert is only allowed for future (unavailed) leave.',
+            });
+        }
+
+        const creditedDays = calculateWorkingDays(leaveRequest.startDate, leaveRequest.endDate);
+
+        const updatedRequest = await LeaveRequest.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'Cancelled',
+                cancelledAt: new Date(),
+                cancelledBy: req.user._id || req.user.id,
+            },
+            { new: true, runValidators: true }
+        )
+            .populate('employee', 'username emailId')
+            .populate('hodApprovedBy', 'username')
+            .populate('adminApprovedBy', 'username')
+            .populate('cancelledBy', 'username');
+
+        const io = req.app.get('io');
+        notifyLeaveStatusChange(io, updatedRequest, 'Cancelled', req.user.role)
+            .catch((e) => console.error('[Leave] Revert notification error:', e));
+
+        sendLeaveStatusToEmployee(updatedRequest, 'Cancelled')
+            .then(() => console.log('[Leave] Revert email sent'))
+            .catch(e => console.error('[Leave] Revert email error:', e));
+
+        res.json({
+            message: 'Leave reverted successfully. Leave balance has been credited back.',
+            creditedDays,
+            leaveRequest: updatedRequest,
+        });
+    } catch (error) {
+        console.error('Error reverting leave request:', error);
+        res.status(400).json({ message: 'Error reverting leave request', error: error.message });
     }
 });
 

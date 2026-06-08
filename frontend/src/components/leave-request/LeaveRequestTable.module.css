@@ -251,6 +251,20 @@
     color: #2563eb;
 }
 
+.statusChip.cancelled {
+    background: #f5f3ff;
+    color: #7c3aed;
+}
+
+.revertButton {
+    color: #7c3aed;
+}
+
+.revertButton:hover {
+    background: #f5f3ff;
+    color: #6d28d9;
+}
+
 .rowActions {
     display: flex;
     gap: 8px;

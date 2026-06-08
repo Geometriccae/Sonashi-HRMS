@@ -41,7 +41,7 @@ const leaveRequestSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Pending', 'HOD Approved', 'Approved', 'Rejected'],
+        enum: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'],
         default: 'Pending'
     },
     appliedOn: {
@@ -80,6 +80,15 @@ const leaveRequestSchema = new mongoose.Schema({
     isPastLeave: {
         type: Boolean,
         default: false
+    },
+    cancelledAt: {
+        type: Date,
+        default: null
+    },
+    cancelledBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     }
 }, { timestamps: true });
 
