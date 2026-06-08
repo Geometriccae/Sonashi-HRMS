@@ -46,6 +46,57 @@ const DEFAULT_FILTERS = {
   expMin: "", expMax: "", office: "", country: "",
 };
 
+const getDateConfigForStatus = (status) => {
+  const configs = {
+    "On Vacation": {
+      label: "Last Working Day",
+      fieldKey: "lastWorkingDay",
+      secondaryLabel: "Travelling Date",
+      secondaryFieldKey: "travellingDate",
+    },
+    "Vacation Pending": {
+      label: "Travelling Date",
+      fieldKey: "travellingDate",
+    },
+    "Vacation Approved": {
+      label: "Return / Entry Date",
+      fieldKey: "firstWorkingDay",
+    },
+  };
+  return configs[status] || { label: "Date", fieldKey: "date" };
+};
+
+const toDateInputValue = (value) => {
+  if (!value) return "";
+  try {
+    return new Date(value).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+};
+
+const buildEditModalState = (item, status, mode = "date") => {
+  const cfg = getDateConfigForStatus(status);
+  return {
+    item,
+    newStatus: status,
+    label: cfg.label,
+    fieldKey: cfg.fieldKey,
+    dateValue: toDateInputValue(item[cfg.fieldKey]),
+    secondaryLabel: cfg.secondaryLabel,
+    secondaryFieldKey: cfg.secondaryFieldKey,
+    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(item[cfg.secondaryFieldKey]) : "",
+    mode,
+  };
+};
+
+const getEmployeeIdFromItem = (item) => {
+  if (item._source === "leave") {
+    return item.employee?._id || item.employee;
+  }
+  return item._id || item.id;
+};
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 function AnnualVacations() {
   const navigate = useNavigate();
@@ -173,6 +224,10 @@ function AnnualVacations() {
           nationality:           linked?.nationality           || "",
           doj:                   linked?.doj                   || null,
           totalYearsExperience:  linked?.totalYearsExperience  ?? null,
+          travellingDate:        linked?.travellingDate        || req.travellingDate || null,
+          lastWorkingDay:        linked?.lastWorkingDay        || req.lastWorkingDay || null,
+          firstWorkingDay:       linked?.firstWorkingDay       || req.firstWorkingDay || null,
+          vacationStatus:        linked?.vacationStatus        || targetStatus,
           _source: "leave",
         };
       });
@@ -286,13 +341,7 @@ function AnnualVacations() {
 
   // ─── Operations ──────────────────────────────────────────────────────────
   const handleStatusChange = (item, newStatus) => {
-    const dateConfig = {
-      "On Vacation":       { label:"Last Working Day",    fieldKey:"lastWorkingDay" },
-      "Vacation Pending":  { label:"Travelling Date",     fieldKey:"travellingDate" },
-      "Vacation Approved": { label:"Return / Entry Date", fieldKey:"firstWorkingDay" },
-    };
-    const cfg = dateConfig[newStatus];
-    setEditModal({ item, newStatus, label:cfg?.label||"Date", fieldKey:cfg?.fieldKey||"date", dateValue:"", mode:"status" });
+    setEditModal(buildEditModalState(item, newStatus, "status"));
   };
 
   const handleMarkReturned = (item) => {
@@ -322,11 +371,16 @@ function AnnualVacations() {
 
   const handleEditDateConfirm = async () => {
     if (!editModal) return;
-    const { item, newStatus, fieldKey, dateValue } = editModal;
-    const extra = dateValue ? { [fieldKey]: new Date(dateValue).toISOString() } : {};
+    const { item, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue } = editModal;
+    const extra = {};
+    if (dateValue) extra[fieldKey] = new Date(dateValue).toISOString();
+    if (secondaryFieldKey && secondaryDateValue) {
+      extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+    }
     try {
-      if (item._source === "employee" || item.vacationStatus) {
-        await employeeService.updateEmployee(item._id||item.id, { vacationStatus:newStatus, ...extra });
+      const empId = getEmployeeIdFromItem(item);
+      if (empId) {
+        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
       }
       showToast("Status updated successfully.");
       setEditModal(null);
@@ -544,7 +598,7 @@ function AnnualVacations() {
                               <th>Country</th>
                               <th>DOJ</th>
                               <th>Exp (yrs)</th>
-                              {activeTab === "onVacation" && <><th>Start Date</th><th>End Date</th><th>Last Working Day</th></>}
+                              {activeTab === "onVacation" && <><th>Start Date</th><th>End Date</th><th>Travelling Date</th><th>Last Working Day</th></>}
                               {activeTab === "yetToGo"   && <><th>Travelling Date</th><th>Leave Start</th><th>Leave End</th></>}
                               {activeTab === "returned"  && <><th>Return Date</th><th>Leave Start</th><th>Leave End</th></>}
                               <th>Status</th>
@@ -582,7 +636,7 @@ function AnnualVacations() {
                                       : "—"}
                                   </td>
 
-                                  {activeTab === "onVacation" && <><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
+                                  {activeTab === "onVacation" && <><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
                                   {activeTab === "yetToGo"   && <><td>{fmt(item.travellingDate)}</td><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td></>}
                                   {activeTab === "returned"  && <><td>{fmt(item.firstWorkingDay)}</td><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td></>}
 
@@ -605,15 +659,7 @@ function AnnualVacations() {
                                     <td onClick={e => e.stopPropagation()}>
                                       <div className={styles.actionBtns}>
                                         <button className={styles.actionBtn} title="Edit dates" onClick={() => {
-                                          const dateConfig = {
-                                            "On Vacation":       { label:"Last Working Day",    fieldKey:"lastWorkingDay" },
-                                            "Vacation Pending":  { label:"Travelling Date",     fieldKey:"travellingDate" },
-                                            "Vacation Approved": { label:"Return / Entry Date", fieldKey:"firstWorkingDay" },
-                                          };
-                                          const cfg = dateConfig[vs] || { label:"Date", fieldKey:"date" };
-                                          setEditModal({ item, newStatus:vs, label:cfg.label, fieldKey:cfg.fieldKey,
-                                            dateValue: item[cfg.fieldKey] ? new Date(item[cfg.fieldKey]).toISOString().split("T")[0] : "",
-                                            mode:"date" });
+                                          setEditModal(buildEditModalState(item, vs, "date"));
                                         }}><FaEdit /></button>
                                         {activeTab === "onVacation" && (
                                           <button className={`${styles.actionBtn} ${styles.actionBtnGreen}`}
@@ -667,14 +713,9 @@ function AnnualVacations() {
                 <select className={styles.modalSelect} value={editModal.newStatus}
                   onChange={e => {
                     const ns = e.target.value;
-                    const dcfg = {
-                      "On Vacation":       { label:"Last Working Day",    fieldKey:"lastWorkingDay" },
-                      "Vacation Pending":  { label:"Travelling Date",     fieldKey:"travellingDate" },
-                      "Vacation Approved": { label:"Return / Entry Date", fieldKey:"firstWorkingDay" },
-                      "Onsite":            { label:"Date",                fieldKey:"date" },
-                    };
-                    const c = dcfg[ns] || dcfg["Onsite"];
-                    setEditModal(prev => ({ ...prev, newStatus:ns, label:c.label, fieldKey:c.fieldKey }));
+                    setEditModal(prev => ({
+                      ...buildEditModalState(prev.item, ns, "status"),
+                    }));
                   }}>
                   <option value="Onsite">Onsite</option>
                   <option value="On Vacation">On Vacation</option>
@@ -684,11 +725,20 @@ function AnnualVacations() {
               </div>
             )}
             {editModal.newStatus !== "Onsite" && (
-              <div className={styles.modalField}>
-                <label className={styles.modalLabel}>{editModal.label}</label>
-                <input type="date" className={styles.modalInput} value={editModal.dateValue}
-                  onChange={e => setEditModal(prev => ({ ...prev, dateValue:e.target.value }))} />
-              </div>
+              <>
+                <div className={styles.modalField}>
+                  <label className={styles.modalLabel}>{editModal.label}</label>
+                  <input type="date" className={styles.modalInput} value={editModal.dateValue}
+                    onChange={e => setEditModal(prev => ({ ...prev, dateValue:e.target.value }))} />
+                </div>
+                {editModal.secondaryFieldKey && (
+                  <div className={styles.modalField}>
+                    <label className={styles.modalLabel}>{editModal.secondaryLabel}</label>
+                    <input type="date" className={styles.modalInput} value={editModal.secondaryDateValue}
+                      onChange={e => setEditModal(prev => ({ ...prev, secondaryDateValue:e.target.value }))} />
+                  </div>
+                )}
+              </>
             )}
             <div className={styles.modalFooter}>
               <button className={styles.modalCancelBtn} onClick={() => setEditModal(null)}>Cancel</button>

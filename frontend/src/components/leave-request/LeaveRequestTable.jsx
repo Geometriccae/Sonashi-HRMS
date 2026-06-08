@@ -39,6 +39,10 @@ const ViewIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
 );
 
+const RevertIcon = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+);
+
 function LeaveRequestTable({ onUpdate }) {
     const { showToast } = useToast();
     const [leaveRequests, setLeaveRequests] = useState([]);
@@ -63,6 +67,8 @@ function LeaveRequestTable({ onUpdate }) {
     const [managers, setManagers] = useState([]);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
     const [approvalAction, setApprovalAction] = useState(null); // { type: 'approve' | 'reject', request: object }
+    const [revertModal, setRevertModal] = useState(null);
+    const [isReverting, setIsReverting] = useState(false);
     const [selectedRows, setSelectedRows] = useState([]);
     const [isDeletingBulk, setIsDeletingBulk] = useState(false);
     const itemsPerPage = 10;
@@ -196,6 +202,43 @@ function LeaveRequestTable({ onUpdate }) {
         }
     };
 
+    const isUnavailedLeave = (request) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const start = new Date(request.startDate);
+        start.setHours(0, 0, 0, 0);
+        return start > today;
+    };
+
+    const canRevertLeave = (request) => {
+        if (!canManageLeaves) return false;
+        if (request.status !== "Approved" && request.status !== "HOD Approved") return false;
+        return isUnavailedLeave(request);
+    };
+
+    const handleRevert = (request) => {
+        setRevertModal({ request });
+    };
+
+    const confirmRevert = async () => {
+        if (!revertModal?.request) return;
+        setIsReverting(true);
+        try {
+            const result = await leaveRequestService.revertLeaveRequest(revertModal.request._id);
+            const days = result.creditedDays != null ? ` (${result.creditedDays} day(s) credited back)` : "";
+            showToast(`Leave reverted successfully${days}.`, "success");
+            setRevertModal(null);
+            fetchLeaveRequests();
+        } catch (error) {
+            const msg = error.response?.data?.message
+                || (error.response?.status === 404 ? "Revert API not found. Please restart the backend server." : null)
+                || "Failed to revert leave request.";
+            showToast(msg, "error");
+        } finally {
+            setIsReverting(false);
+        }
+    };
+
     const currentYear = new Date().getFullYear();
     const uniqueYears = [...new Set([
         currentYear - 1,
@@ -232,7 +275,7 @@ function LeaveRequestTable({ onUpdate }) {
         // Status Filter (Segmented Control)
         if (activeFilter !== "All") {
             if (activeFilter === "History") {
-                if (req.status !== "Approved" && req.status !== "Rejected") return false;
+                if (req.status !== "Approved" && req.status !== "Rejected" && req.status !== "Cancelled") return false;
             } else if (req.status !== activeFilter) {
                 return false;
             }
@@ -569,8 +612,8 @@ function LeaveRequestTable({ onUpdate }) {
 
                 <div className={styles.segmentedControl}>
                     {(isAdminRole
-                        ? ["All", "Pending", "Approved", "Rejected", "History"]
-                        : ["All", "Pending", "Approved", "Rejected", "History"]
+                        ? ["All", "Pending", "Approved", "Rejected", "Cancelled", "History"]
+                        : ["All", "Pending", "Approved", "Rejected", "Cancelled", "History"]
                     ).map(filter => (
                         <button
                             key={filter}
@@ -669,7 +712,7 @@ function LeaveRequestTable({ onUpdate }) {
                                         </td>
                                         <td>
                                             <span className={`${styles.statusChip} ${styles[req.status.toLowerCase().replace(' ', '_')]}`}>
-                                                {req.status}
+                                                {req.status === "Cancelled" ? "Reverted" : req.status}
                                             </span>
                                         </td>
                                     </>
@@ -693,7 +736,7 @@ function LeaveRequestTable({ onUpdate }) {
                                         </td>
                                         <td>
                                             <span className={`${styles.statusChip} ${styles[req.status.toLowerCase().replace(' ', '_')]}`}>
-                                                {req.status}
+                                                {req.status === "Cancelled" ? "Reverted" : req.status}
                                             </span>
                                         </td>
                                     </>
@@ -741,7 +784,19 @@ function LeaveRequestTable({ onUpdate }) {
                                                             <XIcon />
                                                         </button>
                                                     </div>
-                                                ) : ((isAdminRole || isHOD || isViewerRole) ? <span className={styles.noAction}>—</span> : null)}
+                                                ) : null}
+                                                {canRevertLeave(req) && (
+                                                    <button
+                                                        className={`${styles.iconButton} ${styles.revertButton}`}
+                                                        onClick={() => handleRevert(req)}
+                                                        title="Revert unavailed leave (credit balance back)"
+                                                    >
+                                                        <RevertIcon />
+                                                    </button>
+                                                )}
+                                                {!canApprove(req) && !canRevertLeave(req) && (isAdminRole || isHOD || isViewerRole || isHR) && (
+                                                    <span className={styles.noAction}>—</span>
+                                                )}
                                             </>
                                         ) : (
                                             // Employee view
@@ -923,6 +978,93 @@ function LeaveRequestTable({ onUpdate }) {
                                 }}
                             >
                                 Confirm {approvalAction.type === 'approve' ? 'Approve' : 'Reject'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {revertModal && (
+                <div className="modal-backdrop" style={{ zIndex: 200000 }}>
+                    <div style={{
+                        background: "#fff",
+                        padding: "32px",
+                        borderRadius: "16px",
+                        maxWidth: "480px",
+                        width: "90%",
+                        boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)"
+                    }}>
+                        <h2 style={{ fontSize: "20px", fontWeight: "800", marginBottom: "12px", color: "#0f172a" }}>
+                            Revert Leave Request
+                        </h2>
+                        <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "16px", lineHeight: "1.6" }}>
+                            Revert the approved leave for <strong>{revertModal.request.employeeName || revertModal.request.employee?.username}</strong>?
+                            The leave balance will be credited back because this leave has not started yet.
+                        </p>
+                        <div style={{
+                            background: "#faf5ff",
+                            padding: "14px 16px",
+                            borderRadius: "12px",
+                            border: "1px solid #ddd6fe",
+                            marginBottom: "20px",
+                            fontSize: "13px",
+                            color: "#5b21b6",
+                            lineHeight: "1.5"
+                        }}>
+                            Leave cancellation is only allowed for unavailed (future) leave. Once a leave has started, it cannot be reverted.
+                        </div>
+                        <div style={{
+                            background: "#f8fafc",
+                            padding: "16px",
+                            borderRadius: "12px",
+                            border: "1px solid #e2e8f0",
+                            marginBottom: "24px"
+                        }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                                <span style={{ fontSize: "13px", color: "#64748b" }}>Leave Duration:</span>
+                                <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
+                                    {formatDisplayDate(revertModal.request.startDate)} - {formatDisplayDate(revertModal.request.endDate)}
+                                </span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: "13px", color: "#64748b" }}>Current Status:</span>
+                                <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
+                                    {revertModal.request.status}
+                                </span>
+                            </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "12px" }}>
+                            <button
+                                onClick={() => setRevertModal(null)}
+                                disabled={isReverting}
+                                style={{
+                                    flex: 1,
+                                    padding: "12px",
+                                    borderRadius: "8px",
+                                    border: "1px solid #e2e8f0",
+                                    background: "#fff",
+                                    fontWeight: "600",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmRevert}
+                                disabled={isReverting}
+                                style={{
+                                    flex: 1,
+                                    padding: "12px",
+                                    borderRadius: "8px",
+                                    border: "none",
+                                    background: "#7c3aed",
+                                    color: "#fff",
+                                    fontWeight: "600",
+                                    cursor: isReverting ? "not-allowed" : "pointer",
+                                    opacity: isReverting ? 0.7 : 1
+                                }}
+                            >
+                                {isReverting ? "Reverting..." : "Confirm Revert"}
                             </button>
                         </div>
                     </div>

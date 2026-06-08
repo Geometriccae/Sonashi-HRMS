@@ -53,6 +53,12 @@ const leaveRequestService = {
         });
         return response.data;
     },
+    revertLeaveRequest: async (id) => {
+        const response = await axios.post(`${API_URL}/${id}/revert`, {}, {
+            headers: getAuthHeader()
+        });
+        return response.data;
+    },
     bulkImport: async (leaves) => {
         const response = await axios.post(`${API_URL}/bulk-import`, { leaves }, {
             headers: getAuthHeader()
