@@ -929,6 +929,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4} style={{ flex: '1 1 50%' }}>
                           <span className={styles.text9} style={{ fontWeight: 'bold', fontSize: '15px', color: '#1a1a1a', marginBottom: '10px' }}>Emergency Contact - UAE</span>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Relationship</span><span className={styles.text10}>{employee.emergencyContact?.uae?.relationship || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Name</span><span className={styles.text10}>{employee.emergencyContact?.uae?.name || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Address</span><span className={styles.text10}>{employee.emergencyContact?.uae?.address || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Contact No.</span><span className={styles.text10}>{employee.emergencyContact?.uae?.contactNo || "Not provided"}</span></div>
@@ -937,6 +938,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4} style={{ flex: '1 1 50%' }}>
                           <span className={styles.text9} style={{ fontWeight: 'bold', fontSize: '15px', color: '#1a1a1a', marginBottom: '10px' }}>Emergency Contact - Home Country</span>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Relationship</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry?.relationship || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Name</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry?.name || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Address</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry?.address || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Contact No.</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry?.contactNo || "Not provided"}</span></div>
@@ -948,6 +950,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4} style={{ flex: '1 1 100%' }}>
                           <span className={styles.text9} style={{ fontWeight: 'bold', fontSize: '15px', color: '#1a1a1a', marginBottom: '10px' }}>Emergency Contact - Home Country 2</span>
                           <div style={{ display: 'flex', flexDirection: 'row', gap: '40px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Relationship</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry2?.relationship || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Name</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry2?.name || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Address</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry2?.address || "Not provided"}</span></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}><span className={styles.text9}>Contact No.</span><span className={styles.text10}>{employee.emergencyContact?.homeCountry2?.contactNo || "Not provided"}</span></div>

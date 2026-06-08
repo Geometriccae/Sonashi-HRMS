@@ -9,7 +9,8 @@ import {
   FaUserTimes,
   FaPlane,
   FaCalendarAlt,
-  FaPassport
+  FaPassport,
+  FaIdCard
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
@@ -26,7 +27,8 @@ function DashboardOverview() {
     onVacation: 0,
     upcomingVacation: 0,
     vacationReturn: 0,
-    visaExpiry: 0
+    visaExpiry: 0,
+    passportExpiry: 0
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -73,6 +75,7 @@ function DashboardOverview() {
         let active = 0;
         let inactive = 0;
         let visaExpiry = 0;
+        let passportExpiry = 0;
         let attOnVacation = 0;
         let attUpcoming = 0;
         let attVacReturn = 0;
@@ -93,6 +96,13 @@ function DashboardOverview() {
             const expiry = new Date(emp.visaExpiryDate);
             if (expiry > today && expiry <= next90Days) {
               visaExpiry++;
+            }
+          }
+
+          if (emp.passportExpiryDate) {
+            const expiry = new Date(emp.passportExpiryDate);
+            if (expiry > today && expiry <= next90Days) {
+              passportExpiry++;
             }
           }
         });
@@ -133,7 +143,8 @@ function DashboardOverview() {
             onVacation,
             upcomingVacation,
             vacationReturn,
-            visaExpiry
+            visaExpiry,
+            passportExpiry
           });
         }
       } catch (err) {
@@ -373,6 +384,13 @@ function DashboardOverview() {
           return expiry > today && expiry <= next90Days;
         });
         break;
+      case "Passport Expiry":
+        list = empSource.filter(e => {
+          if (!e.passportExpiryDate) return false;
+          const expiry = new Date(e.passportExpiryDate);
+          return expiry > today && expiry <= next90Days;
+        });
+        break;
       case "ONBOARDING":
         list = [];
         break;
@@ -391,6 +409,7 @@ function DashboardOverview() {
     { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "Next 60 days", tooltip: "Employees with approved leave starting in the next 60 days" },
     { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 1 month", tooltip: "Employees who returned from vacation in the last 1 month" },
     { label: "Visa Expiry", value: counts.visaExpiry, icon: <FaPassport />, color: "#f97316", sub: "Next 90 days", alert: true, tooltip: "Visas expiring within the next 3 months. Action required." },
+    { label: "Passport Expiry", value: counts.passportExpiry, icon: <FaIdCard />, color: "#0d9488", sub: "Next 90 days", alert: true, tooltip: "Passports expiring within the next 3 months. Action required." },
   ];
 
   if (isLoading) {
@@ -457,7 +476,7 @@ function DashboardOverview() {
                         ) : (
                           <>
                             <th>Department</th>
-                            <th>{selectedCategory === "Visa Expiry" ? "Visa Expiry" : "Role"}</th>
+                            <th>{selectedCategory === "Visa Expiry" ? "Visa Expiry" : selectedCategory === "Passport Expiry" ? "Passport Expiry" : "Role"}</th>
                             <th>Vacation Status</th>
                             <th>
                               {(() => {
@@ -516,7 +535,9 @@ function DashboardOverview() {
                               <td>
                                 {selectedCategory === "Visa Expiry"
                                   ? <span style={{ color: "#ef4444", fontWeight: "600" }}>{new Date(item.visaExpiryDate).toLocaleDateString('en-GB')}</span>
-                                  : item.role || item.employeeStatus || "-"}
+                                  : selectedCategory === "Passport Expiry"
+                                    ? <span style={{ color: "#ef4444", fontWeight: "600" }}>{new Date(item.passportExpiryDate).toLocaleDateString('en-GB')}</span>
+                                    : item.role || item.employeeStatus || "-"}
                               </td>
                               <td>
                                 {(localStorage.getItem("role") === "admin" || localStorage.getItem("role") === "hod") && selectedCategory === "Active Employees" ? (() => {

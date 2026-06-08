@@ -19,6 +19,7 @@ import {
   VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
+  EMERGENCY_RELATIONSHIP_OPTIONS,
   ROLE_OPTIONS_DEFAULT,
   ensureOptionWithValue,
   mergeWithDynamicOptions,
@@ -58,12 +59,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     emiratesId: "",
     nationality: "",
     emergencyUaeName: "",
+    emergencyUaeRelationship: "",
     emergencyUaeAddress: "",
     emergencyUaeContactNo: "",
     emergencyHomeName: "",
+    emergencyHomeRelationship: "",
     emergencyHomeAddress: "",
     emergencyHomeContactNo: "",
     emergencyHomeName2: "",
+    emergencyHomeRelationship2: "",
     emergencyHomeAddress2: "",
     emergencyHomeContactNo2: "",
 
@@ -112,6 +116,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const attendanceOptions = ATTENDANCE_OPTIONS;
   const vacationStatusOptions = VACATION_STATUS_OPTIONS;
   const genderOptions = GENDER_OPTIONS;
+  const emergencyRelationshipOptions = EMERGENCY_RELATIONSHIP_OPTIONS;
 
   const mapStoredTypeToField = (type) => {
     const s = String(type || "").trim().toLowerCase();
@@ -259,12 +264,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         emiratesId: employee.emiratesId || "",
         nationality: employee.nationality || "",
         emergencyUaeName: employee.emergencyContact?.uae?.name || "",
+        emergencyUaeRelationship: employee.emergencyContact?.uae?.relationship || "",
         emergencyUaeAddress: employee.emergencyContact?.uae?.address || "",
         emergencyUaeContactNo: employee.emergencyContact?.uae?.contactNo || "",
         emergencyHomeName: employee.emergencyContact?.homeCountry?.name || "",
+        emergencyHomeRelationship: employee.emergencyContact?.homeCountry?.relationship || "",
         emergencyHomeAddress: employee.emergencyContact?.homeCountry?.address || "",
         emergencyHomeContactNo: employee.emergencyContact?.homeCountry?.contactNo || "",
         emergencyHomeName2: employee.emergencyContact?.homeCountry2?.name || "",
+        emergencyHomeRelationship2: employee.emergencyContact?.homeCountry2?.relationship || "",
         emergencyHomeAddress2: employee.emergencyContact?.homeCountry2?.address || "",
         emergencyHomeContactNo2: employee.emergencyContact?.homeCountry2?.contactNo || "",
         role: employee.role || "",
@@ -339,12 +347,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         emiratesId: "",
         nationality: "",
         emergencyUaeName: "",
+        emergencyUaeRelationship: "",
         emergencyUaeAddress: "",
         emergencyUaeContactNo: "",
         emergencyHomeName: "",
+        emergencyHomeRelationship: "",
         emergencyHomeAddress: "",
         emergencyHomeContactNo: "",
         emergencyHomeName2: "",
+        emergencyHomeRelationship2: "",
         emergencyHomeAddress2: "",
         emergencyHomeContactNo2: "",
         role: "",
@@ -533,16 +544,19 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       payload.emergencyContact = {
         uae: {
           name: formData.emergencyUaeName || "",
+          relationship: formData.emergencyUaeRelationship || "",
           address: formData.emergencyUaeAddress || "",
           contactNo: formData.emergencyUaeContactNo || ""
         },
         homeCountry: {
           name: formData.emergencyHomeName || "",
+          relationship: formData.emergencyHomeRelationship || "",
           address: formData.emergencyHomeAddress || "",
           contactNo: formData.emergencyHomeContactNo || ""
         },
         homeCountry2: {
           name: formData.emergencyHomeName2 || "",
+          relationship: formData.emergencyHomeRelationship2 || "",
           address: formData.emergencyHomeAddress2 || "",
           contactNo: formData.emergencyHomeContactNo2 || ""
         }
@@ -784,6 +798,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               <div style={{ gridColumn: "span 2", marginTop: "10px" }}>
                 <h3 className="section-subtitle">Emergency Contact - UAE</h3>
                 <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <Dropdown
+                    label="Relationship"
+                    placeholder="Select relationship"
+                    options={emergencyRelationshipOptions}
+                    value={formData.emergencyUaeRelationship}
+                    onChange={(e) => handleInputChange("emergencyUaeRelationship", e.target.value)}
+                  />
                   <InputField
                     label="Name"
                     placeholder="Contact Name"
@@ -806,6 +827,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
                 <h3 className="section-subtitle" style={{ marginTop: "20px" }}>Emergency Contact - Home Country</h3>
                 <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <Dropdown
+                    label="Relationship"
+                    placeholder="Select relationship"
+                    options={emergencyRelationshipOptions}
+                    value={formData.emergencyHomeRelationship}
+                    onChange={(e) => handleInputChange("emergencyHomeRelationship", e.target.value)}
+                  />
                   <InputField
                     label="Name"
                     placeholder="Contact Name"
@@ -828,6 +856,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
                 <h3 className="section-subtitle" style={{ marginTop: "20px" }}>Emergency Contact - Home Country 2</h3>
                 <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <Dropdown
+                    label="Relationship"
+                    placeholder="Select relationship"
+                    options={emergencyRelationshipOptions}
+                    value={formData.emergencyHomeRelationship2}
+                    onChange={(e) => handleInputChange("emergencyHomeRelationship2", e.target.value)}
+                  />
                   <InputField
                     label="Name"
                     placeholder="Contact Name"
