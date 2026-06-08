@@ -18,6 +18,7 @@ import {
   VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
+  EMERGENCY_RELATIONSHIP_OPTIONS,
   ROLE_OPTIONS_DEFAULT,
   mergeWithDynamicOptions,
 } from "../../constants/employeeDropdownOptions";
@@ -48,12 +49,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     emiratesId: "",
     nationality: "",
     emergencyUaeName: "",
+    emergencyUaeRelationship: "",
     emergencyUaeAddress: "",
     emergencyUaeContactNo: "",
     emergencyHomeName: "",
+    emergencyHomeRelationship: "",
     emergencyHomeAddress: "",
     emergencyHomeContactNo: "",
     emergencyHomeName2: "",
+    emergencyHomeRelationship2: "",
     emergencyHomeAddress2: "",
     emergencyHomeContactNo2: "",
 
@@ -351,16 +355,19 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       payload.emergencyContact = {
         uae: {
           name: formData.emergencyUaeName || "",
+          relationship: formData.emergencyUaeRelationship || "",
           address: formData.emergencyUaeAddress || "",
           contactNo: formData.emergencyUaeContactNo || ""
         },
         homeCountry: {
           name: formData.emergencyHomeName || "",
+          relationship: formData.emergencyHomeRelationship || "",
           address: formData.emergencyHomeAddress || "",
           contactNo: formData.emergencyHomeContactNo || ""
         },
         homeCountry2: {
           name: formData.emergencyHomeName2 || "",
+          relationship: formData.emergencyHomeRelationship2 || "",
           address: formData.emergencyHomeAddress2 || "",
           contactNo: formData.emergencyHomeContactNo2 || ""
         }
@@ -418,12 +425,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         emiratesId: "",
         nationality: "",
         emergencyUaeName: "",
+        emergencyUaeRelationship: "",
         emergencyUaeAddress: "",
         emergencyUaeContactNo: "",
         emergencyHomeName: "",
+        emergencyHomeRelationship: "",
         emergencyHomeAddress: "",
         emergencyHomeContactNo: "",
         emergencyHomeName2: "",
+        emergencyHomeRelationship2: "",
         emergencyHomeAddress2: "",
         emergencyHomeContactNo2: "",
         role: "",
@@ -502,6 +512,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const activeOptions = ACTIVE_OPTIONS;
   const vacationStatusOptions = VACATION_STATUS_OPTIONS;
   const genderOptions = GENDER_OPTIONS;
+  const emergencyRelationshipOptions = EMERGENCY_RELATIONSHIP_OPTIONS;
 
   const clientOptions = clients.map((client) => ({
     value: client._id,
@@ -634,6 +645,13 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               <div style={{ gridColumn: "span 2", marginTop: "10px" }}>
                 <h3 className="section-subtitle">Emergency Contact - UAE</h3>
                 <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <Dropdown
+                    label="Relationship"
+                    placeholder="Select relationship"
+                    options={emergencyRelationshipOptions}
+                    value={formData.emergencyUaeRelationship}
+                    onChange={(e) => handleInputChange("emergencyUaeRelationship", e.target.value)}
+                  />
                   <InputField
                     label="Name"
                     placeholder="Contact Name"
@@ -656,6 +674,13 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
                 <h3 className="section-subtitle" style={{ marginTop: "20px" }}>Emergency Contact - Home Country</h3>
                 <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <Dropdown
+                    label="Relationship"
+                    placeholder="Select relationship"
+                    options={emergencyRelationshipOptions}
+                    value={formData.emergencyHomeRelationship}
+                    onChange={(e) => handleInputChange("emergencyHomeRelationship", e.target.value)}
+                  />
                   <InputField
                     label="Name"
                     placeholder="Contact Name"
@@ -678,6 +703,13 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
                 <h3 className="section-subtitle" style={{ marginTop: "20px" }}>Emergency Contact - Home Country 2</h3>
                 <div className="form-fields-grid" style={{ marginTop: "10px" }}>
+                  <Dropdown
+                    label="Relationship"
+                    placeholder="Select relationship"
+                    options={emergencyRelationshipOptions}
+                    value={formData.emergencyHomeRelationship2}
+                    onChange={(e) => handleInputChange("emergencyHomeRelationship2", e.target.value)}
+                  />
                   <InputField
                     label="Name"
                     placeholder="Contact Name"

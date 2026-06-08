@@ -25,6 +25,18 @@ export const GENDER_OPTIONS = [
   { value: "Other", label: "Other" },
 ];
 
+export const EMERGENCY_RELATIONSHIP_OPTIONS = [
+  { value: "", label: "-Select-" },
+  { value: "Father", label: "Father" },
+  { value: "Mother", label: "Mother" },
+  { value: "Sister", label: "Sister" },
+  { value: "Brother", label: "Brother" },
+  { value: "Wife", label: "Wife" },
+  { value: "Husband", label: "Husband" },
+  { value: "Friend", label: "Friend" },
+  { value: "Other", label: "Other" },
+];
+
 export const ROLE_OPTIONS_DEFAULT = [
   { value: "", label: "-Select-" },
   { value: "MANAGING DIRECTOR", label: "MANAGING DIRECTOR" },

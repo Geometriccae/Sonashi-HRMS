@@ -52,16 +52,19 @@ const employeeSchema = new mongoose.Schema({
   emergencyContact: {
     uae: {
       name: { type: String, default: "" },
+      relationship: { type: String, default: "" },
       address: { type: String, default: "" },
       contactNo: { type: String, default: "" }
     },
     homeCountry: {
       name: { type: String, default: "" },
+      relationship: { type: String, default: "" },
       address: { type: String, default: "" },
       contactNo: { type: String, default: "" }
     },
     homeCountry2: {
       name: { type: String, default: "" },
+      relationship: { type: String, default: "" },
       address: { type: String, default: "" },
       contactNo: { type: String, default: "" }
     }
