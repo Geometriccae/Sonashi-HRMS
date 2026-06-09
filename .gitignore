@@ -137,8 +137,8 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-"client/node_modules/" 
-".cache/" 
+"client/node_modules/"
+".cache/"
 
 # Node modules
 node_modules/
@@ -149,4 +149,4 @@ client/node_modules/
 client/node_modules/.cache/
 
 # Upload directories
-server/uploads/expense-documents/
+uploads/
