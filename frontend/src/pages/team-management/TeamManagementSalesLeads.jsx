@@ -21,7 +21,7 @@ import EditLeaveRequestModal from "../../components/leave-request/EditLeaveReque
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
-import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import { calculateLeaveBalance, calculateLeaveDays } from "../../utils/leaveCalculator";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -1056,6 +1056,7 @@ function TeamManagementSalesLeads() {
                         <tr>
                           <th>Start Date</th>
                           <th>End Date</th>
+                          <th>Leave Days</th>
                           <th>Leave Type</th>
                           <th>Ticket Type</th>
                           <th>Status</th>
@@ -1069,6 +1070,12 @@ function TeamManagementSalesLeads() {
                             <tr key={index}>
                               <td>{new Date(leave.startDate).toLocaleDateString('en-GB')}</td>
                               <td>{new Date(leave.endDate).toLocaleDateString('en-GB')}</td>
+                              <td style={{ textAlign: "center", fontWeight: 600 }}>
+                                {(() => {
+                                  const days = calculateLeaveDays(leave.startDate, leave.endDate);
+                                  return days != null ? `${days} ${days === 1 ? "day" : "days"}` : "—";
+                                })()}
+                              </td>
                               <td>{leave.leaveType}</td>
                               <td style={{ textAlign: "center" }}>
                                 <span style={{
@@ -1107,7 +1114,7 @@ function TeamManagementSalesLeads() {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={isAdmin ? "7" : "6"} style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
+                            <td colSpan={isAdmin ? "8" : "7"} style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
                               No leave history found.
                             </td>
                           </tr>
