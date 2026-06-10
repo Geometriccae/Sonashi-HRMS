@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styles from "./AddUserModal.module.css";
+import DateInput from "./DateInput";
 
 const initialForm = {
   particulars: "",
@@ -129,8 +130,7 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit, documentToEdit 
 
           <div className={styles.formGroup}>
             <label htmlFor="issueDate">Doc Issue Date</label>
-            <input
-              type="date"
+            <DateInput
               id="issueDate"
               name="issueDate"
               value={formData.issueDate}
@@ -141,8 +141,7 @@ const UploadCompanyDocumentModal = ({ isOpen, onClose, onSubmit, documentToEdit 
 
           <div className={styles.formGroup}>
             <label htmlFor="expiryDate">Doc Expiry Date</label>
-            <input
-              type="date"
+            <DateInput
               id="expiryDate"
               name="expiryDate"
               value={formData.expiryDate}

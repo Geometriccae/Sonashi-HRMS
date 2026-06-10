@@ -3,6 +3,7 @@ import styles from './SalarySlipManualAddModal.module.css';
 import { FaTimes, FaSave, FaSpinner } from 'react-icons/fa';
 import salarySlipService from '../../services/SalarySlipService';
 import { useToast } from '../../context/ToastContext';
+import DateInput from '../DateInput';
 
 function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
     const { showToast } = useToast();
@@ -185,7 +186,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Date of Joining</label>
-                                <input type="date" name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} />
+                                <DateInput name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} />
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Month</label>

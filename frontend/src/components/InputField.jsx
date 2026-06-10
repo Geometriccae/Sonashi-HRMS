@@ -1,5 +1,25 @@
-import React from "react";
+import React, { useState } from "react";
 import "./InputField.css";
+import DatePickerModal from "./DatePickerModal";
+import { DEFAULT_MIN_YEAR, getDefaultMaxYear } from "../utils/calendarNavUtils";
+
+const formatDateDisplay = (value) => {
+  if (!value) return "";
+  try {
+    const [y, m, d] = String(value).split("T")[0].split("-");
+    if (y && m && d) return `${d}/${m}/${y}`;
+    return new Date(value).toLocaleDateString("en-GB");
+  } catch {
+    return value;
+  }
+};
+
+const toYYYYMMDD = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
 
 function InputField({
   label,
@@ -14,7 +34,18 @@ function InputField({
   disabled = false,
   name,
   inputMode,
+  minYear = DEFAULT_MIN_YEAR,
+  maxYear = getDefaultMaxYear(),
 }) {
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+
+  const handleDateSelect = (date) => {
+    if (onChange) {
+      onChange({ target: { value: toYYYYMMDD(date), name } });
+    }
+    setDatePickerOpen(false);
+  };
+
   return (
     <div className="input-field">
       <div className="input-label-container">
@@ -51,6 +82,28 @@ function InputField({
               </svg>
             </div>
           </div>
+        ) : type === "date" ? (
+          <>
+            <input
+              type="text"
+              className="input-field-input"
+              readOnly
+              placeholder={placeholder || "dd/mm/yyyy"}
+              value={formatDateDisplay(value)}
+              onClick={() => !disabled && setDatePickerOpen(true)}
+              disabled={disabled}
+              name={name}
+              style={{ cursor: disabled ? "not-allowed" : "pointer" }}
+            />
+            <DatePickerModal
+              isOpen={datePickerOpen}
+              onClose={() => setDatePickerOpen(false)}
+              onSelectDate={handleDateSelect}
+              selectedDate={value}
+              minYear={minYear}
+              maxYear={maxYear}
+            />
+          </>
         ) : (
           <input
             type={type}

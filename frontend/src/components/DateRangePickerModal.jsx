@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from "react";
 import styles from "./DateRangePickerModal.module.css";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
-import chevrondleft from "../assets/dashboard/chevron-left.svg";
+import CalendarMonthSelector from "./CalendarMonthSelector";
+import { DEFAULT_MIN_YEAR, getDefaultMaxYear } from "../utils/calendarNavUtils";
 
-const DateRangePickerModal = ({ isOpen, onClose, onApplyDateRange, initialStartDate, initialEndDate }) => {
+const DateRangePickerModal = ({
+  isOpen,
+  onClose,
+  onApplyDateRange,
+  initialStartDate,
+  initialEndDate,
+  minYear = DEFAULT_MIN_YEAR,
+  maxYear = getDefaultMaxYear(),
+}) => {
   // State management
   const [startDate, setStartDate] = useState(initialStartDate || new Date());
   const [endDate, setEndDate] = useState(initialEndDate || new Date());
@@ -155,6 +163,12 @@ const DateRangePickerModal = ({ isOpen, onClose, onApplyDateRange, initialStartD
     }
   };
 
+  const updateCalendarMonth = (isLeftCalendar, month, year) => {
+    const next = new Date(year, month, 1);
+    if (isLeftCalendar) setLeftCalendarDate(next);
+    else setRightCalendarDate(next);
+  };
+
   // Date selection handlers
   const handleDateClick = (day, calendarDate, isCurrentMonth = true) => {
     if (!isCurrentMonth) {
@@ -299,11 +313,6 @@ const DateRangePickerModal = ({ isOpen, onClose, onApplyDateRange, initialStartD
 
   if (!isOpen) return null;
 
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-
   const daysOfWeek = ["Mo", "Tu", "We", "Th", "Fr", "Sat", "Su"];
 
   return (
@@ -330,27 +339,15 @@ const DateRangePickerModal = ({ isOpen, onClose, onApplyDateRange, initialStartD
               <div className={styles.content}>
                 <div className={styles.calendar}>
                   <div className={styles.calendarMonth}>
-                    <div className={styles.navButton} onClick={() => goToPreviousMonth(true)}>
-                      <div className={styles.buttonBase}>
-                        <img
-                         src={chevrondleft}
-                          alt="Previous"
-                          className={styles.navIcon}
-                        />
-                      </div>
-                    </div>
-                    <div className={styles.monthText}>
-                      {months[leftCalendarDate.getMonth()]} {leftCalendarDate.getFullYear()}
-                    </div>
-                    <div className={styles.navButton} onClick={() => goToNextMonth(true)}>
-                      <div className={styles.buttonBase}>
-                        <img
-                          src={chevrondright}
-                          alt="Next"
-                          className={styles.navIcon}
-                        />
-                      </div>
-                    </div>
+                    <CalendarMonthSelector
+                      currentDate={leftCalendarDate}
+                      minYear={minYear}
+                      maxYear={maxYear}
+                      onPrevious={() => goToPreviousMonth(true)}
+                      onNext={() => goToNextMonth(true)}
+                      onMonthChange={(month) => updateCalendarMonth(true, month, leftCalendarDate.getFullYear())}
+                      onYearChange={(year) => updateCalendarMonth(true, leftCalendarDate.getMonth(), year)}
+                    />
                   </div>
 
                   <div className={styles.calendarDates}>
@@ -376,27 +373,15 @@ const DateRangePickerModal = ({ isOpen, onClose, onApplyDateRange, initialStartD
               <div className={styles.content}>
                 <div className={styles.calendar}>
                   <div className={styles.calendarMonth}>
-                    <div className={styles.navButton} onClick={() => goToPreviousMonth(false)}>
-                      <div className={styles.buttonBase}>
-                        <img
-                        src={chevrondleft}
-                          alt="Previous"
-                          className={styles.navIcon}
-                        />
-                      </div>
-                    </div>
-                    <div className={styles.monthText}>
-                      {months[rightCalendarDate.getMonth()]} {rightCalendarDate.getFullYear()}
-                    </div>
-                    <div className={styles.navButton} onClick={() => goToNextMonth(false)}>
-                      <div className={styles.buttonBase}>
-                        <img
-                        src={chevrondright}
-                          alt="Next"
-                          className={styles.navIcon}
-                        />
-                      </div>
-                    </div>
+                    <CalendarMonthSelector
+                      currentDate={rightCalendarDate}
+                      minYear={minYear}
+                      maxYear={maxYear}
+                      onPrevious={() => goToPreviousMonth(false)}
+                      onNext={() => goToNextMonth(false)}
+                      onMonthChange={(month) => updateCalendarMonth(false, month, rightCalendarDate.getFullYear())}
+                      onYearChange={(year) => updateCalendarMonth(false, rightCalendarDate.getMonth(), year)}
+                    />
                   </div>
 
                   <div className={styles.calendarDates}>

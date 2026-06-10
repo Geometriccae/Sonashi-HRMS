@@ -11,6 +11,7 @@ import autoTable from "jspdf-autotable";
 import SalarySlipBulkImportModal from "./SalarySlipBulkImportModal";
 import SalarySlipManualAddModal from "./SalarySlipManualAddModal";
 import SalarySlipEditModal from "./SalarySlipEditModal";
+import DateInput from "../DateInput";
 
 const DownloadIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -249,13 +250,11 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
                         </div>
                         <div className={styles.formGroup}>
                             <label className={styles.formLabel}>Date *</label>
-                            <input
-                                type="date"
+                            <DateInput
                                 name="expenseDate"
                                 value={formData.expenseDate}
                                 onChange={handleChange}
                                 className={styles.formInput}
-                                required
                             />
                         </div>
                     </div>

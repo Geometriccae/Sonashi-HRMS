@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./DatePickerModal.css";
-import chevrondright from "../assets/dashboard/chevron-right.svg";
-import chevrondleft from "../assets/dashboard/chevron-left.svg";
+import CalendarMonthSelector from "./CalendarMonthSelector";
+import { DEFAULT_MIN_YEAR, clampDayToMonth, getDefaultMaxYear } from "../utils/calendarNavUtils";
 
 function toYYYYMMDD(date) {
   const y = date.getFullYear();
@@ -10,7 +10,15 @@ function toYYYYMMDD(date) {
   return `${y}-${m}-${d}`;
 }
 
-function DatePickerModal({ isOpen, onClose, onSelectDate, selectedDate, disabledDates = [] }) {
+function DatePickerModal({
+  isOpen,
+  onClose,
+  onSelectDate,
+  selectedDate,
+  disabledDates = [],
+  minYear = DEFAULT_MIN_YEAR,
+  maxYear = getDefaultMaxYear(),
+}) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
   const disabledSet = React.useMemo(() => new Set(disabledDates || []), [disabledDates]);
@@ -25,12 +33,13 @@ function DatePickerModal({ isOpen, onClose, onSelectDate, selectedDate, disabled
 
   if (!isOpen) return null;
 
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-
   const daysOfWeek = ["Mo", "Tu", "We", "Th", "Fr", "Sat", "Su"];
+
+  const updateCalendarMonth = (month, year) => {
+    const next = new Date(year, month, 1);
+    setCurrentDate(next);
+    setSelectedDay((prev) => clampDayToMonth(prev, year, month));
+  };
 
   const getDaysInMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -168,27 +177,15 @@ function DatePickerModal({ isOpen, onClose, onSelectDate, selectedDate, disabled
               <div className="picker-content">
                 <div className="calendar">
                   <div className="calendar-month">
-                      <div className="date-nav-button" onClick={goToPreviousMonth}>
-                      <div className="button-base">
-                        <img
-                         src={chevrondleft}
-                          alt="Previous month"
-                          className="nav-icon"
-                        />
-                      </div> 
-                    </div> 
-                    <div className="month-text">
-                      {months[currentDate.getMonth()]} {currentDate.getFullYear()}
-                    </div>
-                    <div className="date-nav-button" onClick={goToNextMonth}>
-                      <div className="button-base">
-                        <img
-                         src={chevrondright}
-                          alt="Next month"
-                          className="nav-icon"
-                        />
-                      </div>
-                    </div>
+                    <CalendarMonthSelector
+                      currentDate={currentDate}
+                      minYear={minYear}
+                      maxYear={maxYear}
+                      onPrevious={goToPreviousMonth}
+                      onNext={goToNextMonth}
+                      onMonthChange={(month) => updateCalendarMonth(month, currentDate.getFullYear())}
+                      onYearChange={(year) => updateCalendarMonth(currentDate.getMonth(), year)}
+                    />
                   </div>
                   <div className="calendar-dates">
                     <div className="day-headers">

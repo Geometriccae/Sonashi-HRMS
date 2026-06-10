@@ -5,6 +5,7 @@ import EmployeeService from "../../services/EmployeeService";
 import InputField from "../InputField";
 import Dropdown from "../DropDown";
 import DatePickerModal from "../DatePickerModal";
+import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
@@ -500,11 +501,10 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                     <div className="input-field">
                                         <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Visa Expiry Date</label>
                                         {leaveEntitlementType === 'Past Leave' ? (
-                                            <input 
-                                                type="date" 
-                                                className="input-field-input" 
-                                                value={formData.visaExpiryDate || ""} 
-                                                onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)} 
+                                            <DateInput
+                                                className="input-field-input"
+                                                value={formData.visaExpiryDate || ""}
+                                                onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)}
                                             />
                                         ) : (
                                             <input 

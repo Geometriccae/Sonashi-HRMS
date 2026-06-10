@@ -3,6 +3,7 @@ import clientService from '../services/ClientService';
 import employeeService from '../services/EmployeeService';
 import checkInService from '../services/CheckInService';
 import Select from 'react-select';
+import DatePickerModal from './DatePickerModal';
 
 function CheckInModal({ isOpen, onClose, onSubmit }) {
   const [formData, setFormData] = useState({
@@ -23,6 +24,7 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   const eventTypes = [
     { value: 'client_meeting', label: 'Client Meeting' },
@@ -290,7 +292,7 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
             {/* Date Field */}
             <div className="input-field">
               <label className="field-label">Select a Date *</label>
-              <div className="date-wrapper">
+              <div className="date-wrapper" onClick={() => setDatePickerOpen(true)} style={{ cursor: 'pointer' }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -304,19 +306,18 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
                     <path d="M12.67 2H11.33V1.33C11.33 1.15 11.18 1 11 1S10.67 1.15 10.67 1.33V2H5.33V1.33C5.33 1.15 5.18 1 5 1S4.67 1.15 4.67 1.33V2H3.33C2.6 2 2 2.6 2 3.33V12.67C2 13.4 2.6 14 3.33 14H12.67C13.4 14 14 13.4 14 12.67V3.33C14 2.6 13.4 2 12.67 2Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
-                  style={{
-                    position: 'absolute',
-                    opacity: 0,
-                    width: '100%',
-                    height: '100%',
-                    cursor: 'pointer'
-                  }}
-                />
               </div>
+              <DatePickerModal
+                isOpen={datePickerOpen}
+                onClose={() => setDatePickerOpen(false)}
+                onSelectDate={(date) => {
+                  const y = date.getFullYear();
+                  const m = String(date.getMonth() + 1).padStart(2, '0');
+                  const d = String(date.getDate()).padStart(2, '0');
+                  handleInputChange('date', `${y}-${m}-${d}`);
+                }}
+                selectedDate={formData.date}
+              />
             </div>
 
             {/* Time Field */}

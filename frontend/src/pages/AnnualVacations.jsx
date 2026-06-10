@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Side from "./sidebar/Sidebar";
 import TopNavbar, { PageBody } from "../components/TopNavbar";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
+import DateInput from "../components/DateInput";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import styles from "./AnnualVacations.module.css";
@@ -587,13 +588,13 @@ function AnnualVacations() {
 
                   <div className={styles.filterField}>
                     <label className={styles.filterLabel}>DOJ From</label>
-                    <input type="date" className={styles.filterInput} value={pendingFilters.dojFrom}
+                    <DateInput className={styles.filterInput} value={pendingFilters.dojFrom}
                       onChange={e => setPendingFilters(p => ({ ...p, dojFrom: e.target.value }))} />
                   </div>
 
                   <div className={styles.filterField}>
                     <label className={styles.filterLabel}>DOJ To</label>
-                    <input type="date" className={styles.filterInput} value={pendingFilters.dojTo}
+                    <DateInput className={styles.filterInput} value={pendingFilters.dojTo}
                       onChange={e => setPendingFilters(p => ({ ...p, dojTo: e.target.value }))} />
                   </div>
 
@@ -862,13 +863,13 @@ function AnnualVacations() {
               <>
                 <div className={styles.modalField}>
                   <label className={styles.modalLabel}>{editModal.label}</label>
-                  <input type="date" className={styles.modalInput} value={editModal.dateValue}
+                  <DateInput className={styles.modalInput} value={editModal.dateValue}
                     onChange={e => setEditModal(prev => ({ ...prev, dateValue:e.target.value }))} />
                 </div>
                 {editModal.secondaryFieldKey && (
                   <div className={styles.modalField}>
                     <label className={styles.modalLabel}>{editModal.secondaryLabel}</label>
-                    <input type="date" className={styles.modalInput} value={editModal.secondaryDateValue}
+                    <DateInput className={styles.modalInput} value={editModal.secondaryDateValue}
                       onChange={e => setEditModal(prev => ({ ...prev, secondaryDateValue:e.target.value }))} />
                   </div>
                 )}

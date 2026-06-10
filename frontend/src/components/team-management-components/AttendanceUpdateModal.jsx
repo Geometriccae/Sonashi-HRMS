@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import AttendanceService from "../../services/AttendanceService";
+import DateInput from "../DateInput";
 
 function AttendanceUpdateModal({ isOpen, onClose, employee, onSaved }) {
   const [date, setDate] = useState("");
@@ -56,7 +57,7 @@ function AttendanceUpdateModal({ isOpen, onClose, employee, onSaved }) {
         <div style={{ padding: "12px 16px", display: "flex", gap: 12, alignItems: "center" }}>
           <label>
             <div>Date</div>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateInput value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label>
             <div>Status</div>

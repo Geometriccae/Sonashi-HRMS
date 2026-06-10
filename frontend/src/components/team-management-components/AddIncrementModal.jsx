@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import DateInput from "../DateInput";
 import styles from "./AddIncrementModal.module.css";
 
 const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee, initialData }) => {
@@ -220,8 +221,7 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee, initialData })
           <div className={styles.topGrid}>
             <div className={styles.formGroup}>
               <label>Effective Date</label>
-              <input
-                type="date"
+              <DateInput
                 value={formData.date}
                 onChange={(e) => handleDateOrReasonChange("date", e.target.value)}
                 required

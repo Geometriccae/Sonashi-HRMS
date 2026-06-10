@@ -8,6 +8,7 @@ import autoTable from "jspdf-autotable";
 
 
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
+import DateInput from "../components/DateInput";
 import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
@@ -710,9 +711,9 @@ function Reports() {
               <div className={`${styles["form-row"]} ${styles.dateRangeRow}`}>
                 <div className={styles["form-label"]}>Choose a date range</div>
                 <div className={`${styles["form-field"]} ${styles.dateRangeGroup}`}>
-                  <input className={styles["date-field"]} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <DateInput className={styles["date-field"]} value={startDate} onChange={e => setStartDate(e.target.value)} />
                   <span className={styles.dateRangeSep}>to</span>
-                  <input className={styles["date-field"]} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <DateInput className={styles["date-field"]} value={endDate} onChange={e => setEndDate(e.target.value)} />
                 </div>
               </div>
 
