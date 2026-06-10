@@ -62,6 +62,9 @@ function DashboardOverview() {
         const next90Days = new Date(today);
         next90Days.setDate(today.getDate() + 90);
 
+        const next6Months = new Date(today);
+        next6Months.setMonth(today.getMonth() + 6);
+
         // Map of empId -> vacationStatus for deduplication
         const empAttendanceMap = {};
         empList.forEach(emp => {
@@ -101,7 +104,7 @@ function DashboardOverview() {
 
           if (emp.passportExpiryDate) {
             const expiry = new Date(emp.passportExpiryDate);
-            if (expiry > today && expiry <= next90Days) {
+            if (expiry > today && expiry <= next6Months) {
               passportExpiry++;
             }
           }
@@ -283,6 +286,8 @@ function DashboardOverview() {
     next60Days.setDate(today.getDate() + 60);
     const next90Days = new Date(today);
     next90Days.setDate(today.getDate() + 90);
+    const next6Months = new Date(today);
+    next6Months.setMonth(today.getMonth() + 6);
 
     const empSource = customEmpList || data.employees;
 
@@ -388,7 +393,7 @@ function DashboardOverview() {
         list = empSource.filter(e => {
           if (!e.passportExpiryDate) return false;
           const expiry = new Date(e.passportExpiryDate);
-          return expiry > today && expiry <= next90Days;
+          return expiry > today && expiry <= next6Months;
         });
         break;
       case "ONBOARDING":
@@ -409,7 +414,7 @@ function DashboardOverview() {
     { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "Next 60 days", tooltip: "Employees with approved leave starting in the next 60 days" },
     { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 1 month", tooltip: "Employees who returned from vacation in the last 1 month" },
     { label: "Visa Expiry", value: counts.visaExpiry, icon: <FaPassport />, color: "#f97316", sub: "Next 90 days", alert: true, tooltip: "Visas expiring within the next 3 months. Action required." },
-    { label: "Passport Expiry", value: counts.passportExpiry, icon: <FaIdCard />, color: "#0d9488", sub: "Next 90 days", alert: true, tooltip: "Passports expiring within the next 3 months. Action required." },
+    { label: "Passport Expiry", value: counts.passportExpiry, icon: <FaIdCard />, color: "#0d9488", sub: "Next 6 months", alert: true, tooltip: "Passports expiring within the next 6 months. Action required." },
   ];
 
   if (isLoading) {
