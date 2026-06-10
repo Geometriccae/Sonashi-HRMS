@@ -11,7 +11,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1500;
+  z-index: 10000000;
 }
 
 /* Main container */
@@ -34,7 +34,7 @@
 
 .trailing-content {
   width: 100%;
-  max-width: 328px;
+  max-width: 360px;
 }
 
 .date-pickers {
@@ -67,10 +67,9 @@
 .calendar-month {
   display: flex;
   width: 100%;
-  max-width: 280px;
+  max-width: 100%;
   align-items: center;
-  gap: 40px 42px;
-  justify-content: space-between;
+  justify-content: center;
 }
 
 .date-nav-button {

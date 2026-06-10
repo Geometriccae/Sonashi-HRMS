@@ -10,6 +10,7 @@ import ImportLeaveExcelModal from "./ImportLeaveExcelModal";
 import { useToast } from "../../context/ToastContext";
 import OptionService from "../../services/OptionService";
 import Select from "react-select";
+import DateInput from "../DateInput";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import {
     canManageLeaves as checkCanManageLeaves,
@@ -577,8 +578,7 @@ function LeaveRequestTable({ onUpdate }) {
                     <div className={styles.dateSection}>
                         <div className={styles.dateInputWrapper}>
                             <span>From:</span>
-                            <input 
-                                type="date" 
+                            <DateInput
                                 className={styles.dateInput}
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
@@ -586,8 +586,7 @@ function LeaveRequestTable({ onUpdate }) {
                         </div>
                         <div className={styles.dateInputWrapper}>
                             <span>To:</span>
-                            <input 
-                                type="date" 
+                            <DateInput
                                 className={styles.dateInput}
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}

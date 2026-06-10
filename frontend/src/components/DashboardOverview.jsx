@@ -13,6 +13,7 @@ import {
   FaIdCard
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import DateInput from "./DateInput";
 
 function DashboardOverview() {
   const navigate = useNavigate();
@@ -828,8 +829,7 @@ function DashboardOverview() {
                 <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Select {datePrompt.label}
                 </label>
-                <input
-                  type="date"
+                <DateInput
                   value={datePrompt.dateValue}
                   className="premium-input-date"
                   onChange={e => setDatePrompt(prev => ({ ...prev, dateValue: e.target.value }))}
@@ -847,7 +847,6 @@ function DashboardOverview() {
                     boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
                     cursor: "pointer"
                   }}
-                  autoFocus
                 />
               </div>
 

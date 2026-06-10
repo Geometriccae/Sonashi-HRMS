@@ -5,6 +5,7 @@ import salarySlipService from '../../services/SalarySlipService';
 import employeeService from '../../services/EmployeeService';
 import { useToast } from '../../context/ToastContext';
 import Dropdown from '../DropDown';
+import DateInput from '../DateInput';
 
 function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, existingSlips = [] }) {
     const { showToast } = useToast();
@@ -216,7 +217,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Date of Joining</label>
-                                <input type="date" name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} />
+                                <DateInput name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} />
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Month</label>

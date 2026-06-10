@@ -31,6 +31,7 @@ import employeeService from "../../services/EmployeeService";
 import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
+import DateInput from "../DateInput";
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -845,8 +846,7 @@ function TeamMembersTable() {
                 <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Select {datePrompt.label}
                 </label>
-                <input
-                  type="date"
+                <DateInput
                   value={datePrompt.dateValue}
                   className="premium-input-date"
                   onChange={e => setDatePrompt(prev => ({ ...prev, dateValue: e.target.value }))}
@@ -864,7 +864,6 @@ function TeamMembersTable() {
                     boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
                     cursor: "pointer"
                   }}
-                  autoFocus
                 />
               </div>
 

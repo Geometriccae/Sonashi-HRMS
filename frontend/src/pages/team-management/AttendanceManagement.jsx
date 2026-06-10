@@ -5,6 +5,7 @@ import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavba
 import EmployeeService from "../../services/EmployeeService";
 import AttendanceService from "../../services/AttendanceService";
 import AttendanceUpdateModal from "../../components/team-management-components/AttendanceUpdateModal";
+import DateInput from "../../components/DateInput";
 
 function AttendanceManagement() {
   const [employees, setEmployees] = useState([]);
@@ -367,16 +368,14 @@ function AttendanceManagement() {
               <div className={styles["date-inputs"]}>
                 <label>
                   Start:
-                  <input
-                    type="date"
+                  <DateInput
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                   />
                 </label>
                 <label>
                   End:
-                  <input
-                    type="date"
+                  <DateInput
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                   />
