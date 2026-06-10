@@ -1,3 +1,11 @@
+export const calculateLeaveDays = (startDate, endDate) => {
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+    const days = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
+    return days > 0 ? days : null;
+};
+
 export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDate = null) => {
     if (!employee) {
         return { 

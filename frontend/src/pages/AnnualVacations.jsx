@@ -41,10 +41,108 @@ function StatusBadge({ status }) {
   );
 }
 
+const MONTH_OPTIONS = [
+  { value: "", label: "All Months" },
+  { value: "0", label: "January" },
+  { value: "1", label: "February" },
+  { value: "2", label: "March" },
+  { value: "3", label: "April" },
+  { value: "4", label: "May" },
+  { value: "5", label: "June" },
+  { value: "6", label: "July" },
+  { value: "7", label: "August" },
+  { value: "8", label: "September" },
+  { value: "9", label: "October" },
+  { value: "10", label: "November" },
+  { value: "11", label: "December" },
+];
+
 const DEFAULT_FILTERS = {
   department: "", role: "", dojFrom: "", dojTo: "",
   expMin: "", expMax: "", office: "", country: "",
+  vacationMonth: "", vacationYear: "",
 };
+
+const itemMatchesVacationMonth = (item, monthStr, yearStr) => {
+  if (!monthStr && !yearStr) return true;
+
+  const dates = [item.travellingDate, item.startDate, item.lastWorkingDay].filter(Boolean);
+  if (dates.length === 0) return false;
+
+  const monthIdx = monthStr !== "" ? Number(monthStr) : null;
+  const yearNum = yearStr !== ""
+    ? Number(yearStr)
+    : (monthStr !== "" ? new Date().getFullYear() : null);
+
+  return dates.some((d) => {
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return false;
+    if (monthIdx !== null && dt.getMonth() !== monthIdx) return false;
+    if (yearNum !== null && dt.getFullYear() !== yearNum) return false;
+    return true;
+  });
+};
+
+const normalizeName = (name) => String(name || "").toLowerCase().replace(/[\s_.-]+/g, "").trim();
+
+const findLinkedEmployee = (req, empList) => {
+  if (!Array.isArray(empList) || empList.length === 0) return null;
+
+  const populated = req.employee;
+  if (populated?.employeeId) {
+    const byRef = empList.find((e) => String(e._id) === String(populated.employeeId));
+    if (byRef) return byRef;
+  }
+
+  if (req.employeeId) {
+    const byCode = empList.find((e) => String(e.employeeId) === String(req.employeeId));
+    if (byCode) return byCode;
+  }
+
+  const reqName = normalizeName(req.employeeName || populated?.username);
+  if (!reqName) return null;
+
+  const exact = empList.find((e) => normalizeName(e.employeeName) === reqName);
+  if (exact) return exact;
+
+  return empList.find((e) => {
+    const n = normalizeName(e.employeeName);
+    return n && (n.includes(reqName) || reqName.includes(n));
+  }) || null;
+};
+
+const mapLeaveRow = (req, empList, targetStatus) => {
+  const linked = findLinkedEmployee(req, empList);
+  const empName = req.employeeName || linked?.employeeName || req.employee?.username || "Unknown";
+
+  return {
+    ...req,
+    employeeName: linked?.employeeName || empName,
+    employeeId: linked?.employeeId || req.employeeId || "—",
+    department: linked?.department || req.department || "",
+    role: linked?.role || "",
+    office: linked?.office || "",
+    nationality: linked?.nationality || "",
+    doj: linked?.doj || null,
+    totalYearsExperience: linked?.totalYearsExperience ?? null,
+    travellingDate: linked?.travellingDate || req.travellingDate || null,
+    lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
+    firstWorkingDay: linked?.firstWorkingDay || req.firstWorkingDay || null,
+    vacationStatus: linked?.vacationStatus || targetStatus,
+    linkedEmployeeId: linked?._id || null,
+    _source: "leave",
+  };
+};
+
+const getNavEmployeeId = (item) => {
+  if (item.linkedEmployeeId) return item.linkedEmployeeId;
+  if (item._source === "leave") {
+    return item.employee?.employeeId || null;
+  }
+  return item._id || item.id || null;
+};
+
+const displayLastWorkingDay = (item) => fmt(item.lastWorkingDay || item.startDate);
 
 const getDateConfigForStatus = (status) => {
   const configs = {
@@ -55,8 +153,10 @@ const getDateConfigForStatus = (status) => {
       secondaryFieldKey: "travellingDate",
     },
     "Vacation Pending": {
-      label: "Travelling Date",
-      fieldKey: "travellingDate",
+      label: "Last Working Day",
+      fieldKey: "lastWorkingDay",
+      secondaryLabel: "Travelling Date",
+      secondaryFieldKey: "travellingDate",
     },
     "Vacation Approved": {
       label: "Return / Entry Date",
@@ -91,8 +191,10 @@ const buildEditModalState = (item, status, mode = "date") => {
 };
 
 const getEmployeeIdFromItem = (item) => {
+  const navId = getNavEmployeeId(item);
+  if (navId) return navId;
   if (item._source === "leave") {
-    return item.employee?._id || item.employee;
+    return item.employee?.employeeId || item.employee?._id || item.employee;
   }
   return item._id || item.id;
 };
@@ -129,11 +231,14 @@ function AnnualVacations() {
   // ─── Unique dropdown options ─────────────────────────────────────────────
   const options = useMemo(() => {
     const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
+    const currentYear = new Date().getFullYear();
+    const years = ["", ...Array.from({ length: currentYear - 2011 }, (_, i) => String(currentYear - i))];
     return {
       departments: uniq(employees.map(e => e.department)),
       roles:       uniq(employees.map(e => e.role)),
       offices:     uniq(employees.map(e => e.office)),
       countries:   uniq(employees.map(e => e.nationality)),
+      years,
     };
   }, [employees]);
 
@@ -170,15 +275,13 @@ function AnnualVacations() {
     const today     = new Date(); today.setHours(0,0,0,0);
     const next60    = new Date(today); next60.setDate(today.getDate() + 60);
     const lastMonth = new Date(today); lastMonth.setMonth(today.getMonth() - 1);
-    const attMap    = {};
-    empList.forEach(e => { if (e.vacationStatus && e.vacationStatus !== "Onsite") attMap[e._id] = e.vacationStatus; });
     let onVacation = empList.filter(e => e.vacationStatus === "On Vacation").length;
     let yetToGo    = empList.filter(e => e.vacationStatus === "Vacation Pending").length;
     let returned   = empList.filter(e => e.vacationStatus === "Vacation Approved").length;
     leaveList.forEach(req => {
       if (req.status !== "Approved") return;
-      const empId = req.employee?._id || req.employee;
-      if (attMap[empId]) return;
+      const linked = findLinkedEmployee(req, empList);
+      if (linked && linked.vacationStatus && linked.vacationStatus !== "Onsite") return;
       const s = new Date(req.startDate); const e = new Date(req.endDate);
       if (today >= s && today <= e) onVacation++;
       else if (s > today && s <= next60) yetToGo++;
@@ -197,40 +300,34 @@ function AnnualVacations() {
 
     const attEmps = empList
       .filter(e => e.vacationStatus === targetStatus)
-      .map(e => ({ ...e, _source: "employee" }));
-    const attEmpIds = new Set(attEmps.map(e => e._id));
+      .map(e => {
+        const leave = leaveList.find((req) => {
+          if (req.status !== "Approved") return false;
+          const linked = findLinkedEmployee(req, empList);
+          return linked && String(linked._id) === String(e._id);
+        });
+        return {
+          ...e,
+          _source: "employee",
+          linkedEmployeeId: e._id,
+          startDate: leave?.startDate || e.startDate || null,
+          endDate: leave?.endDate || e.endDate || null,
+        };
+      });
+    const attEmpIds = new Set(attEmps.map(e => String(e._id)));
 
     const leaveEmps = leaveList
       .filter(req => {
         if (req.status !== "Approved") return false;
-        const empId = req.employee?._id || req.employee;
-        if (attEmpIds.has(empId)) return false;
+        const linked = findLinkedEmployee(req, empList);
+        if (linked && attEmpIds.has(String(linked._id))) return false;
         const s = new Date(req.startDate); const e = new Date(req.endDate);
         if (tabKey === "onVacation") return today >= s && today <= e;
         if (tabKey === "yetToGo")   return s > today && s <= next60;
         if (tabKey === "returned")  return e >= lastMonth && e < today;
         return false;
       })
-      .map(req => {
-        const empName = req.employeeName || req.employee?.employeeName || "Unknown";
-        const linked  = empList.find(e => e._id === (req.employee?._id || req.employee));
-        return {
-          ...req,
-          employeeName:          empName,
-          employeeId:            linked?.employeeId            || req.employeeId || "—",
-          department:            linked?.department            || req.department  || "",
-          role:                  linked?.role                  || "",
-          office:                linked?.office                || "",
-          nationality:           linked?.nationality           || "",
-          doj:                   linked?.doj                   || null,
-          totalYearsExperience:  linked?.totalYearsExperience  ?? null,
-          travellingDate:        linked?.travellingDate        || req.travellingDate || null,
-          lastWorkingDay:        linked?.lastWorkingDay        || req.lastWorkingDay || null,
-          firstWorkingDay:       linked?.firstWorkingDay       || req.firstWorkingDay || null,
-          vacationStatus:        linked?.vacationStatus        || targetStatus,
-          _source: "leave",
-        };
-      });
+      .map(req => mapLeaveRow(req, empList, targetStatus));
 
     return [...attEmps, ...leaveEmps];
   }, []);
@@ -303,6 +400,13 @@ function AnnualVacations() {
         if (exp == null || exp > Number(filters.expMax)) return false;
       }
 
+      // ── Vacation month / year (travelling date or leave start) ──
+      if (filters.vacationMonth || filters.vacationYear) {
+        if (!itemMatchesVacationMonth(item, filters.vacationMonth, filters.vacationYear)) {
+          return false;
+        }
+      }
+
       return true;
     });
   }, [tabList, searchQuery, filters]);
@@ -323,6 +427,7 @@ function AnnualVacations() {
     const updated = { ...filters };
     if (key === "doj") { updated.dojFrom = ""; updated.dojTo = ""; }
     else if (key === "exp") { updated.expMin = ""; updated.expMax = ""; }
+    else if (key === "vacation") { updated.vacationMonth = ""; updated.vacationYear = ""; }
     else updated[key] = "";
     setFilters(updated);
     setPendingFilters(updated);
@@ -336,6 +441,14 @@ function AnnualVacations() {
     if (filters.country)                           pills.push({ key:"country",    label:`Country: ${filters.country}` });
     if (filters.dojFrom || filters.dojTo)          pills.push({ key:"doj",        label:`DOJ: ${filters.dojFrom||"—"} → ${filters.dojTo||"—"}` });
     if (filters.expMin !== "" || filters.expMax !== "") pills.push({ key:"exp",   label:`Exp: ${filters.expMin||"0"}–${filters.expMax||"∞"} yrs` });
+    if (filters.vacationMonth || filters.vacationYear) {
+      const monthLabel = MONTH_OPTIONS.find(m => m.value === filters.vacationMonth)?.label;
+      const yearLabel = filters.vacationYear || String(new Date().getFullYear());
+      const parts = [];
+      if (monthLabel && monthLabel !== "All Months") parts.push(monthLabel);
+      parts.push(yearLabel);
+      pills.push({ key: "vacation", label: `Vacation: ${parts.join(" ")}` });
+    }
     return pills;
   }, [filters]);
 
@@ -354,7 +467,7 @@ function AnnualVacations() {
     try {
       if (item._source === "leave" || item.startDate) {
         await leaveRequestService.updateLeaveRequest(item._id, { endDate:today.toISOString(), status:"Approved" });
-        const empId = item.employee?._id || item.employee;
+        const empId = getEmployeeIdFromItem(item);
         if (empId) await employeeService.updateEmployee(empId, { vacationStatus:"Vacation Approved", firstWorkingDay:today.toISOString() });
       } else {
         await employeeService.updateEmployee(item._id, { vacationStatus:"Vacation Approved", firstWorkingDay:today.toISOString() });
@@ -497,6 +610,27 @@ function AnnualVacations() {
                       value={pendingFilters.expMax}
                       onChange={e => setPendingFilters(p => ({ ...p, expMax: e.target.value }))} />
                   </div>
+
+                  <div className={styles.filterField}>
+                    <label className={styles.filterLabel}>Vacation Month</label>
+                    <select className={styles.filterSelect} value={pendingFilters.vacationMonth}
+                      onChange={e => setPendingFilters(p => ({ ...p, vacationMonth: e.target.value }))}>
+                      {MONTH_OPTIONS.map(m => (
+                        <option key={m.value || "all"} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.filterField}>
+                    <label className={styles.filterLabel}>Vacation Year</label>
+                    <select className={styles.filterSelect} value={pendingFilters.vacationYear}
+                      onChange={e => setPendingFilters(p => ({ ...p, vacationYear: e.target.value }))}>
+                      <option value="">Current year (default)</option>
+                      {options.years.filter(Boolean).map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className={styles.filterPanelFooter}>
@@ -599,7 +733,7 @@ function AnnualVacations() {
                               <th>DOJ</th>
                               <th>Exp (yrs)</th>
                               {activeTab === "onVacation" && <><th>Start Date</th><th>End Date</th><th>Travelling Date</th><th>Last Working Day</th></>}
-                              {activeTab === "yetToGo"   && <><th>Travelling Date</th><th>Leave Start</th><th>Leave End</th></>}
+                              {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Day</th></>}
                               {activeTab === "returned"  && <><th>Return Date</th><th>Leave Start</th><th>Leave End</th></>}
                               <th>Status</th>
                               {isAdmin && <th>Actions</th>}
@@ -610,8 +744,8 @@ function AnnualVacations() {
                               const empId = item._id || item.id;
                               const vs    = item.vacationStatus || (activeTab === "onVacation" ? "On Vacation" : activeTab === "yetToGo" ? "Vacation Pending" : "Vacation Approved");
                               return (
-                                <tr key={empId || idx} className={styles.tableRow}
-                                  onClick={() => { const navId = item._id||item.id||item.employee?._id; if (navId) navigate(`/teammanagement_salesleads/${navId}`); }}>
+                                <tr key={item._source === "leave" ? `leave-${item._id}` : (empId || idx)} className={styles.tableRow}
+                                  onClick={() => { const navId = getNavEmployeeId(item); if (navId) navigate(`/teammanagement_salesleads/${navId}`); }}>
                                   <td className={styles.tdNum}>{idx + 1}</td>
                                   <td>
                                     <div className={styles.empCell}>
@@ -637,7 +771,7 @@ function AnnualVacations() {
                                   </td>
 
                                   {activeTab === "onVacation" && <><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
-                                  {activeTab === "yetToGo"   && <><td>{fmt(item.travellingDate)}</td><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td></>}
+                                  {activeTab === "yetToGo"   && <><td>{displayLastWorkingDay(item)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.endDate)}</td></>}
                                   {activeTab === "returned"  && <><td>{fmt(item.firstWorkingDay)}</td><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
