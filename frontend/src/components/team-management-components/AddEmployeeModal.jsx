@@ -74,7 +74,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     labourCardExpiryDate: "",
     visaExpiryDate: "",
     emiratesIdExpiryDate: "",
-    contractRenewalDate: "",
     remarks: "",
     employeeStatus: "Active",
     vacationStatus: "Onsite",
@@ -125,13 +124,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
   const fetchEmployeeDropdownValues = async () => {
     try {
-      const [roles, depts] = await Promise.all([
+      const [roles, depts, excludedRoles, excludedDepts] = await Promise.all([
         OptionService.getOptions('role'),
-        OptionService.getOptions('department')
+        OptionService.getOptions('department'),
+        OptionService.getExcludedDefaults('role'),
+        OptionService.getExcludedDefaults('department'),
       ]);
 
-      setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles));
-      setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts));
+      setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles, excludedRoles));
+      setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts, excludedDepts));
     } catch (err) {
       console.error("Failed to fetch dynamic options:", err);
       setRoleOptions(ROLE_OPTIONS_DEFAULT);
@@ -151,17 +152,17 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   };
 
   const handleRoleDelete = async (option) => {
+    if (!option?.label || option.label === "-Select-") return;
     try {
-      // Find the ID of the option to delete
       const roles = await OptionService.getOptions('role');
-      const toDelete = roles.find(r => r.label === option.label);
+      const toDelete = roles.find((r) => r.label === option.label);
       if (toDelete) {
         await OptionService.deleteOption('role', toDelete._id);
-        await fetchEmployeeDropdownValues();
-        addToast(`Role "${option.label}" deleted`, "success");
       } else {
-        addToast("Cannot delete default options", "error");
+        await OptionService.excludeDefaultOption('role', option.label);
       }
+      await fetchEmployeeDropdownValues();
+      addToast(`Role "${option.label}" deleted`, "success");
     } catch (err) {
       addToast("Failed to delete role", "error");
     }
@@ -179,16 +180,17 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   };
 
   const handleDeptDelete = async (option) => {
+    if (!option?.label || option.label === "-Select-") return;
     try {
       const depts = await OptionService.getOptions('department');
-      const toDelete = depts.find(d => d.label === option.label);
+      const toDelete = depts.find((d) => d.label === option.label);
       if (toDelete) {
         await OptionService.deleteOption('department', toDelete._id);
-        await fetchEmployeeDropdownValues();
-        addToast(`Department "${option.label}" deleted`, "success");
       } else {
-        addToast("Cannot delete default options", "error");
+        await OptionService.excludeDefaultOption('department', option.label);
       }
+      await fetchEmployeeDropdownValues();
+      addToast(`Department "${option.label}" deleted`, "success");
     } catch (err) {
       addToast("Failed to delete department", "error");
     }
@@ -447,7 +449,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         labourCardExpiryDate: "",
         visaExpiryDate: "",
         emiratesIdExpiryDate: "",
-        contractRenewalDate: "",
         remarks: "",
         employeeStatus: "Active",
         vacationStatus: "Onsite",
@@ -887,16 +888,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 value={formData.emiratesIdExpiryDate}
                 onChange={(e) =>
                   handleInputChange("emiratesIdExpiryDate", e.target.value)
-                }
-              />
-
-              <InputField
-                label="Contract Renewal Date"
-                placeholder="YYYY-MM-DD"
-                type="date"
-                value={formData.contractRenewalDate}
-                onChange={(e) =>
-                  handleInputChange("contractRenewalDate", e.target.value)
                 }
               />
 

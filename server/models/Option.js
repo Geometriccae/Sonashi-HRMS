@@ -15,6 +15,10 @@ const optionSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true
+  },
+  isExcludedDefault: {
+    type: Boolean,
+    default: false
   }
 }, { timestamps: true });
 

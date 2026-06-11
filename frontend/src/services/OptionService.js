@@ -27,16 +27,37 @@ const deleteOption = async (type, id) => {
   return response.data;
 };
 
-const mergeWithDynamicOptions = (defaultOptions, dbOptions) => {
+const getExcludedDefaults = async (type) => {
+  const response = await axios.get(`${API_URL}/${type}/excluded`);
+  return response.data;
+};
+
+const excludeDefaultOption = async (type, label) => {
+  const token = localStorage.getItem('token');
+  const response = await axios.post(
+    `${API_URL}/${type}/exclude-default`,
+    { label },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return response.data;
+};
+
+const mergeWithDynamicOptions = (defaultOptions, dbOptions, excludedDefaults = []) => {
+  const excluded = new Set(
+    (excludedDefaults || []).map((label) => String(label || "").trim().toLowerCase()).filter(Boolean)
+  );
+  const visibleDefaults = (defaultOptions || []).filter((opt) => {
+    if (!opt || opt.value == null) return false;
+    if (!opt.value) return true;
+    return !excluded.has(String(opt.value).toLowerCase());
+  });
+
   const map = new Map();
-  
-  // Add defaults to map
-  for (const opt of defaultOptions || []) {
-    if (!opt || opt.value == null) continue;
+
+  for (const opt of visibleDefaults) {
     map.set(String(opt.value).toLowerCase(), { value: opt.value, label: opt.label });
   }
-  
-  // Add DB options to map (overwrite or add new)
+
   for (const opt of dbOptions || []) {
     const val = String(opt.label || opt.value || "").trim();
     if (!val) continue;
@@ -45,22 +66,19 @@ const mergeWithDynamicOptions = (defaultOptions, dbOptions) => {
       map.set(key, { value: val, label: val });
     }
   }
-  
-  // Create final list starting with defaults (preserve order)
-  const result = [...(defaultOptions || []).filter(Boolean)];
-  
-  // Add new dynamic options
+
+  const result = [...visibleDefaults.filter(Boolean)];
+
   const newOptions = [];
   for (const [k, opt] of map.entries()) {
-    const existsInDefaults = (defaultOptions || []).some(d => d && String(d.value).toLowerCase() === k);
+    const existsInDefaults = visibleDefaults.some((d) => d && String(d.value).toLowerCase() === k);
     if (!existsInDefaults) {
       newOptions.push(opt);
     }
   }
-  
-  // Sort new options alphabetically
+
   newOptions.sort((a, b) => a.label.localeCompare(b.label));
-  
+
   return [...result, ...newOptions];
 };
 
@@ -68,6 +86,8 @@ const OptionService = {
   getOptions,
   addOption,
   deleteOption,
+  getExcludedDefaults,
+  excludeDefaultOption,
   mergeWithDynamicOptions
 };
 
