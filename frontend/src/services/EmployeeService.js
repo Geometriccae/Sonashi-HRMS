@@ -66,6 +66,31 @@ class EmployeeService {
     }
   }
 
+  // Server-side paginated list for the team members table
+  async getEmployeesListPaginated({ page = 1, limit = 20, search = '', status = '' } = {}) {
+    try {
+      const params = new URLSearchParams({ view: 'list', page: String(page), limit: String(limit) });
+      if (search) params.set('search', search);
+      if (status) params.set('status', status);
+      const response = await fetch(`${this.baseURL}?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      // Handle both paginated response { employees, total } and legacy flat array
+      if (Array.isArray(data)) {
+        return { employees: data, total: data.length, page, limit, totalPages: Math.ceil(data.length / limit) };
+      }
+      return data;
+    } catch (error) {
+      console.error('Error fetching paginated employee list:', error);
+      throw error;
+    }
+  }
+
   // Stats only — counts for dashboard cards
   async getEmployeeStats({ force = false } = {}) {
     if (!force && this._isCacheValid() && this._cache.stats) {
@@ -111,6 +136,24 @@ class EmployeeService {
     } catch (error) {
       console.error('Error fetching employees:', error);
       throw error;
+    }
+  }
+
+  // Batch fetch profile photos for a list of employee IDs (current page only).
+  async getProfilePhotosByIds(ids = []) {
+    try {
+      const clean = (ids || []).map((id) => String(id)).filter(Boolean);
+      if (!clean.length) return [];
+      const params = new URLSearchParams({ ids: clean.join(',') });
+      const response = await fetch(`${this.baseURL}/photos?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching profile photos:', error);
+      return [];
     }
   }
 

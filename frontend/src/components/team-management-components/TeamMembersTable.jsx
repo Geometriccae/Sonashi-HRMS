@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Card,
@@ -141,7 +141,7 @@ const formatVacationDates = (record, vs) => {
 
 function TeamMembersTable() {
   const { showToast } = useToast();
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [activeFilter, setActiveFilter] = useState("Active");
   const [searchTerm, setSearchTerm] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState(null);
@@ -154,7 +154,7 @@ function TeamMembersTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
   const canEditEmployees = userRole !== "viewer";
@@ -198,7 +198,6 @@ function TeamMembersTable() {
       setEmployees(employeesData || []);
     } catch (err) {
       console.error("Error fetching employees:", err);
-      // Keep existing list visible; surface error inline
       setError("Failed to load employees. Please try again.");
     } finally {
       setLoading(false);
@@ -239,7 +238,7 @@ function TeamMembersTable() {
       }
 
       // Refresh the employees list
-      await fetchEmployees();
+      fetchEmployees();
     } catch (err) {
       console.error("Error deleting employee(s):", err);
       const errorMsg = err.message || "Unknown error";
@@ -269,7 +268,7 @@ function TeamMembersTable() {
   };
 
   const handleBulkImportSuccess = async (res) => {
-    await fetchEmployees();
+    fetchEmployees();
     const created = res?.created ?? 0;
     const failed = res?.failed ?? 0;
     if (failed === 0) {
@@ -292,20 +291,10 @@ function TeamMembersTable() {
 
   const handleAddEmployeeSubmit = async (formData) => {
     try {
-      // If the AddEmployeeModal returns the created employee, append optimistically.
-      // Expectation: onSubmit may return the created employee object; if not, we still refresh.
-      const created = formData?.createdEmployee || null;
-      if (created) {
-        setEmployees((prev) => [created, ...prev]);
-      }
-      // run background refresh to reconcile server state
-      await fetchEmployees();
-
-      // Show success notification
+      fetchEmployees();
       showToast(`${formData.employeeName} has been successfully added.`, 'success');
     } catch (err) {
       console.error("Error refreshing employees after add:", err);
-      // Re-fetch to ensure consistency on error
       fetchEmployees();
       showToast("Employee added, but failed to refresh list.", 'warning');
     }
@@ -313,8 +302,7 @@ function TeamMembersTable() {
 
   const handleEditEmployeeSubmit = async (formData) => {
     try {
-      // Refresh the employees list after editing
-      await fetchEmployees();
+      fetchEmployees();
       showToast("Employee details updated successfully.", 'success');
     } catch (err) {
       console.error("Error refreshing employees after edit:", err);
@@ -375,45 +363,31 @@ function TeamMembersTable() {
     setDatePrompt(null);
   };
 
-  // Filter employees first
-  const filteredData = employees.filter((member) => {
-    let matchesFilter = true;
-    if (activeFilter === "Active") {
-      matchesFilter = member.employeeStatus !== "InActive";
-    } else if (activeFilter === "Inactive") {
-      matchesFilter = member.employeeStatus === "InActive";
-    }
+  const filteredData = useMemo(() => {
+    return employees.filter((member) => {
+      let matchesFilter = true;
+      if (activeFilter === "Active") {
+        matchesFilter = member.employeeStatus !== "InActive";
+      } else if (activeFilter === "Inactive") {
+        matchesFilter = member.employeeStatus === "InActive";
+      }
 
-    const q = searchTerm.toLowerCase();
-    const matchesSearch =
-      (member.employeeName || "").toLowerCase().includes(q) ||
-      (member.employeeId || "").toLowerCase().includes(q) ||
-      (member.emailId || "").toLowerCase().includes(q) ||
-      (member.role || "").toLowerCase().includes(q);
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        (member.employeeName || "").toLowerCase().includes(q) ||
+        (member.employeeId || "").toLowerCase().includes(q) ||
+        (member.emailId || "").toLowerCase().includes(q) ||
+        (member.mobile || "").toLowerCase().includes(q) ||
+        (member.role || "").toLowerCase().includes(q);
 
-    return matchesFilter && matchesSearch;
-  });
+      return matchesFilter && matchesSearch;
+    });
+  }, [employees, activeFilter, searchTerm]);
 
-  // Pagination: compute total pages (minimum 1 so UI behaves like ClientsTable)
-  const totalPages = Math.max(1, Math.ceil((filteredData.length || 0) / itemsPerPage));
-
-  // Reset to first page when filters/search/list length change
+  // Reset to first page when filters/search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter, searchTerm, employees.length]); // <-- removed filteredData.length here
-
-  // Ensure currentPage stays within bounds and derive a safe page for slicing
-  const currentPageSafe = Math.max(1, Math.min(currentPage, totalPages));
-  useEffect(() => {
-    if (currentPage !== currentPageSafe) setCurrentPage(currentPageSafe);
-  }, [currentPageSafe]); // ensure state sync if bounds changed externally
-
-  // If filteredData becomes empty, ensure we are on page 1
-  useEffect(() => {
-    if ((filteredData || []).length === 0 && currentPage !== 1) {
-      setCurrentPage(1);
-    }
-  }, [filteredData.length, currentPage]);
+  }, [activeFilter, searchTerm]);
 
   const allFilteredSelected =
     filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
@@ -426,7 +400,7 @@ function TeamMembersTable() {
         key: "sno",
         width: 70,
         align: "center",
-        render: (_, __, index) => (currentPageSafe - 1) * itemsPerPage + index + 1,
+        render: (_, __, index) => (currentPage - 1) * itemsPerPage + index + 1,
       },
       {
         title: "Employee Name",
@@ -670,9 +644,9 @@ function TeamMembersTable() {
           value={activeFilter}
           onChange={setActiveFilter}
           options={[
-            { label: "All", value: "All" },
             { label: "Active", value: "Active" },
             { label: "Inactive", value: "Inactive" },
+            { label: "All", value: "All" },
           ]}
           style={{ background: "#f5f5f5", padding: 4, borderRadius: 24 }}
         />
@@ -702,11 +676,11 @@ function TeamMembersTable() {
           ),
         }}
         pagination={{
-          current: currentPageSafe,
+          current: currentPage,
           pageSize: itemsPerPage,
           total: filteredData.length,
           showSizeChanger: true,
-          pageSizeOptions: ["5", "10", "15"],
+          pageSizeOptions: ["10", "20", "50", "100"],
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`,
           onChange: (page, size) => {
             setCurrentPage(page);

@@ -18,6 +18,41 @@ const Client = require('../models/Client');
 const { buildEmployeePayload } = require('../utils/employeeExcelImport');
 const { notifyEmployeeOnboarding } = require('../services/hrNotificationService');
 
+// ========== SERVER-SIDE LIST CACHE ==========
+// The employee list query hits MongoDB Atlas (cloud) which adds 1.5-7s latency.
+// We cache the list in memory and serve it instantly. The cache is invalidated
+// whenever any employee is created, updated, deleted, or bulk-imported.
+const LIST_CACHE_TTL_MS = 300000; // 5 minutes max staleness (invalidated on writes)
+let _listCache = { data: null, ts: 0 };
+
+function getListCache() {
+  if (_listCache.data && (Date.now() - _listCache.ts) < LIST_CACHE_TTL_MS) {
+    return _listCache.data;
+  }
+  return null;
+}
+
+function setListCache(data) {
+  _listCache = { data, ts: Date.now() };
+}
+
+function invalidateListCache() {
+  _listCache = { data: null, ts: 0 };
+}
+
+// Warm cache on startup so the very first user request is fast
+function warmListCache() {
+  const mongoose = require('mongoose');
+  if (mongoose.connection.readyState !== 1) {
+    mongoose.connection.once('connected', () => warmListCache());
+    return;
+  }
+  Employee.find({}).select(EMPLOYEE_LIST_FIELDS).sort({ createdAt: -1 }).lean()
+    .then(data => { setListCache(data); console.log(`✅ Employee list cache warmed (${data.length} records)`); })
+    .catch(err => console.warn('Cache warm-up failed (non-critical):', err.message));
+}
+// =============================================
+
 /** Import rows only require these four fields (mobile & email are optional). */
 function importRowRequiredFieldsMissing(payload) {
   const missing = [];
@@ -133,6 +168,38 @@ const uploadProfilePhoto = multer({
     }
   }
 });
+
+const DATA_URI_EXT = {
+  'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
+  'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp', 'image/svg+xml': 'svg',
+};
+
+/**
+ * If a profilePhoto value is an inline base64 data URI, write it to disk and
+ * return the public file path. Prevents storing huge base64 blobs in MongoDB,
+ * which makes list queries return tens of MB and time out.
+ * Returns the original value when it is not a data URI (e.g. already a path).
+ */
+function persistBase64ProfilePhoto(value, idHint) {
+  if (typeof value !== 'string' || !value.startsWith('data:')) return value;
+  const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(value);
+  if (!match) return value;
+  const mime = (match[1] || 'image/jpeg').toLowerCase();
+  const isBase64 = !!match[2];
+  const payload = match[3] || '';
+  const ext = DATA_URI_EXT[mime] || 'jpg';
+  const buffer = isBase64
+    ? Buffer.from(payload, 'base64')
+    : Buffer.from(decodeURIComponent(payload), 'utf8');
+
+  const uploadDir = path.join(__dirname, '../../uploads/employees');
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+  const safeId = String(idHint || 'emp').replace(/[^a-zA-Z0-9_-]/g, '-');
+  const filename = `${safeId}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(uploadDir, filename), buffer);
+  return `/uploads/employees/${filename}`;
+}
 // =============================================
 
 // ?? Email sending helper
@@ -217,7 +284,7 @@ const EMPLOYEE_LIST_FIELDS = [
   'role', 'department', 'attendance', 'doj', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
   'travellingDate', 'firstWorkingDay', 'lastWorkingDay', 'reportingManager', 'assignedProjects',
-  'nationality', 'office', 'passportNo', 'emiratesId', 'createdAt',
+  'nationality', 'office', 'passportNo', 'emiratesId', 'createdAt', 'profilePhoto',
 ].join(' ');
 
 // Lightweight stats for dashboard / team management cards
@@ -252,11 +319,53 @@ router.get('/stats', authMiddleware, async (req, res) => {
 });
 
 // Get all employees (use ?view=list for lightweight table data)
+// Supports server-side pagination: ?page=1&limit=20&search=...&status=Active|InActive
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const view = String(req.query.view || '').toLowerCase();
-    const query = Employee.find().sort({ createdAt: -1 });
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+    const search = String(req.query.search || '').trim();
+    const status = String(req.query.status || '').trim();
+    const paginate = !isNaN(page) && page > 0 && !isNaN(limit) && limit > 0;
+    const hasFilters = search || status;
 
+    // Fast path: unfiltered list view served from in-memory cache
+    if (view === 'list' && !paginate && !hasFilters) {
+      const cached = getListCache();
+      if (cached) return res.json(cached);
+    }
+
+    const filter = {};
+    if (status === 'Active') filter.employeeStatus = 'Active';
+    else if (status === 'InActive') filter.employeeStatus = 'InActive';
+
+    if (search) {
+      const regex = new RegExp(search, 'i');
+      filter.$or = [
+        { employeeName: regex },
+        { employeeId: regex },
+        { emailId: regex },
+        { role: regex },
+        { department: regex },
+        { mobile: regex },
+      ];
+    }
+
+    if (paginate && view === 'list') {
+      const [employees, total] = await Promise.all([
+        Employee.find(filter)
+          .select(EMPLOYEE_LIST_FIELDS)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .lean(),
+        Employee.countDocuments(filter),
+      ]);
+      return res.json({ employees, total, page, limit, totalPages: Math.ceil(total / limit) });
+    }
+
+    const query = Employee.find(filter).sort({ createdAt: -1 });
     if (view === 'list') {
       query.select(EMPLOYEE_LIST_FIELDS).lean();
     } else {
@@ -264,6 +373,12 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 
     const employees = await query;
+
+    // Populate cache for unfiltered list queries
+    if (view === 'list' && !hasFilters) {
+      setListCache(employees);
+    }
+
     res.json(employees);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
@@ -284,6 +399,27 @@ router.get('/profile-photo', authMiddleware, async (req, res) => {
     res.json({ profilePhoto: employee.profilePhoto || '' });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching profile photo', error: error.message });
+  }
+});
+
+// Batch fetch profile photos for a specific set of employee IDs (current page only).
+// Keeps the main list lightweight while still showing avatars. ?ids=id1,id2,...
+router.get('/photos', authMiddleware, async (req, res) => {
+  try {
+    const idsParam = String(req.query.ids || '').trim();
+    if (!idsParam) return res.json([]);
+    const ids = idsParam
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => mongoose.Types.ObjectId.isValid(s));
+    if (!ids.length) return res.json([]);
+
+    const employees = await Employee.find({ _id: { $in: ids } })
+      .select('profilePhoto')
+      .lean();
+    res.json(employees.map((e) => ({ _id: e._id, profilePhoto: e.profilePhoto || '' })));
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching profile photos', error: error.message });
   }
 });
 
@@ -448,6 +584,7 @@ router.post('/import', authMiddleware, blockViewerWrites, uploadEmployeeImport.s
       }
     }
 
+    invalidateListCache();
     res.status(201).json({
       message: 'Import finished',
       created: results.length,
@@ -489,6 +626,9 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
 
     if (req.file) {
       employeeData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+    } else if (employeeData.profilePhoto) {
+      // Convert any inline base64 image into a file path
+      employeeData.profilePhoto = persistBase64ProfilePhoto(employeeData.profilePhoto, employeeData.employeeId);
     }
 
     // Defensive: strip any incoming id fields to avoid duplicate _id insertion
@@ -533,6 +673,7 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
 
     const employee = new Employee(employeeData);
     const savedEmployee = await employee.save();
+    invalidateListCache();
 
     // Emit lightweight event so frontends can update lists in real-time
     try {
@@ -607,6 +748,9 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
 
     if (req.file) {
       updateData.profilePhoto = `/uploads/employees/${req.file.filename}`;
+    } else if (updateData.profilePhoto) {
+      // Convert any inline base64 image into a file path
+      updateData.profilePhoto = persistBase64ProfilePhoto(updateData.profilePhoto, req.params.id);
     }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'mobile') && updateData.mobile != null) {
@@ -654,6 +798,7 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
       return res.status(404).json({ message: 'Employee not found' });
     }
 
+    invalidateListCache();
     console.log('✅ Employee updated successfully:', updatedEmployee._id);
     res.json({
       message: 'Employee updated successfully',
@@ -707,6 +852,7 @@ router.post('/bulk-delete', authMiddleware, blockViewerWrites, async (req, res) 
       return res.status(404).json({ message: 'No employees found to delete' });
     }
 
+    invalidateListCache();
     res.json({
       message: 'Employees and related data deleted successfully',
       deletedCount: result.deletedCount,
@@ -837,6 +983,7 @@ router.post('/:id/increments', authMiddleware, requireAdminOrHod, async (req, re
     }
 
     await employee.save();
+    invalidateListCache();
     res.status(201).json(employee);
   } catch (error) {
     res.status(500).json({ message: 'Error adding increment', error: error.message });
@@ -954,6 +1101,7 @@ router.delete('/:id', authMiddleware, blockViewerWrites, async (req, res) => {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
+    invalidateListCache();
     res.json({ message: 'Employee deleted successfully' });
   } catch (error) {
     console.error('Error deleting employee:', error);
@@ -1484,5 +1632,7 @@ router.delete('/:id/events/:eventId', authMiddleware, blockViewerWrites, async (
     res.status(500).json({ message: 'Error deleting task', error: error.message });
   }
 });
+
+warmListCache();
 
 module.exports = router;
