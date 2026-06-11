@@ -77,6 +77,68 @@ const vacationLabel = (vs) => {
   return vs;
 };
 
+const toDateInputValue = (value) => {
+  if (!value) return "";
+  try {
+    return new Date(value).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+};
+
+const getDateConfigForStatus = (status) => {
+  const configs = {
+    "On Vacation": {
+      label: "Last Working Day",
+      fieldKey: "lastWorkingDay",
+      secondaryLabel: "Travelling Date",
+      secondaryFieldKey: "travellingDate",
+    },
+    "Vacation Pending": {
+      label: "Last Working Day",
+      fieldKey: "lastWorkingDay",
+      secondaryLabel: "Travelling Date",
+      secondaryFieldKey: "travellingDate",
+    },
+    "Vacation Approved": {
+      label: "Return / Entry Date",
+      fieldKey: "firstWorkingDay",
+    },
+  };
+  return configs[status] || null;
+};
+
+const buildVacationDatePrompt = (employeeItem, newStatus) => {
+  const cfg = getDateConfigForStatus(newStatus);
+  if (!cfg) return null;
+  return {
+    employeeItem,
+    newStatus,
+    label: cfg.label,
+    fieldKey: cfg.fieldKey,
+    dateValue: toDateInputValue(employeeItem[cfg.fieldKey]),
+    secondaryLabel: cfg.secondaryLabel,
+    secondaryFieldKey: cfg.secondaryFieldKey,
+    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(employeeItem[cfg.secondaryFieldKey]) : "",
+  };
+};
+
+const formatVacationDates = (record, vs) => {
+  const fmt = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : null);
+  if (vs === "On Vacation" || vs === "Vacation Pending") {
+    const lines = [];
+    const lwd = fmt(record.lastWorkingDay);
+    const travel = fmt(record.travellingDate);
+    if (lwd) lines.push(`LWD: ${lwd}`);
+    if (travel) lines.push(`Travel: ${travel}`);
+    return lines;
+  }
+  if (vs === "Vacation Approved" && record.firstWorkingDay) {
+    return [`Return: ${fmt(record.firstWorkingDay)}`];
+  }
+  return [];
+};
+
 function TeamMembersTable() {
   const { showToast } = useToast();
   const [activeFilter, setActiveFilter] = useState("All");
@@ -98,6 +160,7 @@ function TeamMembersTable() {
   const canEditEmployees = userRole !== "viewer";
   const canDeleteEmployees = userRole === "admin" || userRole === "hod";
   const [datePrompt, setDatePrompt] = useState(null);
+  const [datePromptSaving, setDatePromptSaving] = useState(false);
 
   useEffect(() => {
     fetchEmployees();
@@ -280,38 +343,35 @@ function TeamMembersTable() {
   };
 
   const handleStatusDropdownChange = (employeeItem, newStatus) => {
-    const dateConfig = {
-      "On Vacation": { label: "Last Working Day", fieldKey: "lastWorkingDay" },
-      "Vacation Pending": { label: "Travelling Date", fieldKey: "travellingDate" },
-      "Vacation Approved": { label: "Entered Date", fieldKey: "firstWorkingDay" },
-    };
-    const cfg = dateConfig[newStatus];
-    if (cfg) {
-      setDatePrompt({
-        employeeItem,
-        newStatus,
-        label: cfg.label,
-        fieldKey: cfg.fieldKey,
-        dateValue: ""
-      });
+    const prompt = buildVacationDatePrompt(employeeItem, newStatus);
+    if (prompt) {
+      setDatePrompt(prompt);
     } else {
       handleVacationStatusChange(employeeItem, newStatus);
     }
   };
 
   const handleDatePromptConfirm = async () => {
-    if (!datePrompt) return;
-    const { employeeItem, newStatus, fieldKey, dateValue } = datePrompt;
-    const extraFields = dateValue ? { [fieldKey]: new Date(dateValue).toISOString() } : {};
+    if (!datePrompt || datePromptSaving) return;
+    const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue } = datePrompt;
+    const extraFields = {};
+    if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
+    if (secondaryFieldKey && secondaryDateValue) {
+      extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+    }
+    setDatePromptSaving(true);
     try {
       await handleVacationStatusChange(employeeItem, newStatus, extraFields);
       setDatePrompt(null);
     } catch (err) {
       // handled
+    } finally {
+      setDatePromptSaving(false);
     }
   };
 
   const handleDatePromptCancel = () => {
+    if (datePromptSaving) return;
     setDatePrompt(null);
   };
 
@@ -423,13 +483,7 @@ function TeamMembersTable() {
           if (!isActive) return <Typography.Text type="secondary">—</Typography.Text>;
 
           const vs = record.vacationStatus || "Onsite";
-          const dateFieldMap = {
-            "On Vacation": "lastWorkingDay",
-            "Vacation Pending": "travellingDate",
-            "Vacation Approved": "firstWorkingDay",
-          };
-          const dateField = dateFieldMap[vs];
-          const dateVal = dateField ? record[dateField] : null;
+          const dateLines = formatVacationDates(record, vs);
 
           if (isAdmin) {
             return (
@@ -447,11 +501,11 @@ function TeamMembersTable() {
                     { value: "Vacation Pending", label: "Yet to go" },
                   ]}
                 />
-                {dateVal && (
-                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                    {new Date(dateVal).toLocaleDateString("en-GB")}
+                {dateLines.map((line) => (
+                  <Typography.Text key={line} type="secondary" style={{ fontSize: 11 }}>
+                    {line}
                   </Typography.Text>
-                )}
+                ))}
               </Space>
             );
           }
@@ -461,11 +515,11 @@ function TeamMembersTable() {
               <Tag color={vacationTagColor[vs] || "default"} style={{ borderRadius: 20 }}>
                 {vacationLabel(vs)}
               </Tag>
-              {dateVal && (
-                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                  {new Date(dateVal).toLocaleDateString("en-GB")}
+              {dateLines.map((line) => (
+                <Typography.Text key={line} type="secondary" style={{ fontSize: 11 }}>
+                  {line}
                 </Typography.Text>
-              )}
+              ))}
             </Space>
           );
         },
@@ -726,6 +780,9 @@ function TeamMembersTable() {
                 from { opacity: 0; transform: scale(0.95) translateY(10px); }
                 to { opacity: 1; transform: scale(1) translateY(0); }
               }
+              @keyframes datePromptSpin {
+                to { transform: rotate(360deg); }
+              }
               .premium-input-date:focus {
                 border-color: #6366f1 !important;
                 box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15) !important;
@@ -761,18 +818,21 @@ function TeamMembersTable() {
               {/* Close Button */}
               <button
                 onClick={handleDatePromptCancel}
+                disabled={datePromptSaving}
                 style={{
                   position: "absolute",
                   top: "20px", right: "20px",
                   background: "#f1f5f9", border: "none",
                   width: "32px", height: "32px", borderRadius: "50%",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "18px", color: "#64748b", cursor: "pointer",
+                  fontSize: "18px", color: "#64748b",
+                  cursor: datePromptSaving ? "not-allowed" : "pointer",
+                  opacity: datePromptSaving ? 0.5 : 1,
                   transition: "all 0.2s ease",
                   lineHeight: 1
                 }}
-                onMouseEnter={e => { e.target.style.background = "#e2e8f0"; e.target.style.color = "#0f172a"; }}
-                onMouseLeave={e => { e.target.style.background = "#f1f5f9"; e.target.style.color = "#64748b"; }}
+                onMouseEnter={e => { if (!datePromptSaving) { e.target.style.background = "#e2e8f0"; e.target.style.color = "#0f172a"; } }}
+                onMouseLeave={e => { if (!datePromptSaving) { e.target.style.background = "#f1f5f9"; e.target.style.color = "#64748b"; } }}
               >&times;</button>
 
               {/* Avatar & Header */}
@@ -793,10 +853,10 @@ function TeamMembersTable() {
                   {nameInitials}
                 </div>
                 <h3 style={{ margin: "10px 0 2px", fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
-                  Set {datePrompt.label}
+                  {datePrompt.secondaryFieldKey ? "Set Vacation Dates" : `Set ${datePrompt.label}`}
                 </h3>
                 <p style={{ margin: 0, fontSize: "14px", color: "#64748b", lineHeight: "1.5" }}>
-                  Please select the vacation-related date for <strong style={{ color: "#334155" }}>{datePrompt.employeeItem.employeeName}</strong>.
+                  Please select the vacation-related date{datePrompt.secondaryFieldKey ? "s" : ""} for <strong style={{ color: "#334155" }}>{datePrompt.employeeItem.employeeName}</strong>.
                 </p>
               </div>
 
@@ -842,70 +902,119 @@ function TeamMembersTable() {
               </div>
 
               {/* Date Input Section */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Select {datePrompt.label}
-                </label>
-                <DateInput
-                  value={datePrompt.dateValue}
-                  className="premium-input-date"
-                  onChange={e => setDatePrompt(prev => ({ ...prev, dateValue: e.target.value }))}
-                  style={{
-                    border: "2px solid #e2e8f0",
-                    borderRadius: "12px",
-                    padding: "12px 16px",
-                    fontSize: "15px",
-                    color: "#0f172a",
-                    fontWeight: "600",
-                    outline: "none",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    transition: "all 0.2s ease",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
-                    cursor: "pointer"
-                  }}
-                />
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Select {datePrompt.label}
+                  </label>
+                  <DateInput
+                    value={datePrompt.dateValue}
+                    className="premium-input-date"
+                    onChange={e => setDatePrompt(prev => ({ ...prev, dateValue: e.target.value }))}
+                    style={{
+                      border: "2px solid #e2e8f0",
+                      borderRadius: "12px",
+                      padding: "12px 16px",
+                      fontSize: "15px",
+                      color: "#0f172a",
+                      fontWeight: "600",
+                      outline: "none",
+                      width: "100%",
+                      boxSizing: "border-box",
+                      transition: "all 0.2s ease",
+                      boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+                      cursor: "pointer"
+                    }}
+                  />
+                </div>
+                {datePrompt.secondaryFieldKey && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Select {datePrompt.secondaryLabel}
+                    </label>
+                    <DateInput
+                      value={datePrompt.secondaryDateValue}
+                      className="premium-input-date"
+                      onChange={e => setDatePrompt(prev => ({ ...prev, secondaryDateValue: e.target.value }))}
+                      style={{
+                        border: "2px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "12px 16px",
+                        fontSize: "15px",
+                        color: "#0f172a",
+                        fontWeight: "600",
+                        outline: "none",
+                        width: "100%",
+                        boxSizing: "border-box",
+                        transition: "all 0.2s ease",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+                        cursor: "pointer"
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Footer Buttons */}
               <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px" }}>
                 <button
-                  onClick={handleDatePromptCancel}
-                  style={{
-                    padding: "12px 24px",
-                    borderRadius: "12px",
-                    border: "2px solid #e2e8f0",
-                    background: "#fff",
-                    color: "#64748b",
-                    fontWeight: "700",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease"
-                  }}
-                  onMouseEnter={e => { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; }}
-                  onMouseLeave={e => { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDatePromptConfirm}
-                  style={{
-                    padding: "12px 28px",
-                    borderRadius: "12px",
-                    border: "none",
-                    background: "linear-gradient(135deg, #4f46e5, #6366f1)",
-                    color: "#fff",
-                    fontWeight: "700",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)",
-                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
-                  }}
-                  onMouseEnter={e => { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(79, 70, 229, 0.35)"; }}
-                  onMouseLeave={e => { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(79, 70, 229, 0.25)"; }}
-                >
-                  Confirm
-                </button>
+                onClick={handleDatePromptCancel}
+                disabled={datePromptSaving}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: "12px",
+                  border: "2px solid #e2e8f0",
+                  background: "#fff",
+                  color: "#64748b",
+                  fontWeight: "700",
+                  fontSize: "14px",
+                  cursor: datePromptSaving ? "not-allowed" : "pointer",
+                  opacity: datePromptSaving ? 0.6 : 1,
+                  transition: "all 0.2s ease"
+                }}
+                onMouseEnter={e => { if (!datePromptSaving) { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; } }}
+                onMouseLeave={e => { if (!datePromptSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; } }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDatePromptConfirm}
+                disabled={datePromptSaving}
+                style={{
+                  padding: "12px 28px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: datePromptSaving ? "#94a3b8" : "linear-gradient(135deg, #4f46e5, #6366f1)",
+                  color: "#fff",
+                  fontWeight: "700",
+                  fontSize: "14px",
+                  cursor: datePromptSaving ? "not-allowed" : "pointer",
+                  boxShadow: datePromptSaving ? "none" : "0 4px 12px rgba(79, 70, 229, 0.25)",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  minWidth: "120px"
+                }}
+                onMouseEnter={e => { if (!datePromptSaving) { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(79, 70, 229, 0.35)"; } }}
+                onMouseLeave={e => { if (!datePromptSaving) { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(79, 70, 229, 0.25)"; } }}
+              >
+                {datePromptSaving && (
+                  <span
+                    style={{
+                      width: "14px",
+                      height: "14px",
+                      border: "2px solid rgba(255,255,255,0.35)",
+                      borderTopColor: "#fff",
+                      borderRadius: "50%",
+                      display: "inline-block",
+                      animation: "datePromptSpin 0.7s linear infinite"
+                    }}
+                  />
+                )}
+                {datePromptSaving ? "Saving..." : "Confirm"}
+              </button>
               </div>
             </div>
           </div>

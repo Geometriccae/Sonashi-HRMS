@@ -221,6 +221,7 @@ function Reports() {
         "Role": e.role || "",
         "Office Location": e.office || "",
         "Airfare Eligible": e.airFare ? "Yes" : "No",
+        "Last Working Day": e.lastWorkingDay ? new Date(e.lastWorkingDay).toLocaleDateString('en-GB') : "Not set",
         "Travelling Date": e.travellingDate ? new Date(e.travellingDate).toLocaleDateString('en-GB') : "Not set",
         "First Working Day": e.firstWorkingDay ? new Date(e.firstWorkingDay).toLocaleDateString('en-GB') : "",
         "Passport No": e.passportNo || "",
