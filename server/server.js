@@ -222,6 +222,9 @@ io.on("connection", (socket) => {
 app.set('io', io);
 
 // ====== CORS CONFIG ======
+const compression = require('compression');
+app.use(compression());
+
 app.use(cors({
   origin: (origin, cb) => {
     console.log('[CORS DEBUG] Request from origin:', origin);

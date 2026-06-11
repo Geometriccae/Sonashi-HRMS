@@ -26,6 +26,7 @@ function Reports() {
   const [filterOffice, setFilterOffice] = useState("All");
   const [filterCountry, setFilterCountry] = useState("All");
   const [minExperience, setMinExperience] = useState("All");
+  const [minExpMonths, setMinExpMonths] = useState("All");
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -61,7 +62,6 @@ function Reports() {
           ? data
           : data.employees || data.data || [];
 
-        // Extract unique options — sort first, then prepend "All"
         const depts = ["All", ...[...new Set(empList.map(e => e.department).filter(Boolean))].sort()];
         const roles  = ["All", ...[...new Set(empList.map(e => e.role).filter(Boolean))].sort()];
         const offices = ["All", ...[...new Set(empList.map(e => e.office).filter(Boolean))].sort()];
@@ -78,12 +78,20 @@ function Reports() {
     loadEmployees();
   }, []);
 
+  // Full employee data (includes salaryDetails, increments, etc.)
+  // needed for Salary report and Increment report. Fetched once and cached.
+  const fetchFullEmployees = async () => {
+    const data = await employeeService.getEmployees({ force: true });
+    return Array.isArray(data) ? data : (data.employees || data.data || []);
+  };
+
   const reportTypes = [
     "Leave Report",
     "Airfare Report",
     "Increment report",
     "Document expiry",
-    "Salary report"
+    "Salary report",
+    "Employee Experience"
   ];
   const formats = ["Excel", "PDF"];
 
@@ -94,6 +102,7 @@ function Reports() {
   ];
   const employeeStatusOptions = ["All", "Active", "InActive"];
   const minExperienceOptions = ["All", ...Array.from({ length: 21 }, (_, i) => String(i))];
+  const minExpMonthsOptions = ["All", ...Array.from({ length: 12 }, (_, i) => String(i))];
 
   const clientDropdownOptions = {
     clientType: ["Agent", "Barge Operator", "Barge Owners", "Broker", "CHA", "Consignee", "Freigt Forwarder", "Other", "Ship Owners", "Shipper", "Transporter"],
@@ -127,6 +136,7 @@ function Reports() {
     setFilterOffice("All");
     setFilterCountry("All");
     setMinExperience("All");
+    setMinExpMonths("All");
     setStartDate("");
     setEndDate("");
     setFilterMonth("All");
@@ -135,6 +145,43 @@ function Reports() {
     setPreviewData([]);
     setPreviewHeaders([]);
     setShowPreview(false);
+  };
+
+  // Compute experience in months from Date of Joining
+  const computeExperienceFromDoj = (doj) => {
+    if (!doj) return null;
+    const joinDate = new Date(doj);
+    if (isNaN(joinDate.getTime())) return null;
+    const now = new Date();
+    const years = now.getFullYear() - joinDate.getFullYear();
+    const months = now.getMonth() - joinDate.getMonth();
+    const totalMonths = years * 12 + months - (now.getDate() < joinDate.getDate() ? 1 : 0);
+    return Math.max(0, totalMonths);
+  };
+
+  const formatExperience = (totalMonths) => {
+    if (totalMonths == null) return "N/A";
+    const y = Math.floor(totalMonths / 12);
+    const m = totalMonths % 12;
+    if (y === 0) return `${m} month${m !== 1 ? 's' : ''}`;
+    if (m === 0) return `${y} year${y !== 1 ? 's' : ''}`;
+    return `${y} year${y !== 1 ? 's' : ''} ${m} month${m !== 1 ? 's' : ''}`;
+  };
+
+  // Filter employees by the combined min years + min months experience filter
+  const filterByExperience = (empList) => {
+    const minYears = minExperience !== "All" ? parseFloat(minExperience) : 0;
+    const minMonths = minExpMonths !== "All" ? parseFloat(minExpMonths) : 0;
+    if (minYears === 0 && minMonths === 0 && minExperience === "All" && minExpMonths === "All") return empList;
+
+    const thresholdMonths = minYears * 12 + minMonths;
+
+    return empList.filter(e => {
+      // Prefer computing from DOJ; fall back to totalYearsExperience
+      const fromDoj = computeExperienceFromDoj(e.doj);
+      const expMonths = fromDoj != null ? fromDoj : ((e.totalYearsExperience || 0) * 12);
+      return expMonths >= thresholdMonths;
+    });
   };
 
   const fetchReportData = async (type) => {
@@ -206,10 +253,7 @@ function Reports() {
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "All") {
-        const minYears = parseFloat(minExperience);
-        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
-      }
+      empList = filterByExperience(empList);
       if (hasDateFilter) {
         empList = empList.filter(e => isDateMatch(e.travellingDate));
       }
@@ -230,18 +274,14 @@ function Reports() {
     }
 
     if (type === "Increment report") {
-      let data = await employeeService.getEmployeesList();
-      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+      let empList = await fetchFullEmployees();
 
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "All") {
-        const minYears = parseFloat(minExperience);
-        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
-      }
+      empList = filterByExperience(empList);
 
       let incrementRows = [];
       empList.forEach(e => {
@@ -288,10 +328,7 @@ function Reports() {
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "All") {
-        const minYears = parseFloat(minExperience);
-        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
-      }
+      empList = filterByExperience(empList);
 
       if (hasDateFilter) {
         empList = empList.filter(e => {
@@ -333,18 +370,14 @@ function Reports() {
     }
 
     if (type === "Salary report") {
-      let data = await employeeService.getEmployeesList();
-      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+      let empList = await fetchFullEmployees();
 
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      if (minExperience !== "All") {
-        const minYears = parseFloat(minExperience);
-        if (!isNaN(minYears)) empList = empList.filter(e => (e.totalYearsExperience || 0) >= minYears);
-      }
+      empList = filterByExperience(empList);
 
       return empList.map(e => {
         const sal = e.salaryDetails || {};
@@ -364,6 +397,34 @@ function Reports() {
           "Account Number": sal.accountNumber || "",
           "IBAN": sal.ibanNumber || "",
           "Sort Code": sal.bankSortCode || ""
+        };
+      });
+    }
+
+    if (type === "Employee Experience") {
+      let data = await employeeService.getEmployeesList();
+      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+
+      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
+      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
+      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
+      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
+      empList = filterByExperience(empList);
+
+      return empList.map(e => {
+        const expMonths = computeExperienceFromDoj(e.doj);
+        return {
+          "Employee ID": e.employeeId || "",
+          "Name": e.employeeName || "",
+          "Department": e.department || "",
+          "Role": e.role || "",
+          "Office Location": e.office || "",
+          "Nationality": e.nationality || "",
+          "Status": e.employeeStatus || "",
+          "Date of Joining": e.doj ? new Date(e.doj).toLocaleDateString('en-GB') : "Not set",
+          "Experience": formatExperience(expMonths),
+          "Total Years (Stored)": e.totalYearsExperience != null ? e.totalYearsExperience : "N/A",
         };
       });
     }
@@ -414,6 +475,8 @@ function Reports() {
         await generateDocumentExpiryReport();
       } else if (reportType === "Salary report") {
         await generateSalaryReport();
+      } else if (reportType === "Employee Experience") {
+        await generateEmployeeExperienceReport();
       }
     } catch (err) {
       console.error("Report generation failed:", err);
@@ -470,6 +533,16 @@ function Reports() {
       exportToExcel(exportData, "Salary_Report");
     } else if (format === "PDF") {
       exportToPDF(exportData, "Salary_Report");
+    }
+  };
+
+  const generateEmployeeExperienceReport = async () => {
+    const exportData = await fetchReportData("Employee Experience");
+    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
+    if (format === "Excel") {
+      exportToExcel(exportData, "Employee_Experience_Report");
+    } else if (format === "PDF") {
+      exportToPDF(exportData, "Employee_Experience_Report");
     }
   };
 
@@ -595,6 +668,7 @@ function Reports() {
                       setFilterOffice("All");
                       setFilterCountry("All");
                       setMinExperience("All");
+                      setMinExpMonths("All");
                       setFilterMonth("All");
                       setFilterYear("All");
                     }}
@@ -612,6 +686,7 @@ function Reports() {
                 reportType === "Increment report" ||
                 reportType === "Document expiry" ||
                 reportType === "Salary report" ||
+                reportType === "Employee Experience" ||
                 reportType === "Leave Report") && (
                 <div className={styles.filtersPanel}>
                   {/* Status Filter (Only show for employee reports, not leave report) */}
@@ -673,18 +748,32 @@ function Reports() {
                       </div>
 
                       {reportType !== "Document expiry" && (
-                        <div className={styles["form-row"]}>
-                          <div className={styles["form-label"]}>Min Years of Experience</div>
-                          <div className={styles["form-field"]}>
-                            <select
-                              className={styles["select-field"]}
-                              value={minExperience}
-                              onChange={e => setMinExperience(e.target.value)}
-                            >
-                              {minExperienceOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
+                        <>
+                          <div className={styles["form-row"]}>
+                            <div className={styles["form-label"]}>Min Years of Experience</div>
+                            <div className={styles["form-field"]}>
+                              <select
+                                className={styles["select-field"]}
+                                value={minExperience}
+                                onChange={e => setMinExperience(e.target.value)}
+                              >
+                                {minExperienceOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} year${o !== "1" ? "s" : ""}`}</option>)}
+                              </select>
+                            </div>
                           </div>
-                        </div>
+                          <div className={styles["form-row"]}>
+                            <div className={styles["form-label"]}>Min Months of Experience</div>
+                            <div className={styles["form-field"]}>
+                              <select
+                                className={styles["select-field"]}
+                                value={minExpMonths}
+                                onChange={e => setMinExpMonths(e.target.value)}
+                              >
+                                {minExpMonthsOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} month${o !== "1" ? "s" : ""}`}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        </>
                       )}
         
                     </>
@@ -693,18 +782,32 @@ function Reports() {
               )}
 
               {reportType === "Document expiry" && (
-                <div className={styles["form-row"]}>
-                  <div className={styles["form-label"]}>Min Years of Experience</div>
-                  <div className={styles["form-field"]}>
-                    <select
-                      className={styles["select-field"]}
-                      value={minExperience}
-                      onChange={e => setMinExperience(e.target.value)}
-                    >
-                      {minExperienceOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
+                <>
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Min Years of Experience</div>
+                    <div className={styles["form-field"]}>
+                      <select
+                        className={styles["select-field"]}
+                        value={minExperience}
+                        onChange={e => setMinExperience(e.target.value)}
+                      >
+                        {minExperienceOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} year${o !== "1" ? "s" : ""}`}</option>)}
+                      </select>
+                    </div>
                   </div>
-                </div>
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Min Months of Experience</div>
+                    <div className={styles["form-field"]}>
+                      <select
+                        className={styles["select-field"]}
+                        value={minExpMonths}
+                        onChange={e => setMinExpMonths(e.target.value)}
+                      >
+                        {minExpMonthsOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} month${o !== "1" ? "s" : ""}`}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </>
               )}
 
               <div className={styles.datePeriodPanel}>
