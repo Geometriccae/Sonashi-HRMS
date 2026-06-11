@@ -347,8 +347,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
             }
         }
 
-        // Handle status update (approval/rejection)
-        if (status) {
+        // Handle status update (approval/rejection) — only when status is actually changing.
+        // The edit form always sends the current status; re-sending "Approved" on an already-
+        // approved record must not trigger the approval workflow.
+        if (status && status !== oldRequest.status) {
             const userRole = req.user.role;
             const currentStatus = oldRequest.status;
 

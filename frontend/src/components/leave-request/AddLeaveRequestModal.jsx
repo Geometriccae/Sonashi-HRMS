@@ -84,10 +84,11 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     const fetchDepartmentOptions = async () => {
         try {
-            const dbOptions = await OptionService.getOptions('department');
-            console.log("DB DEPARTMENTS:", dbOptions);
-            const merged = OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, dbOptions);
-            console.log("MERGED DEPARTMENTS:", merged);
+            const [dbOptions, excluded] = await Promise.all([
+                OptionService.getOptions('department'),
+                OptionService.getExcludedDefaults('department'),
+            ]);
+            const merged = OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, dbOptions, excluded);
             setDynamicDepartmentOptions(merged);
         } catch (error) {
             console.error("Error fetching departments:", error);
@@ -107,16 +108,17 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     };
 
     const handleDeleteDepartment = async (option) => {
+        if (!option?.label || option.label === "-Select-") return;
         try {
             const dbOptions = await OptionService.getOptions('department');
-            const toDelete = dbOptions.find(o => o.label === option.label);
+            const toDelete = dbOptions.find((o) => o.label === option.label);
             if (toDelete) {
                 await OptionService.deleteOption('department', toDelete._id);
-                await fetchDepartmentOptions();
-                showToast(`Department "${option.label}" deleted`, "success");
             } else {
-                showToast("Cannot delete default options", "error");
+                await OptionService.excludeDefaultOption('department', option.label);
             }
+            await fetchDepartmentOptions();
+            showToast(`Department "${option.label}" deleted`, "success");
         } catch (err) {
             console.error("Error deleting department:", err);
             showToast("Failed to delete department", "error");
