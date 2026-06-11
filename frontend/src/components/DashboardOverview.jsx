@@ -15,6 +15,52 @@ import {
 import { useNavigate } from "react-router-dom";
 import DateInput from "./DateInput";
 
+const toDateInputValue = (value) => {
+  if (!value) return "";
+  try {
+    return new Date(value).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+};
+
+const getDateConfigForStatus = (status) => {
+  const configs = {
+    "On Vacation": {
+      label: "Last Working Day",
+      fieldKey: "lastWorkingDay",
+      secondaryLabel: "Travelling Date",
+      secondaryFieldKey: "travellingDate",
+    },
+    "Vacation Pending": {
+      label: "Last Working Day",
+      fieldKey: "lastWorkingDay",
+      secondaryLabel: "Travelling Date",
+      secondaryFieldKey: "travellingDate",
+    },
+    "Vacation Approved": {
+      label: "Return / Entry Date",
+      fieldKey: "firstWorkingDay",
+    },
+  };
+  return configs[status] || null;
+};
+
+const buildVacationDatePrompt = (employeeItem, newStatus) => {
+  const cfg = getDateConfigForStatus(newStatus);
+  if (!cfg) return null;
+  return {
+    employeeItem,
+    newStatus,
+    label: cfg.label,
+    fieldKey: cfg.fieldKey,
+    dateValue: toDateInputValue(employeeItem[cfg.fieldKey]),
+    secondaryLabel: cfg.secondaryLabel,
+    secondaryFieldKey: cfg.secondaryFieldKey,
+    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(employeeItem[cfg.secondaryFieldKey]) : "",
+  };
+};
+
 function DashboardOverview() {
   const navigate = useNavigate();
   const [data, setData] = useState({
@@ -39,6 +85,7 @@ function DashboardOverview() {
 
   // Vacation date prompt modal
   const [datePrompt, setDatePrompt] = useState(null);
+  const [datePromptSaving, setDatePromptSaving] = useState(false);
   // datePrompt = { employeeItem, newStatus, label, fieldKey, dateValue }
 
   useEffect(() => {
@@ -65,15 +112,6 @@ function DashboardOverview() {
 
         const next6Months = new Date(today);
         next6Months.setMonth(today.getMonth() + 6);
-
-        // Map of empId -> vacationStatus for deduplication
-        const empAttendanceMap = {};
-        empList.forEach(emp => {
-          const vs = emp.vacationStatus || "Onsite";
-          if (vs !== "Onsite") {
-            empAttendanceMap[emp._id] = vs;
-          }
-        });
 
         // 1. Employee Stats
         let active = 0;
@@ -111,32 +149,11 @@ function DashboardOverview() {
           }
         });
 
-        // 2. Vacation Stats (leave-request-based, skip employees with manual attendance)
+        // Vacation counts are based solely on employee.vacationStatus — the
+        // single source of truth set via Team Management / Dashboard dropdowns.
         let onVacation = attOnVacation;
         let upcomingVacation = attUpcoming;
         let vacationReturn = attVacReturn;
-
-        const lastMonth = new Date(today);
-        lastMonth.setMonth(today.getMonth() - 1);
-
-        leaveList.forEach(req => {
-          if (req.status === "Approved") {
-            const empId = req.employee?._id || req.employee;
-            // Skip if employee has a manual vacation status override
-            if (empAttendanceMap[empId]) return;
-
-            const start = new Date(req.startDate);
-            const end = new Date(req.endDate);
-
-            if (today >= start && today <= end) {
-              onVacation++;
-            } else if (start > today && start <= next60Days) {
-              upcomingVacation++;
-            } else if (end >= lastMonth && end < today) {
-              vacationReturn++;
-            }
-          }
-        });
 
         if (isMounted) {
           setData({ employees: empList, leaveRequests: leaveList });
@@ -232,23 +249,11 @@ function DashboardOverview() {
 
   // Called when user picks a new status from the dropdown — show date modal first
   const handleStatusDropdownChange = (employeeItem, newStatus) => {
-    const dateConfig = {
-      "On Vacation": { label: "Last Working Day", fieldKey: "lastWorkingDay" },
-      "Vacation Pending": { label: "Travelling Date", fieldKey: "travellingDate" },
-      "Vacation Approved": { label: "Entered Date", fieldKey: "firstWorkingDay" },
-    };
-    const cfg = dateConfig[newStatus];
-    if (cfg) {
+    const prompt = buildVacationDatePrompt(employeeItem, newStatus);
+    if (prompt) {
       const categoryToReopen = selectedCategory;
-      setSelectedCategory(null); // Close the table details modal first
-      setDatePrompt({
-        employeeItem,
-        newStatus,
-        label: cfg.label,
-        fieldKey: cfg.fieldKey,
-        dateValue: "",
-        categoryToReopen
-      });
+      setSelectedCategory(null);
+      setDatePrompt({ ...prompt, categoryToReopen });
     } else {
       handleVacationStatusChange(employeeItem, newStatus);
     }
@@ -256,9 +261,14 @@ function DashboardOverview() {
 
   // Confirm date modal → save both status + date, then reopen table
   const handleDatePromptConfirm = async () => {
-    if (!datePrompt) return;
-    const { employeeItem, newStatus, fieldKey, dateValue, categoryToReopen } = datePrompt;
-    const extraFields = dateValue ? { [fieldKey]: new Date(dateValue).toISOString() } : {};
+    if (!datePrompt || datePromptSaving) return;
+    const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, categoryToReopen } = datePrompt;
+    const extraFields = {};
+    if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
+    if (secondaryFieldKey && secondaryDateValue) {
+      extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+    }
+    setDatePromptSaving(true);
     try {
       const updatedEmployees = await handleVacationStatusChange(employeeItem, newStatus, extraFields);
       setDatePrompt(null);
@@ -267,12 +277,14 @@ function DashboardOverview() {
       }
     } catch (err) {
       // handled in handleVacationStatusChange
+    } finally {
+      setDatePromptSaving(false);
     }
   };
 
   // Cancel date modal → reopen table details modal without changes
   const handleDatePromptCancel = () => {
-    if (!datePrompt) return;
+    if (!datePrompt || datePromptSaving) return;
     const { categoryToReopen } = datePrompt;
     setDatePrompt(null);
     if (categoryToReopen) {
@@ -307,80 +319,15 @@ function DashboardOverview() {
         list = empSource.filter(e => String(e.employeeStatus || "Active").toLowerCase() === "inactive");
         break;
       case "On vacation": {
-        // Employees with vacationStatus = "On Vacation"
-        const attEmps = empSource
-          .filter(e => e.vacationStatus === "On Vacation")
-          .map(e => ({ ...e, _type: "employee" }));
-        const attEmpIds = new Set(attEmps.map(e => e._id));
-        // Leave-request-based (exclude already counted)
-        const leaveEmps = data.leaveRequests
-          .filter(req => {
-            if (req.status !== "Approved") return false;
-            const empId = req.employee?._id || req.employee;
-            if (attEmpIds.has(empId)) return false;
-            const s = new Date(req.startDate);
-            const e = new Date(req.endDate);
-            return today >= s && today <= e;
-          })
-          .map(req => {
-            const empName = req.employeeName || req.employee?.employeeName || "Unknown";
-            const linkedEmp = empSource.find(e =>
-              (e._id === (req.employee?._id || req.employee)) ||
-              (e.employeeName === empName)
-            );
-            return { ...req, employeeName: empName, employeeId: linkedEmp?.employeeId || req.employeeId || "-" };
-          });
-        list = [...attEmps, ...leaveEmps];
+        list = empSource.filter(e => e.vacationStatus === "On Vacation");
         break;
       }
       case "Yet to go": {
-        const attEmps = empSource
-          .filter(e => e.vacationStatus === "Vacation Pending")
-          .map(e => ({ ...e, _type: "employee" }));
-        const attEmpIds = new Set(attEmps.map(e => e._id));
-        const leaveEmps = data.leaveRequests
-          .filter(req => {
-            if (req.status !== "Approved") return false;
-            const empId = req.employee?._id || req.employee;
-            if (attEmpIds.has(empId)) return false;
-            const s = new Date(req.startDate);
-            return s > today && s <= next60Days;
-          })
-          .map(req => {
-            const empName = req.employeeName || req.employee?.employeeName || "Unknown";
-            const linkedEmp = empSource.find(e =>
-              (e._id === (req.employee?._id || req.employee)) ||
-              (e.employeeName === empName)
-            );
-            return { ...req, employeeName: empName, employeeId: linkedEmp?.employeeId || req.employeeId || "-" };
-          });
-        list = [...attEmps, ...leaveEmps];
+        list = empSource.filter(e => e.vacationStatus === "Vacation Pending");
         break;
       }
       case "Returned back from vacation": {
-        const attEmps = empSource
-          .filter(e => e.vacationStatus === "Vacation Approved")
-          .map(e => ({ ...e, _type: "employee" }));
-        const attEmpIds = new Set(attEmps.map(e => e._id));
-        const lastM = new Date(today);
-        lastM.setMonth(today.getMonth() - 1);
-        const leaveEmps = data.leaveRequests
-          .filter(req => {
-            if (req.status !== "Approved") return false;
-            const empId = req.employee?._id || req.employee;
-            if (attEmpIds.has(empId)) return false;
-            const e = new Date(req.endDate);
-            return e >= lastM && e < today;
-          })
-          .map(req => {
-            const empName = req.employeeName || req.employee?.employeeName || "Unknown";
-            const linkedEmp = empSource.find(e =>
-              (e._id === (req.employee?._id || req.employee)) ||
-              (e.employeeName === empName)
-            );
-            return { ...req, employeeName: empName, employeeId: linkedEmp?.employeeId || req.employeeId || "-" };
-          });
-        list = [...attEmps, ...leaveEmps];
+        list = empSource.filter(e => e.vacationStatus === "Vacation Approved");
         break;
       }
       case "Visa Expiry":
@@ -484,15 +431,7 @@ function DashboardOverview() {
                             <th>Department</th>
                             <th>{selectedCategory === "Visa Expiry" ? "Visa Expiry" : selectedCategory === "Passport Expiry" ? "Passport Expiry" : "Role"}</th>
                             <th>Vacation Status</th>
-                            <th>
-                              {(() => {
-                                const vs = (filteredList[0] && filteredList[0].vacationStatus) || "";
-                                if (vs === "On Vacation") return "Last Working Day";
-                                if (vs === "Vacation Pending") return "Travelling Date";
-                                if (vs === "Vacation Approved") return "Entered Date";
-                                return "Date";
-                              })()}
-                            </th>
+                            <th>Last Working Day / Travelling Date</th>
                           </>
                         )}
                       </tr>
@@ -632,18 +571,28 @@ function DashboardOverview() {
                               <td onClick={e => e.stopPropagation()}>
                                 {(() => {
                                   const vs = item.vacationStatus || "Onsite";
-                                  const dateFieldMap = {
-                                    "On Vacation": { key: "lastWorkingDay" },
-                                    "Vacation Pending": { key: "travellingDate" },
-                                    "Vacation Approved": { key: "firstWorkingDay" },
-                                  };
-                                  const cfg = dateFieldMap[vs];
-                                  if (!cfg || !item[cfg.key]) return <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>;
-                                  return (
-                                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#1e293b" }}>
-                                      {new Date(item[cfg.key]).toLocaleDateString('en-GB')}
-                                    </span>
-                                  );
+                                  const fmt = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : null);
+                                  if (vs === "On Vacation" || vs === "Vacation Pending") {
+                                    const lines = [];
+                                    if (item.lastWorkingDay) lines.push(`LWD: ${fmt(item.lastWorkingDay)}`);
+                                    if (item.travellingDate) lines.push(`Travel: ${fmt(item.travellingDate)}`);
+                                    if (!lines.length) return <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>;
+                                    return (
+                                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                        {lines.map((line) => (
+                                          <span key={line} style={{ fontSize: "12px", fontWeight: "600", color: "#1e293b" }}>{line}</span>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  if (vs === "Vacation Approved" && item.firstWorkingDay) {
+                                    return (
+                                      <span style={{ fontSize: "13px", fontWeight: "600", color: "#1e293b" }}>
+                                        {fmt(item.firstWorkingDay)}
+                                      </span>
+                                    );
+                                  }
+                                  return <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>;
                                 })()}
                               </td>
                             </>
@@ -709,6 +658,9 @@ function DashboardOverview() {
               @keyframes datePromptFadeIn {
                 from { opacity: 0; transform: scale(0.95) translateY(10px); }
                 to { opacity: 1; transform: scale(1) translateY(0); }
+              }
+              @keyframes datePromptSpin {
+                to { transform: rotate(360deg); }
               }
               .premium-input-date:focus {
                 border-color: #6366f1 !important;
@@ -776,10 +728,10 @@ function DashboardOverview() {
                   {nameInitials}
                 </div>
                 <h3 style={{ margin: "10px 0 2px", fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
-                  Set {datePrompt.label}
+                  {datePrompt.secondaryFieldKey ? "Set Vacation Dates" : `Set ${datePrompt.label}`}
                 </h3>
                 <p style={{ margin: 0, fontSize: "14px", color: "#64748b", lineHeight: "1.5" }}>
-                  Please select the vacation-related date for <strong style={{ color: "#334155" }}>{datePrompt.employeeItem.employeeName}</strong>.
+                  Please select the vacation-related date{datePrompt.secondaryFieldKey ? "s" : ""} for <strong style={{ color: "#334155" }}>{datePrompt.employeeItem.employeeName}</strong>.
                 </p>
               </div>
 
@@ -825,35 +777,64 @@ function DashboardOverview() {
               </div>
 
               {/* Date Input Section */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Select {datePrompt.label}
-                </label>
-                <DateInput
-                  value={datePrompt.dateValue}
-                  className="premium-input-date"
-                  onChange={e => setDatePrompt(prev => ({ ...prev, dateValue: e.target.value }))}
-                  style={{
-                    border: "2px solid #e2e8f0",
-                    borderRadius: "12px",
-                    padding: "12px 16px",
-                    fontSize: "15px",
-                    color: "#0f172a",
-                    fontWeight: "600",
-                    outline: "none",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    transition: "all 0.2s ease",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
-                    cursor: "pointer"
-                  }}
-                />
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Select {datePrompt.label}
+                  </label>
+                  <DateInput
+                    value={datePrompt.dateValue}
+                    className="premium-input-date"
+                    onChange={e => setDatePrompt(prev => ({ ...prev, dateValue: e.target.value }))}
+                    style={{
+                      border: "2px solid #e2e8f0",
+                      borderRadius: "12px",
+                      padding: "12px 16px",
+                      fontSize: "15px",
+                      color: "#0f172a",
+                      fontWeight: "600",
+                      outline: "none",
+                      width: "100%",
+                      boxSizing: "border-box",
+                      transition: "all 0.2s ease",
+                      boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+                      cursor: "pointer"
+                    }}
+                  />
+                </div>
+                {datePrompt.secondaryFieldKey && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Select {datePrompt.secondaryLabel}
+                    </label>
+                    <DateInput
+                      value={datePrompt.secondaryDateValue}
+                      className="premium-input-date"
+                      onChange={e => setDatePrompt(prev => ({ ...prev, secondaryDateValue: e.target.value }))}
+                      style={{
+                        border: "2px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "12px 16px",
+                        fontSize: "15px",
+                        color: "#0f172a",
+                        fontWeight: "600",
+                        outline: "none",
+                        width: "100%",
+                        boxSizing: "border-box",
+                        transition: "all 0.2s ease",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+                        cursor: "pointer"
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Footer Buttons */}
               <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px" }}>
                 <button
                   onClick={handleDatePromptCancel}
+                  disabled={datePromptSaving}
                   style={{
                     padding: "12px 24px",
                     borderRadius: "12px",
@@ -862,32 +843,52 @@ function DashboardOverview() {
                     color: "#64748b",
                     fontWeight: "700",
                     fontSize: "14px",
-                    cursor: "pointer",
+                    cursor: datePromptSaving ? "not-allowed" : "pointer",
+                    opacity: datePromptSaving ? 0.6 : 1,
                     transition: "all 0.2s ease"
                   }}
-                  onMouseEnter={e => { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; }}
-                  onMouseLeave={e => { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; }}
+                  onMouseEnter={e => { if (!datePromptSaving) { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; } }}
+                  onMouseLeave={e => { if (!datePromptSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; } }}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDatePromptConfirm}
+                  disabled={datePromptSaving}
                   style={{
                     padding: "12px 28px",
                     borderRadius: "12px",
                     border: "none",
-                    background: "linear-gradient(135deg, #4f46e5, #6366f1)",
+                    background: datePromptSaving ? "#94a3b8" : "linear-gradient(135deg, #4f46e5, #6366f1)",
                     color: "#fff",
                     fontWeight: "700",
                     fontSize: "14px",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)",
-                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+                    cursor: datePromptSaving ? "not-allowed" : "pointer",
+                    boxShadow: datePromptSaving ? "none" : "0 4px 12px rgba(79, 70, 229, 0.25)",
+                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    minWidth: "120px"
                   }}
-                  onMouseEnter={e => { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(79, 70, 229, 0.35)"; }}
-                  onMouseLeave={e => { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(79, 70, 229, 0.25)"; }}
+                  onMouseEnter={e => { if (!datePromptSaving) { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(79, 70, 229, 0.35)"; } }}
+                  onMouseLeave={e => { if (!datePromptSaving) { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(79, 70, 229, 0.25)"; } }}
                 >
-                  Confirm
+                  {datePromptSaving && (
+                    <span
+                      style={{
+                        width: "14px",
+                        height: "14px",
+                        border: "2px solid rgba(255,255,255,0.35)",
+                        borderTopColor: "#fff",
+                        borderRadius: "50%",
+                        display: "inline-block",
+                        animation: "datePromptSpin 0.7s linear infinite"
+                      }}
+                    />
+                  )}
+                  {datePromptSaving ? "Saving..." : "Confirm"}
                 </button>
               </div>
             </div>

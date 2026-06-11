@@ -222,6 +222,7 @@ function AnnualVacations() {
   const [filterOpen, setFilterOpen]     = useState(false);
 
   const [editModal, setEditModal]       = useState(null);
+  const [editModalSaving, setEditModalSaving] = useState(false);
   const [toast, setToast]               = useState(null);
 
   const showToast = (msg, type = "success") => {
@@ -272,34 +273,24 @@ function AnnualVacations() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // ─── Compute Counts (no filters applied to counts) ──────────────────────
-  const computeCounts = (empList, leaveList) => {
-    const today     = new Date(); today.setHours(0,0,0,0);
-    const next60    = new Date(today); next60.setDate(today.getDate() + 60);
-    const lastMonth = new Date(today); lastMonth.setMonth(today.getMonth() - 1);
-    let onVacation = empList.filter(e => e.vacationStatus === "On Vacation").length;
-    let yetToGo    = empList.filter(e => e.vacationStatus === "Vacation Pending").length;
-    let returned   = empList.filter(e => e.vacationStatus === "Vacation Approved").length;
-    leaveList.forEach(req => {
-      if (req.status !== "Approved") return;
-      const linked = findLinkedEmployee(req, empList);
-      if (linked && linked.vacationStatus && linked.vacationStatus !== "Onsite") return;
-      const s = new Date(req.startDate); const e = new Date(req.endDate);
-      if (today >= s && today <= e) onVacation++;
-      else if (s > today && s <= next60) yetToGo++;
-      else if (e >= lastMonth && e < today) returned++;
-    });
+  // Only the employee's vacationStatus field is authoritative.
+  // Leave-request date ranges are NOT used to inflate counts — the status
+  // dropdown on Team Management / Dashboard is the single source of truth.
+  const computeCounts = (empList, _leaveList) => {
+    const onVacation = empList.filter(e => e.vacationStatus === "On Vacation").length;
+    const yetToGo    = empList.filter(e => e.vacationStatus === "Vacation Pending").length;
+    const returned   = empList.filter(e => e.vacationStatus === "Vacation Approved").length;
     setCounts({ onVacation, yetToGo, returned });
   };
 
   // ─── Build Tab List (category-only, NO user filters here) ───────────────
+  // Only employees whose vacationStatus matches the tab are shown.
+  // We enrich each row with leave-request dates when available.
   const buildTabList = useCallback((tabKey, empList, leaveList) => {
-    const today     = new Date(); today.setHours(0,0,0,0);
-    const next60    = new Date(today); next60.setDate(today.getDate() + 60);
-    const lastMonth = new Date(today); lastMonth.setMonth(today.getMonth() - 1);
     const statusMap = { onVacation: "On Vacation", yetToGo: "Vacation Pending", returned: "Vacation Approved" };
     const targetStatus = statusMap[tabKey];
 
-    const attEmps = empList
+    return empList
       .filter(e => e.vacationStatus === targetStatus)
       .map(e => {
         const leave = leaveList.find((req) => {
@@ -315,22 +306,6 @@ function AnnualVacations() {
           endDate: leave?.endDate || e.endDate || null,
         };
       });
-    const attEmpIds = new Set(attEmps.map(e => String(e._id)));
-
-    const leaveEmps = leaveList
-      .filter(req => {
-        if (req.status !== "Approved") return false;
-        const linked = findLinkedEmployee(req, empList);
-        if (linked && attEmpIds.has(String(linked._id))) return false;
-        const s = new Date(req.startDate); const e = new Date(req.endDate);
-        if (tabKey === "onVacation") return today >= s && today <= e;
-        if (tabKey === "yetToGo")   return s > today && s <= next60;
-        if (tabKey === "returned")  return e >= lastMonth && e < today;
-        return false;
-      })
-      .map(req => mapLeaveRow(req, empList, targetStatus));
-
-    return [...attEmps, ...leaveEmps];
   }, []);
 
   // ─── Card Click ──────────────────────────────────────────────────────────
@@ -484,13 +459,16 @@ function AnnualVacations() {
   };
 
   const handleEditDateConfirm = async () => {
-    if (!editModal) return;
+    if (!editModal || editModalSaving) return;
     const { item, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue } = editModal;
     const extra = {};
-    if (dateValue) extra[fieldKey] = new Date(dateValue).toISOString();
-    if (secondaryFieldKey && secondaryDateValue) {
-      extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+    if (newStatus !== "Onsite") {
+      if (dateValue) extra[fieldKey] = new Date(dateValue).toISOString();
+      if (secondaryFieldKey && secondaryDateValue) {
+        extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+      }
     }
+    setEditModalSaving(true);
     try {
       const empId = getEmployeeIdFromItem(item);
       if (empId) {
@@ -504,7 +482,11 @@ function AnnualVacations() {
       setEmployees(empList); setLeaveRequests(leaveList);
       computeCounts(empList, leaveList);
       setTabList(buildTabList(activeTab, empList, leaveList));
-    } catch { showToast("Failed to update status.", "error"); }
+    } catch {
+      showToast("Failed to update status.", "error");
+    } finally {
+      setEditModalSaving(false);
+    }
   };
 
   const getTabConfig = (tabKey) => VACATION_TABS.find(t => t.key === tabKey);
@@ -838,27 +820,21 @@ function AnnualVacations() {
               {editModal.mode === "date" ? `Update ${editModal.label}` : "Change Vacation Status"}
             </h3>
             <p className={styles.modalSub}>for <strong>{editModal.item.employeeName||editModal.item.name}</strong></p>
-            <div className={styles.modalStatusRow}>
-              <span className={styles.modalStatusLabel}>Status:</span>
-              <StatusBadge status={editModal.newStatus} />
+            <div className={styles.modalField}>
+              <label className={styles.modalLabel}>Vacation Status</label>
+              <select className={styles.modalSelect} value={editModal.newStatus}
+                onChange={e => {
+                  const ns = e.target.value;
+                  setEditModal(prev => ({
+                    ...buildEditModalState(prev.item, ns, prev.mode),
+                  }));
+                }}>
+                <option value="Onsite">Onsite</option>
+                <option value="On Vacation">On Vacation</option>
+                <option value="Vacation Pending">Yet to Go</option>
+                <option value="Vacation Approved">Returned Back</option>
+              </select>
             </div>
-            {editModal.mode === "status" && (
-              <div className={styles.modalField}>
-                <label className={styles.modalLabel}>New Status</label>
-                <select className={styles.modalSelect} value={editModal.newStatus}
-                  onChange={e => {
-                    const ns = e.target.value;
-                    setEditModal(prev => ({
-                      ...buildEditModalState(prev.item, ns, "status"),
-                    }));
-                  }}>
-                  <option value="Onsite">Onsite</option>
-                  <option value="On Vacation">On Vacation</option>
-                  <option value="Vacation Pending">Yet to Go</option>
-                  <option value="Vacation Approved">Returned Back</option>
-                </select>
-              </div>
-            )}
             {editModal.newStatus !== "Onsite" && (
               <>
                 <div className={styles.modalField}>
@@ -876,8 +852,10 @@ function AnnualVacations() {
               </>
             )}
             <div className={styles.modalFooter}>
-              <button className={styles.modalCancelBtn} onClick={() => setEditModal(null)}>Cancel</button>
-              <button className={styles.modalSaveBtn} onClick={handleEditDateConfirm}>Save Changes</button>
+              <button className={styles.modalCancelBtn} onClick={() => setEditModal(null)} disabled={editModalSaving}>Cancel</button>
+              <button className={styles.modalSaveBtn} onClick={handleEditDateConfirm} disabled={editModalSaving}>
+                {editModalSaving ? "Saving..." : "Save Changes"}
+              </button>
             </div>
           </div>
         </div>
