@@ -19,6 +19,102 @@ const fmt = (d) => {
   try { return new Date(d).toLocaleDateString("en-GB"); } catch { return "—"; }
 };
 
+const APPROVED_LEAVE_STATUSES = ["Approved", "HOD Approved"];
+
+const computeExperienceYears = (doj, totalYearsExperience) => {
+  if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
+    return Number(totalYearsExperience);
+  }
+  if (!doj) return null;
+  const joinDate = new Date(doj);
+  if (Number.isNaN(joinDate.getTime())) return null;
+  const now = new Date();
+  let years = now.getFullYear() - joinDate.getFullYear();
+  const monthDiff = now.getMonth() - joinDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < joinDate.getDate())) {
+    years -= 1;
+  }
+  return Math.max(0, years);
+};
+
+const leaveMatchesEmployee = (req, emp, empList) => {
+  const linked = findLinkedEmployee(req, empList);
+  if (linked && String(linked._id) === String(emp._id)) return true;
+
+  const userEmpId = req.employee?.employeeId;
+  if (userEmpId && String(userEmpId) === String(emp._id)) return true;
+
+  const reqEmail = String(req.employee?.emailId || "").trim().toLowerCase();
+  const empEmail = String(emp.emailId || "").trim().toLowerCase();
+  if (reqEmail && empEmail && reqEmail === empEmail) return true;
+
+  const reqName = normalizeName(req.employeeName || req.employee?.username);
+  const empName = normalizeName(emp.employeeName);
+  return Boolean(reqName && empName && reqName === empName);
+};
+
+const findLeaveForEmployee = (emp, leaveList, empList, tabKey) => {
+  const candidates = leaveList.filter(
+    (req) => APPROVED_LEAVE_STATUSES.includes(req.status) && leaveMatchesEmployee(req, emp, empList)
+  );
+  if (candidates.length === 0) return null;
+
+  const vacationLeaves = candidates.filter((req) => req.leaveType === "Vacation");
+  const pool = vacationLeaves.length > 0 ? vacationLeaves : candidates;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const toDay = (value) => {
+    if (!value) return null;
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return null;
+    dt.setHours(0, 0, 0, 0);
+    return dt;
+  };
+
+  if (tabKey === "onVacation") {
+    const active = pool.find((req) => {
+      const start = toDay(req.startDate);
+      const end = toDay(req.endDate);
+      return start && end && start <= today && end >= today;
+    });
+    if (active) return active;
+
+    const open = pool
+      .filter((req) => {
+        const end = toDay(req.endDate);
+        return end && end >= today;
+      })
+      .sort((a, b) => toDay(a.endDate) - toDay(b.endDate));
+    if (open.length > 0) return open[0];
+  }
+
+  if (tabKey === "yetToGo") {
+    const upcoming = pool
+      .filter((req) => {
+        const start = toDay(req.startDate);
+        return start && start >= today;
+      })
+      .sort((a, b) => toDay(a.startDate) - toDay(b.startDate));
+    if (upcoming.length > 0) return upcoming[0];
+  }
+
+  if (tabKey === "returned") {
+    const past = pool
+      .filter((req) => {
+        const end = toDay(req.endDate);
+        return end && end < today;
+      })
+      .sort((a, b) => toDay(b.endDate) - toDay(a.endDate));
+    if (past.length > 0) return past[0];
+  }
+
+  return pool.sort(
+    (a, b) => new Date(b.appliedOn || b.createdAt || 0) - new Date(a.appliedOn || a.createdAt || 0)
+  )[0];
+};
+
 const VACATION_TABS = [
   { key: "onVacation", label: "On Vacation",  icon: <MdBeachAccess />,   color: "#3b82f6", bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", statusVal: "On Vacation",      subLabel: "Currently away",          description: "Employees currently on vacation" },
   { key: "yetToGo",   label: "Yet to Go",     icon: <MdFlightTakeoff />, color: "#8b5cf6", bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", statusVal: "Vacation Pending",  subLabel: "Upcoming (next 60 days)", description: "Employees with approved leave starting in the next 60 days" },
@@ -293,17 +389,15 @@ function AnnualVacations() {
     return empList
       .filter(e => e.vacationStatus === targetStatus)
       .map(e => {
-        const leave = leaveList.find((req) => {
-          if (req.status !== "Approved") return false;
-          const linked = findLinkedEmployee(req, empList);
-          return linked && String(linked._id) === String(e._id);
-        });
+        const leave = findLeaveForEmployee(e, leaveList, empList, tabKey);
         return {
           ...e,
           _source: "employee",
           linkedEmployeeId: e._id,
-          startDate: leave?.startDate || e.startDate || null,
-          endDate: leave?.endDate || e.endDate || null,
+          linkedLeaveId: leave?._id || null,
+          startDate: leave?.startDate || null,
+          endDate: leave?.endDate || null,
+          experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
         };
       });
   }, []);
@@ -368,7 +462,7 @@ function AnnualVacations() {
       }
 
       // ── Years of Experience Range ──
-      const exp = item.totalYearsExperience;
+      const exp = item.experienceYears ?? computeExperienceYears(item.doj, item.totalYearsExperience);
       if (filters.expMin !== "" && filters.expMin !== null) {
         if (exp == null || exp < Number(filters.expMin)) return false;
       }
@@ -441,8 +535,8 @@ function AnnualVacations() {
   const doMarkReturned = async (item) => {
     const today = new Date(); today.setHours(0,0,0,0);
     try {
-      if (item._source === "leave" || item.startDate) {
-        await leaveRequestService.updateLeaveRequest(item._id, { endDate:today.toISOString(), status:"Approved" });
+      if (item.linkedLeaveId) {
+        await leaveRequestService.updateLeaveRequest(item.linkedLeaveId, { endDate:today.toISOString(), status:"Approved" });
         const empId = getEmployeeIdFromItem(item);
         if (empId) await employeeService.updateEmployee(empId, { vacationStatus:"Vacation Approved", firstWorkingDay:today.toISOString() });
       } else {
@@ -715,8 +809,8 @@ function AnnualVacations() {
                               <th>Country</th>
                               <th>DOJ</th>
                               <th>Exp (yrs)</th>
-                              {activeTab === "onVacation" && <><th>Start Date</th><th>End Date</th><th>Travelling Date</th><th>Last Working Day</th></>}
-                              {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Day</th></>}
+                              {activeTab === "onVacation" && <><th>Leave End Date</th><th>Travelling Date</th><th>Last Working Day</th></>}
+                              {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th></>}
                               {activeTab === "returned"  && <><th>Return Date</th><th>Leave Start</th><th>Leave End</th></>}
                               <th>Status</th>
                               {isAdmin && <th>Actions</th>}
@@ -726,6 +820,7 @@ function AnnualVacations() {
                             {filteredList.map((item, idx) => {
                               const empId = item._id || item.id;
                               const vs    = item.vacationStatus || (activeTab === "onVacation" ? "On Vacation" : activeTab === "yetToGo" ? "Vacation Pending" : "Vacation Approved");
+                              const expYears = item.experienceYears ?? computeExperienceYears(item.doj, item.totalYearsExperience);
                               return (
                                 <tr key={item._source === "leave" ? `leave-${item._id}` : (empId || idx)} className={styles.tableRow}
                                   onClick={() => { const navId = getNavEmployeeId(item); if (navId) navigate(`/teammanagement_salesleads/${navId}`); }}>
@@ -748,12 +843,12 @@ function AnnualVacations() {
                                   <td>{item.nationality||"—"}</td>
                                   <td>{fmt(item.doj)}</td>
                                   <td className={styles.tdCenter}>
-                                    {item.totalYearsExperience != null
-                                      ? <span className={styles.expBadge}>{item.totalYearsExperience} yrs</span>
+                                    {expYears != null
+                                      ? <span className={styles.expBadge}>{expYears} yrs</span>
                                       : "—"}
                                   </td>
 
-                                  {activeTab === "onVacation" && <><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
+                                  {activeTab === "onVacation" && <><td>{fmt(item.endDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
                                   {activeTab === "yetToGo"   && <><td>{displayLastWorkingDay(item)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.endDate)}</td></>}
                                   {activeTab === "returned"  && <><td>{fmt(item.firstWorkingDay)}</td><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td></>}
 

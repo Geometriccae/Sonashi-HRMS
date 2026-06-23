@@ -875,7 +875,7 @@ function Reports() {
                       </tr>
                     </thead>
                     <tbody>
-                      {previewData.slice(0, 15).map((row, idx) => (
+                      {previewData.map((row, idx) => (
                         <tr key={idx}>
                           {previewHeaders.map(h => <td key={h}>{row[h] !== null && row[h] !== undefined ? String(row[h]) : ""}</td>)}
                         </tr>
@@ -883,9 +883,9 @@ function Reports() {
                     </tbody>
                   </table>
                 </div>
-                {previewData.length > 15 && (
+                {previewData.length > 0 && (
                   <div className={styles.previewNote}>
-                    * Showing first 15 records in preview. Generate Excel/PDF to download all {previewData.length} records.
+                    Scroll inside the table to view all records. Use Generate to download the full report as Excel or PDF.
                   </div>
                 )}
               </div>
