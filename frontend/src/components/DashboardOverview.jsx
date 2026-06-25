@@ -40,7 +40,9 @@ const getDateConfigForStatus = (status) => {
     },
     "Vacation Approved": {
       label: "Return / Entry Date",
-      fieldKey: "firstWorkingDay",
+      fieldKey: "returnDate",
+      secondaryLabel: "First Working Day",
+      secondaryFieldKey: "firstWorkingDay",
     },
   };
   return configs[status] || null;
@@ -585,11 +587,17 @@ function DashboardOverview() {
                                       </div>
                                     );
                                   }
-                                  if (vs === "Vacation Approved" && item.firstWorkingDay) {
+                                  if (vs === "Vacation Approved") {
+                                    const lines = [];
+                                    if (item.returnDate) lines.push(`Return: ${fmt(item.returnDate)}`);
+                                    if (item.firstWorkingDay) lines.push(`First Work Day: ${fmt(item.firstWorkingDay)}`);
+                                    if (!lines.length) return <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>;
                                     return (
-                                      <span style={{ fontSize: "13px", fontWeight: "600", color: "#1e293b" }}>
-                                        {fmt(item.firstWorkingDay)}
-                                      </span>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                        {lines.map((line) => (
+                                          <span key={line} style={{ fontSize: "12px", fontWeight: "600", color: "#1e293b" }}>{line}</span>
+                                        ))}
+                                      </div>
                                     );
                                   }
                                   return <span style={{ color: "#94a3b8", fontSize: "12px" }}>—</span>;

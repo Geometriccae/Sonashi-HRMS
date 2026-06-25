@@ -283,7 +283,7 @@ const EMPLOYEE_LIST_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId', 'mobile',
   'role', 'department', 'attendance', 'doj', 'totalYearsExperience', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
-  'travellingDate', 'firstWorkingDay', 'lastWorkingDay', 'reportingManager', 'assignedProjects',
+  'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay', 'reportingManager', 'assignedProjects',
   'nationality', 'office', 'passportNo', 'emiratesId', 'createdAt', 'profilePhoto',
 ].join(' ');
 

@@ -102,7 +102,9 @@ const getDateConfigForStatus = (status) => {
     },
     "Vacation Approved": {
       label: "Return / Entry Date",
-      fieldKey: "firstWorkingDay",
+      fieldKey: "returnDate",
+      secondaryLabel: "First Working Day",
+      secondaryFieldKey: "firstWorkingDay",
     },
   };
   return configs[status] || null;
@@ -133,8 +135,13 @@ const formatVacationDates = (record, vs) => {
     if (travel) lines.push(`Travel: ${travel}`);
     return lines;
   }
-  if (vs === "Vacation Approved" && record.firstWorkingDay) {
-    return [`Return: ${fmt(record.firstWorkingDay)}`];
+  if (vs === "Vacation Approved") {
+    const lines = [];
+    const ret = fmt(record.returnDate);
+    const fwd = fmt(record.firstWorkingDay);
+    if (ret) lines.push(`Return: ${ret}`);
+    if (fwd) lines.push(`First Work Day: ${fwd}`);
+    return lines;
   }
   return [];
 };

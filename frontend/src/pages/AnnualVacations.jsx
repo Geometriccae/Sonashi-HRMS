@@ -224,6 +224,7 @@ const mapLeaveRow = (req, empList, targetStatus) => {
     totalYearsExperience: linked?.totalYearsExperience ?? null,
     travellingDate: linked?.travellingDate || req.travellingDate || null,
     lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
+    returnDate: linked?.returnDate || req.returnDate || null,
     firstWorkingDay: linked?.firstWorkingDay || req.firstWorkingDay || null,
     vacationStatus: linked?.vacationStatus || targetStatus,
     linkedEmployeeId: linked?._id || null,
@@ -257,7 +258,9 @@ const getDateConfigForStatus = (status) => {
     },
     "Vacation Approved": {
       label: "Return / Entry Date",
-      fieldKey: "firstWorkingDay",
+      fieldKey: "returnDate",
+      secondaryLabel: "First Working Day",
+      secondaryFieldKey: "firstWorkingDay",
     },
   };
   return configs[status] || { label: "Date", fieldKey: "date" };
@@ -811,7 +814,7 @@ function AnnualVacations() {
                               <th>Exp (yrs)</th>
                               {activeTab === "onVacation" && <><th>Leave End Date</th><th>Travelling Date</th><th>Last Working Day</th></>}
                               {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th></>}
-                              {activeTab === "returned"  && <><th>Return Date</th><th>Leave Start</th><th>Leave End</th></>}
+                              {activeTab === "returned"  && <><th>Return Date</th><th>First Working Day</th></>}
                               <th>Status</th>
                               {isAdmin && <th>Actions</th>}
                             </tr>
@@ -850,7 +853,7 @@ function AnnualVacations() {
 
                                   {activeTab === "onVacation" && <><td>{fmt(item.endDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
                                   {activeTab === "yetToGo"   && <><td>{displayLastWorkingDay(item)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.endDate)}</td></>}
-                                  {activeTab === "returned"  && <><td>{fmt(item.firstWorkingDay)}</td><td>{fmt(item.startDate)}</td><td>{fmt(item.endDate)}</td></>}
+                                  {activeTab === "returned"  && <><td>{fmt(item.returnDate)}</td><td>{fmt(item.firstWorkingDay)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
                                     {isAdmin && item._source === "employee" ? (
