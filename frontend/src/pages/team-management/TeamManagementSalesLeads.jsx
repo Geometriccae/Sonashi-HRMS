@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import styles from "./TeamManagementSalesLeads.module.css";
 import Side from "../sidebar/Sidebar";
 import employeeService from "../../services/EmployeeService";
@@ -102,6 +102,8 @@ function TeamManagementSalesLeads() {
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const teamListPath = location.state?.from || "/teammanagement";
   // const { employeeId } = useParams();
 
   const { id: employeeId } = useParams();
@@ -312,7 +314,7 @@ function TeamManagementSalesLeads() {
       if (deleteType === "entry") {
         await employeeService.deleteEmployee(employeeId);
         showToast("Employee deleted successfully.", 'success');
-        navigate("/teammanagement");
+        navigate(teamListPath);
         return; // no further cleanup needed, leaving page
       } else if (deleteType === "data") {
         await DocumentsService.removeAll(employeeId);
@@ -617,7 +619,7 @@ function TeamManagementSalesLeads() {
           title="Team Management"
           breadcrumbs={[
             { label: "Home", path: "/dashboard" },
-            { label: "Team Management", path: "/teammanagement" },
+            { label: "Team Management", path: teamListPath },
             { label: loading ? "Loading..." : employee?.employeeName || "Employee" },
           ]}
         />
@@ -633,7 +635,7 @@ function TeamManagementSalesLeads() {
                     className={styles.image}
                     alt="Go Back"
                     style={{ cursor: "pointer" }}
-                    onClick={() => navigate(-1)}
+                    onClick={() => navigate(teamListPath)}
                   />
                   <div className={styles.row_view3}>
                     <div className={styles.row_view4}>
