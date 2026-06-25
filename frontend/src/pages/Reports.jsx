@@ -27,6 +27,7 @@ function Reports() {
   const [filterCountry, setFilterCountry] = useState("All");
   const [minExperience, setMinExperience] = useState("All");
   const [minExpMonths, setMinExpMonths] = useState("All");
+  const [filterEmployee, setFilterEmployee] = useState("All");
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -45,6 +46,7 @@ function Reports() {
   const [uniqueRoles, setUniqueRoles] = useState(["All"]);
   const [uniqueOffices, setUniqueOffices] = useState(["All"]);
   const [uniqueCountries, setUniqueCountries] = useState(["All"]);
+  const [employeeList, setEmployeeList] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -71,6 +73,7 @@ function Reports() {
         setUniqueRoles(roles);
         setUniqueOffices(offices);
         setUniqueCountries(countries);
+        setEmployeeList(empList);
       } catch (err) {
         console.error("Failed to load employees for report filters:", err);
       }
@@ -137,6 +140,7 @@ function Reports() {
     setFilterCountry("All");
     setMinExperience("All");
     setMinExpMonths("All");
+    setFilterEmployee("All");
     setStartDate("");
     setEndDate("");
     setFilterMonth("All");
@@ -213,6 +217,13 @@ function Reports() {
       let leaves = await leaveRequestService.getLeaveRequests();
       leaves = Array.isArray(leaves) ? leaves : (leaves.data || []);
 
+      if (filterEmployee !== "All") {
+        const selectedEmp = employeeList.find(e => (e.employeeId || e._id) === filterEmployee);
+        if (selectedEmp) {
+          leaves = leaves.filter(l => l.employeeName === selectedEmp.employeeName || l.employeeId === filterEmployee);
+        }
+      }
+
       if (filterDepartment !== "All") {
         leaves = leaves.filter(l => l.department === filterDepartment);
       }
@@ -248,6 +259,7 @@ function Reports() {
       let data = await employeeService.getEmployeesList();
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
+      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
@@ -277,6 +289,7 @@ function Reports() {
     if (type === "Increment report") {
       let empList = await fetchFullEmployees();
 
+      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
@@ -324,6 +337,7 @@ function Reports() {
       let data = await employeeService.getEmployeesList();
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
+      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
@@ -373,6 +387,7 @@ function Reports() {
     if (type === "Salary report") {
       let empList = await fetchFullEmployees();
 
+      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
@@ -406,6 +421,7 @@ function Reports() {
       let data = await employeeService.getEmployeesList();
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
+      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
@@ -670,6 +686,7 @@ function Reports() {
                       setFilterCountry("All");
                       setMinExperience("All");
                       setMinExpMonths("All");
+                      setFilterEmployee("All");
                       setFilterMonth("All");
                       setFilterYear("All");
                     }}
@@ -681,6 +698,29 @@ function Reports() {
               </div>
 
 
+
+              {/* Individual Employee Filter */}
+              {reportType && (
+                <div className={styles["form-row"]}>
+                  <div className={styles["form-label"]}>Individual Employee</div>
+                  <div className={styles["form-field"]}>
+                    <select
+                      className={styles["select-field"]}
+                      value={filterEmployee}
+                      onChange={e => setFilterEmployee(e.target.value)}
+                    >
+                      <option value="All">All Employees</option>
+                      {employeeList
+                        .sort((a, b) => (a.employeeName || "").localeCompare(b.employeeName || ""))
+                        .map(emp => (
+                          <option key={emp.employeeId || emp._id} value={emp.employeeId || emp._id}>
+                            {emp.employeeName}{emp.employeeId ? ` (${emp.employeeId})` : ""}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Employee & Leave Report Filters */}
               {(reportType === "Airfare Report" ||
