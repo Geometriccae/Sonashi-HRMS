@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Card,
   Table,
@@ -141,8 +141,37 @@ const formatVacationDates = (record, vs) => {
 
 function TeamMembersTable() {
   const { showToast } = useToast();
-  const [activeFilter, setActiveFilter] = useState("Active");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentPage = Math.max(1, Number(searchParams.get("page")) || 1);
+  const itemsPerPage = Number(searchParams.get("size")) || 20;
+  const activeFilter = searchParams.get("filter") || "Active";
+  const searchTerm = searchParams.get("q") || "";
+  const listReturnPath = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `/teammanagement?${query}` : "/teammanagement";
+  }, [searchParams]);
+
+  const patchSearchParams = (updates, { resetPage = false } = {}) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (resetPage) next.delete("page");
+
+      Object.entries(updates).forEach(([key, value]) => {
+        const normalized = value == null ? "" : String(value).trim();
+        const isDefault =
+          (key === "page" && (normalized === "" || normalized === "1")) ||
+          (key === "size" && (normalized === "" || normalized === "20")) ||
+          (key === "filter" && (normalized === "" || normalized === "Active")) ||
+          (key === "q" && normalized === "");
+
+        if (isDefault) next.delete(key);
+        else next.set(key, normalized);
+      });
+
+      return next;
+    }, { replace: true });
+  };
+
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState(null);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
@@ -153,8 +182,6 @@ function TeamMembersTable() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
   const canEditEmployees = userRole !== "viewer";
@@ -384,10 +411,13 @@ function TeamMembersTable() {
     });
   }, [employees, activeFilter, searchTerm]);
 
-  // Reset to first page when filters/search change
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
+
   useEffect(() => {
-    setCurrentPage(1);
-  }, [activeFilter, searchTerm]);
+    if (currentPage > totalPages) {
+      patchSearchParams({ page: totalPages === 1 ? undefined : totalPages });
+    }
+  }, [currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allFilteredSelected =
     filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
@@ -410,6 +440,7 @@ function TeamMembersTable() {
         render: (name, record) => (
           <Link
             to={`/teammanagement_salesleads/${record._id || record.id}`}
+            state={{ from: listReturnPath }}
             style={{ color: "inherit", textDecoration: "none" }}
           >
             <Space>
@@ -531,7 +562,10 @@ function TeamMembersTable() {
         render: (_, record) => (
           <Space size={4}>
             <Tooltip title="View">
-              <Link to={`/teammanagement_salesleads/${record._id || record.id}`}>
+              <Link
+                to={`/teammanagement_salesleads/${record._id || record.id}`}
+                state={{ from: listReturnPath }}
+              >
                 <Button type="text" icon={<EyeOutlined />} size="small" />
               </Link>
             </Tooltip>
@@ -642,7 +676,7 @@ function TeamMembersTable() {
       >
         <Segmented
           value={activeFilter}
-          onChange={setActiveFilter}
+          onChange={(value) => patchSearchParams({ filter: value }, { resetPage: true })}
           options={[
             { label: "Active", value: "Active" },
             { label: "Inactive", value: "Inactive" },
@@ -654,8 +688,9 @@ function TeamMembersTable() {
           placeholder="Search by name, employee ID, email, role..."
           prefix={<SearchOutlined style={{ color: "#98A1B0" }} />}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => patchSearchParams({ q: e.target.value }, { resetPage: true })}
           allowClear
+          onClear={() => patchSearchParams({ q: "" }, { resetPage: true })}
           style={{ width: 320, borderRadius: 24 }}
         />
       </div>
@@ -683,8 +718,10 @@ function TeamMembersTable() {
           pageSizeOptions: ["10", "20", "50", "100"],
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`,
           onChange: (page, size) => {
-            setCurrentPage(page);
-            if (size !== itemsPerPage) setItemsPerPage(size);
+            patchSearchParams({
+              page: page === 1 ? undefined : page,
+              size: size === 20 ? undefined : size,
+            });
           },
         }}
         scroll={{ x: 900 }}
