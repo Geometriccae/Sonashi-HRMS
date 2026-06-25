@@ -914,8 +914,38 @@ function TeamManagementSalesLeads() {
                               })()}
                             </span>
                           </div>
-                          <div className={styles.column4}></div>
-                          <div className={styles.column4}></div>
+                          {(employee.vacationStatus === "On Vacation" || employee.vacationStatus === "Vacation Pending") && (
+                            <>
+                              <div className={styles.column4}>
+                                <span className={styles.text9}>Last Working Day</span>
+                                <span className={styles.text10}>
+                                  {employee.lastWorkingDay ? new Date(employee.lastWorkingDay).toLocaleDateString('en-GB') : "Not provided"}
+                                </span>
+                              </div>
+                              <div className={styles.column4}>
+                                <span className={styles.text9}>Travelling Date</span>
+                                <span className={styles.text10}>
+                                  {employee.travellingDate ? new Date(employee.travellingDate).toLocaleDateString('en-GB') : "Not provided"}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                          {employee.vacationStatus === "Vacation Approved" && (
+                            <>
+                              <div className={styles.column4}>
+                                <span className={styles.text9}>Return / Entry Date</span>
+                                <span className={styles.text10}>
+                                  {employee.returnDate ? new Date(employee.returnDate).toLocaleDateString('en-GB') : "Not provided"}
+                                </span>
+                              </div>
+                              <div className={styles.column4}>
+                                <span className={styles.text9}>First Working Day</span>
+                                <span className={styles.text10}>
+                                  {employee.firstWorkingDay ? new Date(employee.firstWorkingDay).toLocaleDateString('en-GB') : "Not provided"}
+                                </span>
+                              </div>
+                            </>
+                          )}
                           <div className={styles.column5}></div>
                         </div>
                       )}

@@ -14,6 +14,7 @@ const employeeSchema = new mongoose.Schema({
   doj: { type: Date, default: null },
   lastWorkingDay: { type: Date, default: null },
   travellingDate: { type: Date, default: null },
+  returnDate: { type: Date, default: null },
   firstWorkingDay: { type: Date, default: null },
   totalYearsExperience: { type: Number, default: null },
   dateOfBirth: { type: Date, default: null },

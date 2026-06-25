@@ -267,6 +267,7 @@ function Reports() {
         "Airfare Eligible": e.airFare ? "Yes" : "No",
         "Last Working Day": e.lastWorkingDay ? new Date(e.lastWorkingDay).toLocaleDateString('en-GB') : "Not set",
         "Travelling Date": e.travellingDate ? new Date(e.travellingDate).toLocaleDateString('en-GB') : "Not set",
+        "Return / Entry Date": e.returnDate ? new Date(e.returnDate).toLocaleDateString('en-GB') : "",
         "First Working Day": e.firstWorkingDay ? new Date(e.firstWorkingDay).toLocaleDateString('en-GB') : "",
         "Passport No": e.passportNo || "",
         "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : ""
