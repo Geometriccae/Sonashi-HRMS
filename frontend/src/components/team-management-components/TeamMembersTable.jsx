@@ -28,6 +28,7 @@ import AddEmployeeModal from "./AddEmployeeModal";
 import EditEmployeeModal from "./EditEmployeeModal";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 import employeeService from "../../services/EmployeeService";
+import styles from "./TeamMembersTable.module.css";
 import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
@@ -702,6 +703,7 @@ function TeamMembersTable() {
         />
       </div>
 
+      <div className={styles.tableScrollWrap}>
       <Table
         rowKey={(record) => empRowId(record)}
         columns={columns}
@@ -731,9 +733,10 @@ function TeamMembersTable() {
             });
           },
         }}
-        scroll={{ x: 900 }}
+        scroll={{ x: 900, y: "calc(100vh - 26rem)" }}
         size="middle"
       />
+      </div>
 
       <DeleteModal
         isOpen={isDeleteModalOpen}
