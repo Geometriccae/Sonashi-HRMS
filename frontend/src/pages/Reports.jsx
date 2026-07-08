@@ -276,7 +276,7 @@ function Reports() {
         "Department": e.department || "",
         "Role": e.role || "",
         "Office Location": e.office || "",
-        "Airfare Eligible": e.airFare ? "Yes" : "No",
+        "Airfare Entitlement": e.airFare ? "Yes" : "No",
         "Last Working Day": e.lastWorkingDay ? new Date(e.lastWorkingDay).toLocaleDateString('en-GB') : "Not set",
         "Travelling Date": e.travellingDate ? new Date(e.travellingDate).toLocaleDateString('en-GB') : "Not set",
         "Return / Entry Date": e.returnDate ? new Date(e.returnDate).toLocaleDateString('en-GB') : "",

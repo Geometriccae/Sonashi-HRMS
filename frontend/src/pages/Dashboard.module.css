@@ -2,9 +2,8 @@
   width: 100vw;
   height: 100vh;
   display: flex;
-  /* overflow: hidden; */
   position: relative;
-  background-color: #FAFBFB;
+  background: var(--bg-app, #f4f7fb);
 }
 
 /* Desktop Sidebar */
@@ -280,7 +279,7 @@
 }
 
 .main-content {
-  background-color: #FAFBFB;
+  background-color: var(--bg-app, #f4f7fb);
 }
 
 /* Custom scrollbar for webkit browsers */
@@ -483,7 +482,7 @@
 /* Mobile Responsive Design */
 @media (max-width: 768px) {
   .dashboard-layout {
-    background-color: #fafbfb;
+    background-color: var(--bg-app, #f4f7fb);
     width: 100%;
     margin: 0;
     overflow-x: hidden;
@@ -528,7 +527,7 @@
   .main-content {
     padding-bottom: 90px;
     /* Account for bottom navigation */
-    background-color: #fafbfb;
+    background-color: var(--bg-app, #f4f7fb);
   }
 }
 

@@ -1,13 +1,164 @@
+/* ─── Sonashi HRMS Design System ─────────────────────────────────────────── */
+:root {
+  /* Brand — Sonashi logo blue */
+  --brand-50: #e8f2fc;
+  --brand-100: #c5dff8;
+  --brand-200: #8fc0f0;
+  --brand-500: #0078e7;
+  --brand-600: #0057b5;
+  --brand-700: #004494;
+  --brand-800: #003570;
+
+  /* Neutrals */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* Semantic */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+
+  /* Surfaces */
+  --bg-app: #f0f6fc;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --border-subtle: #dce8f5;
+  --border-default: #d4e4f4;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Inter Tight', 'Inter', sans-serif;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.1), 0 4px 8px rgba(15, 23, 42, 0.04);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+
+  /* Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layout */
+  --sidebar-width: clamp(16rem, 17.2vw, 20.75rem);
+
+  /* Legacy token aliases (used across older CSS files) */
+  --Button-normal: #0057b5;
+  --Foundation-Blue-blue-50: #e8f2fc;
+  --Foundation-Blue-blue-500: #0057b5;
+  --Foundation-Blue-blue-700: #004494;
+  --Foundation-Neutral-N10: #f4f7fb;
+  --Foundation-Neutral-N100: #7a8699;
+  --Foundation-Green-green-400: #5dd27a;
+  --Foundation-Red-red-400: #ed5e56;
+  --Foundation-Red-red-500: #ef4444;
+  --White: #ffffff;
+  --Gray-50: #f9fafb;
+  --Gray-200: #e9eaeb;
+  --Gray-300: #d5d7da;
+  --Gray-700: #414651;
+  --Error-50: #fef2f2;
+  --Error-100: #fee2e2;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--slate-800);
+  background-color: var(--bg-app);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+::selection {
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+/* Global scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--slate-100);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--slate-300);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--slate-400);
+}
+
+/* Shared focus ring for accessibility */
+:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Ant Design overrides for consistency */
+.ant-table {
+  font-family: var(--font-sans) !important;
+}
+
+.ant-btn-primary {
+  background: linear-gradient(180deg, var(--brand-600, #0057b5) 0%, var(--brand-700, #004494) 100%) !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0, 87, 181, 0.28) !important;
+}
+
+.ant-btn-primary:hover {
+  background: linear-gradient(180deg, var(--brand-700, #004494) 0%, var(--brand-800, #003570) 100%) !important;
 }

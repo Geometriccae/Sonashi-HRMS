@@ -1,14 +1,5 @@
 import React, { useState } from "react";
-import {
-  FaTachometerAlt,
-  FaUsers,
-  FaCalendarAlt,
-  FaChartBar,
-  FaCog,
-  FaFolder,
-  FaQuestionCircle,
-  FaSignOutAlt,
-} from "react-icons/fa";
+import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from "./Sidebar.module.css";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
@@ -18,47 +9,51 @@ import LogoutModal from "../../components/logout-modal/LogoutModal";
 
 import sonashi_logo from "../../assets/sonashi_logo.png";
 import users from "../../assets/dashboard/users.svg";
-import arrowupright from "../../assets/dashboard/arrow-up-right.svg";
-import arrowdownup from "../../assets/dashboard/arrow-down-up.svg";
-import belldot from "../../assets/dashboard/bell-dot.svg";
 import calendar from "../../assets/dashboard/calendar.svg";
-import chevrondown from "../../assets/dashboard/chevron-down.svg";
 import circlehelp from "../../assets/dashboard/circle-help.svg";
 import cloud from "../../assets/dashboard/cloud.svg";
 import filechartcolumn from "../../assets/dashboard/file-chart-column.svg";
-import icons from "../../assets/dashboard/Icons.svg";
 import layoutdashboard from "../../assets/dashboard/layout-dashboard.svg";
-import packageicon from "../../assets/dashboard/package.svg";
-import scaneye from "../../assets/dashboard/scan-eye.svg";
-import settings2 from "../../assets/dashboard/settings-2.svg";
 import settings from "../../assets/dashboard/settings.svg";
-import userplus from "../../assets/dashboard/user-plus.svg";
 import addcontact from "../../assets/dashboard/add-contact.png";
 import logout from "../../assets/dashboard/log-out.svg";
-import offbutton from "../../assets/dashboard/off-button.png";
+
+function NavItem({ to, icon, label, active, onNavigate }) {
+  const { isCollapsed } = useSidebar();
+
+  return (
+    <li className={active ? styles.active : ""}>
+      <Link
+        to={to}
+        className={styles["sidebar-link"]}
+        onClick={onNavigate}
+        title={isCollapsed ? label : undefined}
+      >
+        <img src={icon} alt="" className={styles.icon} />
+        <span className={styles.linkText}>{label}</span>
+      </Link>
+    </li>
+  );
+}
 
 function Sidebar() {
   const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
   const location = useLocation();
   const isActive = (path) => location.pathname.startsWith(path);
   const navigate = useNavigate();
-  const { isOpen, closeSidebar } = useSidebar();
+  const { isOpen, isCollapsed, closeSidebar, toggleCollapse, toggleSidebar } = useSidebar();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-
-  // Fix: Get role directly from localStorage
-  const userRole = localStorage.getItem("role"); // This returns a string like "sales_executive"
+  const userRole = localStorage.getItem("role");
 
   const handleLogoutClick = () => {
     setIsLogoutModalOpen(true);
   };
 
   const handleConfirmLogout = () => {
-    // Clear authentication data
     localStorage.removeItem("token");
     localStorage.removeItem("username");
-    localStorage.removeItem("role"); // Also clear role on logout
-    // Redirect to login page
+    localStorage.removeItem("role");
     navigate("/login", { replace: true });
     setIsLogoutModalOpen(false);
   };
@@ -67,17 +62,12 @@ function Sidebar() {
     setIsLogoutModalOpen(false);
   };
 
-  // Use the custom date range hook for backend functionality
   const {
     dateRange,
     updateDateRange,
     getFormattedDateRange,
     getCurrentPreset,
   } = useDateRange();
-
-  const handleDateRangeClick = () => {
-    setIsDateRangeModalOpen(true);
-  };
 
   const handleDateRangeModalClose = () => {
     setIsDateRangeModalOpen(false);
@@ -91,20 +81,34 @@ function Sidebar() {
       formatted: getFormattedDateRange(),
       preset: getCurrentPreset(),
     });
-    // Here you can add logic to filter data based on the selected date range
-    // Example: triggerDataRefresh(startDate, endDate);
+  };
+
+  const handleNavClick = () => {
+    closeSidebar();
   };
 
   return (
     <>
-      <div 
-        className={`${styles.overlay} ${isOpen ? styles.showOverlay : ""}`} 
+      <button
+        type="button"
+        className={`${styles.mobileOpenTab} ${isOpen ? styles.mobileOpenTabHidden : ""}`}
+        onClick={toggleSidebar}
+        aria-label="Open sidebar"
+        title="Open menu"
+      >
+        <FaChevronRight />
+      </button>
+      <div
+        className={`${styles.overlay} ${isOpen ? styles.showOverlay : ""}`}
         onClick={closeSidebar}
       />
-      <div className={`${styles["sidebar-layout"]} ${isOpen ? styles.open : ""}`}>
+      <div
+        className={`${styles["sidebar-layout"]} ${isOpen ? styles.open : ""} ${isCollapsed ? styles.collapsed : ""}`}
+      >
         <div className={styles.mobileCloseBtn} onClick={closeSidebar}>
           ×
         </div>
+
         <div className={styles["sidebar-header"]}>
           <div className={styles["auxin-logo"]}>
             <img
@@ -113,169 +117,139 @@ function Sidebar() {
               className={styles["auxinlogo-img"]}
             />
           </div>
-          <div className={styles["line"]}></div>
+          <button
+            type="button"
+            className={styles.collapseBtn}
+            onClick={toggleCollapse}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? <FaChevronRight /> : <FaChevronLeft />}
+          </button>
+          <div className={styles.line} />
         </div>
 
         <div className={styles["sidebar-nav"]}>
-        <div className={styles["menu-sections"]}>
-          <div className={styles["menu-section-one"]}>
-            <p className={styles["section-title"]}>MAIN</p>
-            <ul>
-              <li className={isActive("/dashboard") ? styles.active : ""}>
-                <Link to="/dashboard" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={layoutdashboard}
-                    alt="Dashboard"
-                    className={styles.icon}
+          <div className={styles["menu-sections"]}>
+            <div className={styles["menu-section-one"]}>
+              <p className={styles["section-title"]}>MAIN</p>
+              <ul>
+                <NavItem
+                  to="/dashboard"
+                  icon={layoutdashboard}
+                  label="Dashboard"
+                  active={isActive("/dashboard")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to="/teammanagement"
+                  icon={users}
+                  label="Team Management"
+                  active={isActive("/teammanagement")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to="/leave-requests"
+                  icon={calendar}
+                  label="Leave Management"
+                  active={isActive("/leave-requests")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to="/annual-vacations"
+                  icon={calendar}
+                  label="Annual Vacations"
+                  active={isActive("/annual-vacations")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to="/salary-slips"
+                  icon={filechartcolumn}
+                  label="Salary Slips"
+                  active={isActive("/salary-slips")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to="/reports"
+                  icon={filechartcolumn}
+                  label="Reports"
+                  active={isActive("/reports")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to="/company-document"
+                  icon={cloud}
+                  label="Company Document"
+                  active={isActive("/company-document")}
+                  onNavigate={handleNavClick}
+                />
+                {["admin", "hod"].includes(userRole) && (
+                  <NavItem
+                    to="/user-management"
+                    icon={addcontact}
+                    label="User Management"
+                    active={isActive("/user-management")}
+                    onNavigate={handleNavClick}
                   />
-                  Dashboard
-                </Link>
-              </li>
+                )}
+              </ul>
+            </div>
 
-              <li className={isActive("/teammanagement") ? styles.active : ""}>
-                <Link to="/teammanagement" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={users}
-                    alt="teamManagement"
-                    className={styles.icon}
-                  />{" "}
-                  Team Management
-                </Link>
-              </li>
-
-              <li className={isActive("/leave-requests") ? styles.active : ""}>
-                <Link to="/leave-requests" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={calendar}
-                    alt="Leave Management"
-                    className={styles.icon}
-                  />
-                  Leave Management
-                </Link>
-              </li>
-
-              <li className={isActive("/annual-vacations") ? styles.active : ""}>
-                <Link to="/annual-vacations" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={calendar}
-                    alt="Annual Vacations"
-                    className={styles.icon}
-                  />
-                  Annual Vacations
-                </Link>
-              </li>
-
-              <li className={isActive("/salary-slips") ? styles.active : ""}>
-                <Link to="/salary-slips" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={filechartcolumn}
-                    alt="Salary Slips"
-                    className={styles.icon}
-                  />
-                  Salary Slips
-                </Link>
-              </li>
-
-              <li className={isActive("/reports") ? styles.active : ""}>
-                <Link to="/reports" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={filechartcolumn}
-                    alt="Reports"
-                    className={styles.icon}
-                  />
-                  Reports
-                </Link>
-              </li>
-
-              <li className={isActive("/company-document") ? styles.active : ""}>
-                <Link to="/company-document" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={cloud}
-                    alt="Company Document"
-                    className={styles.icon}
-                  />
-                  Company Document
-                </Link>
-              </li>
-
-
-              {/* User Management - Admin & HOD Only */}
-              {["admin", "hod"].includes(userRole) && (
-                <li className={isActive("/user-management") ? styles.active : ""}>
-                  <Link to="/user-management" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                    <img
-                      src={addcontact}
-                      alt="User Management"
-                      className={styles.icon}
-                    />{" "}
-                    User Management
-                  </Link>
-                </li>
-              )}
-            </ul>
-          </div>
-
-          <div className={styles["menu-section-two"]}>
-            <p className={styles["section-title"]}>ADDITIONAL</p>
-            <ul>
-              <li className={isActive("/profile") ? styles.active : ""}>
-                <Link to="/profile" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img src={settings} alt="Profile" className={styles.icon} />{" "}
-                  Settings
-                </Link>
-              </li>
-              <li>
-                <Link to="" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img src={cloud} alt="My Files" className={styles.icon} /> My
-                  Files
-                </Link>
-              </li>
-              <li className={isActive("/help-support") ? styles.active : ""}>
-                <Link to="/help-support" className={styles["sidebar-link"]} onClick={closeSidebar}>
-                  <img
-                    src={circlehelp}
-                    alt="Help & Support"
-                    className={styles.icon}
-                  />{" "}
-                  Help & Support
-                </Link>
-              </li>
-            </ul>
+            <div className={styles["menu-section-two"]}>
+              <p className={styles["section-title"]}>ADDITIONAL</p>
+              <ul>
+                <NavItem
+                  to="/profile"
+                  icon={settings}
+                  label="Settings"
+                  active={isActive("/profile")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to=""
+                  icon={cloud}
+                  label="My Files"
+                  active={false}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
+                  to="/help-support"
+                  icon={circlehelp}
+                  label="Help & Support"
+                  active={isActive("/help-support")}
+                  onNavigate={handleNavClick}
+                />
+              </ul>
+            </div>
           </div>
         </div>
+
+        <div className={styles["sidebar-footer-content"]}>
+          <div className={styles.line} />
+          <button
+            type="button"
+            className={styles.footerLogoutBtn}
+            onClick={handleLogoutClick}
+            title={isCollapsed ? "Logout" : undefined}
+          >
+            <img src={logout} alt="" className={styles.icon} />
+            <span className={styles.linkText}>Logout</span>
+          </button>
         </div>
 
-      <div className={styles["sidebar-footer-content"]}>
-        {/* <div className={styles["view-as-executive"]}>
-          <div className={styles["view-as-executive-row"]}>
-            <img src={scaneye} alt="View as Executive" />
-            <div className={styles["label"]}>View as Executive</div>
-          </div>
-          <img src={offbutton} alt="View as Executive" height={28} />
-        </div> */}
-
-        <div className={styles["line"]}></div>
-        <button className={styles.footerLogoutBtn} onClick={handleLogoutClick}>
-          <img src={logout} alt="Logout" className={styles.icon} />
-          Logout
-        </button>
+        <DateRangePickerModal
+          isOpen={isDateRangeModalOpen}
+          onClose={handleDateRangeModalClose}
+          onApplyDateRange={handleDateRangeApply}
+          initialStartDate={dateRange.start}
+          initialEndDate={dateRange.end}
+        />
+        <LogoutModal
+          isOpen={isLogoutModalOpen}
+          onClose={handleCloseLogoutModal}
+          onConfirm={handleConfirmLogout}
+        />
       </div>
-
-      {/* Date Range Picker Modal */}
-      <DateRangePickerModal
-        isOpen={isDateRangeModalOpen}
-        onClose={handleDateRangeModalClose}
-        onApplyDateRange={handleDateRangeApply}
-        initialStartDate={dateRange.start}
-        initialEndDate={dateRange.end}
-      />
-      {/* Logout Confirmation Modal */}
-      <LogoutModal
-        isOpen={isLogoutModalOpen}
-        onClose={handleCloseLogoutModal}
-        onConfirm={handleConfirmLogout}
-      />
-    </div>
     </>
   );
 }

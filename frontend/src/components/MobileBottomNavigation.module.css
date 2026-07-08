@@ -1,7 +1,7 @@
 .bottomNavigation {
-  background-color: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background-color: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--brand-50, #e8f2fc);
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -11,7 +11,7 @@
   right: 0;
   z-index: 1000;
   padding: 8px 12px;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -4px 20px rgba(0, 87, 181, 0.08);
 }
 
 .navItem {
@@ -39,7 +39,7 @@
 }
 
 .active .iconContainer {
-  background-color: #e6f2ff;
+  background-color: var(--brand-50, #e8f2fc);
 }
 
 .stateLayer {
@@ -48,12 +48,12 @@
   width: 100%;
   align-items: center;
   justify-content: center;
-  color: #49454f;
-  transition: color 0.2s ease;
+  color: var(--slate-500, #64748b);
+  transition: color var(--transition, 0.2s ease);
 }
 
 .active .stateLayer {
-  color: #007aff;
+  color: var(--brand-600, #0057b5);
 }
 
 .labelText {
@@ -69,7 +69,7 @@
 }
 
 .active .labelText {
-  color: #007aff;
+  color: var(--brand-600, #0057b5);
   font-weight: 600;
 }
 

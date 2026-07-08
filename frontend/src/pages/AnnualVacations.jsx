@@ -20,6 +20,7 @@ const fmt = (d) => {
 };
 
 const APPROVED_LEAVE_STATUSES = ["Approved", "HOD Approved"];
+const YET_TO_GO_LEAVE_STATUSES = ["Pending", "HOD Approved", "Approved"];
 
 const computeExperienceYears = (doj, totalYearsExperience) => {
   if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
@@ -54,8 +55,9 @@ const leaveMatchesEmployee = (req, emp, empList) => {
 };
 
 const findLeaveForEmployee = (emp, leaveList, empList, tabKey) => {
+  const statusFilter = tabKey === "yetToGo" ? YET_TO_GO_LEAVE_STATUSES : APPROVED_LEAVE_STATUSES;
   const candidates = leaveList.filter(
-    (req) => APPROVED_LEAVE_STATUSES.includes(req.status) && leaveMatchesEmployee(req, emp, empList)
+    (req) => statusFilter.includes(req.status) && leaveMatchesEmployee(req, emp, empList)
   );
   if (candidates.length === 0) return null;
 
@@ -115,9 +117,100 @@ const findLeaveForEmployee = (emp, leaveList, empList, tabKey) => {
   )[0];
 };
 
+const toDayStart = (value) => {
+  if (!value) return null;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+};
+
+const getEmployeeDedupeKey = (req, empList) => {
+  const linked = findLinkedEmployee(req, empList);
+  if (linked?._id) return String(linked._id);
+  if (req.employee?._id) return String(req.employee._id);
+  if (req.employee) return String(req.employee);
+  const name = normalizeName(req.employeeName || req.employee?.username);
+  return name || String(req._id);
+};
+
+const buildYetToGoFromLeaves = (empList, leaveList) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcoming = leaveList
+    .filter((req) =>
+      YET_TO_GO_LEAVE_STATUSES.includes(req.status) &&
+      req.leaveType === "Vacation"
+    )
+    .filter((req) => {
+      const start = toDayStart(req.startDate);
+      return start && start >= today;
+    })
+    .sort((a, b) => toDayStart(a.startDate) - toDayStart(b.startDate));
+
+  const seen = new Set();
+  const rows = [];
+
+  upcoming.forEach((req) => {
+    const dedupeKey = getEmployeeDedupeKey(req, empList);
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+
+    const linked = findLinkedEmployee(req, empList);
+    if (linked) {
+      rows.push({
+        ...linked,
+        _source: "employee",
+        linkedEmployeeId: linked._id,
+        linkedLeaveId: req._id,
+        startDate: req.startDate,
+        endDate: req.endDate,
+        leaveStatus: req.status,
+        experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience),
+        vacationStatus: linked.vacationStatus || "Vacation Pending",
+      });
+    } else {
+      rows.push({ ...mapLeaveRow(req, empList, "Vacation Pending"), leaveStatus: req.status });
+    }
+  });
+
+  empList
+    .filter((e) => e.vacationStatus === "Vacation Pending")
+    .forEach((e) => {
+      const dedupeKey = String(e._id);
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+
+      const leave = findLeaveForEmployee(e, leaveList, empList, "yetToGo");
+      rows.push({
+        ...e,
+        _source: "employee",
+        linkedEmployeeId: e._id,
+        linkedLeaveId: leave?._id || null,
+        startDate: leave?.startDate || null,
+        endDate: leave?.endDate || null,
+        leaveStatus: leave?.status || null,
+        experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+        vacationStatus: e.vacationStatus || "Vacation Pending",
+      });
+    });
+
+  rows.sort((a, b) => {
+    const aStart = toDayStart(a.startDate);
+    const bStart = toDayStart(b.startDate);
+    if (!aStart && !bStart) return 0;
+    if (!aStart) return 1;
+    if (!bStart) return -1;
+    return aStart - bStart;
+  });
+
+  return rows;
+};
+
 const VACATION_TABS = [
   { key: "onVacation", label: "On Vacation",  icon: <MdBeachAccess />,   color: "#3b82f6", bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", statusVal: "On Vacation",      subLabel: "Currently away",          description: "Employees currently on vacation" },
-  { key: "yetToGo",   label: "Yet to Go",     icon: <MdFlightTakeoff />, color: "#8b5cf6", bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", statusVal: "Vacation Pending",  subLabel: "Upcoming (next 60 days)", description: "Employees with approved leave starting in the next 60 days" },
+  { key: "yetToGo",   label: "Yet to Go",     icon: <MdFlightTakeoff />, color: "#8b5cf6", bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", statusVal: "Vacation Pending",  subLabel: "Approved & pending", description: "Employees with approved or pending vacation leave who are yet to travel" },
   { key: "returned",  label: "Returned Back", icon: <MdFlightLand />,    color: "#10b981", bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", statusVal: "Vacation Approved", subLabel: "Last 1 month",            description: "Employees who returned from vacation in the last month" },
 ];
 
@@ -375,9 +468,9 @@ function AnnualVacations() {
   // Only the employee's vacationStatus field is authoritative.
   // Leave-request date ranges are NOT used to inflate counts — the status
   // dropdown on Team Management / Dashboard is the single source of truth.
-  const computeCounts = (empList, _leaveList) => {
+  const computeCounts = (empList, leaveList) => {
     const onVacation = empList.filter(e => e.vacationStatus === "On Vacation").length;
-    const yetToGo    = empList.filter(e => e.vacationStatus === "Vacation Pending").length;
+    const yetToGo    = buildYetToGoFromLeaves(empList, leaveList).length;
     const returned   = empList.filter(e => e.vacationStatus === "Vacation Approved").length;
     setCounts({ onVacation, yetToGo, returned });
   };
@@ -386,7 +479,11 @@ function AnnualVacations() {
   // Only employees whose vacationStatus matches the tab are shown.
   // We enrich each row with leave-request dates when available.
   const buildTabList = useCallback((tabKey, empList, leaveList) => {
-    const statusMap = { onVacation: "On Vacation", yetToGo: "Vacation Pending", returned: "Vacation Approved" };
+    if (tabKey === "yetToGo") {
+      return buildYetToGoFromLeaves(empList, leaveList);
+    }
+
+    const statusMap = { onVacation: "On Vacation", returned: "Vacation Approved" };
     const targetStatus = statusMap[tabKey];
 
     return empList
