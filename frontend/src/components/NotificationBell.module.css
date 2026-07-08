@@ -5,23 +5,24 @@
 }
 
 .bellButton {
-  border: 0.0625rem solid rgba(229, 231, 235, 0.5);
-  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(0.5rem);
   padding: clamp(0.5rem, 0.625vw, 0.625rem);
   cursor: pointer;
   position: relative;
   border-radius: clamp(0.6rem, 0.75vw, 0.75rem);
-  transition: all 0.2s ease;
+  transition: all var(--transition, 0.2s ease);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .bellButton:hover {
-  background: #f9fafb;
+  background: rgba(255, 255, 255, 0.95);
   transform: translateY(-0.0625rem);
-  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 40, 90, 0.2);
+  border-color: #ffffff;
 }
 
 .bellButton:active {
@@ -32,7 +33,12 @@
   width: clamp(1.25rem, 1.5vw, 1.5rem);
   height: clamp(1.25rem, 1.5vw, 1.5rem);
   display: block;
-  opacity: 0.8;
+  opacity: 0.95;
+  filter: brightness(0) invert(1);
+}
+
+.bellButton:hover .bellIcon {
+  filter: brightness(0) saturate(100%) invert(22%) sepia(90%) saturate(1200%) hue-rotate(188deg) brightness(90%) contrast(101%);
 }
 
 .badge {

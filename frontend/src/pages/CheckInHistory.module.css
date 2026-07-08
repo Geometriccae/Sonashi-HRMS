@@ -5,7 +5,7 @@
   display: flex;
 
   position: relative;
-  background-color: #FAFBFB;
+  background-color: var(--bg-app, #f4f7fb);
 }
 
 main {

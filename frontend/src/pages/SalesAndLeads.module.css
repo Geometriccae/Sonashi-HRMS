@@ -3,7 +3,7 @@
   width: 100%;
   display: flex;
   position: relative;
-  background-color: #FAFBFB;
+  background-color: var(--bg-app, #f4f7fb);
 }
 
 main {
@@ -180,7 +180,7 @@ main {
 
 .main-content {
   padding: clamp(1rem, 1.5vw, 1.5rem);
-  background-color: #FAFBFB;
+  background-color: var(--bg-app, #f4f7fb);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;

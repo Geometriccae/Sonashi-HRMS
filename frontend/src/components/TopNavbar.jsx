@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Dropdown from "react-bootstrap/Dropdown";
-import { FaBars } from "react-icons/fa";
 import { HiOutlineHome } from "react-icons/hi2";
 import { IoChevronForward } from "react-icons/io5";
 import { FiUser, FiSettings, FiLogOut } from "react-icons/fi";
@@ -10,7 +9,6 @@ import layoutStyles from "./PageLayout.module.css";
 import NotificationBell from "./NotificationBell";
 import ProfileAvatar from "./ProfileAvatar";
 import LogoutModal from "./logout-modal/LogoutModal";
-import { useSidebar } from "../context/SidebarContext";
 
 const ROLE_LABELS = {
   admin: "Administrator",
@@ -30,7 +28,6 @@ function TopNavbar({
   subtitle,
 }) {
   const navigate = useNavigate();
-  const { toggleSidebar } = useSidebar();
   const [username, setUsername] = useState("");
   const [userRole, setUserRole] = useState("");
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -67,14 +64,6 @@ function TopNavbar({
       <header className={styles.topbar}>
         <div className={styles.topbarInner}>
           <div className={styles.topbarLeft}>
-            <button
-              className={styles.menuBtn}
-              onClick={toggleSidebar}
-              aria-label="Toggle sidebar"
-            >
-              <FaBars />
-            </button>
-
             <div className={styles.titleBlock}>
               <h1 className={styles.pageTitle}>{title}</h1>
               {displaySubtitle && (

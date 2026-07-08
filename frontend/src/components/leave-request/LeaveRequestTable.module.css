@@ -1,12 +1,13 @@
 .container {
     width: 100%;
-    background: white;
-    border-radius: 12px;
-    border: 1px solid #e4e4e4;
-    padding: 24px 0;
+    background: var(--bg-surface, #ffffff);
+    border-radius: var(--radius-xl, 1.25rem);
+    border: 1px solid var(--border-default, #e2e8f0);
+    box-shadow: var(--shadow-card, 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06));
+    padding: 1.5rem 0;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 1.25rem;
 }
 
 .header {
@@ -32,14 +33,22 @@
 .addButton {
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: #007aff;
+    gap: 0.5rem;
+    background: linear-gradient(180deg, var(--brand-500, #007aff) 0%, var(--brand-600, #0057b5) 100%);
     color: white;
     border: none;
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-weight: 500;
+    padding: 0.625rem 1rem;
+    border-radius: var(--radius-md, 0.75rem);
+    font-weight: 600;
+    font-size: 0.875rem;
     cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 87, 181, 0.25);
+    transition: transform var(--transition-fast, 0.15s ease), box-shadow var(--transition, 0.2s ease);
+}
+
+.addButton:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 87, 181, 0.3);
 }
 
 .controls {
@@ -52,12 +61,12 @@
 .filterBar {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 1rem;
     align-items: center;
-    background: #f9fafb;
-    padding: 16px;
-    border-radius: 12px;
-    border: 1px solid #e4e4e4;
+    background: linear-gradient(180deg, var(--slate-50, #f8fafc) 0%, #f1f7ff 100%);
+    padding: 1rem;
+    border-radius: var(--radius-lg, 1rem);
+    border: 1px solid var(--border-default, #e2e8f0);
 }
 
 .searchSection {

@@ -21,7 +21,10 @@
   min-height: 0;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
+  scrollbar-color: var(--brand-200, #8fc0f0) var(--brand-50, #e8f2fc);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(0, 87, 181, 0.06), transparent),
+    linear-gradient(180deg, #ffffff 0%, var(--bg-app, #f0f6fc) 120px);
 }
 
 .pageBody::-webkit-scrollbar {

@@ -83,7 +83,7 @@ html {
 
 .rightPanel {
   flex: 1;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
   display: flex;
   justify-content: center;
   align-items: center;
