@@ -926,3 +926,43 @@
     /* Ensure horizontal scroll */
   }
 }
+
+/* Ant Design table — scroll body inside, sticky header */
+.tableScrollWrap {
+  width: 100%;
+}
+
+.tableScrollWrap :global(.ant-table-container) {
+  border: 1px solid var(--border-default, #e2e8f0);
+  border-radius: var(--radius-lg, 1rem);
+  overflow: hidden;
+}
+
+.tableScrollWrap :global(.ant-table-header) {
+  background: linear-gradient(180deg, #f8fbff 0%, #f0f6fc 100%);
+}
+
+.tableScrollWrap :global(.ant-table-body) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--brand-200, #8fc0f0) var(--brand-50, #e8f2fc);
+}
+
+.tableScrollWrap :global(.ant-table-body::-webkit-scrollbar) {
+  width: 8px;
+  height: 8px;
+}
+
+.tableScrollWrap :global(.ant-table-body::-webkit-scrollbar-thumb) {
+  background: var(--brand-200, #8fc0f0);
+  border-radius: 4px;
+}
+
+.tableScrollWrap :global(.ant-table-body::-webkit-scrollbar-track) {
+  background: var(--brand-50, #e8f2fc);
+}
+
+@media (max-width: 991px) {
+  .tableScrollWrap :global(.ant-table-body) {
+    max-height: calc(100vh - 22rem);
+  }
+}

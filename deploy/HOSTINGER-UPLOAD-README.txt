@@ -5,7 +5,7 @@ ZIP FILES
 =========
 1. sonashi-frontend-hostinger-latest.zip (~2.9 MB)
    - React SOURCE project (required by Hostinger auto-deploy)
-   - Includes: UI theme, sidebar toggle, Reports employee filter, Annual Vacations updates
+   - Includes: UI theme, sidebar toggle, Reports employee filter, Annual Vacations updates, Team Management table scroll
    - .env.production: https://backend.sonashi.in/api
 
 2. sonashi-backend-hostinger-latest.zip (~0.12 MB)
