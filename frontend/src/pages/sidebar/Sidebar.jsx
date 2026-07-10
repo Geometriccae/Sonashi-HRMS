@@ -110,22 +110,24 @@ function Sidebar() {
         </div>
 
         <div className={styles["sidebar-header"]}>
-          <div className={styles["auxin-logo"]}>
-            <img
-              src={sonashi_logo}
-              alt="Sonashi Logo"
-              className={styles["auxinlogo-img"]}
-            />
+          <div className={styles.sidebarHeaderRow}>
+            <div className={styles["auxin-logo"]}>
+              <img
+                src={sonashi_logo}
+                alt="Sonashi Logo"
+                className={styles["auxinlogo-img"]}
+              />
+            </div>
+            <button
+              type="button"
+              className={styles.collapseBtn}
+              onClick={toggleCollapse}
+              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {isCollapsed ? <FaChevronRight /> : <FaChevronLeft />}
+            </button>
           </div>
-          <button
-            type="button"
-            className={styles.collapseBtn}
-            onClick={toggleCollapse}
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? <FaChevronRight /> : <FaChevronLeft />}
-          </button>
           <div className={styles.line} />
         </div>
 

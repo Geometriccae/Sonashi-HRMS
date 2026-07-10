@@ -1,4 +1,5 @@
 import React from "react";
+import ReactDOM from "react-dom";
 import "./DeleteModal.css";
 import warning from "../../assets/dashboard/alert-circle.svg";
 
@@ -12,7 +13,7 @@ function DeleteModal({ isOpen, onClose, onConfirm, title = "Delete this Client?"
     }
   };
 
-  return (
+  return ReactDOM.createPortal(
     <div className="modal-backdrop" onClick={handleBackdropClick}>
       <div className="delete-modal">
         <div className="modal-content">
@@ -43,7 +44,8 @@ function DeleteModal({ isOpen, onClose, onConfirm, title = "Delete this Client?"
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,11 +1,13 @@
 Sonashi HRMS - Hostinger Upload Package
-Generated: 2026-07-08
+Generated: 2026-07-10
 
 ZIP FILES
 =========
 1. sonashi-frontend-hostinger-latest.zip (~2.9 MB)
    - React SOURCE project (required by Hostinger auto-deploy)
-   - Includes: UI theme, sidebar toggle, Reports employee filter, Annual Vacations updates, Team Management table scroll
+   - Includes: blue sidebar + light topbar, breadcrumb bar, logo watermark,
+     sidebar border toggle, modal fixes, Team Management table scroll,
+     Reports employee filter, Annual Vacations updates, UI theme polish
    - .env.production: https://backend.sonashi.in/api
 
 2. sonashi-backend-hostinger-latest.zip (~0.12 MB)

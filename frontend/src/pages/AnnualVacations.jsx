@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Side from "./sidebar/Sidebar";
 import TopNavbar, { PageBody } from "../components/TopNavbar";
+import ModalPortal from "../components/ModalPortal";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import DateInput from "../components/DateInput";
 import employeeService from "../services/EmployeeService";
@@ -1004,6 +1005,7 @@ function AnnualVacations() {
 
       {/* ── Edit Modal ── */}
       {editModal && (
+        <ModalPortal>
         <div className={styles.modalBackdrop} onClick={() => setEditModal(null)}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
             <div className={styles.modalAccent} />
@@ -1054,6 +1056,7 @@ function AnnualVacations() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* ── Toast ── */}

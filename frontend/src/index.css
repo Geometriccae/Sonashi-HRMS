@@ -1,13 +1,23 @@
 /* ─── Sonashi HRMS Design System ─────────────────────────────────────────── */
 :root {
-  /* Brand — Sonashi logo blue */
-  --brand-50: #e8f2fc;
-  --brand-100: #c5dff8;
-  --brand-200: #8fc0f0;
+  /* Brand — Sonashi logo blue (vibrant professional) */
+  --brand-50: #e6f2ff;
+  --brand-100: #b8d9ff;
+  --brand-200: #7ab8ff;
+  --brand-300: #3d96f5;
+  --brand-400: #0a7ae8;
   --brand-500: #0078e7;
   --brand-600: #0057b5;
   --brand-700: #004494;
   --brand-800: #003570;
+  --brand-900: #002850;
+
+  /* Accent — vibrant highlights */
+  --accent-cyan: #06b6d4;
+  --accent-violet: #6366f1;
+  --accent-emerald: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
 
   /* Neutrals */
   --slate-50: #f8fafc;
@@ -25,31 +35,38 @@
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
-  --info: #3b82f6;
+  --info: #0ea5e9;
 
   /* Surfaces */
-  --bg-app: #f0f6fc;
+  --bg-app: #eef6ff;
   --bg-surface: #ffffff;
   --bg-elevated: #ffffff;
-  --border-subtle: #dce8f5;
-  --border-default: #d4e4f4;
+  --bg-glass: rgba(255, 255, 255, 0.88);
+  --border-subtle: #d6e8f8;
+  --border-default: #c5ddf0;
+
+  /* Watermark */
+  --watermark-opacity: 0.045;
+  --watermark-size: min(480px, 52vw);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Inter Tight', 'Inter', sans-serif;
 
-  /* Elevation */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
-  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.1), 0 4px 8px rgba(15, 23, 42, 0.04);
-  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  /* Elevation — blue-tinted shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 69, 148, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 69, 148, 0.07), 0 1px 2px rgba(0, 69, 148, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 87, 181, 0.1), 0 2px 4px rgba(0, 69, 148, 0.05);
+  --shadow-lg: 0 12px 36px rgba(0, 87, 181, 0.14), 0 4px 8px rgba(0, 69, 148, 0.06);
+  --shadow-card: 0 1px 3px rgba(0, 69, 148, 0.05), 0 8px 28px rgba(0, 87, 181, 0.08);
+  --shadow-glow: 0 0 0 3px rgba(0, 120, 231, 0.15);
 
   /* Radius */
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
   --radius-full: 9999px;
 
   /* Motion */
@@ -62,10 +79,10 @@
 
   /* Legacy token aliases (used across older CSS files) */
   --Button-normal: #0057b5;
-  --Foundation-Blue-blue-50: #e8f2fc;
+  --Foundation-Blue-blue-50: #e6f2ff;
   --Foundation-Blue-blue-500: #0057b5;
   --Foundation-Blue-blue-700: #004494;
-  --Foundation-Neutral-N10: #f4f7fb;
+  --Foundation-Neutral-N10: #eef6ff;
   --Foundation-Neutral-N100: #7a8699;
   --Foundation-Green-green-400: #5dd27a;
   --Foundation-Red-red-400: #ed5e56;
@@ -118,16 +135,16 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--slate-100);
+  background: var(--brand-50);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--slate-300);
+  background: var(--brand-200);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--slate-400);
+  background: var(--brand-300);
 }
 
 /* Shared focus ring for accessibility */
@@ -153,12 +170,182 @@ img {
   font-family: var(--font-sans) !important;
 }
 
+.ant-card {
+  border-radius: var(--radius-xl) !important;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: var(--shadow-card) !important;
+  transition: box-shadow var(--transition), transform var(--transition) !important;
+}
+
+.ant-card:hover {
+  box-shadow: var(--shadow-md) !important;
+}
+
+.ant-card-head {
+  border-bottom-color: var(--border-subtle) !important;
+  min-height: 52px !important;
+}
+
+.ant-card-head-title {
+  font-weight: 700 !important;
+  color: var(--slate-800) !important;
+}
+
+.ant-btn {
+  border-radius: var(--radius-md) !important;
+  font-weight: 600 !important;
+  transition: all var(--transition) !important;
+}
+
 .ant-btn-primary {
-  background: linear-gradient(180deg, var(--brand-600, #0057b5) 0%, var(--brand-700, #004494) 100%) !important;
+  background: linear-gradient(135deg, var(--brand-500) 0%, var(--brand-700) 100%) !important;
   border: none !important;
-  box-shadow: 0 2px 8px rgba(0, 87, 181, 0.28) !important;
+  box-shadow: 0 4px 14px rgba(0, 87, 181, 0.32) !important;
 }
 
 .ant-btn-primary:hover {
-  background: linear-gradient(180deg, var(--brand-700, #004494) 0%, var(--brand-800, #003570) 100%) !important;
+  background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-800) 100%) !important;
+  box-shadow: 0 6px 20px rgba(0, 87, 181, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.ant-btn-default {
+  border-color: var(--border-default) !important;
+  color: var(--slate-700) !important;
+}
+
+.ant-btn-default:hover {
+  border-color: var(--brand-300) !important;
+  color: var(--brand-600) !important;
+  background: var(--brand-50) !important;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-picker {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--border-default) !important;
+  transition: border-color var(--transition), box-shadow var(--transition) !important;
+}
+
+.ant-input:hover,
+.ant-input-affix-wrapper:hover,
+.ant-select-selector:hover,
+.ant-picker:hover {
+  border-color: var(--brand-200) !important;
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper-focused,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused {
+  border-color: var(--brand-500) !important;
+  box-shadow: var(--shadow-glow) !important;
+}
+
+.ant-table-thead > tr > th {
+  background: linear-gradient(180deg, var(--brand-50) 0%, #f5faff 100%) !important;
+  color: var(--brand-700) !important;
+  font-weight: 700 !important;
+  font-size: 0.8125rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--brand-100) !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom-color: var(--border-subtle) !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: var(--brand-50) !important;
+}
+
+.ant-segmented {
+  background: var(--brand-50) !important;
+  border-radius: var(--radius-full) !important;
+  padding: 3px !important;
+}
+
+.ant-segmented-item-selected {
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-600)) !important;
+  color: #fff !important;
+  border-radius: var(--radius-full) !important;
+  box-shadow: 0 2px 8px rgba(0, 87, 181, 0.25) !important;
+}
+
+.ant-segmented-item-selected .ant-segmented-item-label {
+  color: #fff !important;
+}
+
+.ant-tag {
+  border-radius: var(--radius-full) !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  padding: 2px 10px !important;
+}
+
+.ant-modal-content {
+  border-radius: var(--radius-xl) !important;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.ant-modal-header {
+  background: linear-gradient(180deg, #fff 0%, var(--brand-50) 100%) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+.ant-modal-title {
+  font-weight: 700 !important;
+  color: var(--slate-800) !important;
+}
+
+.ant-statistic-content-value {
+  font-weight: 800 !important;
+  color: var(--slate-900) !important;
+}
+
+.ant-empty-description {
+  color: var(--slate-500) !important;
+}
+
+.ant-pagination-item-active {
+  border-color: var(--brand-500) !important;
+  background: var(--brand-50) !important;
+}
+
+.ant-pagination-item-active a {
+  color: var(--brand-600) !important;
+  font-weight: 700 !important;
+}
+
+/* ─── Modal layer — always above header shell (z-index 50) ─── */
+.modal-backdrop,
+.create-event-modal-backdrop,
+.import-modal-backdrop {
+  z-index: 10000 !important;
+}
+
+/* Header shell sits below modals */
+.hrms-watermark {
+  position: relative;
+  isolation: isolate;
+}
+
+.hrms-watermark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('./assets/sonashi_logo.png') no-repeat center 40%;
+  background-size: var(--watermark-size);
+  opacity: var(--watermark-opacity);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hrms-watermark > * {
+  position: relative;
+  z-index: 1;
 }

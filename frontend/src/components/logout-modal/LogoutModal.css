@@ -4,21 +4,22 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(15, 23, 42, 0.6); /* Slightly less opaque */
+  background-color: rgba(0, 40, 90, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000000;
-  backdrop-filter: blur(6px); /* Reduced blur as requested */
+  backdrop-filter: blur(6px);
 }
 
 .logout-modal {
   background: #ffffff;
-  border-radius: 16px;
+  border-radius: var(--radius-xl, 1.25rem);
   padding: 32px 24px;
   width: 95%;
   max-width: 400px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg, 0 12px 36px rgba(0, 87, 181, 0.18));
+  border: 1px solid var(--border-subtle, #d6e8f8);
   animation: modalScaleUp 0.3s ease-out;
   box-sizing: border-box;
 }
