@@ -61,8 +61,9 @@ function TopNavbar({
 
   return (
     <>
-      <header className={styles.topbar}>
-        <div className={styles.topbarInner}>
+      <div className={styles.headerShell}>
+        <div className={styles.topbarCard}>
+          <div className={styles.topbarInner}>
           <div className={styles.topbarLeft}>
             <div className={styles.titleBlock}>
               <h1 className={styles.pageTitle}>{title}</h1>
@@ -136,6 +137,7 @@ function TopNavbar({
               </Dropdown.Menu>
             </Dropdown>
           </div>
+          </div>
         </div>
 
         {showBreadcrumb && (breadcrumbs?.length > 0 || breadcrumb) && (
@@ -170,7 +172,7 @@ function TopNavbar({
             )}
           </nav>
         )}
-      </header>
+      </div>
 
       <LogoutModal
         isOpen={isLogoutModalOpen}

@@ -13,6 +13,7 @@ import {
   FaIdCard
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
 
 const toDateInputValue = (value) => {
@@ -404,8 +405,11 @@ function DashboardOverview() {
           ))}
         </div>
 
-        {/* Details Modal */}
+      </div>
+
+        {/* Details Modal — portaled above header */}
         {selectedCategory && (
+          <ModalPortal>
           <div className={styles.modalBackdrop} onClick={() => setSelectedCategory(null)}>
             <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
               <div className={styles.modalHeader}>
@@ -417,6 +421,7 @@ function DashboardOverview() {
               </div>
               <div className={styles.modalBody}>
                 {filteredList.length > 0 ? (
+                  <div className={styles.modalTableWrap}>
                   <table className={styles.detailsTable}>
                     <thead>
                       <tr>
@@ -512,7 +517,7 @@ function DashboardOverview() {
                                         border: `1px solid ${cfg.dot}30`,
                                         userSelect: "none",
                                         cursor: "pointer",
-                                        minWidth: "140px",
+                                        minWidth: "118px",
                                         justifyContent: "space-between",
                                         letterSpacing: "0.01em",
                                       }}>
@@ -609,6 +614,7 @@ function DashboardOverview() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 ) : (
                   <div className={styles.emptyState}>No data found for this category.</div>
                 )}
@@ -630,8 +636,8 @@ function DashboardOverview() {
               </div>
             </div>
           </div>
+          </ModalPortal>
         )}
-      </div>
 
       {/* Vacation Date Prompt Modal */}
       {datePrompt && (() => {
@@ -653,7 +659,7 @@ function DashboardOverview() {
         return (
           <div
             style={{
-              position: "fixed", inset: 0, zIndex: 100001,
+              position: "fixed", inset: 0, zIndex: 10001,
               background: "rgba(15, 23, 42, 0.6)",
               backdropFilter: "blur(10px)",
               WebkitBackdropFilter: "blur(10px)",

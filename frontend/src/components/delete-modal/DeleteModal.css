@@ -5,7 +5,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 40, 90, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,14 +16,15 @@
 
 /* Modal Container */
 .delete-modal {
-  border-radius: 12px;
-  box-shadow: 0 20px 24px -4px rgba(10, 13, 18, 0.08), 0 8px 8px -4px rgba(10, 13, 18, 0.03);
+  border-radius: var(--radius-xl, 1.25rem);
+  box-shadow: var(--shadow-lg, 0 12px 36px rgba(0, 87, 181, 0.18));
   max-width: 400px;
   width: 90%;
   overflow: hidden;
-  font-family: Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  font-family: var(--font-sans, Inter, sans-serif);
   background-color: var(--White, #FFF);
-  padding: 24px;
+  padding: 28px;
+  border: 1px solid var(--border-subtle, #d6e8f8);
 }
 
 /* Modal Content */

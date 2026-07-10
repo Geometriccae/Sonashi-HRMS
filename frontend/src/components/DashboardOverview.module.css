@@ -7,11 +7,11 @@
 }
 
 .statCard {
-  background: var(--bg-surface, #ffffff);
+  background: linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
   border-radius: var(--radius-xl, 1.25rem);
   padding: 1.25rem;
-  border: 1px solid var(--border-default, #e2e8f0);
-  box-shadow: var(--shadow-card, 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06));
+  border: 1px solid var(--border-subtle, #d6e8f8);
+  box-shadow: var(--shadow-card);
   position: relative;
   overflow: hidden;
   transition: transform var(--transition-slow, 0.3s ease), box-shadow var(--transition-slow, 0.3s ease), border-color var(--transition, 0.2s ease);
@@ -19,6 +19,19 @@
   flex-direction: column;
   gap: 1rem;
   cursor: pointer;
+}
+
+.statCard::after {
+  content: '';
+  position: absolute;
+  bottom: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--card-accent, var(--brand-200)) 0%, transparent 70%);
+  opacity: 0.15;
+  pointer-events: none;
 }
 
 .statCard::before {
@@ -39,7 +52,7 @@
 
 .cardActionHint {
   font-size: 11px;
-  color: #007aff;
+  color: var(--brand-500);
   font-weight: 600;
   margin-top: auto;
   opacity: 0;
@@ -51,9 +64,9 @@
 }
 
 .statCard:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-lg, 0 12px 32px rgba(15, 23, 42, 0.1));
-  border-color: var(--slate-200, #e2e8f0);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--brand-200);
 }
 
 .statCard:hover::before {
@@ -207,7 +220,7 @@
   height: 100vh;
   background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(4px);
-  z-index: 100000;
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -217,13 +230,14 @@
 .modalContent {
   background: white;
   width: 100%;
-  max-width: 800px;
-  max-height: 85vh;
+  max-width: min(1140px, 96vw);
+  max-height: 88vh;
   border-radius: 20px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   animation: modalScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
 }
 
 @keyframes modalScale {
@@ -281,20 +295,29 @@
 
 .modalBody {
   padding: 0;
-  overflow-y: auto;
+  overflow: auto;
   flex: 1;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modalTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .detailsTable {
   width: 100%;
+  min-width: 860px;
   border-collapse: collapse;
 }
 
 .detailsTable th {
   background: #f8fafc;
-  padding: 12px 24px;
+  padding: 12px 16px;
   text-align: left;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -302,13 +325,15 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  white-space: nowrap;
 }
 
 .detailsTable td {
-  padding: 16px 24px;
+  padding: 14px 16px;
   border-bottom: 1px solid #f1f5f9;
-  font-size: 14px;
+  font-size: 13px;
   color: #334155;
+  vertical-align: middle;
 }
 
 .detailsTable tr:hover {
@@ -323,10 +348,15 @@
 }
 
 .modalFooter {
-  padding: 20px 24px;
+  padding: 16px 20px;
   border-top: 1px solid #f1f5f9;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  background: #fff;
 }
 
 .modalCloseBtn {
@@ -351,7 +381,7 @@
 }
 
 .viewAllBtn {
-  margin-right: auto;
+  margin-right: 0;
   padding: 10px 16px;
   background: #f1f5f9;
   color: #0f172a;
@@ -361,6 +391,7 @@
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .viewAllBtn:hover {
