@@ -50,7 +50,17 @@ const replace = async (docId, file, type) => {
   return response.json();
 };
 
-const DocumentsService = { listByEmployee, uploadForEmployee, remove, removeAll, replace };
+const updateType = async (docId, type) => {
+  const response = await fetch(`${baseUrl}/${docId}/type`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type }),
+  });
+  if (!response.ok) throw new Error("Failed to update document type");
+  return response.json();
+};
+
+const DocumentsService = { listByEmployee, uploadForEmployee, remove, removeAll, replace, updateType };
 
 export default DocumentsService;
 

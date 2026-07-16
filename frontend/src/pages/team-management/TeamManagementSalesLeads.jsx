@@ -5,6 +5,7 @@ import Side from "../sidebar/Sidebar";
 import employeeService from "../../services/EmployeeService";
 import leaveRequestService from "../../services/LeaveRequestService";
 import DocumentsService from "../../services/EmployeeDocumentService";
+import { DOC_TYPE_OPTIONS } from "../../components/team-management-components/TeamMangementDocuments";
 import EditEmployeeModal from "../../components/team-management-components/EditEmployeeModal";
 import Documents from "../../components/team-management-components/TeamMangementDocuments";
 // import Calendar from "../../components/CalendarComponent";
@@ -413,10 +414,16 @@ function TeamManagementSalesLeads() {
     try {
       if (!employeeId || !files || files.length === 0) return;
       // Upload each file sequentially (could be parallel if desired)
-      for (const file of files) {
+      for (const fileObj of files) {
+        // Handle backwards compatibility if fileObj is just a File
+        const isFile = fileObj instanceof File || !fileObj.rawFile;
+        const file = isFile ? fileObj : fileObj.rawFile;
+        const type = isFile ? undefined : fileObj.type;
+
         await DocumentsService.uploadForEmployee(employeeId, file, {
           uploadedBy: "Current User",
           userRole: "Sales Executive",
+          type: type
         });
       }
       // Refresh documents tab
@@ -1195,6 +1202,8 @@ function TeamManagementSalesLeads() {
         isOpen={isFileUploadModalOpen}
         onClose={handleFileUploadClose}
         onUpload={handleFileUploadComplete}
+        allowTypeSelection={true}
+        typeOptions={DOC_TYPE_OPTIONS}
       />
 
       <AssignTaskModal
