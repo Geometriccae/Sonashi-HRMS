@@ -201,6 +201,13 @@ function Sidebar() {
               <p className={styles["section-title"]}>ADDITIONAL</p>
               <ul>
                 <NavItem
+                  to="/settings-preferences"
+                  icon={settings}
+                  label="Settings preferences"
+                  active={isActive("/settings-preferences")}
+                  onNavigate={handleNavClick}
+                />
+                <NavItem
                   to="/profile"
                   icon={settings}
                   label="Settings"

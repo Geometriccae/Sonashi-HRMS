@@ -94,6 +94,10 @@
   --Gray-700: #414651;
   --Error-50: #fef2f2;
   --Error-100: #fee2e2;
+
+  /* Override Bootstrap font variables */
+  --bs-body-font-family: var(--font-sans);
+  --bs-font-sans-serif: var(--font-sans);
 }
 
 *,
@@ -109,7 +113,7 @@ html {
 
 body {
   margin: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-sans) !important;
   font-size: 0.9375rem;
   line-height: 1.5;
   color: var(--slate-800);
@@ -117,6 +121,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6,
+p, span:not([class*="icon"]):not([class*="fa"]), 
+div, input, button, select, textarea, a,
+.form-control, .btn, .table {
+  font-family: var(--font-sans);
 }
 
 code {
@@ -348,4 +359,131 @@ img {
 .hrms-watermark > * {
   position: relative;
   z-index: 1;
+}
+
+/* --- Themes ------------------------------------------- */
+[data-theme='forest'] {
+  --brand-50: #e6f4ea;
+  --brand-100: #ceead6;
+  --brand-200: #a8dab5;
+  --brand-300: #81c995;
+  --brand-400: #5bb974;
+  --brand-500: #34a853;
+  --brand-600: #2d9248;
+  --brand-700: #24763a;
+  --brand-800: #1b5a2c;
+  --brand-900: #123d1e;
+  --bg-app: #f1f8f4;
+  --bg-surface: #ffffff;
+}
+
+[data-theme='sunset'] {
+  --brand-50: #fce8e6;
+  --brand-100: #fad1ce;
+  --brand-200: #f6a5a0;
+  --brand-300: #f28b82;
+  --brand-400: #ee675c;
+  --brand-500: #ea4335;
+  --brand-600: #d03c2f;
+  --brand-700: #b13328;
+  --brand-800: #932a21;
+  --brand-900: #74211a;
+  --bg-app: #fdf3f2;
+  --bg-surface: #ffffff;
+}
+
+[data-theme='cream-gold'] {
+  --brand-50: #fff9e6;
+  --brand-100: #ffefb3;
+  --brand-200: #ffe680;
+  --brand-300: #ffdc4d;
+  --brand-400: #ffd21a;
+  --brand-500: #fbbc04;
+  --brand-600: #dfa300;
+  --brand-700: #b38200;
+  --brand-800: #805d00;
+  --brand-900: #4d3800;
+  --bg-app: #fcf9f2;
+  --bg-surface: #ffffff;
+}
+
+[data-theme='neon'] {
+  --brand-50: #1a1025;
+  --brand-100: #2d1b4e;
+  --brand-200: #432c7a;
+  --brand-300: #6b44c4;
+  --brand-400: #9d4edd;
+  --brand-500: #ff3385; /* Pink top of sidebar & primary accent */
+  --brand-600: #8a2be2; /* Purple middle of sidebar */
+  --brand-700: #3b82f6; /* Blue bottom of sidebar */
+  --brand-800: #1d4ed8;
+  --brand-900: #1e3a8a;
+  
+  --bg-app: #09090b;
+  --bg-surface: #18181b;
+  --slate-800: #e2e8f0;
+  --slate-900: #ffffff;
+  --border-subtle: #27272a;
+  --border-default: #3f3f46;
+  --bg-glass: rgba(24, 24, 27, 0.88);
+
+  /* RGB Neon Header overrides */
+  --header-bg: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 15px, transparent 15px, transparent 30px), linear-gradient(90deg, #8a2be2 0%, #3b82f6 100%);
+  --header-border: rgba(255, 255, 255, 0.1);
+  --header-text-color: #ffffff;
+  --header-subtitle-color: rgba(255, 255, 255, 0.8);
+  --profile-btn-bg: #18181b;
+  --profile-btn-border: #3f3f46;
+  --profile-text-color: #ffffff;
+  --profile-text-hover-color: #ff3385;
+}
+
+[data-theme='navy-royal'] {
+  --brand-50: #0b192c;
+  --brand-100: #102542;
+  --brand-200: #163258;
+  --brand-300: #1b3f6e;
+  --brand-400: #214b84;
+  --brand-500: #295f99;
+  --brand-600: #4a80c2;
+  --brand-700: #78a1d1;
+  --brand-800: #a5c3e0;
+  --brand-900: #d2e4f0;
+  --bg-app: #08111e;
+  --bg-surface: #0f1d30;
+  --slate-800: #e2e8f0;
+  --slate-900: #f8fafc;
+  --border-subtle: #1e3a5f;
+  --border-default: #2a5285;
+}
+
+/* --- Fonts ------------------------------------------- */
+[data-font='inter'] {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+[data-font='poppins'] {
+  --font-sans: 'Poppins', sans-serif;
+}
+[data-font='nunito'] {
+  --font-sans: 'Nunito', sans-serif;
+}
+[data-font='space-grotesk'] {
+  --font-sans: 'Space Grotesk', sans-serif;
+}
+[data-font='outfit'] {
+  --font-sans: 'Outfit', sans-serif;
+}
+[data-font='playfair-display'] {
+  --font-sans: 'Playfair Display', serif;
+}
+
+/* --- Sizes ------------------------------------------- */
+[data-size='s'] {
+  font-size: 13px;
+}
+[data-size='m'] {
+  font-size: 15px;
+}
+[data-size='l'] {
+  font-size: 17px;
 }

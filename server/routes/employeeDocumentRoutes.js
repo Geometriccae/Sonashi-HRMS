@@ -166,6 +166,26 @@ router.put("/:docId", memUpload.single("file"), async (req, res) => {
   }
 });
 
+// Update document type only (no file re-upload)
+router.patch("/:docId/type", async (req, res) => {
+  try {
+    const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : "";
+    if (!rawType) return res.status(400).json({ error: "Document type is required" });
+
+    const doc = await Document.findById(req.params.docId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    const updated = await Document.findByIdAndUpdate(
+      req.params.docId,
+      { $set: { type: rawType } },
+      { new: true }
+    );
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Delete document
 router.delete("/:docId", async (req, res) => {
   try {

@@ -41,6 +41,26 @@ function DocumentUploadField({
     window.open(existingDocument.filePath, "_blank", "noopener,noreferrer");
   };
 
+  const downloadCurrent = async () => {
+    const url = previewImageUrl || existingDocument?.filePath;
+    if (!url) return;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = existingDocument?.fileName || file?.name || "document";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
   return (
     <div className={`document-upload-field ${hasError ? "has-error" : ""}`}>
       <label className="document-label">
@@ -186,33 +206,76 @@ function DocumentUploadField({
               borderRadius: 12,
               overflow: "hidden",
               boxShadow: "0 20px 40px rgba(0, 0, 0, 0.25)",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <button
-              type="button"
-              onClick={() => setPreviewImageUrl("")}
+            <div
               style={{
-                position: "absolute",
-                top: 8,
-                right: 8,
-                border: "none",
-                background: "rgba(0,0,0,0.65)",
-                color: "#fff",
-                borderRadius: 8,
-                width: 32,
-                height: 32,
-                cursor: "pointer",
-                fontSize: 18,
-                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 8,
+                padding: "10px 12px",
+                borderBottom: "1px solid #e2e8f0",
+                background: "#f8fbff",
               }}
-              aria-label="Close preview"
             >
-              ×
-            </button>
+              <button
+                type="button"
+                onClick={downloadCurrent}
+                style={{
+                  border: "1px solid #c5ddf0",
+                  background: "#fff",
+                  color: "#004494",
+                  borderRadius: 8,
+                  padding: "7px 12px",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={downloadCurrent}
+                style={{
+                  border: "none",
+                  background: "linear-gradient(135deg, #0078e7, #0057b5)",
+                  color: "#fff",
+                  borderRadius: 8,
+                  padding: "7px 12px",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Download
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewImageUrl("")}
+                style={{
+                  border: "none",
+                  background: "rgba(0,0,0,0.65)",
+                  color: "#fff",
+                  borderRadius: 8,
+                  width: 32,
+                  height: 32,
+                  cursor: "pointer",
+                  fontSize: 18,
+                  lineHeight: 1,
+                }}
+                aria-label="Close preview"
+              >
+                ×
+              </button>
+            </div>
             <img
               src={previewImageUrl}
               alt={existingDocument?.fileName || "Uploaded document"}
-              style={{ display: "block", maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain" }}
+              style={{ display: "block", maxWidth: "90vw", maxHeight: "80vh", objectFit: "contain" }}
             />
           </div>
         </div>

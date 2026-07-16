@@ -188,16 +188,14 @@ main {
 
 /* Main Content Container */
 .contain {
-  width: 100%;
-  max-width: 96.25rem;
-  height: auto;
-  min-height: auto;
-  margin: 1.25rem 0 0 1.25rem;
-  border-radius: 0.75rem 0.75rem 0rem 0rem;
+  width: auto;
+  flex: 1;
+  margin: 1.25rem;
+  border-radius: 0.75rem;
   display: flex;
   flex-direction: column;
-  font-family: Inter, sans-serif;
-  background: #fff;
+  font-family: var(--font-sans, Inter, sans-serif);
+  background: var(--bg-surface, #fff);
   overflow: visible;
 }
 
@@ -205,9 +203,8 @@ main {
   height: auto;
   min-height: 100%;
   align-self: stretch;
-  background: #ffffff;
-  border-top-left-radius: 0.75rem;
-  border-top-right-radius: 0.75rem;
+  background: transparent;
+  border-radius: 0.75rem;
   padding-bottom: 2rem;
 }
 
@@ -494,8 +491,8 @@ main {
   }
 
   .contain {
-    margin: 1rem 0 0 1rem;
-    width: calc(100% - 2rem);
+    margin: 1rem;
+    width: auto;
   }
 
   .column3 {
@@ -541,8 +538,8 @@ main {
   }
 
   .contain {
-    margin: 0.75rem 0 0 0.75rem;
-    width: calc(100% - 1.5rem);
+    margin: 0.75rem;
+    width: auto;
   }
 
   .column {

@@ -3,7 +3,7 @@ import "./FileUploadModal.css";
 import uploadIcon from "../assets/dashboard/upload-cloud.svg";
 import removeIcon from "../assets/dashboard/trash-2.svg";
 
-function FileUploadModal({ isOpen, onClose, onUpload }) {
+function FileUploadModal({ isOpen, onClose, onUpload, allowTypeSelection = false, typeOptions = [] }) {
   const [uploadedFiles, setUploadedFiles] = useState([]);
 
   // Clear previously selected files whenever the modal opens
@@ -24,7 +24,13 @@ function FileUploadModal({ isOpen, onClose, onUpload }) {
 
   const handleFileUpload = () => {
     if (onUpload) {
-      const filesToSend = uploadedFiles.map(f => f.rawFile).filter(Boolean);
+      const filesToSend = uploadedFiles.map(f => {
+        if (allowTypeSelection) {
+          const finalType = f.isCustomType ? f.customType : f.type;
+          return { rawFile: f.rawFile, type: finalType };
+        }
+        return f.rawFile;
+      }).filter(f => allowTypeSelection ? f.rawFile : f);
       onUpload(filesToSend);
     }
     setUploadedFiles([]);
@@ -33,6 +39,28 @@ function FileUploadModal({ isOpen, onClose, onUpload }) {
 
   const handleRemoveFile = (fileId) => {
     setUploadedFiles(uploadedFiles.filter(file => file.id !== fileId));
+  };
+
+  const handleTypeChange = (fileId, value) => {
+    setUploadedFiles(prev => prev.map(f => {
+      if (f.id === fileId) {
+        if (value === "ADD_CUSTOM") {
+          return { ...f, type: "ADD_CUSTOM", isCustomType: true };
+        } else {
+          return { ...f, type: value, isCustomType: false };
+        }
+      }
+      return f;
+    }));
+  };
+
+  const handleCustomTypeChange = (fileId, value) => {
+    setUploadedFiles(prev => prev.map(f => {
+      if (f.id === fileId) {
+        return { ...f, customType: value };
+      }
+      return f;
+    }));
   };
 
   const handleUploadClick = () => {
@@ -51,7 +79,10 @@ function FileUploadModal({ isOpen, onClose, onUpload }) {
           size: `${sizeKB} KB`,
           progress: 100,
           isCompleted: true,
-          rawFile: file
+          rawFile: file,
+          type: typeOptions.length > 0 ? typeOptions[0] : "Extra",
+          isCustomType: false,
+          customType: ""
         };
       });
       setUploadedFiles(prev => [...prev, ...next]);
@@ -101,6 +132,37 @@ function FileUploadModal({ isOpen, onClose, onUpload }) {
                       <div className="file-name">{file.name}</div>
                       <div className="file-size">{file.size}</div>
                     </div>
+                    {allowTypeSelection && (
+                      <div style={{ marginTop: '8px', marginBottom: '8px', width: '100%' }}>
+                        <select 
+                          value={file.type}
+                          onChange={(e) => handleTypeChange(file.id, e.target.value)}
+                          style={{
+                            width: "100%", padding: "6px 10px", borderRadius: 6,
+                            border: "1.5px solid #e2e8f0", fontSize: 13,
+                            background: "#fff", cursor: "pointer", outline: "none", boxSizing: "border-box"
+                          }}
+                        >
+                          {typeOptions.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                          <option value="ADD_CUSTOM">+ Add Custom Type</option>
+                        </select>
+                        {file.isCustomType && (
+                          <input
+                            type="text"
+                            placeholder="Enter custom document type"
+                            value={file.customType}
+                            onChange={(e) => handleCustomTypeChange(file.id, e.target.value)}
+                            style={{
+                              width: "100%", padding: "6px 10px", borderRadius: 6,
+                              border: "1.5px solid #e2e8f0", fontSize: 13,
+                              marginTop: 6, boxSizing: "border-box", outline: "none"
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
                     <div className="file-progress">
                       <div className="progress-bar">
                         <div className="progress-background">
