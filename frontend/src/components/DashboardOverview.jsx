@@ -15,6 +15,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
+import { buildYetToGoFromLeaves } from "../utils/yetToGoHelpers";
 
 const toDateInputValue = (value) => {
   if (!value) return "";
@@ -107,9 +108,6 @@ function DashboardOverview() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const next60Days = new Date(today);
-        next60Days.setDate(today.getDate() + 60);
-
         const next90Days = new Date(today);
         next90Days.setDate(today.getDate() + 90);
 
@@ -122,7 +120,6 @@ function DashboardOverview() {
         let visaExpiry = 0;
         let passportExpiry = 0;
         let attOnVacation = 0;
-        let attUpcoming = 0;
         let attVacReturn = 0;
 
         empList.forEach(emp => {
@@ -134,7 +131,6 @@ function DashboardOverview() {
 
           // Count vacation statuses
           if (vs === "On Vacation") attOnVacation++;
-          else if (vs === "Vacation Pending") attUpcoming++;
           else if (vs === "Vacation Approved") attVacReturn++;
 
           if (emp.visaExpiryDate) {
@@ -152,10 +148,10 @@ function DashboardOverview() {
           }
         });
 
-        // Vacation counts are based solely on employee.vacationStatus — the
-        // single source of truth set via Team Management / Dashboard dropdowns.
+        // Yet to go = all upcoming vacation leave + Vacation Pending (no 60-day limit)
+        const yetToGoList = buildYetToGoFromLeaves(empList, leaveList);
         let onVacation = attOnVacation;
-        let upcomingVacation = attUpcoming;
+        let upcomingVacation = yetToGoList.length;
         let vacationReturn = attVacReturn;
 
         if (isMounted) {
@@ -226,18 +222,21 @@ function DashboardOverview() {
       );
 
       // Recompute counts from updated list
-      let attOnVacation = 0, attUpcoming = 0, attVacReturn = 0;
+      let attOnVacation = 0, attVacReturn = 0;
       updatedEmployees.forEach(e => {
         const vs = e.vacationStatus || "Onsite";
 
         if (vs === "On Vacation") attOnVacation++;
-        else if (vs === "Vacation Pending") attUpcoming++;
         else if (vs === "Vacation Approved") attVacReturn++;
       });
+      const upcomingVacation = buildYetToGoFromLeaves(
+        updatedEmployees,
+        data.leaveRequests || []
+      ).length;
       setCounts(prev => ({
         ...prev,
         onVacation: attOnVacation,
-        upcomingVacation: attUpcoming,
+        upcomingVacation,
         vacationReturn: attVacReturn
       }));
 
@@ -298,14 +297,13 @@ function DashboardOverview() {
   const handleCardClick = (category, customEmpList = null) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const next60Days = new Date(today);
-    next60Days.setDate(today.getDate() + 60);
     const next90Days = new Date(today);
     next90Days.setDate(today.getDate() + 90);
     const next6Months = new Date(today);
     next6Months.setMonth(today.getMonth() + 6);
 
     const empSource = customEmpList || data.employees;
+    const leaveSource = data.leaveRequests || [];
 
     let list = [];
     switch (category) {
@@ -326,7 +324,7 @@ function DashboardOverview() {
         break;
       }
       case "Yet to go": {
-        list = empSource.filter(e => e.vacationStatus === "Vacation Pending");
+        list = buildYetToGoFromLeaves(empSource, leaveSource);
         break;
       }
       case "Returned back from vacation": {
@@ -362,7 +360,7 @@ function DashboardOverview() {
     { label: "Active Employees", value: counts.active, icon: <FaUserCheck />, color: "#10b981", trend: "Steady" },
     { label: "Inactive Employees", value: counts.inactive, icon: <FaUserTimes />, color: "#64748b" },
     { label: "On vacation", value: counts.onVacation, icon: <FaPlane />, color: "#3b82f6", trend: "Live" },
-    { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "Next 60 days", tooltip: "Employees with approved leave starting in the next 60 days" },
+    { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "All upcoming", tooltip: "All employees with approved or pending vacation leave who are yet to travel (no date limit)" },
     { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 1 month", tooltip: "Employees who returned from vacation in the last 1 month" },
     { label: "Visa Expiry", value: counts.visaExpiry, icon: <FaPassport />, color: "#f97316", sub: "Next 90 days", alert: true, tooltip: "Visas expiring within the next 3 months. Action required." },
     { label: "Passport Expiry", value: counts.passportExpiry, icon: <FaIdCard />, color: "#0d9488", sub: "Next 6 months", alert: true, tooltip: "Passports expiring within the next 6 months. Action required." },
@@ -458,8 +456,8 @@ function DashboardOverview() {
                           <td>{item.employeeId || "-"}</td>
                           {(selectedCategory === "On vacation" || selectedCategory === "Yet to go" || selectedCategory === "Returned back from vacation") ? (
                             <>
-                              <td>{new Date(item.startDate).toLocaleDateString('en-GB')}</td>
-                              <td>{new Date(item.endDate).toLocaleDateString('en-GB')}</td>
+                              <td>{item.startDate ? new Date(item.startDate).toLocaleDateString('en-GB') : "—"}</td>
+                              <td>{item.endDate ? new Date(item.endDate).toLocaleDateString('en-GB') : "—"}</td>
                               {selectedCategory === "On vacation" && (
                                 <td>
                                   <button

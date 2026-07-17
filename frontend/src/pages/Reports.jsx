@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import Select from "react-select";
 import styles from "./Reports.module.css";
 import Side from "./sidebar/Sidebar";
 import * as XLSX from "xlsx";
@@ -12,6 +13,99 @@ import DateInput from "../components/DateInput";
 import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
+
+const EMPLOYEE_MENU_VISIBLE_COUNT = 5;
+const EMPLOYEE_OPTION_HEIGHT = 48;
+const EMPLOYEE_MENU_MAX_HEIGHT = EMPLOYEE_MENU_VISIBLE_COUNT * EMPLOYEE_OPTION_HEIGHT;
+
+const getEmployeeSelectStyles = (menuWidth) => ({
+  container: (base) => ({
+    ...base,
+    width: "100%",
+  }),
+  control: (base, state) => ({
+    ...base,
+    minHeight: "2.875rem",
+    borderRadius: "0.625rem",
+    borderColor: state.isFocused ? "#3b82f6" : "#e2e8f0",
+    boxShadow: state.isFocused ? "0 0 0 3px rgba(59, 130, 246, 0.12)" : "none",
+    fontSize: "0.9rem",
+    fontWeight: 500,
+    cursor: "pointer",
+    width: "100%",
+    "&:hover": { borderColor: "#cbd5e1" },
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    padding: "0 0.875rem",
+  }),
+  input: (base) => ({
+    ...base,
+    margin: 0,
+    padding: 0,
+  }),
+  indicatorSeparator: () => ({ display: "none" }),
+  dropdownIndicator: (base) => ({
+    ...base,
+    color: "#64748b",
+    paddingRight: "0.75rem",
+    "&:hover": { color: "#334155" },
+  }),
+  menu: (base) => ({
+    ...base,
+    zIndex: 10000,
+    width: menuWidth ? `${menuWidth}px` : "100%",
+    minWidth: menuWidth ? `${menuWidth}px` : "28rem",
+    borderRadius: "0.625rem",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 12px 32px rgba(15, 23, 42, 0.12)",
+    overflow: "hidden",
+  }),
+  menuList: (base) => ({
+    ...base,
+    maxHeight: `${EMPLOYEE_MENU_MAX_HEIGHT}px`,
+    padding: "4px 0",
+    overflowY: "auto",
+  }),
+  option: (base, state) => ({
+    ...base,
+    minHeight: `${EMPLOYEE_OPTION_HEIGHT}px`,
+    padding: "0 14px",
+    fontSize: "0.9rem",
+    textTransform: "none",
+    backgroundColor: state.isSelected ? "#2563eb" : state.isFocused ? "#eff6ff" : "#fff",
+    color: state.isSelected ? "#fff" : "#0f172a",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+  }),
+  singleValue: (base) => ({
+    ...base,
+    textTransform: "none",
+    maxWidth: "100%",
+    color: "#0f172a",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  }),
+  placeholder: (base) => ({
+    ...base,
+    color: "#94a3b8",
+    textTransform: "none",
+  }),
+  noOptionsMessage: (base) => ({
+    ...base,
+    fontSize: "0.875rem",
+    color: "#64748b",
+    padding: "12px 14px",
+  }),
+  menuPortal: (base) => ({
+    ...base,
+    zIndex: 10000,
+  }),
+});
 
 function Reports() {
   const [reportType, setReportType] = useState("");
@@ -27,7 +121,11 @@ function Reports() {
   const [filterCountry, setFilterCountry] = useState("All");
   const [minExperience, setMinExperience] = useState("All");
   const [minExpMonths, setMinExpMonths] = useState("All");
+  const [experienceMode, setExperienceMode] = useState("minimum"); // "minimum" | "exact"
   const [filterEmployee, setFilterEmployee] = useState("All");
+  const employeeSelectWrapRef = useRef(null);
+  const [employeeMenuWidth, setEmployeeMenuWidth] = useState(null);
+  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(false);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -47,6 +145,66 @@ function Reports() {
   const [uniqueOffices, setUniqueOffices] = useState(["All"]);
   const [uniqueCountries, setUniqueCountries] = useState(["All"]);
   const [employeeList, setEmployeeList] = useState([]);
+
+  const employeeOptions = useMemo(() => {
+    const sorted = [...employeeList].sort((a, b) =>
+      (a.employeeName || "").localeCompare(b.employeeName || "")
+    );
+    return [
+      { value: "All", label: "All Employees", name: "All Employees", employeeId: "" },
+      ...sorted.map((emp) => ({
+        value: emp.employeeId || emp._id,
+        label: `${emp.employeeName || "Unknown"}${emp.employeeId ? ` (${emp.employeeId})` : ""}`,
+        name: emp.employeeName || "Unknown",
+        employeeId: emp.employeeId || "",
+      })),
+    ];
+  }, [employeeList]);
+
+  const selectedEmployeeOption =
+    employeeOptions.find((opt) => opt.value === filterEmployee) || employeeOptions[0];
+
+  const showEmployeeSearchPlaceholder =
+    employeeMenuOpen && filterEmployee === "All";
+
+  const employeeSelectValue = showEmployeeSearchPlaceholder
+    ? null
+    : selectedEmployeeOption;
+
+  const syncEmployeeMenuWidth = useCallback(() => {
+    if (employeeSelectWrapRef.current) {
+      setEmployeeMenuWidth(employeeSelectWrapRef.current.offsetWidth);
+    }
+  }, []);
+
+  const handleEmployeeMenuOpen = useCallback(() => {
+    syncEmployeeMenuWidth();
+    setEmployeeMenuOpen(true);
+  }, [syncEmployeeMenuWidth]);
+
+  const handleEmployeeMenuClose = useCallback(() => {
+    setEmployeeMenuOpen(false);
+  }, []);
+
+  const employeeSelectStyles = useMemo(
+    () => getEmployeeSelectStyles(employeeMenuWidth),
+    [employeeMenuWidth]
+  );
+
+  const formatEmployeeOption = useCallback((option) => {
+    if (option.value === "All") {
+      return <span className={styles.employeeOptionAll}>{option.label}</span>;
+    }
+
+    return (
+      <span className={styles.employeeOptionLabel}>
+        <span className={styles.employeeOptionName}>{option.name}</span>
+        {option.employeeId ? (
+          <span className={styles.employeeOptionId}>{option.employeeId}</span>
+        ) : null}
+      </span>
+    );
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -140,6 +298,7 @@ function Reports() {
     setFilterCountry("All");
     setMinExperience("All");
     setMinExpMonths("All");
+    setExperienceMode("minimum");
     setFilterEmployee("All");
     setStartDate("");
     setEndDate("");
@@ -172,18 +331,36 @@ function Reports() {
     return `${y} year${y !== 1 ? 's' : ''} ${m} month${m !== 1 ? 's' : ''}`;
   };
 
-  // Filter employees by the combined min years + min months experience filter
-  const filterByExperience = (empList) => {
-    const minYears = minExperience !== "All" ? parseFloat(minExperience) : 0;
-    const minMonths = minExpMonths !== "All" ? parseFloat(minExpMonths) : 0;
-    if (minYears === 0 && minMonths === 0 && minExperience === "All" && minExpMonths === "All") return empList;
+  const getEmployeeExperienceMonths = (e) => {
+    const fromDoj = computeExperienceFromDoj(e.doj);
+    return fromDoj != null ? fromDoj : ((e.totalYearsExperience || 0) * 12);
+  };
 
-    const thresholdMonths = minYears * 12 + minMonths;
+  // Filter by Minimum (>=) or Exact experience
+  const filterByExperience = (empList) => {
+    if (minExperience === "All" && minExpMonths === "All") return empList;
+
+    const years = minExperience !== "All" ? parseInt(minExperience, 10) : 0;
+    const months = minExpMonths !== "All" ? parseInt(minExpMonths, 10) : 0;
+    const thresholdMonths = years * 12 + months;
 
     return empList.filter(e => {
-      // Prefer computing from DOJ; fall back to totalYearsExperience
-      const fromDoj = computeExperienceFromDoj(e.doj);
-      const expMonths = fromDoj != null ? fromDoj : ((e.totalYearsExperience || 0) * 12);
+      const expMonths = getEmployeeExperienceMonths(e);
+
+      if (experienceMode === "exact") {
+        // Exact years only (months = All): match completed years, e.g. "1 year" => 12–23 months
+        if (minExperience !== "All" && minExpMonths === "All") {
+          return Math.floor(expMonths / 12) === years;
+        }
+        // Exact months only (years = All): match residual months, e.g. "3 months" => 3, 15, 27...
+        if (minExperience === "All" && minExpMonths !== "All") {
+          return expMonths % 12 === months;
+        }
+        // Exact years + months: total months must match exactly
+        return expMonths === thresholdMonths;
+      }
+
+      // Minimum: experience must be at least the selected years + months
       return expMonths >= thresholdMonths;
     });
   };
@@ -430,7 +607,7 @@ function Reports() {
       empList = filterByExperience(empList);
 
       return empList.map(e => {
-        const expMonths = computeExperienceFromDoj(e.doj);
+        const expMonths = getEmployeeExperienceMonths(e);
         return {
           "Employee ID": e.employeeId || "",
           "Name": e.employeeName || "",
@@ -686,6 +863,7 @@ function Reports() {
                       setFilterCountry("All");
                       setMinExperience("All");
                       setMinExpMonths("All");
+                      setExperienceMode("minimum");
                       setFilterEmployee("All");
                       setFilterMonth("All");
                       setFilterYear("All");
@@ -701,23 +879,46 @@ function Reports() {
 
               {/* Individual Employee Filter */}
               {reportType && (
-                <div className={styles["form-row"]}>
+                <div className={`${styles["form-row"]} ${styles.employeeSelectRow}`}>
                   <div className={styles["form-label"]}>Individual Employee</div>
-                  <div className={styles["form-field"]}>
-                    <select
-                      className={styles["select-field"]}
-                      value={filterEmployee}
-                      onChange={e => setFilterEmployee(e.target.value)}
-                    >
-                      <option value="All">All Employees</option>
-                      {employeeList
-                        .sort((a, b) => (a.employeeName || "").localeCompare(b.employeeName || ""))
-                        .map(emp => (
-                          <option key={emp.employeeId || emp._id} value={emp.employeeId || emp._id}>
-                            {emp.employeeName}{emp.employeeId ? ` (${emp.employeeId})` : ""}
-                          </option>
-                        ))}
-                    </select>
+                  <div
+                    ref={employeeSelectWrapRef}
+                    className={`${styles["form-field"]} ${styles.employeeSelectWrap}`}
+                  >
+                    <Select
+                      inputId="report-employee-filter"
+                      options={employeeOptions}
+                      value={employeeSelectValue}
+                      onChange={(opt) => setFilterEmployee(opt?.value || "All")}
+                      placeholder={
+                        showEmployeeSearchPlaceholder
+                          ? "Search all employees"
+                          : "All Employees"
+                      }
+                      isSearchable
+                      openMenuOnFocus
+                      blurInputOnSelect={false}
+                      noOptionsMessage={() => "No employees found"}
+                      styles={employeeSelectStyles}
+                      classNamePrefix="report-employee-select"
+                      menuPortalTarget={document.body}
+                      menuPlacement="auto"
+                      menuShouldScrollIntoView
+                      maxMenuHeight={EMPLOYEE_MENU_MAX_HEIGHT}
+                      formatOptionLabel={formatEmployeeOption}
+                      onMenuOpen={handleEmployeeMenuOpen}
+                      onMenuClose={handleEmployeeMenuClose}
+                      filterOption={(option, inputValue) => {
+                        if (!inputValue) return true;
+                        const search = inputValue.trim().toLowerCase();
+                        const data = option.data || {};
+                        return (
+                          (option.label || "").toLowerCase().includes(search) ||
+                          (data.name || "").toLowerCase().includes(search) ||
+                          (data.employeeId || "").toLowerCase().includes(search)
+                        );
+                      }}
+                    />
                   </div>
                 </div>
               )}
@@ -790,8 +991,34 @@ function Reports() {
 
                       {reportType !== "Document expiry" && (
                         <>
+                          <div className={`${styles["form-row"]} ${styles.experienceModeRow}`}>
+                            <div className={styles["form-label"]}>Experience Filter</div>
+                            <div className={`${styles["form-field"]} ${styles.experienceModeToggle}`}>
+                              <button
+                                type="button"
+                                className={`${styles.experienceModeBtn} ${experienceMode === "minimum" ? styles.experienceModeBtnActive : ""}`}
+                                onClick={() => setExperienceMode("minimum")}
+                              >
+                                Minimum
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.experienceModeBtn} ${experienceMode === "exact" ? styles.experienceModeBtnActive : ""}`}
+                                onClick={() => setExperienceMode("exact")}
+                              >
+                                Exact
+                              </button>
+                            </div>
+                            <p className={styles.experienceModeHint}>
+                              {experienceMode === "minimum"
+                                ? "Shows employees with this experience or more."
+                                : "Shows only employees matching this experience."}
+                            </p>
+                          </div>
                           <div className={styles["form-row"]}>
-                            <div className={styles["form-label"]}>Min Years of Experience</div>
+                            <div className={styles["form-label"]}>
+                              {experienceMode === "minimum" ? "Min Years of Experience" : "Years of Experience"}
+                            </div>
                             <div className={styles["form-field"]}>
                               <select
                                 className={styles["select-field"]}
@@ -803,7 +1030,9 @@ function Reports() {
                             </div>
                           </div>
                           <div className={styles["form-row"]}>
-                            <div className={styles["form-label"]}>Min Months of Experience</div>
+                            <div className={styles["form-label"]}>
+                              {experienceMode === "minimum" ? "Min Months of Experience" : "Months of Experience"}
+                            </div>
                             <div className={styles["form-field"]}>
                               <select
                                 className={styles["select-field"]}
@@ -824,8 +1053,34 @@ function Reports() {
 
               {reportType === "Document expiry" && (
                 <>
+                  <div className={`${styles["form-row"]} ${styles.experienceModeRow}`}>
+                    <div className={styles["form-label"]}>Experience Filter</div>
+                    <div className={`${styles["form-field"]} ${styles.experienceModeToggle}`}>
+                      <button
+                        type="button"
+                        className={`${styles.experienceModeBtn} ${experienceMode === "minimum" ? styles.experienceModeBtnActive : ""}`}
+                        onClick={() => setExperienceMode("minimum")}
+                      >
+                        Minimum
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.experienceModeBtn} ${experienceMode === "exact" ? styles.experienceModeBtnActive : ""}`}
+                        onClick={() => setExperienceMode("exact")}
+                      >
+                        Exact
+                      </button>
+                    </div>
+                    <p className={styles.experienceModeHint}>
+                      {experienceMode === "minimum"
+                        ? "Shows employees with this experience or more."
+                        : "Shows only employees matching this experience."}
+                    </p>
+                  </div>
                   <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Min Years of Experience</div>
+                    <div className={styles["form-label"]}>
+                      {experienceMode === "minimum" ? "Min Years of Experience" : "Years of Experience"}
+                    </div>
                     <div className={styles["form-field"]}>
                       <select
                         className={styles["select-field"]}
@@ -837,7 +1092,9 @@ function Reports() {
                     </div>
                   </div>
                   <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Min Months of Experience</div>
+                    <div className={styles["form-label"]}>
+                      {experienceMode === "minimum" ? "Min Months of Experience" : "Months of Experience"}
+                    </div>
                     <div className={styles["form-field"]}>
                       <select
                         className={styles["select-field"]}

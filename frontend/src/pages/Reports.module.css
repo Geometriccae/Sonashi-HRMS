@@ -416,6 +416,134 @@ main {
   width: 100%;
 }
 
+.employeeSelectRow {
+  grid-column: 1 / -1;
+}
+
+.experienceModeRow {
+  grid-column: 1 / -1;
+}
+
+.experienceModeToggle {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+}
+
+.experienceModeBtn {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font: 600 0.8125rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  padding: 0.55rem 1rem;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.experienceModeBtn:hover {
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.experienceModeBtnActive {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.experienceModeBtnActive:hover {
+  color: #ffffff;
+  background: #1d4ed8;
+}
+
+.experienceModeHint {
+  margin: 0.15rem 0 0;
+  color: #64748b;
+  font: 400 0.8125rem Inter, -apple-system, Roboto, Helvetica, sans-serif;
+  line-height: 1.4;
+}
+
+.employeeSelectWrap {
+  width: 100%;
+  max-width: 100% !important;
+}
+
+.employeeSelectWrap :global(.report-employee-select__control) {
+  width: 100%;
+}
+
+.employeeOptionAll {
+  font-weight: 600;
+  color: inherit;
+  text-transform: none;
+}
+
+.employeeOptionLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-height: 48px;
+  text-transform: none;
+}
+
+.employeeOptionName {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employeeOptionId {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+:global(.report-employee-select__menu-list) {
+  scrollbar-width: thin;
+  scrollbar-color: #93c5fd #f1f5f9;
+}
+
+:global(.report-employee-select__menu-list::-webkit-scrollbar) {
+  width: 8px;
+}
+
+:global(.report-employee-select__menu-list::-webkit-scrollbar-track) {
+  background: #f1f5f9;
+  border-radius: 999px;
+}
+
+:global(.report-employee-select__menu-list::-webkit-scrollbar-thumb) {
+  background: #93c5fd;
+  border-radius: 999px;
+}
+
+:global(.report-employee-select__menu-list::-webkit-scrollbar-thumb:hover) {
+  background: #60a5fa;
+}
+
+:global(.report-employee-select__option--is-selected) .employeeOptionId {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:global(.report-employee-select__option--is-focused:not(.report-employee-select__option--is-selected)) .employeeOptionId {
+  color: #3b82f6;
+}
+
 .fullWidthInput {
   width: 100%;
 }
