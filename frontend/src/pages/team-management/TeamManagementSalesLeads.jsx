@@ -611,7 +611,6 @@ function TeamManagementSalesLeads() {
             </button>
           </div>
         ) : null;
-
       default:
         return null;
     }
@@ -1171,6 +1170,7 @@ function TeamManagementSalesLeads() {
                   </section>
                 </div>
               )}
+
             </div>
           </div>
         </div>
