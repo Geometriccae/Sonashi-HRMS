@@ -7,12 +7,19 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import DateInput from "../components/DateInput";
 import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
+import sifService from "../services/SifService";
+
+const SIF_HEADERS = [
+  "StaffID", "EMPID", "EMPNAME", "EMPLOYERID", "AGENTCODE",
+  "BANKACCOUNT", "STATUS", "BASIC", "HRA", "TRANSPOR",
+  "OTHERALLOV", "DEDUCTIO", "TOTA",
+];
+const SIF_RED_HEADERS = new Set(["StaffID", "EMPID", "EMPLOYERID", "AGENTCODE", "BANKACCOUNT"]);
 
 const EMPLOYEE_MENU_VISIBLE_COUNT = 5;
 const EMPLOYEE_OPTION_HEIGHT = 48;
@@ -209,6 +216,16 @@ function Reports() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // SIF settings (Salary report)
+  const [sifEmployerId, setSifEmployerId] = useState("");
+  const [sifAgentCode, setSifAgentCode] = useState("");
+  const sifInputRef = useRef(null);
+  const [sifImportOpen, setSifImportOpen] = useState(false);
+  const [sifDragOver, setSifDragOver] = useState(false);
+  const [sifImporting, setSifImporting] = useState(false);
+  const [sifPreviewRows, setSifPreviewRows] = useState([]);
+  const [sifPreviewFile, setSifPreviewFile] = useState(null);
+
   // Preview States
   const [previewData, setPreviewData] = useState([]);
   const [previewHeaders, setPreviewHeaders] = useState([]);
@@ -239,6 +256,47 @@ function Reports() {
     loadEmployees();
   }, []);
 
+  useEffect(() => {
+    sifService.getSettings()
+      .then((s) => {
+        setSifEmployerId(s.employerId || "");
+        setSifAgentCode(s.defaultAgentRoutingCode || "");
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveSifSettings = useCallback(async (employerId, agentCode, { silent = true } = {}) => {
+    try {
+      await sifService.saveSettings({
+        employerId: employerId,
+        defaultAgentRoutingCode: agentCode,
+      });
+    } catch (err) {
+      if (!silent) throw err;
+    }
+  }, []);
+
+  const digitsOnly = (v) => String(v ?? "").replace(/\D/g, "");
+
+  const getBankAccount = (sal) => {
+    const iban = String(sal.ibanNumber || "").trim();
+    const account = String(sal.accountNumber || "").trim();
+    if (iban) return iban.replace(/\s+/g, "");
+    return account.replace(/\s+/g, "");
+  };
+
+  const getFixedIncome = (sal) => {
+    if (sal.totalSalary != null && Number(sal.totalSalary) > 0) {
+      return Number(sal.totalSalary);
+    }
+    const basic = Number(sal.basicSalary) || 0;
+    const house = Number(sal.houseRent) || 0;
+    const travel = Number(sal.travelExp) || 0;
+    const other = Number(sal.other) || 0;
+    const allowance = Number(sal.totalAllowance) || house + travel + other;
+    return basic + allowance;
+  };
+
   // Full employee data (includes salaryDetails, increments, etc.)
   // needed for Salary report and Increment report. Fetched once and cached.
   const fetchFullEmployees = async () => {
@@ -254,7 +312,9 @@ function Reports() {
     "Salary report",
     "Employee Experience"
   ];
-  const formats = ["Excel", "PDF"];
+  const formats = reportType === "Salary report"
+    ? ["Excel", "PDF", "SIF"]
+    : ["Excel", "PDF"];
 
   const leadTypeOptions = ["All", "Lead", "Client"];
   const followupStatusOptions = [
@@ -579,13 +639,13 @@ function Reports() {
           "Name": e.employeeName || "",
           "Department": e.department || "",
           "Role": e.role || "",
-          "Basic Salary": sal.basicSalary || 0,
-          "House Rent Allowance": sal.houseRent || 0,
-          "Travel Allowance": sal.travelExp || 0,
-          "Other Allowance": sal.other || 0,
-          "Total Allowance": sal.totalAllowance || 0,
-          "Deduction": sal.deduction || 0,
-          "Total / Net Salary": sal.totalSalary || 0,
+          "Basic Salary": Number(sal.basicSalary) || 0,
+          "House Rent Allowance": Number(sal.houseRent) || 0,
+          "Travel Allowance": Number(sal.travelExp) || 0,
+          "Other Allowance": Number(sal.other) || 0,
+          "Total Allowance": Number(sal.totalAllowance) || 0,
+          "Deduction": Number(sal.deduction) || 0,
+          "Total / Net Salary": Number(sal.totalSalary) || 0,
           "Bank Name": sal.bankName || "",
           "Account Number": sal.accountNumber || "",
           "IBAN": sal.ibanNumber || "",
@@ -674,7 +734,7 @@ function Reports() {
       }
     } catch (err) {
       console.error("Report generation failed:", err);
-      setError("Failed to generate report. Please try again.");
+      setError(err.message || "Failed to generate report. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -721,10 +781,26 @@ function Reports() {
   };
 
   const generateSalaryReport = async () => {
+    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const now = new Date();
+    const m = filterMonth !== "All"
+      ? monthNames.indexOf(filterMonth) + 1
+      : now.getMonth() + 1;
+    const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
+
+    if (format === "SIF") {
+      await saveSifSettings(sifEmployerId, sifAgentCode, { silent: true });
+      const result = await sifService.exportSif(m, y);
+      if (result.skippedCount > 0) {
+        alert(`SIF exported (${result.edrCount} records). ${result.skippedCount} employee(s) skipped due to missing data.`);
+      }
+      return;
+    }
     const exportData = await fetchReportData("Salary report");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "Excel") {
-      exportToExcel(exportData, "Salary_Report");
+      await saveSifSettings(sifEmployerId, sifAgentCode, { silent: false });
+      await sifService.exportExcel(m, y);
     } else if (format === "PDF") {
       exportToPDF(exportData, "Salary_Report");
     }
@@ -738,6 +814,153 @@ function Reports() {
     } else if (format === "PDF") {
       exportToPDF(exportData, "Employee_Experience_Report");
     }
+  };
+
+  const isAllowedSifImportFile = (file) => {
+    if (!file) return false;
+    const name = (file.name || "").toLowerCase();
+    return (
+      name.endsWith(".sif") ||
+      name.endsWith(".txt") ||
+      name.endsWith(".csv") ||
+      name.endsWith(".xlsx") ||
+      name.endsWith(".xls") ||
+      (file.type || "").includes("spreadsheet") ||
+      (file.type || "").includes("excel") ||
+      (file.type || "").includes("text")
+    );
+  };
+
+  const SIF_IMPORT_HEADER_ALIASES = {
+    STAFFID: "StaffID", EMPID: "EMPID", EMPNAME: "EMPNAME",
+    EMPLOYERID: "EMPLOYERID", AGENTCODE: "AGENTCODE", AGENTCODI: "AGENTCODE",
+    BANKACCOUNT: "BANKACCOUNT", STATUS: "STATUS", BASIC: "BASIC",
+    HRA: "HRA", TRANSPOR: "TRANSPOR", TRANSPORT: "TRANSPOR",
+    OTHERALLOV: "OTHERALLOV", OTHERALLOW: "OTHERALLOV",
+    DEDUCTIO: "DEDUCTIO", DEDUCTION: "DEDUCTIO", TOTA: "TOTA", TOTAL: "TOTA",
+  };
+
+  const normalizeHeader = (h) => String(h || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+  const parseImportFileForPreview = async (file) => {
+    const name = (file.name || "").toLowerCase();
+    const isExcel =
+      name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".csv") ||
+      (file.type || "").includes("spreadsheet") || (file.type || "").includes("excel");
+
+    if (isExcel) {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const sheetName = wb.SheetNames[0];
+      if (!sheetName) return [];
+      const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
+      return json.map((row) => {
+        const mapped = {};
+        Object.keys(row).forEach((key) => {
+          const norm = normalizeHeader(key);
+          const canonical = SIF_IMPORT_HEADER_ALIASES[norm];
+          if (canonical) mapped[canonical] = row[key];
+        });
+        return mapped;
+      });
+    }
+
+    // Text-based SIF — parse lines
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter((l) => l.startsWith("EDR"));
+    return lines.map((line) => {
+      const parts = line.split(",");
+      return {
+        EMPID: parts[1] || "",
+        AGENTCODE: parts[2] || "",
+        BANKACCOUNT: parts[3] || "",
+        BASIC: parts[7] || "",
+        TOTA: parts[7] || "",
+      };
+    });
+  };
+
+  const handleFileForPreview = async (file) => {
+    if (!file) return;
+    if (!isAllowedSifImportFile(file)) {
+      setError("Please upload a .SIF, .xlsx, .xls, .csv, or .txt file.");
+      return;
+    }
+    setError("");
+    try {
+      const rows = await parseImportFileForPreview(file);
+      if (!rows.length) {
+        setError("File is empty or has no valid data rows.");
+        return;
+      }
+      setSifPreviewRows(rows);
+      setSifPreviewFile(file);
+    } catch (err) {
+      setError("Failed to parse file: " + (err.message || "unknown error"));
+    }
+  };
+
+  const confirmSifImport = async () => {
+    if (!sifPreviewFile) return;
+    setSifImporting(true);
+    setLoading(true);
+    setError("");
+    try {
+      const name = (sifPreviewFile.name || "").toLowerCase();
+      const isExcel =
+        name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".csv") ||
+        (sifPreviewFile.type || "").includes("spreadsheet") ||
+        (sifPreviewFile.type || "").includes("excel");
+
+      const result = isExcel
+        ? await sifService.importExcel(sifPreviewFile)
+        : await sifService.importSif(sifPreviewFile);
+
+      const updated = result.updated ?? result.updatedCount ?? 0;
+      const skipped = result.skipped?.length || 0;
+
+      setSifImportOpen(false);
+      setSifDragOver(false);
+      setSifPreviewRows([]);
+      setSifPreviewFile(null);
+      alert(
+        `Import complete. ${updated} employee(s) updated.${skipped ? ` ${skipped} skipped.` : ""}`
+      );
+
+      // Reload SIF settings (EMPLOYERID may have been updated from file)
+      try {
+        const s = await sifService.getSettings();
+        setSifEmployerId(s.employerId || "");
+        setSifAgentCode(s.defaultAgentRoutingCode || "");
+      } catch {}
+
+      if (reportType === "Salary report") {
+        await handlePreview();
+      }
+    } catch (err) {
+      setError(err.message || "Import failed");
+    } finally {
+      setSifImporting(false);
+      setLoading(false);
+      if (sifInputRef.current) sifInputRef.current.value = "";
+    }
+  };
+
+  const handleImportSif = async (e) => {
+    const file = e.target.files?.[0];
+    if (sifInputRef.current) sifInputRef.current.value = "";
+    if (!file) return;
+    await handleFileForPreview(file);
+  };
+
+  const handleSifDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSifDragOver(false);
+    if (sifImporting) return;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    await handleFileForPreview(file);
   };
 
   const exportToExcel = (data, fileName, dropdownOptions) => {
@@ -832,6 +1055,28 @@ function Reports() {
               </div>
               <div className={styles["report-actions"]}>
                 <button type="button" className={styles["cancel-button"]} onClick={handleCancel}>Cancel</button>
+                {reportType === "Salary report" && (
+                  <button
+                    type="button"
+                    className={styles["import-sif-button"]}
+                    onClick={() => {
+                      setError("");
+                      setSifPreviewRows([]);
+                      setSifPreviewFile(null);
+                      setSifImportOpen(true);
+                    }}
+                    disabled={loading}
+                  >
+                    Import SIF / Excel
+                  </button>
+                )}
+                <input
+                  ref={sifInputRef}
+                  type="file"
+                  accept=".sif,.SIF,.txt,.csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  hidden
+                  onChange={handleImportSif}
+                />
                 <button type="button" className={styles["preview-button"]} onClick={handlePreview} disabled={loading}>
                   {loading ? "Loading..." : "Preview"}
                 </button>
@@ -854,6 +1099,7 @@ function Reports() {
                     value={reportType}
                     onChange={e => {
                       setReportType(e.target.value);
+                      setFormat("");
                       setLeadType("All");
                       setFollowupStatus("All");
                       setEmployeeStatus("All");
@@ -1144,6 +1390,39 @@ function Reports() {
 
 
 
+              {reportType === "Salary report" && (
+                <div className={styles.sifSettingsPanel}>
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Employer ID</div>
+                    <div className={styles["form-field"]}>
+                      <input
+                        type="text"
+                        className={styles["select-field"]}
+                        placeholder="13-digit Employer ID"
+                        maxLength={13}
+                        value={sifEmployerId}
+                        onChange={(e) => setSifEmployerId(e.target.value.replace(/\D/g, "").slice(0, 13))}
+                        onBlur={() => saveSifSettings(sifEmployerId, sifAgentCode)}
+                      />
+                    </div>
+                  </div>
+                  <div className={styles["form-row"]}>
+                    <div className={styles["form-label"]}>Agent Code</div>
+                    <div className={styles["form-field"]}>
+                      <input
+                        type="text"
+                        className={styles["select-field"]}
+                        placeholder="9-digit Agent Routing Code"
+                        maxLength={9}
+                        value={sifAgentCode}
+                        onChange={(e) => setSifAgentCode(e.target.value.replace(/\D/g, "").slice(0, 9))}
+                        onBlur={() => saveSifSettings(sifEmployerId, sifAgentCode)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Format */}
               <div className={styles["form-row"]}>
                 <div className={styles["form-label"]}>Select Format</div>
@@ -1169,7 +1448,9 @@ function Reports() {
                   <table className={styles["preview-table"]}>
                     <thead>
                       <tr>
-                        {previewHeaders.map(h => <th key={h}>{h}</th>)}
+                        {previewHeaders.map(h => (
+                          <th key={h}>{h}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -1183,7 +1464,7 @@ function Reports() {
                 </div>
                 {previewData.length > 0 && (
                   <div className={styles.previewNote}>
-                    Scroll inside the table to view all records. Use Generate to download the full report as Excel or PDF.
+                    Scroll inside the table to view all records. Use Generate to download the full report as Excel, PDF{reportType === "Salary report" ? ", or SIF" : ""}.
                   </div>
                 )}
               </div>
@@ -1193,6 +1474,155 @@ function Reports() {
 
         </PageBody>
       </main>
+
+      {sifImportOpen && (
+        <div
+          className={styles.sifImportOverlay}
+          onClick={() => {
+            if (!sifImporting) {
+              setSifImportOpen(false);
+              setSifDragOver(false);
+              setSifPreviewRows([]);
+              setSifPreviewFile(null);
+            }
+          }}
+        >
+          <div
+            className={`${styles.sifImportModal} ${sifPreviewRows.length > 0 ? styles.sifImportModalWide : ""}`}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sif-import-title"
+          >
+            <div className={styles.sifImportHeader}>
+              <div>
+                <h3 id="sif-import-title" className={styles.sifImportTitle}>
+                  Import SIF / Excel
+                </h3>
+                <p className={styles.sifImportSubtitle}>
+                  {sifPreviewRows.length > 0
+                    ? `Preview — ${sifPreviewRows.length} record(s) found in ${sifPreviewFile?.name || "file"}`
+                    : "Drag and drop your salary file, or browse to upload."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.sifImportClose}
+                onClick={() => {
+                  if (!sifImporting) {
+                    setSifImportOpen(false);
+                    setSifDragOver(false);
+                    setSifPreviewRows([]);
+                    setSifPreviewFile(null);
+                  }
+                }}
+                disabled={sifImporting}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            {sifPreviewRows.length === 0 ? (
+              <div
+                className={`${styles.sifDropZone} ${sifDragOver ? styles.sifDropZoneActive : ""} ${sifImporting ? styles.sifDropZoneDisabled : ""}`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!sifImporting) setSifDragOver(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!sifImporting) setSifDragOver(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSifDragOver(false);
+                }}
+                onDrop={handleSifDrop}
+                onClick={() => {
+                  if (!sifImporting) sifInputRef.current?.click();
+                }}
+              >
+                <div className={styles.sifDropIcon} aria-hidden="true">
+                  ⬆
+                </div>
+                <p className={styles.sifDropTitle}>
+                  {sifDragOver
+                    ? "Drop file to import"
+                    : "Drag & drop file here"}
+                </p>
+                <p className={styles.sifDropHint}>
+                  Supports .SIF, .xlsx, .xls, .csv, .txt
+                </p>
+                <button
+                  type="button"
+                  className={styles.sifBrowseButton}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    sifInputRef.current?.click();
+                  }}
+                >
+                  Browse files
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className={styles.sifPreviewTableWrap}>
+                  <table className={styles.sifPreviewTable}>
+                    <thead>
+                      <tr>
+                        {SIF_HEADERS.filter((h) => sifPreviewRows.some((r) => r[h] !== undefined && r[h] !== "")).map((h) => (
+                          <th key={h} className={SIF_RED_HEADERS.has(h) ? styles.sifRedHeader : undefined}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sifPreviewRows.slice(0, 200).map((row, idx) => (
+                        <tr key={idx}>
+                          {SIF_HEADERS.filter((h) => sifPreviewRows.some((r) => r[h] !== undefined && r[h] !== "")).map((h) => (
+                            <td key={h}>{row[h] !== undefined && row[h] !== null ? String(row[h]) : ""}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {sifPreviewRows.length > 200 && (
+                    <p className={styles.sifPreviewTruncated}>
+                      Showing first 200 of {sifPreviewRows.length} rows
+                    </p>
+                  )}
+                </div>
+                <div className={styles.sifPreviewActions}>
+                  <button
+                    type="button"
+                    className={styles["cancel-button"]}
+                    onClick={() => {
+                      setSifPreviewRows([]);
+                      setSifPreviewFile(null);
+                    }}
+                    disabled={sifImporting}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className={styles["generate-button"]}
+                    onClick={confirmSifImport}
+                    disabled={sifImporting}
+                  >
+                    {sifImporting ? "Importing..." : `Confirm Import (${sifPreviewRows.length} rows)`}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {error && <div className={styles.sifImportError}>{error}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

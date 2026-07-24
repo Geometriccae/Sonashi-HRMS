@@ -37,6 +37,7 @@ const leaveRequestRoutes = require('./routes/leaveRequestRoutes');
 const salarySlipRoutes = require('./routes/salarySlipRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const sifRoutes = require('./routes/sifRoutes');
 const { initExpiryCron } = require('./services/expiryService');
 const Employee = require('./models/Employee');
 
@@ -307,6 +308,7 @@ app.use('/api/leave-requests', leaveRequestRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/options', optionRoutes);
+app.use('/api/sif', sifRoutes);
 
 
 // ====== DATABASE CONNECTION ======
