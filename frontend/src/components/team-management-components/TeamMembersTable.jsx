@@ -197,6 +197,8 @@ function TeamMembersTable() {
   const canDeleteEmployees = userRole === "admin" || userRole === "hod";
   const [datePrompt, setDatePrompt] = useState(null);
   const [datePromptSaving, setDatePromptSaving] = useState(false);
+  const [statusPrompt, setStatusPrompt] = useState(null);
+  const [statusPromptSaving, setStatusPromptSaving] = useState(false);
 
   useEffect(() => {
     fetchEmployees();
@@ -399,6 +401,66 @@ function TeamMembersTable() {
     setDatePrompt(null);
   };
 
+  const handleEmployeeStatusChange = (employeeItem, newStatus) => {
+    if (newStatus === "InActive") {
+      setStatusPrompt({ employeeItem, newStatus, lastWorkingDay: "" });
+    } else {
+      confirmEmployeeStatusChange(employeeItem, "Active", null);
+    }
+  };
+
+  const confirmEmployeeStatusChange = async (employeeItem, newStatus, lastWorkingDay) => {
+    const empId = employeeItem._id || employeeItem.id;
+    setStatusPromptSaving(true);
+    try {
+      const payload = {
+        employeeStatus: newStatus,
+        lastWorkingDay: newStatus === "InActive" && lastWorkingDay
+          ? new Date(lastWorkingDay).toISOString()
+          : null,
+      };
+      if (newStatus === "InActive") {
+        payload.vacationStatus = "Onsite";
+        payload.attendance = "Onsite";
+      }
+      await employeeService.updateEmployee(empId, payload);
+      setEmployees(prev =>
+        prev.map(e =>
+          (e._id === empId || e.id === empId)
+            ? { ...e, ...payload }
+            : e
+        )
+      );
+      employeeService.invalidateCache?.();
+      showToast(
+        newStatus === "Active"
+          ? "Employee activated successfully."
+          : "Employee deactivated successfully.",
+        "success"
+      );
+      setStatusPrompt(null);
+    } catch (err) {
+      console.error("Failed to update employee status:", err);
+      showToast("Failed to update employee status.", "error");
+    } finally {
+      setStatusPromptSaving(false);
+    }
+  };
+
+  const handleStatusPromptConfirm = async () => {
+    if (!statusPrompt || statusPromptSaving) return;
+    await confirmEmployeeStatusChange(
+      statusPrompt.employeeItem,
+      statusPrompt.newStatus,
+      statusPrompt.lastWorkingDay
+    );
+  };
+
+  const handleStatusPromptCancel = () => {
+    if (statusPromptSaving) return;
+    setStatusPrompt(null);
+  };
+
   const filteredData = useMemo(() => {
     return employees.filter((member) => {
       let matchesFilter = true;
@@ -476,10 +538,25 @@ function TeamMembersTable() {
         title: "Status",
         dataIndex: "employeeStatus",
         key: "employeeStatus",
-        width: 120,
+        width: 140,
         sorter: (a, b) => (a.employeeStatus || "").localeCompare(b.employeeStatus || ""),
-        render: (status) => {
+        render: (status, record) => {
           const isActive = status !== "InActive";
+          if (canEditEmployees) {
+            return (
+              <Select
+                size="small"
+                value={status || "Active"}
+                style={{ minWidth: 120 }}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(val) => handleEmployeeStatusChange(record, val)}
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "InActive", label: "InActive" },
+                ]}
+              />
+            );
+          }
           return (
             <Tag color={isActive ? "success" : "default"} style={{ borderRadius: 20, fontWeight: 600 }}>
               {status || "Active"}
@@ -1037,6 +1114,242 @@ function TeamMembersTable() {
                 )}
                 {datePromptSaving ? "Saving..." : "Confirm"}
               </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Last Working Day Prompt Modal for Employee Status Change */}
+      {statusPrompt && (() => {
+        const nameInitials = statusPrompt.employeeItem.employeeName
+          ? statusPrompt.employeeItem.employeeName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+          : "EE";
+
+        return (
+          <div
+            style={{
+              position: "fixed", inset: 0, zIndex: 100001,
+              background: "rgba(15, 23, 42, 0.6)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "20px"
+            }}
+            onClick={handleStatusPromptCancel}
+          >
+            <style>{`
+              @keyframes statusPromptFadeIn {
+                from { opacity: 0; transform: scale(0.95) translateY(10px); }
+                to { opacity: 1; transform: scale(1) translateY(0); }
+              }
+              @keyframes statusPromptSpin {
+                to { transform: rotate(360deg); }
+              }
+              .status-prompt-date:focus {
+                border-color: #ef4444 !important;
+                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15) !important;
+              }
+            `}</style>
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: "24px",
+                padding: "36px",
+                width: "440px",
+                maxWidth: "100%",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 40px rgba(239, 68, 68, 0.05)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "24px",
+                position: "relative",
+                overflow: "hidden",
+                border: "1px solid #f1f5f9",
+                animation: "statusPromptFadeIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+                textAlign: "left"
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Top Accent Gradient Bar */}
+              <div style={{
+                position: "absolute",
+                top: 0, left: 0, right: 0,
+                height: "6px",
+                background: "linear-gradient(90deg, #ef4444, #f97316, #eab308)"
+              }} />
+
+              {/* Close Button */}
+              <button
+                onClick={handleStatusPromptCancel}
+                disabled={statusPromptSaving}
+                style={{
+                  position: "absolute",
+                  top: "20px", right: "20px",
+                  background: "#f1f5f9", border: "none",
+                  width: "32px", height: "32px", borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "18px", color: "#64748b",
+                  cursor: statusPromptSaving ? "not-allowed" : "pointer",
+                  opacity: statusPromptSaving ? 0.5 : 1,
+                  transition: "all 0.2s ease",
+                  lineHeight: 1
+                }}
+                onMouseEnter={e => { if (!statusPromptSaving) { e.target.style.background = "#e2e8f0"; e.target.style.color = "#0f172a"; } }}
+                onMouseLeave={e => { if (!statusPromptSaving) { e.target.style.background = "#f1f5f9"; e.target.style.color = "#64748b"; } }}
+              >&times;</button>
+
+              {/* Avatar & Header */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "8px", marginTop: "10px" }}>
+                <div style={{
+                  width: "60px",
+                  height: "60px",
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #fee2e2, #fecaca)",
+                  color: "#dc2626",
+                  fontSize: "22px",
+                  fontWeight: "700",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 8px 16px rgba(220, 38, 38, 0.12)"
+                }}>
+                  {nameInitials}
+                </div>
+                <h3 style={{ margin: "10px 0 2px", fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
+                  Deactivate Employee
+                </h3>
+                <p style={{ margin: 0, fontSize: "14px", color: "#64748b", lineHeight: "1.5" }}>
+                  Please select the last working day for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong> before deactivating.
+                </p>
+              </div>
+
+              {/* Status Badge */}
+              <div style={{
+                background: "#fef2f2",
+                borderRadius: "16px",
+                padding: "14px 18px",
+                border: "1px solid #fecaca",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Changing Status to:
+                  </span>
+                </div>
+                <div style={{ display: "inline-flex", alignSelf: "flex-start" }}>
+                  <span style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 14px",
+                    borderRadius: "999px",
+                    background: "linear-gradient(135deg, #fee2e2, #fecaca)",
+                    color: "#991b1b",
+                    fontSize: "13px",
+                    fontWeight: "800",
+                    boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
+                    border: "1px solid #fca5a525"
+                  }}>
+                    <span style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: "#ef4444",
+                      boxShadow: "0 0 0 2px #ef444425"
+                    }} />
+                    InActive
+                  </span>
+                </div>
+              </div>
+
+              {/* Date Input */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Last Working Day
+                </label>
+                <DateInput
+                  value={statusPrompt.lastWorkingDay}
+                  className="status-prompt-date"
+                  onChange={e => setStatusPrompt(prev => ({ ...prev, lastWorkingDay: e.target.value }))}
+                  style={{
+                    border: "2px solid #e2e8f0",
+                    borderRadius: "12px",
+                    padding: "12px 16px",
+                    fontSize: "15px",
+                    color: "#0f172a",
+                    fontWeight: "600",
+                    outline: "none",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    transition: "all 0.2s ease",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+                    cursor: "pointer"
+                  }}
+                />
+              </div>
+
+              {/* Footer Buttons */}
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px" }}>
+                <button
+                  onClick={handleStatusPromptCancel}
+                  disabled={statusPromptSaving}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: "12px",
+                    border: "2px solid #e2e8f0",
+                    background: "#fff",
+                    color: "#64748b",
+                    fontWeight: "700",
+                    fontSize: "14px",
+                    cursor: statusPromptSaving ? "not-allowed" : "pointer",
+                    opacity: statusPromptSaving ? 0.6 : 1,
+                    transition: "all 0.2s ease"
+                  }}
+                  onMouseEnter={e => { if (!statusPromptSaving) { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; } }}
+                  onMouseLeave={e => { if (!statusPromptSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; } }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStatusPromptConfirm}
+                  disabled={statusPromptSaving}
+                  style={{
+                    padding: "12px 28px",
+                    borderRadius: "12px",
+                    border: "none",
+                    background: statusPromptSaving ? "#94a3b8" : "linear-gradient(135deg, #dc2626, #ef4444)",
+                    color: "#fff",
+                    fontWeight: "700",
+                    fontSize: "14px",
+                    cursor: statusPromptSaving ? "not-allowed" : "pointer",
+                    boxShadow: statusPromptSaving ? "none" : "0 4px 12px rgba(220, 38, 38, 0.25)",
+                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    minWidth: "120px"
+                  }}
+                  onMouseEnter={e => { if (!statusPromptSaving) { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(220, 38, 38, 0.35)"; } }}
+                  onMouseLeave={e => { if (!statusPromptSaving) { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(220, 38, 38, 0.25)"; } }}
+                >
+                  {statusPromptSaving && (
+                    <span
+                      style={{
+                        width: "14px",
+                        height: "14px",
+                        border: "2px solid rgba(255,255,255,0.35)",
+                        borderTopColor: "#fff",
+                        borderRadius: "50%",
+                        display: "inline-block",
+                        animation: "statusPromptSpin 0.7s linear infinite"
+                      }}
+                    />
+                  )}
+                  {statusPromptSaving ? "Saving..." : "Confirm Deactivation"}
+                </button>
               </div>
             </div>
           </div>
