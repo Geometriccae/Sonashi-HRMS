@@ -77,7 +77,8 @@ function LeaveRequestTable({ onUpdate }) {
     const isHOD = String(userRole || "").toLowerCase() === "hod";
     const isAdminRole = String(userRole || "").toLowerCase() === "admin";
     const isHR = String(userRole || "").toLowerCase() === "hr";
-    const isViewerRole = String(userRole || "").toLowerCase() === "viewer";
+    const roleLower = String(userRole || "").toLowerCase();
+    const isViewerRole = roleLower === "viewer" || roleLower === "authorize_user";
     const canManageLeaves = checkCanManageLeaves(userRole);
     const canCreateLeaveRequests = canCreateLeaves(userRole);
     const canEditLeaveRequests = canEditLeaves(userRole);

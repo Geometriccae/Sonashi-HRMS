@@ -498,7 +498,10 @@ function TeamManagementSalesLeads() {
   // Render different buttons based on active tab
   const renderButtons = () => {
     const isAdmin = userRole === "admin" || userRole === "hod";
-    const canEdit = userRole !== "viewer" && (isAdmin || userRole === "hr");
+    const canEdit =
+      userRole !== "viewer" &&
+      userRole !== "authorize_user" &&
+      (isAdmin || userRole === "hr");
 
     switch (activeTab) {
       case "basicInfo":
@@ -834,12 +837,6 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column5}><span className={styles.text9}>Attendance Status</span><span className={styles.text10}>{employee.attendance || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-
-                        <div className={styles.column4}><span className={styles.text9}>Date of Birth</span><span className={styles.text10}>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-GB') : "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Gender</span><span className={styles.text10}>{employee.gender || "Not provided"}</span></div>
-                        <div className={styles.column5}><span className={styles.text9}>Nationality</span><span className={styles.text10}>{employee.nationality || "Not provided"}</span></div>
-                      </div>
-                      <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Date of Join (DOJ)</span><span className={styles.text10}>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}>
                           <span className={styles.text9}>Total Exp (Yrs)</span>
@@ -857,8 +854,23 @@ function TeamManagementSalesLeads() {
                             })()}
                           </span>
                         </div>
+                        <div className={styles.column4}><span className={styles.text9}>Notice Period</span><span className={styles.text10}>{employee.noticePeriod || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Provision Period</span><span className={styles.text10}>{employee.provisionPeriod || "Not provided"}</span></div>
+                      </div>
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}><span className={styles.text9}>Date of Birth</span><span className={styles.text10}>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Gender</span><span className={styles.text10}>{employee.gender || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Nationality</span><span className={styles.text10}>{employee.nationality || "Not provided"}</span></div>
+                      </div>
+                      <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Emirates ID</span><span className={styles.text10}>{employee.emiratesId || "Not provided"}</span></div>
-                        <div className={styles.column5}><span className={styles.text9}>Passport No</span><span className={styles.text10}>{employee.passportNo || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Passport No</span><span className={styles.text10}>{employee.passportNo || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Labour Card Number</span><span className={styles.text10}>{employee.labourCardNumber || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Company Code</span><span className={styles.text10}>{employee.companyCode || "Not provided"}</span></div>
+                      </div>
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}><span className={styles.text9}>IBAN Number</span><span className={styles.text10}>{employee?.salaryDetails?.ibanNumber || "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Bank Sort Code</span><span className={styles.text10}>{employee?.salaryDetails?.bankSortCode || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Passport Expiry</span><span className={styles.text10}>{employee.passportExpiryDate ? new Date(employee.passportExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
@@ -871,7 +883,7 @@ function TeamManagementSalesLeads() {
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Work Permit No</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Reporting Manager</span><span className={styles.text10}>{employee.reportingManager || "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Status</span><span className={styles.text10}>{employee.employeeStatus || "Active"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Employee Status</span><span className={styles.text10}>{employee.employeeStatus === "InActive" ? "Inactive (Non-Working Employee)" : "Active (Working Employee)"}</span></div>
                         {employee.employeeStatus === "InActive" ? (
                           <div className={styles.column5}>
                             <span className={styles.text9}>Last Working Day</span>
@@ -1022,7 +1034,7 @@ function TeamManagementSalesLeads() {
                     <div className={styles.column4}><span className={styles.text9}>Bank Name</span><span className={styles.text10}>{employee?.salaryDetails?.bankName || "Not provided"}</span></div>
                     <div className={styles.column4}><span className={styles.text9}>Account Number</span><span className={styles.text10}>{employee?.salaryDetails?.accountNumber || "Not provided"}</span></div>
                     <div className={styles.column4}><span className={styles.text9}>IBAN Number</span><span className={styles.text10}>{employee?.salaryDetails?.ibanNumber || "Not provided"}</span></div>
-                    <div className={styles.column5}><span className={styles.text9}>Bank SORT Code</span><span className={styles.text10}>{employee?.salaryDetails?.bankSortCode || "Not provided"}</span></div>
+                    <div className={styles.column5}><span className={styles.text9}>Bank Sort Code</span><span className={styles.text10}>{employee?.salaryDetails?.bankSortCode || "Not provided"}</span></div>
                   </div>
                 </>
               )}

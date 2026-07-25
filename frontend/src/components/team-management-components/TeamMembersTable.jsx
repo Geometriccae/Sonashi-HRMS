@@ -193,7 +193,8 @@ function TeamMembersTable() {
   const [error, setError] = useState(null);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
-  const canEditEmployees = userRole !== "viewer";
+  const canEditEmployees =
+    userRole !== "viewer" && userRole !== "authorize_user";
   const canDeleteEmployees = userRole === "admin" || userRole === "hod";
   const [datePrompt, setDatePrompt] = useState(null);
   const [datePromptSaving, setDatePromptSaving] = useState(false);
@@ -535,31 +536,38 @@ function TeamMembersTable() {
         ),
       },
       {
-        title: "Status",
+        title: "Employee Status",
         dataIndex: "employeeStatus",
         key: "employeeStatus",
-        width: 140,
+        width: 200,
         sorter: (a, b) => (a.employeeStatus || "").localeCompare(b.employeeStatus || ""),
         render: (status, record) => {
           const isActive = status !== "InActive";
+          const statusLabel = isActive
+            ? "Active (Working)"
+            : "Inactive (Non-Working)";
           if (canEditEmployees) {
             return (
               <Select
                 size="small"
                 value={status || "Active"}
-                style={{ minWidth: 120 }}
+                style={{ minWidth: 180 }}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(val) => handleEmployeeStatusChange(record, val)}
                 options={[
-                  { value: "Active", label: "Active" },
-                  { value: "InActive", label: "InActive" },
+                  { value: "Active", label: "Active (Working Employee)" },
+                  { value: "InActive", label: "Inactive (Non-Working Employee)" },
                 ]}
+                optionLabelProp="label"
               />
             );
           }
           return (
-            <Tag color={isActive ? "success" : "default"} style={{ borderRadius: 20, fontWeight: 600 }}>
-              {status || "Active"}
+            <Tag
+              color={isActive ? "success" : "error"}
+              style={{ borderRadius: 20, fontWeight: 600 }}
+            >
+              {statusLabel}
             </Tag>
           );
         },
@@ -1259,7 +1267,7 @@ function TeamMembersTable() {
                       background: "#ef4444",
                       boxShadow: "0 0 0 2px #ef444425"
                     }} />
-                    InActive
+                    Inactive (Non-Working Employee)
                   </span>
                 </div>
               </div>

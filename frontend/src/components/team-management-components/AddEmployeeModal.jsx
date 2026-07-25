@@ -15,6 +15,7 @@ import DocumentsService from "../../services/EmployeeDocumentService";
 import OptionService from "../../services/OptionService";
 import {
   ACTIVE_OPTIONS,
+  COMPANY_CODE_OPTIONS,
   VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
@@ -66,12 +67,16 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     designation: "",
     department: "",
     doj: "",
+    noticePeriod: "",
+    provisionPeriod: "",
     lastWorkingDay: "",
     totalYearsExperience: "",
     dateOfBirth: "",
     passportNo: "",
     passportExpiryDate: "",
+    labourCardNumber: "",
     labourCardExpiryDate: "",
+    companyCode: "",
     visaExpiryDate: "",
     emiratesIdExpiryDate: "",
     remarks: "",
@@ -341,6 +346,10 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
       // Extract salary details cleanly
       const payload = { ...filteredData };
+
+      // Always persist bank / labour / company fields
+      payload.labourCardNumber = formData.labourCardNumber || "";
+      payload.companyCode = formData.companyCode || "";
       payload.salaryDetails = {
         basicSalary: parseFloat(formData.basicSalary) || 0,
         houseRent: parseFloat(formData.houseRent) || 0,
@@ -354,6 +363,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         ibanNumber: formData.ibanNumber || "",
         bankSortCode: formData.bankSortCode || ""
       };
+      [
+        "basicSalary", "houseRent", "travelExp", "other", "totalAllowance",
+        "deduction", "totalSalary", "bankName", "accountNumber", "ibanNumber", "bankSortCode",
+      ].forEach((k) => delete payload[k]);
+
       payload.emergencyContact = {
         uae: {
           name: formData.emergencyUaeName || "",
@@ -442,11 +456,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         designation: "",
         department: "",
         doj: "",
+        noticePeriod: "",
+        provisionPeriod: "",
         totalYearsExperience: "",
         dateOfBirth: "",
         passportNo: "",
         passportExpiryDate: "",
+        labourCardNumber: "",
         labourCardExpiryDate: "",
+        companyCode: "",
         visaExpiryDate: "",
         emiratesIdExpiryDate: "",
         remarks: "",
@@ -511,6 +529,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   };
 
   const activeOptions = ACTIVE_OPTIONS;
+  const companyCodeOptions = COMPANY_CODE_OPTIONS;
   const vacationStatusOptions = VACATION_STATUS_OPTIONS;
   const genderOptions = GENDER_OPTIONS;
   const emergencyRelationshipOptions = EMERGENCY_RELATIONSHIP_OPTIONS;
@@ -552,6 +571,28 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 placeholder="Office"
                 value={formData.office}
                 onChange={(e) => handleInputChange("office", e.target.value)}
+              />
+
+              <Dropdown
+                label="Company Code"
+                placeholder="Select company code"
+                options={companyCodeOptions}
+                value={formData.companyCode}
+                onChange={(e) => handleInputChange("companyCode", e.target.value)}
+              />
+
+              <InputField
+                label="IBAN Number"
+                placeholder="Enter IBAN"
+                value={formData.ibanNumber}
+                onChange={(e) => handleInputChange("ibanNumber", e.target.value)}
+              />
+
+              <InputField
+                label="Bank Sort Code"
+                placeholder="Enter Bank Sort Code"
+                value={formData.bankSortCode}
+                onChange={(e) => handleInputChange("bankSortCode", e.target.value)}
               />
 
               <InputField
@@ -640,6 +681,28 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 onChange={(e) =>
                   handleInputChange("designation", e.target.value)
                 }
+              />
+
+              <InputField
+                label="DOJ"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.doj}
+                onChange={(e) => handleInputChange("doj", e.target.value)}
+              />
+
+              <InputField
+                label="Notice Period"
+                placeholder="e.g. 30 days"
+                value={formData.noticePeriod}
+                onChange={(e) => handleInputChange("noticePeriod", e.target.value)}
+              />
+
+              <InputField
+                label="Provision Period"
+                placeholder="e.g. 3 months"
+                value={formData.provisionPeriod}
+                onChange={(e) => handleInputChange("provisionPeriod", e.target.value)}
               />
 
               {/* Emergency Contacts Section */}
@@ -808,14 +871,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           <div className="billing-content">
             <div className="form-fields-grid">
               <InputField
-                label="DOJ"
-                placeholder="YYYY-MM-DD"
-                type="date"
-                value={formData.doj}
-                onChange={(e) => handleInputChange("doj", e.target.value)}
-              />
-
-              <InputField
                 label="Total Year of Experience"
                 placeholder="0.0"
                 value={(() => {
@@ -858,6 +913,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 value={formData.passportExpiryDate}
                 onChange={(e) =>
                   handleInputChange("passportExpiryDate", e.target.value)
+                }
+              />
+
+              <InputField
+                label="Labour Card Number"
+                placeholder="Labour Card Number"
+                value={formData.labourCardNumber}
+                onChange={(e) =>
+                  handleInputChange("labourCardNumber", e.target.value)
                 }
               />
 
@@ -912,7 +976,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               />
 
               <Dropdown
-                label="Active Status"
+                label="Employee Status"
                 placeholder="Select status"
                 options={activeOptions}
                 value={formData.employeeStatus}
@@ -1120,8 +1184,8 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 onChange={(e) => handleInputChange("ibanNumber", e.target.value)}
               />
               <InputField
-                label="Bank SORT Code"
-                placeholder="Enter SORT Code"
+                label="Bank Sort Code"
+                placeholder="Enter Bank Sort Code"
                 value={formData.bankSortCode}
                 onChange={(e) => handleInputChange("bankSortCode", e.target.value)}
               />
@@ -1160,6 +1224,26 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
             {
               label: "Employee Status",
               value: formData.employeeStatus || "Not provided",
+            },
+          ],
+          [
+            {
+              label: "Notice Period",
+              value: formData.noticePeriod || "Not provided",
+            },
+            {
+              label: "Provision Period",
+              value: formData.provisionPeriod || "Not provided",
+            },
+          ],
+          [
+            {
+              label: "Labour Card Number",
+              value: formData.labourCardNumber || "Not provided",
+            },
+            {
+              label: "Company Code",
+              value: formData.companyCode || "Not provided",
             },
           ],
           [
@@ -1218,7 +1302,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               value: formData.ibanNumber || "Not provided",
             },
             {
-              label: "Bank SORT Code",
+              label: "Bank Sort Code",
               value: formData.bankSortCode || "Not provided",
             },
           ],

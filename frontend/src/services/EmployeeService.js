@@ -115,12 +115,18 @@ class EmployeeService {
   }
 
   // Get all employees (full records — use only when editing/detail views need everything)
-  async getEmployees({ force = false } = {}) {
-    if (!force && this._isCacheValid() && this._cache.full) {
+  // Optional status: 'Active' | 'InActive' — applied server-side via ?status=
+  async getEmployees({ force = false, status } = {}) {
+    const statusFilter = status === 'Active' || status === 'InActive' ? status : '';
+    // Never serve cached full list when a status filter is requested
+    if (!force && !statusFilter && this._isCacheValid() && this._cache.full) {
       return this._cache.full;
     }
     try {
-      const response = await fetch(this.baseURL, {
+      const url = statusFilter
+        ? `${this.baseURL}?${new URLSearchParams({ status: statusFilter })}`
+        : this.baseURL;
+      const response = await fetch(url, {
         method: 'GET',
         headers: this.getAuthHeaders(),
       });
@@ -130,8 +136,10 @@ class EmployeeService {
       }
 
       const data = await response.json();
-      this._cache.full = data;
-      this._cache.ts = Date.now();
+      if (!statusFilter) {
+        this._cache.full = data;
+        this._cache.ts = Date.now();
+      }
       return data;
     } catch (error) {
       console.error('Error fetching employees:', error);

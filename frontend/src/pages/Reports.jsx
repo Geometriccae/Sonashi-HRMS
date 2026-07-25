@@ -141,9 +141,10 @@ function Reports() {
 
   const monthsList = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const currentYear = new Date().getFullYear();
+  // Include a few future years plus past years (e.g. 2022–2031 when current is 2026)
   const yearsList = ["All"];
-  for (let i = 0; i < 15; i++) {
-    yearsList.push((currentYear - i).toString());
+  for (let y = currentYear + 5; y >= currentYear - 14; y--) {
+    yearsList.push(String(y));
   }
 
   // Dynamic dropdown list selectors
@@ -299,9 +300,31 @@ function Reports() {
 
   // Full employee data (includes salaryDetails, increments, etc.)
   // needed for Salary report and Increment report. Fetched once and cached.
-  const fetchFullEmployees = async () => {
-    const data = await employeeService.getEmployees({ force: true });
+  // Optional statusFilter: 'Active' | 'InActive' — applied server-side.
+  const fetchFullEmployees = async (statusFilter) => {
+    const data = await employeeService.getEmployees({
+      force: true,
+      status: statusFilter || undefined,
+    });
     return Array.isArray(data) ? data : (data.employees || data.data || []);
+  };
+
+  const normalizeEmpStatus = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, "");
+
+  const isInactiveEmployee = (emp) => {
+    const s = normalizeEmpStatus(emp?.employeeStatus);
+    return s === "inactive" || s === "nonworking" || s === "nonworkingemployee";
+  };
+
+  const isActiveEmployee = (emp) => {
+    const s = normalizeEmpStatus(emp?.employeeStatus);
+    // Treat missing/empty as Active (schema default); never treat inactive variants as active
+    if (isInactiveEmployee(emp)) return false;
+    return !s || s === "active" || s === "working";
   };
 
   const reportTypes = [
@@ -493,8 +516,17 @@ function Reports() {
     }
 
     if (type === "Airfare Report") {
-      let data = await employeeService.getEmployeesList();
+      let data = await employeeService.getEmployeesList({ force: true });
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+
+      // Dedupe by employeeId/_id so the report has no duplicate rows
+      const seen = new Set();
+      empList = empList.filter((e) => {
+        const key = String(e.employeeId || e._id || "");
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
       if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
       if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
@@ -507,20 +539,24 @@ function Reports() {
         empList = empList.filter(e => isDateMatch(e.travellingDate));
       }
 
-      return empList.map(e => ({
-        "Employee ID": e.employeeId || "",
-        "Name": e.employeeName || "",
-        "Department": e.department || "",
-        "Role": e.role || "",
-        "Office Location": e.office || "",
-        "Airfare Entitlement": e.airFare ? "Yes" : "No",
-        "Last Working Day": e.lastWorkingDay ? new Date(e.lastWorkingDay).toLocaleDateString('en-GB') : "Not set",
-        "Travelling Date": e.travellingDate ? new Date(e.travellingDate).toLocaleDateString('en-GB') : "Not set",
-        "Return / Entry Date": e.returnDate ? new Date(e.returnDate).toLocaleDateString('en-GB') : "",
-        "First Working Day": e.firstWorkingDay ? new Date(e.firstWorkingDay).toLocaleDateString('en-GB') : "",
-        "Passport No": e.passportNo || "",
-        "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : ""
-      }));
+      return empList.map(e => {
+        const airfareYes =
+          e.airFare === true || e.airFare === "true" || e.airFare === "Yes";
+        return {
+          "Employee ID": e.employeeId || "",
+          "Name": e.employeeName || "",
+          "Department": e.department || "",
+          "Role": e.role || "",
+          "Office Location": e.office || "",
+          "Airfare Entitlement": airfareYes ? "Yes" : "No",
+          "Last Working Day": e.lastWorkingDay ? new Date(e.lastWorkingDay).toLocaleDateString('en-GB') : "Not set",
+          "Travelling Date": e.travellingDate ? new Date(e.travellingDate).toLocaleDateString('en-GB') : "Not set",
+          "Return / Entry Date": e.returnDate ? new Date(e.returnDate).toLocaleDateString('en-GB') : "",
+          "First Working Day": e.firstWorkingDay ? new Date(e.firstWorkingDay).toLocaleDateString('en-GB') : "",
+          "Passport No": e.passportNo || "",
+          "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : ""
+        };
+      });
     }
 
     if (type === "Increment report") {
@@ -571,11 +607,12 @@ function Reports() {
     }
 
     if (type === "Document expiry") {
-      let data = await employeeService.getEmployeesList();
+      let data = await employeeService.getEmployeesList({ force: true });
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
       if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
-      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      // Document Expiry: Active (Working) employees only — exclude InActive/Non-Working
+      empList = empList.filter(isActiveEmployee);
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
@@ -622,17 +659,23 @@ function Reports() {
     }
 
     if (type === "Salary report") {
-      let empList = await fetchFullEmployees();
+      // All / Active → Active only; InActive → InActive only (server + client)
+      const statusForApi = employeeStatus === "InActive" ? "InActive" : "Active";
+      let empList = await fetchFullEmployees(statusForApi);
 
       if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
-      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      if (employeeStatus === "InActive") {
+        empList = empList.filter(isInactiveEmployee);
+      } else {
+        empList = empList.filter(isActiveEmployee);
+      }
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
       empList = filterByExperience(empList);
 
-      return empList.map(e => {
+      const rows = empList.map(e => {
         const sal = e.salaryDetails || {};
         return {
           "Employee ID": e.employeeId || "",
@@ -653,6 +696,12 @@ function Reports() {
           "Sort Code": sal.bankSortCode || ""
         };
       });
+
+      // Final safety net so Excel/PDF never include the opposite status
+      if (employeeStatus === "InActive") {
+        return rows.filter((r) => isInactiveEmployee({ employeeStatus: r.Status }));
+      }
+      return rows.filter((r) => isActiveEmployee({ employeeStatus: r.Status }));
     }
 
     if (type === "Employee Experience") {

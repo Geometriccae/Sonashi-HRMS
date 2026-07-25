@@ -284,7 +284,7 @@ const EMPLOYEE_LIST_FIELDS = [
   'role', 'department', 'attendance', 'doj', 'totalYearsExperience', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
   'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay', 'reportingManager', 'assignedProjects',
-  'nationality', 'office', 'passportNo', 'emiratesId', 'createdAt', 'profilePhoto',
+  'nationality', 'office', 'passportNo', 'emiratesId', 'airFare', 'createdAt', 'profilePhoto',
 ].join(' ');
 
 // Lightweight stats for dashboard / team management cards
@@ -788,9 +788,10 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
       updateData.vacationStatus = 'Onsite';
     }
 
+    // Use $set so nested salaryDetails / bank fields merge correctly on update
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
-      updateData,
+      { $set: updateData },
       { new: true, runValidators: true }
     );
 

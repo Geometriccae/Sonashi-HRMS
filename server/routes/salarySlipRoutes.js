@@ -352,7 +352,7 @@ router.get('/all', async (req, res) => {
 
         const role = String(user.role || '').toLowerCase();
         // Only allow Administrative roles + HR
-        if (role !== 'admin' && role !== 'hod' && role !== 'hr' && role !== 'viewer') {
+        if (role !== 'admin' && role !== 'hod' && role !== 'hr' && role !== 'viewer' && role !== 'authorize_user') {
             return res.status(403).json({ message: 'Access denied' });
         }
 
