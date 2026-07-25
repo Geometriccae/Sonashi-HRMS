@@ -637,6 +637,7 @@ function Reports() {
         return {
           "Employee ID": e.employeeId || "",
           "Name": e.employeeName || "",
+          "Status": e.employeeStatus || "",
           "Department": e.department || "",
           "Role": e.role || "",
           "Basic Salary": Number(sal.basicSalary) || 0,
@@ -799,8 +800,7 @@ function Reports() {
     const exportData = await fetchReportData("Salary report");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "Excel") {
-      await saveSifSettings(sifEmployerId, sifAgentCode, { silent: false });
-      await sifService.exportExcel(m, y);
+      exportToExcel(exportData, "Salary_Report");
     } else if (format === "PDF") {
       exportToPDF(exportData, "Salary_Report");
     }
