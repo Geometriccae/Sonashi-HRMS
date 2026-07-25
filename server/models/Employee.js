@@ -12,6 +12,8 @@ const employeeSchema = new mongoose.Schema({
   reportingManager: { type: String, default: "" },
   gender: { type: String, default: "" },
   doj: { type: Date, default: null },
+  noticePeriod: { type: String, default: "" },
+  provisionPeriod: { type: String, default: "" },
   lastWorkingDay: { type: Date, default: null },
   travellingDate: { type: Date, default: null },
   returnDate: { type: Date, default: null },
@@ -20,7 +22,9 @@ const employeeSchema = new mongoose.Schema({
   dateOfBirth: { type: Date, default: null },
   passportNo: { type: String, default: "" },
   passportExpiryDate: { type: Date, default: null },
+  labourCardNumber: { type: String, default: "" },
   labourCardExpiryDate: { type: Date, default: null },
+  companyCode: { type: String, default: "" },
   visaExpiryDate: { type: Date, default: null },
   remarks: { type: String, default: "" },
 

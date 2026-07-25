@@ -350,7 +350,8 @@ function SalarySlipTable({ userRole }) {
     const isHOD = currentRole === "hod";
     const isAdminRole = currentRole === "admin";
     const isHR = currentRole === "hr";
-    const isViewer = currentRole === "viewer";
+    const isViewer =
+      currentRole === "viewer" || currentRole === "authorize_user";
     const isAdmin = isAdminRole || isHOD || isHR || isViewer;
     const canManageSlips = (isAdminRole || isHOD) && !isViewer;
     const { showToast } = useToast();

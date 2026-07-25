@@ -256,6 +256,11 @@ main {
   color: white;
 }
 
+.roleBadge.authorize_user {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
 .roleBadge.viewer {
   background-color: #6366f1;
   color: white;

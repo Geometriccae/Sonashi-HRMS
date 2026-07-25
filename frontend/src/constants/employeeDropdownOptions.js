@@ -1,7 +1,16 @@
 export const ACTIVE_OPTIONS = [
   { value: "", label: "-Select-" },
-  { value: "Active", label: "Active" },
-  { value: "InActive", label: "InActive" },
+  { value: "Active", label: "Active (Working Employee)" },
+  { value: "InActive", label: "Inactive (Non-Working Employee)" },
+];
+
+/** Four selectable company codes for employee assignment */
+export const COMPANY_CODE_OPTIONS = [
+  { value: "", label: "-Select-" },
+  { value: "CC01", label: "Company Code 1 (CC01)" },
+  { value: "CC02", label: "Company Code 2 (CC02)" },
+  { value: "CC03", label: "Company Code 3 (CC03)" },
+  { value: "CC04", label: "Company Code 4 (CC04)" },
 ];
 
 export const ATTENDANCE_OPTIONS = [

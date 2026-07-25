@@ -180,7 +180,12 @@ router.get('/', authMiddleware, async (req, res) => {
             if (employeeId) {
                 filter.employee = employeeId;
             }
-        } else if (req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer') {
+        } else if (
+          req.user.role === 'admin' ||
+          req.user.role === 'hr' ||
+          req.user.role === 'viewer' ||
+          req.user.role === 'authorize_user'
+        ) {
             // Admin and HR see Pending requests, HOD processed requests, and final ones
             const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'];
 
@@ -223,8 +228,8 @@ router.get('/', authMiddleware, async (req, res) => {
 // Create a new leave request
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        if (req.user.role === 'viewer') {
-            return res.status(403).json({ message: 'Viewer cannot create leave requests' });
+        if (req.user.role === 'viewer' || req.user.role === 'authorize_user') {
+            return res.status(403).json({ message: 'This role cannot create leave requests' });
         }
 
         const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
@@ -339,11 +344,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Leave request not found' });
         }
 
-        if (req.user.role === 'viewer') {
+        if (req.user.role === 'viewer' || req.user.role === 'authorize_user') {
             const hasFieldEdits = employeeId || employeeName || company || leaveType || startDate || endDate || reason
                 || req.body.isPastLeave !== undefined || req.body.requestAirfare !== undefined || req.body.visaExpiryDate;
             if (!status || hasFieldEdits) {
-                return res.status(403).json({ message: 'Viewer can only approve or reject leave requests' });
+                return res.status(403).json({ message: 'This role can only approve or reject leave requests' });
             }
         }
 
@@ -379,8 +384,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
                     updateData.hodApprovedAt = new Date();
                 }
             }
-            // Final Approval Logic: Admin and Viewer can finalize.
-            else if (userRole === 'admin' || userRole === 'viewer') {
+            // Final Approval Logic: Admin, Viewer, and Authorize User can finalize.
+            else if (
+              userRole === 'admin' ||
+              userRole === 'viewer' ||
+              userRole === 'authorize_user'
+            ) {
                 if (status === 'Approved') {
                     // Admin can approve Pending or HOD Approved requests
                     if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
@@ -530,7 +539,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // Revert (cancel) an unavailed approved leave — credits balance back by excluding from entitlement calculations
 router.post('/:id/revert', authMiddleware, async (req, res) => {
     try {
-        const allowedRoles = ['admin', 'hr', 'hod', 'viewer'];
+        const allowedRoles = ['admin', 'hr', 'hod', 'viewer', 'authorize_user'];
         if (!allowedRoles.includes(req.user.role)) {
             return res.status(403).json({ message: 'You do not have permission to revert leave requests' });
         }
@@ -595,8 +604,8 @@ router.post('/:id/revert', authMiddleware, async (req, res) => {
 // Delete leave request
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {
-        if (req.user.role === 'viewer') {
-            return res.status(403).json({ message: 'Viewer cannot delete leave requests' });
+        if (req.user.role === 'viewer' || req.user.role === 'authorize_user') {
+            return res.status(403).json({ message: 'This role cannot delete leave requests' });
         }
 
         const deletedRequest = await LeaveRequest.findByIdAndDelete(req.params.id);
