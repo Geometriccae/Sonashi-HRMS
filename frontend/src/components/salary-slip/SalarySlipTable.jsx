@@ -12,6 +12,7 @@ import SalarySlipBulkImportModal from "./SalarySlipBulkImportModal";
 import SalarySlipManualAddModal from "./SalarySlipManualAddModal";
 import SalarySlipEditModal from "./SalarySlipEditModal";
 import DateInput from "../DateInput";
+import { inrToAed, formatAedFromInr } from "../../utils/currency";
 
 const DownloadIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -235,7 +236,7 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
 
                     <div className={styles.formRow}>
                         <div className={styles.formGroup}>
-                            <label className={styles.formLabel}>Amount (₹) *</label>
+                            <label className={styles.formLabel}>Amount (AED) *</label>
                             <input
                                 type="number"
                                 name="expenseAmount"
@@ -535,10 +536,23 @@ function SalarySlipTable({ userRole }) {
                 advance = legacyDeduction;
             }
 
-            // Calculate gross salary and total deduction
-            const grossSalary = slip.grossSalary || (basicPay + hra + conveyanceAllowance + otherAllowance);
-            const totalDeduction = slip.totalDeduction || (advance + leave + staffLoan + profTax + incomeTaxTDS) || slip.deductionsPFTax || 0;
-            const netSalary = slip.netSalary || (grossSalary - totalDeduction);
+            // Calculate gross salary and total deduction (INR), then convert to AED for PDF only
+            const grossSalaryInr = slip.grossSalary || (basicPay + hra + conveyanceAllowance + otherAllowance);
+            const totalDeductionInr = slip.totalDeduction || (advance + leave + staffLoan + profTax + incomeTaxTDS) || slip.deductionsPFTax || 0;
+            const netSalaryInr = slip.netSalary || (grossSalaryInr - totalDeductionInr);
+
+            const basicPayAed = inrToAed(basicPay);
+            const hraAed = inrToAed(hra);
+            const conveyanceAllowanceAed = inrToAed(conveyanceAllowance);
+            const otherAllowanceAed = inrToAed(otherAllowance);
+            const advanceAed = inrToAed(advance);
+            const leaveAed = inrToAed(leave);
+            const staffLoanAed = inrToAed(staffLoan);
+            const profTaxAed = inrToAed(profTax);
+            const incomeTaxTDSAed = inrToAed(incomeTaxTDS);
+            const grossSalary = inrToAed(grossSalaryInr);
+            const totalDeduction = inrToAed(totalDeductionInr);
+            const netSalary = inrToAed(netSalaryInr);
 
             // ==========================================
             // 1. LETTERHEAD BACKGROUND & BRANDING
@@ -705,24 +719,24 @@ function SalarySlipTable({ userRole }) {
 
             doc.setFontSize(9);
             doc.text("Description", margin + 5, currentY + 5.5);
-            doc.text("Amount (Rs)", margin + halfWidth - 5, currentY + 5.5, { align: "right" });
+            doc.text("Amount (AED)", margin + halfWidth - 5, currentY + 5.5, { align: "right" });
             doc.text("Description", margin + halfWidth + 5, currentY + 5.5);
-            doc.text("Amount (Rs)", margin + halfWidth * 2 - 5, currentY + 5.5, { align: "right" });
+            doc.text("Amount (AED)", margin + halfWidth * 2 - 5, currentY + 5.5, { align: "right" });
 
-            // Data Rows
+            // Data Rows (AED amounts — converted from stored INR)
             const earningsData = [
-                ['Basic Pay', basicPay.toFixed(2)],
-                ['HRA', hra.toFixed(2)],
-                ['Conveyance Allowance', conveyanceAllowance.toFixed(2)],
-                ['Other Allowance', otherAllowance.toFixed(2)]
+                ['Basic Pay', basicPayAed.toFixed(2)],
+                ['HRA', hraAed.toFixed(2)],
+                ['Conveyance Allowance', conveyanceAllowanceAed.toFixed(2)],
+                ['Other Allowance', otherAllowanceAed.toFixed(2)]
             ];
 
             const deductionsData = [
-                ['Advance', advance.toFixed(2)],
-                ['Leave', leave.toFixed(2)],
-                ['Staff Loan', staffLoan.toFixed(2)],
-                ['Prof. Tax', profTax.toFixed(2)],
-                ['Income Tax / TDS', incomeTaxTDS.toFixed(2)]
+                ['Advance', advanceAed.toFixed(2)],
+                ['Leave', leaveAed.toFixed(2)],
+                ['Staff Loan', staffLoanAed.toFixed(2)],
+                ['Prof. Tax', profTaxAed.toFixed(2)],
+                ['Income Tax / TDS', incomeTaxTDSAed.toFixed(2)]
             ];
 
             const maxRows = Math.max(earningsData.length, deductionsData.length);
@@ -783,7 +797,7 @@ function SalarySlipTable({ userRole }) {
 
             doc.setFontSize(12);
             doc.text("Net Payable:", margin + halfWidth + 5, currentY + 8);
-            doc.text(`Rs ${netSalary.toFixed(2)}`, pageWidth - margin - 5, currentY + 8, { align: 'right' });
+            doc.text(`AED ${netSalary.toFixed(2)}`, pageWidth - margin - 5, currentY + 8, { align: 'right' });
 
             // Signatures Section
             currentY += 45;
@@ -1084,12 +1098,12 @@ function SalarySlipTable({ userRole }) {
                                 {isAdmin && <th>Month</th>}
                                 {isAdmin && <th>Year</th>}
                                 {!isAdmin && <th>Month & Year</th>}
-                                <th>BASIC (₹)</th>
-                                <th>HOUSE RENT (₹)</th>
-                                <th>TRAVEL EXP (₹)</th>
-                                <th>OTHER (₹)</th>
-                                <th>DEDUCTION (₹)</th>
-                                <th>Net Salary (₹)</th>
+                                <th>BASIC (AED)</th>
+                                <th>HOUSE RENT (AED)</th>
+                                <th>TRAVEL EXP (AED)</th>
+                                <th>OTHER (AED)</th>
+                                <th>DEDUCTION (AED)</th>
+                                <th>Net Salary (AED)</th>
                                 <th className={styles.actionsColumn}>Actions</th>
                             </tr>
                         </thead>
@@ -1119,12 +1133,12 @@ function SalarySlipTable({ userRole }) {
                                         {isAdmin && <td>{slip.month}</td>}
                                         {isAdmin && <td>{slip.year}</td>}
                                         {!isAdmin && <td className={styles.monthYear}>{slip.month} {slip.year}</td>}
-                                        <td>{Number(slip.basicPay ?? 0).toLocaleString()}</td>
-                                        <td>{Number(slip.hra ?? 0).toLocaleString()}</td>
-                                        <td>{Number(slip.conveyanceAllowance ?? 0).toLocaleString()}</td>
-                                        <td>{Number(slip.otherAllowance ?? 0).toLocaleString()}</td>
-                                        <td>{Number(slip.deductionsPFTax ?? slip.totalDeduction ?? 0).toLocaleString()}</td>
-                                        <td><span className={styles.netSal}>₹{Number(slip.netSalary ?? 0).toLocaleString()}</span></td>
+                                        <td>{inrToAed(slip.basicPay ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td>{inrToAed(slip.hra ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td>{inrToAed(slip.conveyanceAllowance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td>{inrToAed(slip.otherAllowance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td>{inrToAed(slip.deductionsPFTax ?? slip.totalDeduction ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td><span className={styles.netSal}>{formatAedFromInr(slip.netSalary ?? 0)}</span></td>
                                         <td>
                                             <div className={styles.rowActions}>
                                                 <button
@@ -1180,7 +1194,7 @@ function SalarySlipTable({ userRole }) {
                                 <th>Email ID</th>
                                 <th>Expense Title</th>
                                 <th>Category</th>
-                                <th>Amount (₹)</th>
+                                <th>Amount (AED)</th>
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th className={styles.actionsColumn}>Actions</th>
@@ -1196,7 +1210,7 @@ function SalarySlipTable({ userRole }) {
                                         <td>
                                             <span className={styles.categoryBadge}>{expense.expenseCategory}</span>
                                         </td>
-                                        <td><span className={styles.expenseAmount}>₹{expense.expenseAmount?.toLocaleString()}</span></td>
+                                        <td><span className={styles.expenseAmount}>{formatAedFromInr(expense.expenseAmount)}</span></td>
                                         <td>{new Date(expense.expenseDate).toLocaleDateString('en-IN')}</td>
                                         <td>
                                             <span className={`${styles.statusBadge} ${styles[`status${expense.status?.replace(/\s/g, '')}`]}`}>
@@ -1277,7 +1291,7 @@ function SalarySlipTable({ userRole }) {
                             <tr>
                                 <th>Expense Title</th>
                                 <th>Category</th>
-                                <th>Amount (₹)</th>
+                                <th>Amount (AED)</th>
                                 <th>Date</th>
                                 <th>Description</th>
                                 <th>Status</th>
@@ -1292,7 +1306,7 @@ function SalarySlipTable({ userRole }) {
                                         <td>
                                             <span className={styles.categoryBadge}>{expense.expenseCategory}</span>
                                         </td>
-                                        <td><span className={styles.expenseAmount}>₹{expense.expenseAmount?.toLocaleString()}</span></td>
+                                        <td><span className={styles.expenseAmount}>{formatAedFromInr(expense.expenseAmount)}</span></td>
                                         <td>{new Date(expense.expenseDate).toLocaleDateString('en-IN')}</td>
                                         <td className={styles.descriptionCell}>{expense.expenseDescription}</td>
                                         <td>
