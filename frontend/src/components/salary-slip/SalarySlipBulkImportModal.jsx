@@ -14,10 +14,10 @@ const SALARY_FIELDS = [
     { key: 'employeeName', label: 'Employee Name', required: true },
     { key: 'emailId', label: 'Email ID', required: true },
     { key: 'designation', label: 'Designation', required: true },
-    { key: 'basicPay', label: 'Basic Pay (₹)', required: true },
-    { key: 'hra', label: 'HRA (₹)', required: true },
+    { key: 'basicPay', label: 'Basic Pay (AED)', required: true },
+    { key: 'hra', label: 'HRA (AED)', required: true },
     { key: 'deductionsPFTax', label: 'Deductions (PF/Tax)', required: true },
-    { key: 'netSalary', label: 'Net Salary (₹)', required: true },
+    { key: 'netSalary', label: 'Net Salary (AED)', required: true },
 ];
 
 function SalarySlipBulkImportModal({ isOpen, onClose, onSuccess, month, year }) {

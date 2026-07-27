@@ -4,6 +4,7 @@ import { FaTimes, FaSave, FaSpinner } from 'react-icons/fa';
 import salarySlipService from '../../services/SalarySlipService';
 import { useToast } from '../../context/ToastContext';
 import DateInput from '../DateInput';
+import { inrToAed, aedToInr, formatAed } from '../../utils/currency';
 
 function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
     const { showToast } = useToast();
@@ -35,25 +36,33 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
 
     useEffect(() => {
         if (salarySlip && isOpen) {
-            const basicPay = salarySlip.basicPay || 0;
-            const hra = salarySlip.hra || 0;
-            const conveyanceAllowance = salarySlip.conveyanceAllowance || 0;
-            const otherAllowance = salarySlip.otherAllowance || 0;
-            let advance = salarySlip.advance || 0;
-            const leave = salarySlip.leave || 0;
-            const staffLoan = salarySlip.staffLoan || 0;
-            const profTax = salarySlip.profTax || 0;
-            const incomeTaxTDS = salarySlip.incomeTaxTDS || 0;
+            // Stored values are INR — show AED in the form (1 AED = 26.20 INR)
+            const basicPay = inrToAed(salarySlip.basicPay || 0);
+            const hra = inrToAed(salarySlip.hra || 0);
+            const conveyanceAllowance = inrToAed(salarySlip.conveyanceAllowance || 0);
+            const otherAllowance = inrToAed(salarySlip.otherAllowance || 0);
+            let advance = inrToAed(salarySlip.advance || 0);
+            const leave = inrToAed(salarySlip.leave || 0);
+            const staffLoan = inrToAed(salarySlip.staffLoan || 0);
+            const profTax = inrToAed(salarySlip.profTax || 0);
+            const incomeTaxTDS = inrToAed(salarySlip.incomeTaxTDS || 0);
 
             // If we have a total/legacy deduction but no breakdown, put it in 'advance' so it's visible
             const hasBreakdown = (advance + leave + staffLoan + profTax + incomeTaxTDS) > 0;
-            const legacyDeduction = salarySlip.deductionsPFTax || salarySlip.totalDeduction || 0;
+            const legacyDeduction = inrToAed(salarySlip.deductionsPFTax || salarySlip.totalDeduction || 0);
             if (!hasBreakdown && legacyDeduction > 0) {
                 advance = legacyDeduction;
             }
 
-            const grossSalary = salarySlip.grossSalary || (basicPay + hra + conveyanceAllowance + otherAllowance);
-            const totalDeduction = salarySlip.totalDeduction || (advance + leave + staffLoan + profTax + incomeTaxTDS) || salarySlip.deductionsPFTax || 0;
+            const grossSalary = salarySlip.grossSalary != null
+                ? inrToAed(salarySlip.grossSalary)
+                : (basicPay + hra + conveyanceAllowance + otherAllowance);
+            const totalDeduction = salarySlip.totalDeduction != null
+                ? inrToAed(salarySlip.totalDeduction)
+                : ((advance + leave + staffLoan + profTax + incomeTaxTDS) || legacyDeduction || 0);
+            const netSalary = salarySlip.netSalary != null
+                ? inrToAed(salarySlip.netSalary)
+                : (grossSalary - totalDeduction);
 
             setFormData({
                 employeeName: salarySlip.employeeName || '',
@@ -74,7 +83,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                 incomeTaxTDS: incomeTaxTDS.toString(),
                 grossSalary: grossSalary.toFixed(2),
                 totalDeduction: totalDeduction.toFixed(2),
-                netSalary: salarySlip.netSalary?.toString() || '',
+                netSalary: netSalary.toFixed(2),
                 month: salarySlip.month || '',
                 year: salarySlip.year || ''
             });
@@ -130,22 +139,22 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                 department: formData.department,
                 designation: formData.designation,
                 dateOfJoining: formData.dateOfJoining,
-                // Earnings
-                basicPay: parseFloat(formData.basicPay) || 0,
-                hra: parseFloat(formData.hra) || 0,
-                conveyanceAllowance: parseFloat(formData.conveyanceAllowance) || 0,
-                otherAllowance: parseFloat(formData.otherAllowance) || 0,
-                grossSalary: parseFloat(formData.grossSalary) || 0,
+                // Earnings — form is AED; persist as INR for existing storage
+                basicPay: aedToInr(formData.basicPay),
+                hra: aedToInr(formData.hra),
+                conveyanceAllowance: aedToInr(formData.conveyanceAllowance),
+                otherAllowance: aedToInr(formData.otherAllowance),
+                grossSalary: aedToInr(formData.grossSalary),
                 // Deductions
-                advance: parseFloat(formData.advance) || 0,
-                leave: parseFloat(formData.leave) || 0,
-                staffLoan: parseFloat(formData.staffLoan) || 0,
-                profTax: parseFloat(formData.profTax) || 0,
-                incomeTaxTDS: parseFloat(formData.incomeTaxTDS) || 0,
-                totalDeduction: parseFloat(formData.totalDeduction) || 0,
+                advance: aedToInr(formData.advance),
+                leave: aedToInr(formData.leave),
+                staffLoan: aedToInr(formData.staffLoan),
+                profTax: aedToInr(formData.profTax),
+                incomeTaxTDS: aedToInr(formData.incomeTaxTDS),
+                totalDeduction: aedToInr(formData.totalDeduction),
                 // Legacy field for backward compatibility
-                deductionsPFTax: parseFloat(formData.totalDeduction) || 0,
-                netSalary: parseFloat(formData.netSalary) || 0,
+                deductionsPFTax: aedToInr(formData.totalDeduction),
+                netSalary: aedToInr(formData.netSalary),
                 month: formData.month,
                 year: formData.year
             });
@@ -208,7 +217,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                                 <thead>
                                     <tr>
                                         <th>Description</th>
-                                        <th>Amount (₹)</th>
+                                        <th>Amount (AED)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -241,7 +250,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                                     <tr className={styles.totalRow}>
                                         <td><strong>Gross Salary</strong></td>
                                         <td>
-                                            <input type="text" value={formData.grossSalary ? `₹${parseFloat(formData.grossSalary).toLocaleString('en-IN')}` : '₹0.00'} readOnly className={styles.readOnlyInput} />
+                                            <input type="text" value={formData.grossSalary ? formatAed(formData.grossSalary) : 'AED 0.00'} readOnly className={styles.readOnlyInput} />
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -255,7 +264,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                                 <thead>
                                     <tr>
                                         <th>Description</th>
-                                        <th>Amount (₹)</th>
+                                        <th>Amount (AED)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -294,7 +303,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                                     <tr className={styles.totalRow}>
                                         <td><strong>Total Deduction</strong></td>
                                         <td>
-                                            <input type="text" value={formData.totalDeduction ? `₹${parseFloat(formData.totalDeduction).toLocaleString('en-IN')}` : '₹0.00'} readOnly className={styles.readOnlyInput} />
+                                            <input type="text" value={formData.totalDeduction ? formatAed(formData.totalDeduction) : 'AED 0.00'} readOnly className={styles.readOnlyInput} />
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -307,7 +316,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                         <div className={styles.netPayableRow}>
                             <span className={styles.netPayableLabel}>Net Payable</span>
                             <span className={styles.netPayableValue}>
-                                {formData.netSalary ? `₹${parseFloat(formData.netSalary).toLocaleString('en-IN')}` : '₹0.00'}
+                                {formData.netSalary ? formatAed(formData.netSalary) : 'AED 0.00'}
                             </span>
                         </div>
                         <p className={styles.netPayableNote}>Net Payable = Gross Salary - Total Deduction</p>

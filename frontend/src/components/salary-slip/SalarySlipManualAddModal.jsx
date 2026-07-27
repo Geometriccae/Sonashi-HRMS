@@ -6,6 +6,7 @@ import employeeService from '../../services/EmployeeService';
 import { useToast } from '../../context/ToastContext';
 import Dropdown from '../DropDown';
 import DateInput from '../DateInput';
+import { inrToAed, aedToInr, formatAed } from '../../utils/currency';
 
 function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, existingSlips = [] }) {
     const { showToast } = useToast();
@@ -77,11 +78,18 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
         if (emp) {
             // Priority: Use the detailed fields if they exist in salaryDetails
             // Otherwise, fallback to the old calculation logic
-            const basic = emp.salaryDetails?.basicSalary || 0;
-            const houseRent = emp.salaryDetails?.houseRent !== undefined ? emp.salaryDetails.houseRent : (basic / 2);
-            const travelExp = emp.salaryDetails?.travelExp || 0;
-            const other = emp.salaryDetails?.other !== undefined ? emp.salaryDetails.other : Math.max(0, (emp.salaryDetails?.allowance || 0) - houseRent);
-            const deduction = emp.salaryDetails?.deduction || 0;
+            // Employee salaryDetails are INR — convert to AED for the form
+            const basicInr = emp.salaryDetails?.basicSalary || 0;
+            const houseRentInr = emp.salaryDetails?.houseRent !== undefined ? emp.salaryDetails.houseRent : (basicInr / 2);
+            const travelExpInr = emp.salaryDetails?.travelExp || 0;
+            const otherInr = emp.salaryDetails?.other !== undefined ? emp.salaryDetails.other : Math.max(0, (emp.salaryDetails?.allowance || 0) - houseRentInr);
+            const deductionInr = emp.salaryDetails?.deduction || 0;
+
+            const basic = inrToAed(basicInr);
+            const houseRent = inrToAed(houseRentInr);
+            const travelExp = inrToAed(travelExpInr);
+            const other = inrToAed(otherInr);
+            const deduction = inrToAed(deductionInr);
 
             const grossSalary = basic + houseRent + travelExp + other;
             const netSalary = grossSalary - deduction;
@@ -158,15 +166,15 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                 department: formData.department,
                 designation: formData.designation,
                 dateOfJoining: formData.dateOfJoining,
-                // Map custom fields to existing backend fields (so other screens stay unchanged)
-                basicPay: parseFloat(formData.basic) || 0,
-                hra: parseFloat(formData.houseRent) || 0,
-                conveyanceAllowance: parseFloat(formData.travelExp) || 0,
-                otherAllowance: parseFloat(formData.other) || 0,
-                grossSalary: parseFloat(formData.grossSalary) || 0,
-                totalDeduction: parseFloat(formData.deduction) || 0,
-                deductionsPFTax: parseFloat(formData.deduction) || 0,
-                netSalary: parseFloat(formData.netSalary) || 0,
+                // Map custom fields to existing backend fields (form is AED; persist INR)
+                basicPay: aedToInr(formData.basic),
+                hra: aedToInr(formData.houseRent),
+                conveyanceAllowance: aedToInr(formData.travelExp),
+                otherAllowance: aedToInr(formData.other),
+                grossSalary: aedToInr(formData.grossSalary),
+                totalDeduction: aedToInr(formData.deduction),
+                deductionsPFTax: aedToInr(formData.deduction),
+                netSalary: aedToInr(formData.netSalary),
                 month: formData.month,
                 year: formData.year
             });
@@ -239,7 +247,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                                 <thead>
                                     <tr>
                                         <th>Description</th>
-                                        <th>Amount (₹)</th>
+                                        <th>Amount (AED)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -274,7 +282,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                                         <td>
                                             <input
                                                 type="text"
-                                                value={formData.grossSalary ? `₹${parseFloat(formData.grossSalary).toLocaleString('en-IN')}` : '₹0.00'}
+                                                value={formData.grossSalary ? formatAed(formData.grossSalary) : 'AED 0.00'}
                                                 readOnly
                                                 className={styles.readOnlyInput}
                                             />
@@ -291,7 +299,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                                 <thead>
                                     <tr>
                                         <th>Description</th>
-                                        <th>Amount (₹)</th>
+                                        <th>Amount (AED)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -306,7 +314,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                                     <tr className={styles.totalRow}>
                                         <td><strong>Total Deduction</strong></td>
                                         <td>
-                                            <input type="text" value={formData.deduction ? `₹${parseFloat(formData.deduction).toLocaleString('en-IN')}` : '₹0.00'} readOnly className={styles.readOnlyInput} />
+                                            <input type="text" value={formData.deduction ? formatAed(formData.deduction) : 'AED 0.00'} readOnly className={styles.readOnlyInput} />
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -319,7 +327,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                         <div className={styles.netPayableRow}>
                             <span className={styles.netPayableLabel}>Net Payable</span>
                             <span className={styles.netPayableValue}>
-                                {formData.netSalary ? `₹${parseFloat(formData.netSalary).toLocaleString('en-IN')}` : '₹0.00'}
+                                {formData.netSalary ? formatAed(formData.netSalary) : 'AED 0.00'}
                             </span>
                         </div>
                         <p className={styles.netPayableNote}>Net Payable = Gross Salary - Total Deduction</p>
