@@ -8,22 +8,36 @@ const isLocalhost = typeof window !== 'undefined' &&
    window.location.hostname.endsWith('.local') ||
    window.location.hostname === '0.0.0.0');
 
+const PRODUCTION_API = 'https://backend.sonashi.in/api';
+const PRODUCTION_HOST = 'https://backend.sonashi.in';
+
+const envApi = (process.env.REACT_APP_API_URL || '').trim();
+const envLooksLocal = /localhost|127\.0\.0\.1/i.test(envApi);
+
+// On Hostinger (hrms.sonashi.in), never use a localhost API URL even if it was
+// baked into the build from frontend/.env — that caused "Failed to load employees".
+const resolvedApiUrl = isLocalhost
+  ? (envApi || `http://${window.location.hostname}:5000/api`)
+  : (envApi && !envLooksLocal ? envApi : PRODUCTION_API);
+
 const config = {
-  API_BASE_URL: process.env.REACT_APP_API_URL || 
-    // (isLocalhost ? `http://${window.location.hostname}:5000/api` : 'https://backend.sonashi.in/api'),
-    'http://localhost:5000/api',
+  API_BASE_URL: resolvedApiUrl,
 };
 
 /**
  * Returns the base URL for API requests (no trailing /api).
  */
 export function getApiBaseUrl() {
-  const env = process.env.REACT_APP_API_URL;
-  if (env) {
-    return String(env).replace(/\/api\/?$/, '');
+  if (isLocalhost) {
+    if (envApi && !envLooksLocal) {
+      return String(envApi).replace(/\/api\/?$/, '');
+    }
+    return `http://${window.location.hostname}:5000`;
   }
-  // return isLocalhost ? `http://${window.location.hostname}:5000` : 'https://backend.sonashi.in';
-  return 'http://localhost:5000';
+  if (envApi && !envLooksLocal) {
+    return String(envApi).replace(/\/api\/?$/, '');
+  }
+  return PRODUCTION_HOST;
 }
 
 /**
@@ -67,7 +81,7 @@ export function getAuthApiUrl(path) {
  */
 export const handleImageError = (e) => {
   const currentSrc = e.target.src;
-  const productionBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const productionBase = PRODUCTION_HOST;
   
   if (currentSrc && !currentSrc.startsWith(productionBase) && !currentSrc.startsWith('blob:')) {
     // Try production fallback
@@ -83,4 +97,3 @@ export const handleImageError = (e) => {
 };
 
 export default config;
-

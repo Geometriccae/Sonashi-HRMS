@@ -16,15 +16,27 @@ import OptionService from "../../services/OptionService";
 import {
   ACTIVE_OPTIONS,
   ATTENDANCE_OPTIONS,
-  COMPANY_CODE_OPTIONS,
   VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
   EMERGENCY_RELATIONSHIP_OPTIONS,
   ROLE_OPTIONS_DEFAULT,
+  DEFAULT_COMPANY_CODE,
+  DEFAULT_COMPANY_NAME,
+  resolveDefaultCompanyCode,
   ensureOptionWithValue,
   mergeWithDynamicOptions,
 } from "../../constants/employeeDropdownOptions";
+import CompanyDocumentService from "../../services/CompanyDocumentService";
+import {
+  buildCompanyOptionsFromDocuments,
+  resolveCompanyCodeFromDocuments,
+} from "../../utils/companyCodeFromDocuments";
+import {
+  formatEmployeeStatusDisplay,
+  isNonWorkingEmployeeStatus,
+  isWorkingEmployeeStatus,
+} from "../../utils/employeeStatusDisplay";
 
 function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -51,7 +63,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     // 1. Basic Information
     workPermitNo: "",
     employeeId: "",
-    office: "",
+    office: DEFAULT_COMPANY_NAME,
     employeeName: "",
     reportingManager: "",
     gender: "",
@@ -79,13 +91,18 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     doj: "",
     noticePeriod: "",
     provisionPeriod: "",
+    noticePeriodStartDate: "",
+    noticePeriodEndDate: "",
+    provisionPeriodStartDate: "",
+    provisionPeriodEndDate: "",
+    lastWorkingDay: "",
     totalYearsExperience: "",
     dateOfBirth: "",
     passportNo: "",
     passportExpiryDate: "",
     labourCardNumber: "",
     labourCardExpiryDate: "",
-    companyCode: "",
+    companyCode: DEFAULT_COMPANY_CODE,
     visaExpiryDate: "",
     emiratesIdExpiryDate: "",
     remarks: "",
@@ -111,13 +128,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   });
 
   const [clients, setClients] = useState([]);
+  const [companyDocuments, setCompanyDocuments] = useState([]);
   const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS_DEFAULT);
   const [departmentOptions, setDepartmentOptions] = useState(DEPARTMENT_OPTIONS_DEFAULT);
   const [toasts, setToasts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const activeOptions = ACTIVE_OPTIONS;
-  const companyCodeOptions = COMPANY_CODE_OPTIONS;
   const attendanceOptions = ATTENDANCE_OPTIONS;
   const vacationStatusOptions = VACATION_STATUS_OPTIONS;
   const genderOptions = GENDER_OPTIONS;
@@ -146,6 +163,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   useEffect(() => {
     if (isOpen) {
       fetchClients();
+      fetchCompanyDocuments();
       fetchEmployeeDropdownValues();
     }
   }, [isOpen]);
@@ -158,6 +176,27 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     } catch (err) {
       console.error("Failed to fetch clients:", err);
       setClients([]);
+    }
+  };
+
+  const fetchCompanyDocuments = async () => {
+    try {
+      const data = await CompanyDocumentService.getAll();
+      const docs = Array.isArray(data) ? data : [];
+      setCompanyDocuments(docs);
+      setFormData((prev) => {
+        const office = prev.office || "";
+        const storedCode = String(prev.companyCode || "").trim();
+        if (storedCode) return prev;
+        const fromDocs = resolveCompanyCodeFromDocuments(office, docs);
+        return {
+          ...prev,
+          companyCode: fromDocs || resolveDefaultCompanyCode(""),
+        };
+      });
+    } catch (err) {
+      console.error("Failed to fetch company documents:", err);
+      setCompanyDocuments([]);
     }
   };
 
@@ -264,7 +303,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setFormData({
         workPermitNo: employee.workPermitNo || "",
         employeeId: employee.employeeId || "",
-        office: employee.office || "",
+        office: employee.office || DEFAULT_COMPANY_NAME,
         employeeName: employee.employeeName || "",
         reportingManager: employee.reportingManager || "",
         gender: employee.gender || "",
@@ -290,6 +329,18 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         doj: employee.doj ? String(employee.doj).slice(0, 10) : "",
         noticePeriod: employee.noticePeriod || "",
         provisionPeriod: employee.provisionPeriod || "",
+        noticePeriodStartDate: employee.noticePeriodStartDate
+          ? String(employee.noticePeriodStartDate).slice(0, 10)
+          : "",
+        noticePeriodEndDate: employee.noticePeriodEndDate
+          ? String(employee.noticePeriodEndDate).slice(0, 10)
+          : "",
+        provisionPeriodStartDate: employee.provisionPeriodStartDate
+          ? String(employee.provisionPeriodStartDate).slice(0, 10)
+          : "",
+        provisionPeriodEndDate: employee.provisionPeriodEndDate
+          ? String(employee.provisionPeriodEndDate).slice(0, 10)
+          : "",
         totalYearsExperience:
           employee.totalYearsExperience !== undefined &&
             employee.totalYearsExperience !== null
@@ -301,7 +352,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         passportExpiryDate: employee.passportExpiryDate ? String(employee.passportExpiryDate).slice(0, 10) : "",
         labourCardNumber: employee.labourCardNumber || "",
         labourCardExpiryDate: employee.labourCardExpiryDate ? String(employee.labourCardExpiryDate).slice(0, 10) : "",
-        companyCode: employee.companyCode || "",
+        companyCode: resolveDefaultCompanyCode(employee.companyCode),
         visaExpiryDate: employee.visaExpiryDate ? String(employee.visaExpiryDate).slice(0, 10) : "",
         emiratesIdExpiryDate: employee.emiratesIdExpiryDate ? String(employee.emiratesIdExpiryDate).slice(0, 10) : "",
         remarks: employee.remarks || "",
@@ -350,7 +401,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setFormData({
         workPermitNo: "",
         employeeId: "",
-        office: "",
+        office: DEFAULT_COMPANY_NAME,
         employeeName: "",
         reportingManager: "",
         gender: "",
@@ -376,13 +427,18 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         doj: "",
         noticePeriod: "",
         provisionPeriod: "",
+        noticePeriodStartDate: "",
+        noticePeriodEndDate: "",
+        provisionPeriodStartDate: "",
+        provisionPeriodEndDate: "",
+        lastWorkingDay: "",
         totalYearsExperience: "",
         dateOfBirth: "",
         passportNo: "",
         passportExpiryDate: "",
         labourCardNumber: "",
         labourCardExpiryDate: "",
-        companyCode: "",
+        companyCode: DEFAULT_COMPANY_CODE,
         visaExpiryDate: "",
         emiratesIdExpiryDate: "",
         remarks: "",
@@ -420,13 +476,19 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       ...prev,
       [field]: value,
     }));
-    // Clear error for this field if it exists
     if (validationErrors[field]) {
       setValidationErrors((prev) => ({ ...prev, [field]: false }));
     }
   };
 
-
+  const handleCompanyChange = (companyName) => {
+    const fromDocs = resolveCompanyCodeFromDocuments(companyName, companyDocuments);
+    setFormData((prev) => ({
+      ...prev,
+      office: companyName,
+      companyCode: fromDocs || resolveDefaultCompanyCode(""),
+    }));
+  };
 
   const addToast = (message, type = "error") => {
     const id = Date.now();
@@ -546,7 +608,10 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
       // Always persist bank / labour / company fields (even if empty)
       payload.labourCardNumber = formData.labourCardNumber || "";
-      payload.companyCode = formData.companyCode || "";
+      payload.companyCode = resolveDefaultCompanyCode(formData.companyCode);
+      if (!String(payload.office || "").trim()) {
+        payload.office = DEFAULT_COMPANY_NAME;
+      }
       payload.salaryDetails = {
         basicSalary: parseFloat(formData.basicSalary) || 0,
         houseRent: parseFloat(formData.houseRent) || 0,
@@ -693,6 +758,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     label: client.clientName || client.companyName || "Unnamed Client",
   }));
 
+  const companyOptions = buildCompanyOptionsFromDocuments(companyDocuments, formData.office);
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -724,18 +791,18 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 hasError={validationErrors.employeeId}
               />
 
-              <InputField
-                label="Office"
-                placeholder="Office"
-                value={formData.office}
-                onChange={(e) => handleInputChange("office", e.target.value)}
+              <Dropdown
+                label="Company"
+                placeholder="Select company"
+                options={companyOptions}
+                value={formData.office || DEFAULT_COMPANY_NAME}
+                onChange={(e) => handleCompanyChange(e.target.value)}
               />
 
-              <Dropdown
+              <InputField
                 label="Company Code"
-                placeholder="Select company code"
-                options={companyCodeOptions}
-                value={formData.companyCode}
+                placeholder="From Company Documents"
+                value={formData.companyCode || DEFAULT_COMPANY_CODE}
                 onChange={(e) => handleInputChange("companyCode", e.target.value)}
               />
 
@@ -850,17 +917,49 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               />
 
               <InputField
-                label="Notice Period"
+                label="Notice Period (Duration)"
                 placeholder="e.g. 30 days"
                 value={formData.noticePeriod}
                 onChange={(e) => handleInputChange("noticePeriod", e.target.value)}
               />
 
               <InputField
-                label="Provision Period"
+                label="Provision Period (Duration)"
                 placeholder="e.g. 3 months"
                 value={formData.provisionPeriod}
                 onChange={(e) => handleInputChange("provisionPeriod", e.target.value)}
+              />
+
+              <InputField
+                label="Notice Period Start Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.noticePeriodStartDate}
+                onChange={(e) => handleInputChange("noticePeriodStartDate", e.target.value)}
+              />
+
+              <InputField
+                label="Notice Period End Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.noticePeriodEndDate}
+                onChange={(e) => handleInputChange("noticePeriodEndDate", e.target.value)}
+              />
+
+              <InputField
+                label="Provision Period Start Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.provisionPeriodStartDate}
+                onChange={(e) => handleInputChange("provisionPeriodStartDate", e.target.value)}
+              />
+
+              <InputField
+                label="Provision Period End Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.provisionPeriodEndDate}
+                onChange={(e) => handleInputChange("provisionPeriodEndDate", e.target.value)}
               />
 
               {/* Emergency Contacts Section */}
@@ -1037,7 +1136,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 value={(() => {
                   if (!formData.doj) return "0.0";
                   const start = new Date(formData.doj);
-                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay)
+                  const end = (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
                     ? new Date(formData.lastWorkingDay)
                     : new Date();
 
@@ -1147,7 +1246,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 }
               />
 
-              {formData.employeeStatus === "InActive" && (
+              {isNonWorkingEmployeeStatus(formData.employeeStatus) && (
                 <InputField
                   label="Last Working Day"
                   placeholder="YYYY-MM-DD"
@@ -1157,7 +1256,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 />
               )}
 
-              {formData.employeeStatus === "Active" && (
+              {isWorkingEmployeeStatus(formData.employeeStatus) && (
                 <Dropdown
                   label="Vacation Status"
                   placeholder="Select vacation status"
@@ -1395,7 +1494,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             },
             {
               label: "Employee Status",
-              value: formData.employeeStatus || "Not provided",
+              value: formatEmployeeStatusDisplay(formData) || "Not provided",
             },
           ],
           [
@@ -1410,12 +1509,22 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
           ],
           [
             {
-              label: "Labour Card Number",
-              value: formData.labourCardNumber || "Not provided",
+              label: "Company",
+              value: formData.office || "Not provided",
             },
             {
               label: "Company Code",
               value: formData.companyCode || "Not provided",
+            },
+          ],
+          [
+            {
+              label: "Labour Card Number",
+              value: formData.labourCardNumber || "Not provided",
+            },
+            {
+              label: "Air Fare",
+              value: formData.airFare ? "Yes" : "No",
             },
           ],
           [
@@ -1426,16 +1535,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             {
               label: "Medical Insurance",
               value: formData.medicalInsurance ? "Yes" : "No",
-            },
-          ],
-          [
-            {
-              label: "Air Fare",
-              value: formData.airFare ? "Yes" : "No",
-            },
-            {
-              label: "",
-              value: "",
             },
           ],
           [

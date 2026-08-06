@@ -1,17 +1,38 @@
 export const ACTIVE_OPTIONS = [
   { value: "", label: "-Select-" },
-  { value: "Active", label: "Active (Working Employee)" },
-  { value: "InActive", label: "Inactive (Non-Working Employee)" },
+  { value: "Active", label: "Active" },
+  { value: "Provision Period", label: "Provision Period" },
+  { value: "Notice Period", label: "Notice Period" },
+  { value: "Confirmed", label: "Confirmed" },
+  { value: "Resigned", label: "Resigned" },
+  { value: "Terminated", label: "Terminated" },
+  { value: "Relieved", label: "Relieved" },
+  { value: "On Hold", label: "On Hold" },
+  { value: "InActive", label: "Inactive" },
 ];
 
-/** Four selectable company codes for employee assignment */
+/** Alias for lifecycle status dropdowns */
+export const EMPLOYEE_STATUS_OPTIONS = ACTIVE_OPTIONS;
+
+/** Built-in default company (from Company Documents) */
+export const DEFAULT_COMPANY_NAME = "JOINT VEN TRADING CO (L.L.C) (BR)";
+export const DEFAULT_COMPANY_CODE = "0000000246878";
+
+/** @deprecated Kept for compatibility; prefer Company Documents dropdown */
 export const COMPANY_CODE_OPTIONS = [
   { value: "", label: "-Select-" },
-  { value: "CC01", label: "Company Code 1 (CC01)" },
-  { value: "CC02", label: "Company Code 2 (CC02)" },
-  { value: "CC03", label: "Company Code 3 (CC03)" },
-  { value: "CC04", label: "Company Code 4 (CC04)" },
+  { value: DEFAULT_COMPANY_CODE, label: `${DEFAULT_COMPANY_NAME} (${DEFAULT_COMPANY_CODE})` },
 ];
+
+export function resolveDefaultCompanyCode(value) {
+  const code = String(value || "").trim();
+  return code || DEFAULT_COMPANY_CODE;
+}
+
+export function resolveDefaultCompanyName(value) {
+  const name = String(value || "").trim();
+  return name || DEFAULT_COMPANY_NAME;
+}
 
 export const ATTENDANCE_OPTIONS = [
   { value: "", label: "-Select-" },

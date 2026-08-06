@@ -23,6 +23,12 @@ import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, ex
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance, calculateLeaveDays } from "../../utils/leaveCalculator";
+import { findLinkedEmployee } from "../../utils/yetToGoHelpers";
+import {
+  formatEmployeeStatusDisplay,
+  isNonWorkingEmployeeStatus,
+  isWorkingEmployeeStatus,
+} from "../../utils/employeeStatusDisplay";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -142,28 +148,73 @@ function TeamManagementSalesLeads() {
       const leaves = await leaveRequestService.getLeaveRequests();
       const allLeaves = Array.isArray(leaves) ? leaves : leaves.data || [];
       setAllLeaveRequests(allLeaves);
-      const empLeaves = allLeaves.filter(req => {
-        const reqEmpIdObj = req.employee?._id || req.employee;
-        const reqUserEmpId = req.employee?.employeeId;
 
-        const isIdMatch =
-          String(reqEmpIdObj) === String(employeeId) ||
-          String(reqUserEmpId) === String(employeeId) ||
-          String(req.employeeId) === String(employeeId);
+      const emp =
+        currentEmployee ||
+        employee ||
+        (employeeId ? { _id: employeeId } : null);
 
-        let isNameMatch = false;
-        if (currentEmployee && currentEmployee.employeeName && req.employeeName) {
-          isNameMatch = String(req.employeeName).toLowerCase().trim() === String(currentEmployee.employeeName).toLowerCase().trim();
+      const visibleStatuses = new Set([
+        "Approved",
+        "HOD Approved",
+        "Pending",
+        "Imported",
+      ]);
+
+      const empLeaves = allLeaves.filter((req) => {
+        if (!req || !visibleStatuses.has(req.status)) return false;
+
+        // Primary: shared linker (User.employeeId ↔ Employee._id, name, codes)
+        if (emp && findLinkedEmployee(req, [emp])) return true;
+
+        // Fallback: leave.employee stored as Employee._id when no User exists
+        const empMongoId = String(emp?._id || employeeId || "");
+        const empCode = String(emp?.employeeId || "");
+        const reqRef = String(req.employee?._id || req.employee || "");
+        if (empMongoId && reqRef && reqRef === empMongoId) return true;
+
+        const linkedEmpId = String(
+          req.employee?.employeeId?._id || req.employee?.employeeId || ""
+        );
+        if (
+          linkedEmpId &&
+          (linkedEmpId === empMongoId || (empCode && linkedEmpId === empCode))
+        ) {
+          return true;
         }
 
-        const isMatch = isIdMatch || isNameMatch;
-        return isMatch && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Pending" || req.status === "Imported");
+        if (req.employeeId) {
+          const rid = String(req.employeeId);
+          if (rid === empMongoId || (empCode && rid === empCode)) return true;
+        }
+
+        const reqName = String(req.employeeName || "")
+          .toLowerCase()
+          .trim();
+        const empName = String(emp?.employeeName || "")
+          .toLowerCase()
+          .trim();
+        if (reqName && empName && reqName === empName) return true;
+
+        return false;
       });
-      setEmployeeLeaves(empLeaves.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)));
+
+      setEmployeeLeaves(
+        empLeaves.sort(
+          (a, b) => new Date(b.startDate) - new Date(a.startDate)
+        )
+      );
     } catch (err) {
       console.error("Failed to fetch leaves", err);
     }
   };
+
+  // Keep Leave Entitlement in sync whenever the tab is opened
+  useEffect(() => {
+    if (activeTab === "leave" && (employee || employeeId)) {
+      fetchEmployeeLeaves(employee);
+    }
+  }, [activeTab, employeeId, employee?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // const fetchEmployeeData = async () => {
   //   try {
@@ -844,7 +895,7 @@ function TeamManagementSalesLeads() {
                             {(() => {
                               if (!employee.doj) return "0";
                               const start = new Date(employee.doj);
-                              const end = (employee.employeeStatus === "InActive" && employee.lastWorkingDay)
+                              const end = (isNonWorkingEmployeeStatus(employee.employeeStatus) && employee.lastWorkingDay)
                                 ? new Date(employee.lastWorkingDay)
                                 : new Date();
 
@@ -856,6 +907,12 @@ function TeamManagementSalesLeads() {
                         </div>
                         <div className={styles.column4}><span className={styles.text9}>Notice Period</span><span className={styles.text10}>{employee.noticePeriod || "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Provision Period</span><span className={styles.text10}>{employee.provisionPeriod || "Not provided"}</span></div>
+                      </div>
+                      <div className={styles.row_view6}>
+                        <div className={styles.column4}><span className={styles.text9}>Notice Period Start</span><span className={styles.text10}>{employee.noticePeriodStartDate ? new Date(employee.noticePeriodStartDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Notice Period End</span><span className={styles.text10}>{employee.noticePeriodEndDate ? new Date(employee.noticePeriodEndDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Provision Period Start</span><span className={styles.text10}>{employee.provisionPeriodStartDate ? new Date(employee.provisionPeriodStartDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
+                        <div className={styles.column5}><span className={styles.text9}>Provision Period End</span><span className={styles.text10}>{employee.provisionPeriodEndDate ? new Date(employee.provisionPeriodEndDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Date of Birth</span><span className={styles.text10}>{employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-GB') : "Not provided"}</span></div>
@@ -883,8 +940,8 @@ function TeamManagementSalesLeads() {
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Work Permit No</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Reporting Manager</span><span className={styles.text10}>{employee.reportingManager || "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Employee Status</span><span className={styles.text10}>{employee.employeeStatus === "InActive" ? "Inactive (Non-Working Employee)" : "Active (Working Employee)"}</span></div>
-                        {employee.employeeStatus === "InActive" ? (
+                        <div className={styles.column4}><span className={styles.text9}>Employee Status</span><span className={styles.text10}>{formatEmployeeStatusDisplay(employee)}</span></div>
+                        {isNonWorkingEmployeeStatus(employee.employeeStatus) ? (
                           <div className={styles.column5}>
                             <span className={styles.text9}>Last Working Day</span>
                             <span className={styles.text10}>
@@ -895,7 +952,7 @@ function TeamManagementSalesLeads() {
                           <div className={styles.column5}></div>
                         )}
                       </div>
-                      {employee.employeeStatus !== "InActive" && (
+                      {isWorkingEmployeeStatus(employee.employeeStatus) && (
                         <div className={styles.row_view6}>
                           <div className={styles.column4}>
                             <span className={styles.text9}>Vacation Status</span>
@@ -1100,6 +1157,47 @@ function TeamManagementSalesLeads() {
 
               {activeTab === "leave" && (
                 <div style={{ padding: "0 36px", width: "100%" }}>
+                  {(() => {
+                    const leaveStats = employee
+                      ? calculateLeaveBalance(employee, allLeaveRequests)
+                      : null;
+                    const latest = employeeLeaves[0];
+                    return (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                          gap: "12px",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Current Leave Status</div>
+                          <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                            {latest?.status || "No active record"}
+                          </div>
+                        </div>
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Leave Days Taken</div>
+                          <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                            {leaveStats ? leaveStats.totalTaken : 0}
+                          </div>
+                        </div>
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Leave Balance</div>
+                          <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                            {leaveStats ? leaveStats.balance : 0}
+                          </div>
+                        </div>
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Entitlement</div>
+                          <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                            {leaveStats ? leaveStats.entitlement : 0}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className={styles.increments_table_container}>
                     <table className={styles.increments_table}>
                       <thead>
@@ -1117,7 +1215,7 @@ function TeamManagementSalesLeads() {
                       <tbody>
                         {employeeLeaves && employeeLeaves.length > 0 ? (
                           employeeLeaves.map((leave, index) => (
-                            <tr key={index}>
+                            <tr key={leave._id || index}>
                               <td>{new Date(leave.startDate).toLocaleDateString('en-GB')}</td>
                               <td>{new Date(leave.endDate).toLocaleDateString('en-GB')}</td>
                               <td style={{ textAlign: "center", fontWeight: 600 }}>
@@ -1243,7 +1341,9 @@ function TeamManagementSalesLeads() {
       <AddLeaveRequestModal
         isOpen={isLeaveModalOpen}
         onClose={() => setIsLeaveModalOpen(false)}
-        onSubmit={() => fetchEmployeeLeaves(employee)}
+        onSubmit={async () => {
+          await fetchEmployeeLeaves(employee);
+        }}
         allLeaveRequests={allLeaveRequests}
         initialEmployeeId={employeeId}
       />
@@ -1251,7 +1351,9 @@ function TeamManagementSalesLeads() {
       <EditLeaveRequestModal
         isOpen={isEditLeaveModalOpen}
         onClose={() => { setIsEditLeaveModalOpen(false); setSelectedLeave(null); }}
-        onSubmit={() => fetchEmployeeLeaves(employee)}
+        onSubmit={async () => {
+          await fetchEmployeeLeaves(employee);
+        }}
         leaveRequest={selectedLeave}
         allLeaveRequests={allLeaveRequests}
       />

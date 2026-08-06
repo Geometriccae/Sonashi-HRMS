@@ -5,6 +5,7 @@ const User = require('../models/User');
 const CompanyDocument = require('../models/CompanyDocument');
 const Notification = require('../models/Notification');
 const { runDailyHrAlerts } = require('./hrNotificationService');
+const { workingStatusFilter } = require('../utils/employeeStatus');
 
 const ALERT_DAYS = [30, 25, 20, 15, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0];
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -102,7 +103,7 @@ async function sendExpiryEmail(employee, docName, expiryDate, diffDays) {
 async function checkExpiries() {
     console.log('[Expiry] Running daily document expiry check...');
     try {
-        const employees = await Employee.find({ employeeStatus: 'Active' });
+        const employees = await Employee.find(workingStatusFilter());
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 

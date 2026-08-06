@@ -314,7 +314,7 @@ export default function SalesLeadsDualGraph({ clients = [], isLoading = false })
       <div className={styles.percentageIndicators}>
         <div className={styles.percentageItem}>
           <div className={styles.indicatorValue}>
-            {mode === "Sales/Revenue" ? `₹${totalA.toLocaleString()}` : totalA}
+            {mode === "Sales/Revenue" ? `AED ${totalA.toLocaleString()}` : totalA}
           </div>
           <div className={styles.indicatorInfo}>
             <div className={styles.indicatorTitle}>{data.legendA}</div>

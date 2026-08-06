@@ -51,9 +51,48 @@ export const canCreateLeaves = (role = getUserRole()) =>
   !isReadOnlyRole(role) &&
   (role === ROLES.HR || role === ROLES.ADMIN || role === ROLES.HOD);
 
+/** True when this leave belongs to an Admin and must be finalized by Authorize User */
+export const isAdminOwnedLeave = (leaveRequest) => {
+  const role = String(
+    leaveRequest?.requesterRole || leaveRequest?.employee?.role || ""
+  ).toLowerCase();
+  return role === ROLES.ADMIN;
+};
+
+/**
+ * Whether the current user may approve/reject this leave request.
+ * - Blocks self-approval
+ * - Admin leaves: Authorize User only
+ * - Employee leaves: Admin / Viewer / Authorize User (existing)
+ */
+export const canApproveLeaveRequest = (leaveRequest, role = getUserRole()) => {
+  if (!canApproveLeaves(role)) return false;
+  const status = leaveRequest?.status;
+  if (status !== "Pending" && status !== "HOD Approved") return false;
+
+  const myId = String(localStorage.getItem("userId") || "");
+  const ownerId = String(
+    leaveRequest?.employee?._id || leaveRequest?.employee || ""
+  );
+  if (myId && ownerId && myId === ownerId) return false;
+
+  if (isAdminOwnedLeave(leaveRequest) && !isAuthorizeUser(role)) return false;
+
+  return true;
+};
+
 export const canEditLeaves = (role = getUserRole()) =>
   !isReadOnlyRole(role) &&
   (role === ROLES.HR || role === ROLES.ADMIN || role === ROLES.HOD);
+
+/**
+ * Admin, HOD, and Authorize User may update vacation return / travel dates.
+ * Does not grant general employee or payroll edit access.
+ */
+export const canManageVacationReturnDates = (role = getUserRole()) =>
+  role === ROLES.ADMIN ||
+  role === ROLES.HOD ||
+  role === ROLES.AUTHORIZE_USER;
 
 export const canManageSlips = (role = getUserRole()) =>
   !isReadOnlyRole(role) && (role === ROLES.ADMIN || role === ROLES.HOD);

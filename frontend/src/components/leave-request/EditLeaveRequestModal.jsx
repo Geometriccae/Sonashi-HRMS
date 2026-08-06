@@ -9,6 +9,7 @@ import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import { buildYearList, yearsFromLeaveRequests } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
@@ -204,6 +205,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         if (!payload.employeeId || payload.employeeId === "unknown" || (typeof payload.employeeId === 'string' && payload.employeeId.length !== 24)) {
             delete payload.employeeId;
         }
+        // Field edits must not re-submit unchanged status (avoids approval/self-approve guards)
+        if (!leaveRequest?.status || payload.status === leaveRequest.status) {
+            delete payload.status;
+        }
 
         const start = new Date(formData.startDate);
         const end = new Date(formData.endDate);
@@ -246,14 +251,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         { value: "Sick Leave", label: "Sick Leave" },
         { value: "Vacation", label: "Vacation" },
         { value: "Personal Leave", label: "Personal Leave" },
+        { value: "Annual Leave", label: "Annual Leave" },
         { value: "Maternity/Paternity", label: "Maternity/Paternity" },
         { value: "Other", label: "Other" }
     ];
 
     const statusOptions = [
         { value: "Pending", label: "Pending" },
+        { value: "HOD Approved", label: "HOD Approved" },
         { value: "Approved", label: "Approved" },
-        { value: "Rejected", label: "Rejected" }
+        { value: "Rejected", label: "Rejected" },
+        { value: "Cancelled", label: "Cancelled" }
     ];
 
     const baseDepartmentOptions = dynamicDepartmentOptions;
@@ -287,7 +295,6 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                         leaveRequest?.employee;
                         
     const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
-    const years = [2026, 2025, 2024, 2023, 2022];
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
         let empNameSearch = "";
@@ -296,6 +303,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         else empNameSearch = String(formData.employeeName || "").toLowerCase().trim();
         
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Imported");
+    });
+    const years = buildYearList({
+      fromDataYears: yearsFromLeaveRequests(employeeLeaves),
+      pastYears: 25,
+      futureYears: 2,
     });
 
     const getYearlyLeaves = (year) => {

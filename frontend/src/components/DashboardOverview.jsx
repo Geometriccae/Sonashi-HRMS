@@ -15,7 +15,10 @@ import {
 import { useNavigate } from "react-router-dom";
 import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
-import { buildYetToGoFromLeaves } from "../utils/yetToGoHelpers";
+import { buildYetToGoFromLeaves, findLeaveForEmployee } from "../utils/yetToGoHelpers";
+import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
+import { canManageVacationReturnDates, getUserRole } from "../utils/permissions";
+import { markStaffReturned, saveVacationStatusWithDates } from "../utils/vacationReturnSync";
 
 const toDateInputValue = (value) => {
   if (!value) return "";
@@ -98,7 +101,7 @@ function DashboardOverview() {
       setIsLoading(true);
       try {
         const [employees, leaveRequests] = await Promise.all([
-          employeeService.getEmployeesList(),
+          employeeService.getEmployeesList({ force: true }),
           leaveRequestService.getLeaveRequests()
         ]);
 
@@ -123,11 +126,10 @@ function DashboardOverview() {
         let attVacReturn = 0;
 
         empList.forEach(emp => {
-          const status = String(emp.employeeStatus || "Active").toLowerCase();
           const vs = emp.vacationStatus || "Onsite";
 
-          if (status === "active") active++;
-          else if (status === "inactive") inactive++;
+          if (isWorkingEmployeeStatus(emp.employeeStatus)) active++;
+          else if (isNonWorkingEmployeeStatus(emp.employeeStatus)) inactive++;
 
           // Count vacation statuses
           if (vs === "On Vacation") attOnVacation++;
@@ -178,28 +180,47 @@ function DashboardOverview() {
     return () => { isMounted = false; };
   }, []);
 
-  const handleMarkAsReturned = async (req) => {
-    if (!window.confirm(`Are you sure ${req.employeeName} has returned early? This will update their leave end date to today.`)) return;
+  const handleMarkAsReturned = async (item) => {
+    const name = item.employeeName || item.name || "Employee";
+    if (!window.confirm(`Are you sure ${name} has returned early? This will update their leave end date to today.`)) return;
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Update Leave Request
-      await leaveRequestService.updateLeaveRequest(req._id, {
-        endDate: today.toISOString(),
-        status: "Approved"
+      const empId = item.linkedEmployeeId || item._id || item.id;
+      const leaveId = item.linkedLeaveId || null;
+
+      await markStaffReturned({ empId, leaveId, returnDate: today });
+
+      // Refresh in-memory dashboard data (vacation / leave / attendance surfaces)
+      const [empListRaw, leaveListRaw] = await Promise.all([
+        employeeService.getEmployeesList({ force: true }),
+        leaveRequestService.getLeaveRequests(),
+      ]);
+      const empList = Array.isArray(empListRaw) ? empListRaw : (empListRaw?.data || []);
+      const leaveList = Array.isArray(leaveListRaw) ? leaveListRaw : (leaveListRaw?.data || []);
+
+      let attOnVacation = 0;
+      let attVacReturn = 0;
+      empList.forEach((e) => {
+        const vs = e.vacationStatus || "Onsite";
+        if (vs === "On Vacation") attOnVacation++;
+        else if (vs === "Vacation Approved") attVacReturn++;
       });
-
-      // Update Employee Attendance if possible
-      const empId = req.employee?._id || req.employee;
-      if (empId) {
-        await employeeService.updateEmployee(empId, { attendance: "Onsite" });
+      const upcomingVacation = buildYetToGoFromLeaves(empList, leaveList).length;
+      setData({ employees: empList, leaveRequests: leaveList });
+      setCounts((prev) => ({
+        ...prev,
+        onVacation: attOnVacation,
+        upcomingVacation,
+        vacationReturn: attVacReturn,
+      }));
+      if (selectedCategory) {
+        handleCardClick(selectedCategory, empList);
       }
-
-      window.location.reload(); // Refresh to update all cards
     } catch (err) {
       console.error("Failed to mark as returned:", err);
-      alert("Failed to update status.");
+      alert(err?.response?.data?.message || err?.message || "Failed to update status.");
     }
   };
 
@@ -207,17 +228,39 @@ function DashboardOverview() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem._id || employeeItem.id;
     try {
-      await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+      await saveVacationStatusWithDates({
+        empId,
+        leaveId: employeeItem.linkedLeaveId || null,
+        vacationStatus: newStatus,
+        extraFields,
+        leaveList: data.leaveRequests || [],
+        empList: data.employees || [],
+        employeeItem,
+      });
 
       // Patch data.employees with both status and extra fields (dates)
       const updatedEmployees = data.employees.map(e =>
-        (e._id === empId || e.id === empId) ? { ...e, vacationStatus: newStatus, ...extraFields } : e
+        (e._id === empId || e.id === empId)
+          ? {
+              ...e,
+              vacationStatus: newStatus,
+              ...extraFields,
+              ...(newStatus === "Vacation Approved" ? { attendance: "Onsite" } : {}),
+            }
+          : e
       );
 
       // Patch filteredList with both status and extra fields (dates)
       setFilteredList(prev =>
         prev.map(e =>
-          (e._id === empId || e.id === empId) ? { ...e, vacationStatus: newStatus, ...extraFields } : e
+          (e._id === empId || e.id === empId)
+            ? {
+                ...e,
+                vacationStatus: newStatus,
+                ...extraFields,
+                ...(newStatus === "Vacation Approved" ? { attendance: "Onsite" } : {}),
+              }
+            : e
         )
       );
 
@@ -311,16 +354,24 @@ function DashboardOverview() {
         list = empSource;
         break;
       case "Active Employees":
-        list = empSource.filter(e => {
-          const status = String(e.employeeStatus || "Active").toLowerCase();
-          return status === "active";
-        });
+        list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
         break;
       case "Inactive Employees":
-        list = empSource.filter(e => String(e.employeeStatus || "Active").toLowerCase() === "inactive");
+        list = empSource.filter(e => isNonWorkingEmployeeStatus(e.employeeStatus));
         break;
       case "On vacation": {
-        list = empSource.filter(e => e.vacationStatus === "On Vacation");
+        list = empSource
+          .filter(e => e.vacationStatus === "On Vacation")
+          .map(e => {
+            const leave = findLeaveForEmployee(e, leaveSource, empSource, "onVacation");
+            return {
+              ...e,
+              linkedEmployeeId: e._id,
+              linkedLeaveId: leave?._id || null,
+              startDate: leave?.startDate || e.lastWorkingDay || null,
+              endDate: leave?.endDate || e.returnDate || null,
+            };
+          });
         break;
       }
       case "Yet to go": {
@@ -328,7 +379,18 @@ function DashboardOverview() {
         break;
       }
       case "Returned back from vacation": {
-        list = empSource.filter(e => e.vacationStatus === "Vacation Approved");
+        list = empSource
+          .filter(e => e.vacationStatus === "Vacation Approved")
+          .map(e => {
+            const leave = findLeaveForEmployee(e, leaveSource, empSource, "returned");
+            return {
+              ...e,
+              linkedEmployeeId: e._id,
+              linkedLeaveId: leave?._id || null,
+              startDate: leave?.startDate || e.lastWorkingDay || null,
+              endDate: leave?.endDate || e.firstWorkingDay || e.returnDate || null,
+            };
+          });
         break;
       }
       case "Visa Expiry":
@@ -430,6 +492,7 @@ function DashboardOverview() {
                             <th>Start Date</th>
                             <th>End Date</th>
                             {selectedCategory === "On vacation" && <th>Action</th>}
+                            {selectedCategory === "Returned back from vacation" && <th>Action</th>}
                           </>
                         ) : (
                           <>
@@ -458,7 +521,7 @@ function DashboardOverview() {
                             <>
                               <td>{item.startDate ? new Date(item.startDate).toLocaleDateString('en-GB') : "—"}</td>
                               <td>{item.endDate ? new Date(item.endDate).toLocaleDateString('en-GB') : "—"}</td>
-                              {selectedCategory === "On vacation" && (
+                              {selectedCategory === "On vacation" && canManageVacationReturnDates(getUserRole()) && (
                                 <td>
                                   <button
                                     className={styles.viewAllBtn}
@@ -478,6 +541,26 @@ function DashboardOverview() {
                                   </button>
                                 </td>
                               )}
+                              {selectedCategory === "Returned back from vacation" && canManageVacationReturnDates(getUserRole()) && (
+                                <td>
+                                  <button
+                                    className={styles.viewAllBtn}
+                                    style={{
+                                      padding: "6px 12px",
+                                      fontSize: "11px",
+                                      background: "#7c3aed",
+                                      margin: 0,
+                                      width: "auto"
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStatusDropdownChange(item, "Vacation Approved");
+                                    }}
+                                  >
+                                    Edit Return Date
+                                  </button>
+                                </td>
+                              )}
                             </>
                           ) : (
                             <>
@@ -490,7 +573,12 @@ function DashboardOverview() {
                                     : item.role || item.employeeStatus || "-"}
                               </td>
                               <td>
-                                {(localStorage.getItem("role") === "admin" || localStorage.getItem("role") === "hod") && selectedCategory === "Active Employees" ? (() => {
+                                {(canManageVacationReturnDates(getUserRole()) && (
+                                  selectedCategory === "Active Employees" ||
+                                  selectedCategory === "On vacation" ||
+                                  selectedCategory === "Yet to go" ||
+                                  selectedCategory === "Returned back from vacation"
+                                )) ? (() => {
                                   const vs = item.vacationStatus || "Onsite";
                                   const statusConfig = {
                                     "Onsite": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", icon: "✓" },

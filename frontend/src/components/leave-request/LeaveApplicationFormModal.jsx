@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import EmployeeService from "../../services/EmployeeService";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import { buildYearList } from "../../utils/yearOptions";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import "./LeaveForm.css"; // Reusing the shared clean modal styles
@@ -42,17 +43,22 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
 
     const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
     const leaveStats = calculateLeaveBalance(employee, allLeaveRequests, leaveRequest.startDate);
-    
-    // Get last 5 years history
-    const currentYear = 2026;
-    const years = [2026, 2025, 2024, 2023, 2022];
-    
+
     const empNameSearch = String(employee.employeeName || employee.name || "").toLowerCase().trim();
-    
+
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
     });
+
+    // Leave history years: all years present in data + wide range (no hardcoded 2026)
+    const yearsFromLeaves = employeeLeaves
+      .map((req) => {
+        const d = new Date(req.startDate);
+        return Number.isNaN(d.getTime()) ? null : d.getFullYear();
+      })
+      .filter((y) => y != null);
+    const years = buildYearList({ fromDataYears: yearsFromLeaves, pastYears: 25, futureYears: 2 });
 
     const getYearlyTotal = (year) => {
         return employeeLeaves

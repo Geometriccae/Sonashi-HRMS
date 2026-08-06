@@ -18,6 +18,8 @@ import {
   findLeaveForEmployee,
   buildYetToGoFromLeaves,
 } from "../utils/yetToGoHelpers";
+import { canManageVacationReturnDates, getUserRole } from "../utils/permissions";
+import { markStaffReturned, saveVacationStatusWithDates } from "../utils/vacationReturnSync";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const fmt = (d) => {
@@ -160,8 +162,7 @@ const getEmployeeIdFromItem = (item) => {
 // ─── Main Component ──────────────────────────────────────────────────────────
 function AnnualVacations() {
   const navigate = useNavigate();
-  const userRole = localStorage.getItem("role");
-  const isAdmin  = userRole === "admin" || userRole === "hod";
+  const canManageReturn = canManageVacationReturnDates(getUserRole());
 
   const [isLoading, setIsLoading]       = useState(true);
   const [employees, setEmployees]       = useState([]);
@@ -212,7 +213,7 @@ function AnnualVacations() {
     setIsLoading(true);
     try {
       const [empRes, leaveRes] = await Promise.all([
-        employeeService.getEmployeesList(),
+        employeeService.getEmployeesList({ force: true }),
         leaveRequestService.getLeaveRequests(),
       ]);
       const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
@@ -400,15 +401,17 @@ function AnnualVacations() {
   const doMarkReturned = async (item) => {
     const today = new Date(); today.setHours(0,0,0,0);
     try {
-      if (item.linkedLeaveId) {
-        await leaveRequestService.updateLeaveRequest(item.linkedLeaveId, { endDate:today.toISOString(), status:"Approved" });
-        const empId = getEmployeeIdFromItem(item);
-        if (empId) await employeeService.updateEmployee(empId, { vacationStatus:"Vacation Approved", firstWorkingDay:today.toISOString() });
-      } else {
-        await employeeService.updateEmployee(item._id, { vacationStatus:"Vacation Approved", firstWorkingDay:today.toISOString() });
-      }
+      const empId = getEmployeeIdFromItem(item);
+      await markStaffReturned({
+        empId,
+        leaveId: item.linkedLeaveId || null,
+        returnDate: today,
+      });
       showToast(`${item.employeeName||item.name} marked as returned.`);
-      const [empRes, leaveRes] = await Promise.all([employeeService.getEmployeesList(), leaveRequestService.getLeaveRequests()]);
+      const [empRes, leaveRes] = await Promise.all([
+        employeeService.getEmployeesList({ force: true }),
+        leaveRequestService.getLeaveRequests(),
+      ]);
       const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
       const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
       setEmployees(empList); setLeaveRequests(leaveList);
@@ -431,11 +434,22 @@ function AnnualVacations() {
     try {
       const empId = getEmployeeIdFromItem(item);
       if (empId) {
-        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
+        await saveVacationStatusWithDates({
+          empId,
+          leaveId: item.linkedLeaveId || null,
+          vacationStatus: newStatus,
+          extraFields: extra,
+          leaveList: leaveRequests,
+          empList: employees,
+          employeeItem: item,
+        });
       }
       showToast("Status updated successfully.");
       setEditModal(null);
-      const [empRes, leaveRes] = await Promise.all([employeeService.getEmployeesList(), leaveRequestService.getLeaveRequests()]);
+      const [empRes, leaveRes] = await Promise.all([
+        employeeService.getEmployeesList({ force: true }),
+        leaveRequestService.getLeaveRequests(),
+      ]);
       const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
       const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
       setEmployees(empList); setLeaveRequests(leaveList);
@@ -678,7 +692,7 @@ function AnnualVacations() {
                               {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th></>}
                               {activeTab === "returned"  && <><th>Return Date</th><th>First Working Day</th></>}
                               <th>Status</th>
-                              {isAdmin && <th>Actions</th>}
+                              {canManageReturn && <th>Actions</th>}
                             </tr>
                           </thead>
                           <tbody>
@@ -718,7 +732,7 @@ function AnnualVacations() {
                                   {activeTab === "returned"  && <><td>{fmt(item.returnDate)}</td><td>{fmt(item.firstWorkingDay)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
-                                    {isAdmin && item._source === "employee" ? (
+                                    {canManageReturn && item._source === "employee" ? (
                                       <div style={{ position:"relative", display:"inline-flex", alignItems:"center" }}>
                                         <StatusBadge status={vs} />
                                         <select style={{ position:"absolute", inset:0, opacity:0, cursor:"pointer", width:"100%", height:"100%" }}
@@ -732,7 +746,7 @@ function AnnualVacations() {
                                     ) : <StatusBadge status={vs} />}
                                   </td>
 
-                                  {isAdmin && (
+                                  {canManageReturn && (
                                     <td onClick={e => e.stopPropagation()}>
                                       <div className={styles.actionBtns}>
                                         <button className={styles.actionBtn} title="Edit dates" onClick={() => {

@@ -1,37 +1,33 @@
 /**
- * Fixed FX for Salary Slips display: 1 AED = 26.20 INR
- * Stored payroll values remain in INR; UI/PDF show AED via this conversion.
+ * Default currency: AED (United Arab Emirates Dirham).
+ * Display/label only — no FX conversion; amounts are shown as stored.
  */
-export const INR_PER_AED = 26.2;
+export const DEFAULT_CURRENCY = 'AED';
+export const CURRENCY_CODE = 'AED';
+export const CURRENCY_PREFIX = 'AED ';
 
-/** Convert INR amount → AED (same numeric space; no change to payroll formulas). */
-export function inrToAed(amountInr) {
-  const n = Number(amountInr);
-  if (!Number.isFinite(n)) return 0;
-  return Math.round((n / INR_PER_AED) * 100) / 100;
-}
-
-/** Convert AED amount → INR (for saving form values back to existing INR storage). */
-export function aedToInr(amountAed) {
-  const n = Number(amountAed);
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * INR_PER_AED * 100) / 100;
-}
-
-/** Format an INR amount as AED for display. */
-export function formatAedFromInr(amountInr) {
-  return `AED ${inrToAed(amountInr).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-/** Format a number already in AED. */
-export function formatAed(amountAed) {
-  const n = Number(amountAed);
+/** Format a monetary amount with AED label (no conversion). */
+export function formatAed(amount) {
+  const n = Number(amount);
   const value = Number.isFinite(n) ? n : 0;
-  return `AED ${value.toLocaleString(undefined, {
+  return `${CURRENCY_PREFIX}${value.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/** @deprecated Use formatAed — kept so older imports keep working without conversion. */
+export function formatAedFromInr(amount) {
+  return formatAed(amount);
+}
+
+/** Identity helpers (no conversion) for any leftover call sites. */
+export function inrToAed(amount) {
+  const n = Number(amount);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function aedToInr(amount) {
+  const n = Number(amount);
+  return Number.isFinite(n) ? n : 0;
 }
