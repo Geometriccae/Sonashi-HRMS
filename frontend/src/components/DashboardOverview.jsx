@@ -17,8 +17,7 @@ import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
 import { buildYetToGoFromLeaves, findLeaveForEmployee } from "../utils/yetToGoHelpers";
 import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
-import { canManageVacationReturnDates, getUserRole } from "../utils/permissions";
-import { markStaffReturned, saveVacationStatusWithDates } from "../utils/vacationReturnSync";
+import { canUpdateVacationReturn } from "../utils/permissions";
 
 const toDateInputValue = (value) => {
   if (!value) return "";
@@ -180,86 +179,56 @@ function DashboardOverview() {
     return () => { isMounted = false; };
   }, []);
 
-  const handleMarkAsReturned = async (item) => {
-    const name = item.employeeName || item.name || "Employee";
-    if (!window.confirm(`Are you sure ${name} has returned early? This will update their leave end date to today.`)) return;
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const empId = item.linkedEmployeeId || item._id || item.id;
-      const leaveId = item.linkedLeaveId || null;
-
-      await markStaffReturned({ empId, leaveId, returnDate: today });
-
-      // Refresh in-memory dashboard data (vacation / leave / attendance surfaces)
-      const [empListRaw, leaveListRaw] = await Promise.all([
-        employeeService.getEmployeesList({ force: true }),
-        leaveRequestService.getLeaveRequests(),
-      ]);
-      const empList = Array.isArray(empListRaw) ? empListRaw : (empListRaw?.data || []);
-      const leaveList = Array.isArray(leaveListRaw) ? leaveListRaw : (leaveListRaw?.data || []);
-
-      let attOnVacation = 0;
-      let attVacReturn = 0;
-      empList.forEach((e) => {
-        const vs = e.vacationStatus || "Onsite";
-        if (vs === "On Vacation") attOnVacation++;
-        else if (vs === "Vacation Approved") attVacReturn++;
-      });
-      const upcomingVacation = buildYetToGoFromLeaves(empList, leaveList).length;
-      setData({ employees: empList, leaveRequests: leaveList });
-      setCounts((prev) => ({
-        ...prev,
-        onVacation: attOnVacation,
-        upcomingVacation,
-        vacationReturn: attVacReturn,
-      }));
-      if (selectedCategory) {
-        handleCardClick(selectedCategory, empList);
-      }
-    } catch (err) {
-      console.error("Failed to mark as returned:", err);
-      alert(err?.response?.data?.message || err?.message || "Failed to update status.");
-    }
+  const handleMarkAsReturned = (item) => {
+    if (!canUpdateVacationReturn()) return;
+    const todayStr = toDateInputValue(new Date());
+    const plannedEnd = toDateInputValue(item.endDate);
+    const prompt = buildVacationDatePrompt(
+      {
+        ...item,
+        returnDate: item.returnDate || item.endDate || new Date(),
+        firstWorkingDay: item.firstWorkingDay || item.returnDate || item.endDate || new Date(),
+      },
+      "Vacation Approved"
+    );
+    setDatePrompt({
+      ...prompt,
+      mode: "markReturn",
+      dateValue: prompt.dateValue || plannedEnd || todayStr,
+      secondaryDateValue: prompt.secondaryDateValue || plannedEnd || todayStr,
+      categoryToReopen: selectedCategory,
+    });
   };
 
   // Update a single employee's vacationStatus in-state (no page reload)
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
-    const empId = employeeItem._id || employeeItem.id;
+    const empId = employeeItem.linkedEmployeeId || employeeItem._id || employeeItem.id;
     try {
-      await saveVacationStatusWithDates({
-        empId,
-        leaveId: employeeItem.linkedLeaveId || null,
-        vacationStatus: newStatus,
-        extraFields,
-        leaveList: data.leaveRequests || [],
-        empList: data.employees || [],
-        employeeItem,
-      });
+      // Returning from vacation (early or extended): sync leave end date + statuses
+      if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
+        const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
+        const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
+        await employeeService.markVacationReturn(empId, {
+          returnDate,
+          firstWorkingDay,
+          leaveId: employeeItem.linkedLeaveId || null,
+        });
+      } else {
+        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+      }
 
       // Patch data.employees with both status and extra fields (dates)
       const updatedEmployees = data.employees.map(e =>
-        (e._id === empId || e.id === empId)
-          ? {
-              ...e,
-              vacationStatus: newStatus,
-              ...extraFields,
-              ...(newStatus === "Vacation Approved" ? { attendance: "Onsite" } : {}),
-            }
+        (e._id === empId || e.id === empId || String(e._id) === String(empId))
+          ? { ...e, vacationStatus: newStatus, ...extraFields, attendance: newStatus === "Vacation Approved" ? "Onsite" : e.attendance }
           : e
       );
 
       // Patch filteredList with both status and extra fields (dates)
       setFilteredList(prev =>
         prev.map(e =>
-          (e._id === empId || e.id === empId)
-            ? {
-                ...e,
-                vacationStatus: newStatus,
-                ...extraFields,
-                ...(newStatus === "Vacation Approved" ? { attendance: "Onsite" } : {}),
-              }
+          (e._id === empId || e.id === empId || e.linkedEmployeeId === empId || String(e._id) === String(empId))
+            ? { ...e, vacationStatus: newStatus, ...extraFields }
             : e
         )
       );
@@ -287,7 +256,7 @@ function DashboardOverview() {
       return updatedEmployees;
     } catch (err) {
       console.error("Failed to update vacation status:", err);
-      alert("Failed to update status.");
+      alert(err?.message || "Failed to update status.");
       throw err;
     }
   };
@@ -308,14 +277,26 @@ function DashboardOverview() {
   const handleDatePromptConfirm = async () => {
     if (!datePrompt || datePromptSaving) return;
     const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, categoryToReopen } = datePrompt;
+    if (newStatus === "Vacation Approved" && !dateValue) {
+      alert("Please select the Return / Entry Date.");
+      return;
+    }
     const extraFields = {};
     if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
     if (secondaryFieldKey && secondaryDateValue) {
       extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+    } else if (newStatus === "Vacation Approved" && dateValue) {
+      extraFields.firstWorkingDay = new Date(dateValue).toISOString();
     }
     setDatePromptSaving(true);
     try {
       const updatedEmployees = await handleVacationStatusChange(employeeItem, newStatus, extraFields);
+      // Refresh leave list so Leave Status / end dates stay in sync
+      try {
+        const leaveRequests = await leaveRequestService.getLeaveRequests();
+        const leaveList = Array.isArray(leaveRequests) ? leaveRequests : (leaveRequests?.data || []);
+        setData(prev => ({ ...prev, leaveRequests: leaveList }));
+      } catch (_) { /* non-blocking */ }
       setDatePrompt(null);
       if (categoryToReopen) {
         handleCardClick(categoryToReopen, updatedEmployees);
@@ -492,7 +473,6 @@ function DashboardOverview() {
                             <th>Start Date</th>
                             <th>End Date</th>
                             {selectedCategory === "On vacation" && <th>Action</th>}
-                            {selectedCategory === "Returned back from vacation" && <th>Action</th>}
                           </>
                         ) : (
                           <>
@@ -521,7 +501,7 @@ function DashboardOverview() {
                             <>
                               <td>{item.startDate ? new Date(item.startDate).toLocaleDateString('en-GB') : "—"}</td>
                               <td>{item.endDate ? new Date(item.endDate).toLocaleDateString('en-GB') : "—"}</td>
-                              {selectedCategory === "On vacation" && canManageVacationReturnDates(getUserRole()) && (
+                              {selectedCategory === "On vacation" && canUpdateVacationReturn() && (
                                 <td>
                                   <button
                                     className={styles.viewAllBtn}
@@ -541,26 +521,6 @@ function DashboardOverview() {
                                   </button>
                                 </td>
                               )}
-                              {selectedCategory === "Returned back from vacation" && canManageVacationReturnDates(getUserRole()) && (
-                                <td>
-                                  <button
-                                    className={styles.viewAllBtn}
-                                    style={{
-                                      padding: "6px 12px",
-                                      fontSize: "11px",
-                                      background: "#7c3aed",
-                                      margin: 0,
-                                      width: "auto"
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleStatusDropdownChange(item, "Vacation Approved");
-                                    }}
-                                  >
-                                    Edit Return Date
-                                  </button>
-                                </td>
-                              )}
                             </>
                           ) : (
                             <>
@@ -573,12 +533,7 @@ function DashboardOverview() {
                                     : item.role || item.employeeStatus || "-"}
                               </td>
                               <td>
-                                {(canManageVacationReturnDates(getUserRole()) && (
-                                  selectedCategory === "Active Employees" ||
-                                  selectedCategory === "On vacation" ||
-                                  selectedCategory === "Yet to go" ||
-                                  selectedCategory === "Returned back from vacation"
-                                )) ? (() => {
+                                {(localStorage.getItem("role") === "admin" || localStorage.getItem("role") === "hod") && selectedCategory === "Active Employees" ? (() => {
                                   const vs = item.vacationStatus || "Onsite";
                                   const statusConfig = {
                                     "Onsite": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", icon: "✓" },
@@ -831,7 +786,8 @@ function DashboardOverview() {
                   {datePrompt.secondaryFieldKey ? "Set Vacation Dates" : `Set ${datePrompt.label}`}
                 </h3>
                 <p style={{ margin: 0, fontSize: "14px", color: "#64748b", lineHeight: "1.5" }}>
-                  Please select the vacation-related date{datePrompt.secondaryFieldKey ? "s" : ""} for <strong style={{ color: "#334155" }}>{datePrompt.employeeItem.employeeName}</strong>.
+                  Please select the actual return date{datePrompt.secondaryFieldKey ? "s" : ""} for <strong style={{ color: "#334155" }}>{datePrompt.employeeItem.employeeName}</strong>
+                  {datePrompt.mode === "markReturn" ? " (earlier or later than planned)." : "."}
                 </p>
               </div>
 

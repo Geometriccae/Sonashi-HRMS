@@ -85,13 +85,11 @@ export const canEditLeaves = (role = getUserRole()) =>
   !isReadOnlyRole(role) &&
   (role === ROLES.HR || role === ROLES.ADMIN || role === ROLES.HOD);
 
-/**
- * Admin, HOD, and Authorize User may update vacation return / travel dates.
- * Does not grant general employee or payroll edit access.
- */
-export const canManageVacationReturnDates = (role = getUserRole()) =>
+/** Admin / HOD / HR / Authorize User — update early or extended vacation return dates */
+export const canUpdateVacationReturn = (role = getUserRole()) =>
   role === ROLES.ADMIN ||
   role === ROLES.HOD ||
+  role === ROLES.HR ||
   role === ROLES.AUTHORIZE_USER;
 
 export const canManageSlips = (role = getUserRole()) =>

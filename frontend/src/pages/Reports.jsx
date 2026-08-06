@@ -328,9 +328,6 @@ function Reports() {
     );
     if (!Array.isArray(empList)) empList = [];
 
-    // Leave Report: never include inactive / non-working employees
-    empList = empList.filter((e) => isActiveEmployee(e));
-
     if (filterEmployee !== "All") {
       const selectedEmp = employeeList.find(e => (e.employeeId || e._id) === filterEmployee)
         || empList.find(e => (e.employeeId || e._id) === filterEmployee);
@@ -543,10 +540,6 @@ function Reports() {
       );
       if (!Array.isArray(empList)) empList = [];
 
-      // Leave Report: never include inactive / non-working employees
-      const allLinkedEmps = empList;
-      empList = empList.filter((e) => isActiveEmployee(e));
-
       if (filterEmployee !== "All") {
         const selectedEmp =
           employeeList.find((e) => (e.employeeId || e._id) === filterEmployee) ||
@@ -582,13 +575,9 @@ function Reports() {
       for (const leave of leaves) {
         if (!leave || leave.status === "Cancelled") continue;
 
-        const linkedAny = findLinkedEmployee(leave, allLinkedEmps);
-        if (linkedAny && isInactiveEmployee(linkedAny)) continue;
-
         const emp = findLinkedEmployee(leave, empList);
         // Keep orphan historical leaves only when no status/employee filter requires a linked employee
         if (filterEmployee !== "All" && !emp) continue;
-        if (!emp && linkedAny) continue; // inactive already skipped; drop non-active matches
         if (employeeStatus !== "All" && !emp) continue;
         if (filterDepartment !== "All" && !emp && leave.department !== filterDepartment) {
           continue;

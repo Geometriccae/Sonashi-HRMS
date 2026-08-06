@@ -18,8 +18,7 @@ import {
   findLeaveForEmployee,
   buildYetToGoFromLeaves,
 } from "../utils/yetToGoHelpers";
-import { canManageVacationReturnDates, getUserRole } from "../utils/permissions";
-import { markStaffReturned, saveVacationStatusWithDates } from "../utils/vacationReturnSync";
+import { canUpdateVacationReturn } from "../utils/permissions";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const fmt = (d) => {
@@ -162,7 +161,8 @@ const getEmployeeIdFromItem = (item) => {
 // ─── Main Component ──────────────────────────────────────────────────────────
 function AnnualVacations() {
   const navigate = useNavigate();
-  const canManageReturn = canManageVacationReturnDates(getUserRole());
+  const userRole = localStorage.getItem("role");
+  const canReturn = canUpdateVacationReturn(userRole);
 
   const [isLoading, setIsLoading]       = useState(true);
   const [employees, setEmployees]       = useState([]);
@@ -394,20 +394,38 @@ function AnnualVacations() {
   };
 
   const handleMarkReturned = (item) => {
-    if (!window.confirm(`Mark ${item.employeeName||item.name} as returned early? This will update the leave end date to today.`)) return;
-    doMarkReturned(item);
+    if (!canReturn) return;
+    const todayStr = toDateInputValue(new Date());
+    const planned = toDateInputValue(item.endDate) || todayStr;
+    const state = buildEditModalState(
+      {
+        ...item,
+        returnDate: item.returnDate || item.endDate || new Date(),
+        firstWorkingDay: item.firstWorkingDay || item.returnDate || item.endDate || new Date(),
+      },
+      "Vacation Approved",
+      "markReturn"
+    );
+    setEditModal({
+      ...state,
+      dateValue: state.dateValue || planned,
+      secondaryDateValue: state.secondaryDateValue || planned,
+    });
   };
 
-  const doMarkReturned = async (item) => {
-    const today = new Date(); today.setHours(0,0,0,0);
+  const doMarkReturned = async (item, returnDate, firstWorkingDay) => {
     try {
       const empId = getEmployeeIdFromItem(item);
-      await markStaffReturned({
-        empId,
+      if (!empId) {
+        showToast("Employee record not found for this leave.", "error");
+        return;
+      }
+      await employeeService.markVacationReturn(empId, {
+        returnDate,
+        firstWorkingDay: firstWorkingDay || returnDate,
         leaveId: item.linkedLeaveId || null,
-        returnDate: today,
       });
-      showToast(`${item.employeeName||item.name} marked as returned.`);
+      showToast(`${item.employeeName || item.name} return date updated.`);
       const [empRes, leaveRes] = await Promise.all([
         employeeService.getEmployeesList({ force: true }),
         leaveRequestService.getLeaveRequests(),
@@ -417,46 +435,55 @@ function AnnualVacations() {
       setEmployees(empList); setLeaveRequests(leaveList);
       computeCounts(empList, leaveList);
       setTabList(buildTabList(activeTab, empList, leaveList));
-    } catch { showToast("Failed to mark as returned.", "error"); }
+    } catch (err) {
+      showToast(err?.message || "Failed to update return date.", "error");
+      throw err;
+    }
   };
 
   const handleEditDateConfirm = async () => {
     if (!editModal || editModalSaving) return;
-    const { item, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue } = editModal;
-    const extra = {};
-    if (newStatus !== "Onsite") {
-      if (dateValue) extra[fieldKey] = new Date(dateValue).toISOString();
-      if (secondaryFieldKey && secondaryDateValue) {
-        extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
-      }
+    const { item, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, mode } = editModal;
+
+    if ((newStatus === "Vacation Approved" || mode === "markReturn") && !dateValue) {
+      showToast("Please select the Return / Entry Date.", "error");
+      return;
     }
+
     setEditModalSaving(true);
     try {
-      const empId = getEmployeeIdFromItem(item);
-      if (empId) {
-        await saveVacationStatusWithDates({
-          empId,
-          leaveId: item.linkedLeaveId || null,
-          vacationStatus: newStatus,
-          extraFields: extra,
-          leaveList: leaveRequests,
-          empList: employees,
-          employeeItem: item,
-        });
+      if (newStatus === "Vacation Approved" || mode === "markReturn") {
+        const returnDate = new Date(dateValue).toISOString();
+        const firstWorkingDay = secondaryDateValue
+          ? new Date(secondaryDateValue).toISOString()
+          : returnDate;
+        await doMarkReturned(item, returnDate, firstWorkingDay);
+      } else {
+        const extra = {};
+        if (newStatus !== "Onsite") {
+          if (dateValue) extra[fieldKey] = new Date(dateValue).toISOString();
+          if (secondaryFieldKey && secondaryDateValue) {
+            extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+          }
+        }
+        const empId = getEmployeeIdFromItem(item);
+        if (empId) {
+          await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
+        }
+        showToast("Status updated successfully.");
+        const [empRes, leaveRes] = await Promise.all([
+          employeeService.getEmployeesList({ force: true }),
+          leaveRequestService.getLeaveRequests(),
+        ]);
+        const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
+        const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
+        setEmployees(empList); setLeaveRequests(leaveList);
+        computeCounts(empList, leaveList);
+        setTabList(buildTabList(activeTab, empList, leaveList));
       }
-      showToast("Status updated successfully.");
       setEditModal(null);
-      const [empRes, leaveRes] = await Promise.all([
-        employeeService.getEmployeesList({ force: true }),
-        leaveRequestService.getLeaveRequests(),
-      ]);
-      const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
-      const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
-      setEmployees(empList); setLeaveRequests(leaveList);
-      computeCounts(empList, leaveList);
-      setTabList(buildTabList(activeTab, empList, leaveList));
     } catch {
-      showToast("Failed to update status.", "error");
+      // toast already shown for return; generic for other
     } finally {
       setEditModalSaving(false);
     }
@@ -692,7 +719,7 @@ function AnnualVacations() {
                               {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th></>}
                               {activeTab === "returned"  && <><th>Return Date</th><th>First Working Day</th></>}
                               <th>Status</th>
-                              {canManageReturn && <th>Actions</th>}
+                              {canReturn && <th>Actions</th>}
                             </tr>
                           </thead>
                           <tbody>
@@ -732,7 +759,7 @@ function AnnualVacations() {
                                   {activeTab === "returned"  && <><td>{fmt(item.returnDate)}</td><td>{fmt(item.firstWorkingDay)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
-                                    {canManageReturn && item._source === "employee" ? (
+                                    {canReturn && item._source === "employee" ? (
                                       <div style={{ position:"relative", display:"inline-flex", alignItems:"center" }}>
                                         <StatusBadge status={vs} />
                                         <select style={{ position:"absolute", inset:0, opacity:0, cursor:"pointer", width:"100%", height:"100%" }}
@@ -746,15 +773,15 @@ function AnnualVacations() {
                                     ) : <StatusBadge status={vs} />}
                                   </td>
 
-                                  {canManageReturn && (
+                                  {canReturn && (
                                     <td onClick={e => e.stopPropagation()}>
                                       <div className={styles.actionBtns}>
-                                        <button className={styles.actionBtn} title="Edit dates" onClick={() => {
-                                          setEditModal(buildEditModalState(item, vs, "date"));
+                                        <button className={styles.actionBtn} title="Edit return / vacation dates" onClick={() => {
+                                          setEditModal(buildEditModalState(item, vs === "On Vacation" || vs === "Vacation Pending" || vs === "Vacation Approved" ? vs : "Vacation Approved", "date"));
                                         }}><FaEdit /></button>
                                         {activeTab === "onVacation" && (
                                           <button className={`${styles.actionBtn} ${styles.actionBtnGreen}`}
-                                            title="Mark as returned" onClick={() => handleMarkReturned(item)}><FaUndoAlt /></button>
+                                            title="Mark as returned (select date)" onClick={() => handleMarkReturned(item)}><FaUndoAlt /></button>
                                         )}
                                       </div>
                                     </td>
@@ -792,12 +819,20 @@ function AnnualVacations() {
               {(editModal.item.employeeName||editModal.item.name||"?")[0].toUpperCase()}
             </div>
             <h3 className={styles.modalTitle}>
-              {editModal.mode === "date" ? `Update ${editModal.label}` : "Change Vacation Status"}
+              {editModal.mode === "markReturn"
+                ? "Mark Returned from Vacation"
+                : editModal.mode === "date"
+                  ? `Update ${editModal.label}`
+                  : "Change Vacation Status"}
             </h3>
-            <p className={styles.modalSub}>for <strong>{editModal.item.employeeName||editModal.item.name}</strong></p>
+            <p className={styles.modalSub}>
+              for <strong>{editModal.item.employeeName||editModal.item.name}</strong>
+              {editModal.mode === "markReturn" ? " — select actual return date (early or extended)." : ""}
+            </p>
             <div className={styles.modalField}>
               <label className={styles.modalLabel}>Vacation Status</label>
               <select className={styles.modalSelect} value={editModal.newStatus}
+                disabled={editModal.mode === "markReturn"}
                 onChange={e => {
                   const ns = e.target.value;
                   setEditModal(prev => ({

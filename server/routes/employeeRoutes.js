@@ -4,7 +4,7 @@ const Employee = require('../models/Employee');
 const User = require('../models/User');
 const EmployeeRemark = require('../models/EmployeeRemark');
 const authMiddleware = require('../middleware/authMiddleware');
-const { blockViewerWrites, blockViewerWritesAllowVacationReturn } = require('../middleware/permissionsMiddleware');
+const { blockViewerWrites } = require('../middleware/permissionsMiddleware');
 const multer = require('multer');
 const path = require('path');
 const nodemailer = require("nodemailer");
@@ -23,6 +23,7 @@ const {
   workingStatusFilter,
   nonWorkingStatusFilter,
 } = require('../utils/employeeStatus');
+const LeaveRequest = require('../models/LeaveRequest');
 const {
   getListCache,
   setListCache,
@@ -768,7 +769,7 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
   }
 });
 // Update employee
-router.put('/:id', authMiddleware, uploadProfilePhoto.single('profilePhoto'), blockViewerWritesAllowVacationReturn, async (req, res) => {
+router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
   try {
     console.log('🔧 UPDATE EMPLOYEE - START');
     console.log('Employee ID:', req.params.id);
@@ -1690,6 +1691,144 @@ router.delete('/:id/events/:eventId', authMiddleware, blockViewerWrites, async (
     res.json({ message: 'Task deleted successfully', employee });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting task', error: error.message });
+  }
+});
+
+/**
+ * Mark / update staff return from vacation (early or extended).
+ * Allowed: admin, hod, hr, authorize_user.
+ * Updates leave end date, vacation status, return dates, and attendance.
+ * Does not change leave approval workflow.
+ */
+router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user?.role || '').toLowerCase();
+    const allowed = ['admin', 'hod', 'hr', 'authorize_user'];
+    if (!allowed.includes(role)) {
+      return res.status(403).json({
+        message: 'You do not have permission to update vacation return dates.',
+      });
+    }
+
+    const returnRaw = req.body?.returnDate;
+    if (!returnRaw) {
+      return res.status(400).json({ message: 'Return / Entry Date is required.' });
+    }
+
+    const returnDt = new Date(returnRaw);
+    if (Number.isNaN(returnDt.getTime())) {
+      return res.status(400).json({ message: 'Invalid return date.' });
+    }
+    returnDt.setHours(0, 0, 0, 0);
+
+    let firstWork = req.body?.firstWorkingDay
+      ? new Date(req.body.firstWorkingDay)
+      : new Date(returnDt);
+    if (Number.isNaN(firstWork.getTime())) firstWork = new Date(returnDt);
+    firstWork.setHours(0, 0, 0, 0);
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    let leave = null;
+    const leaveId = req.body?.leaveId;
+    if (leaveId && mongoose.Types.ObjectId.isValid(String(leaveId))) {
+      leave = await LeaveRequest.findById(leaveId);
+    }
+
+    if (!leave) {
+      const name = String(employee.employeeName || '').trim();
+      const vacationTypes = ['Vacation', 'Annual Leave'];
+      const candidates = await LeaveRequest.find({
+        status: { $in: ['Approved', 'HOD Approved'] },
+        leaveType: { $in: vacationTypes },
+        ...(name ? { employeeName: name } : {}),
+      })
+        .sort({ startDate: -1 })
+        .limit(20);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      leave =
+        candidates.find((reqLeave) => {
+          const start = reqLeave.startDate ? new Date(reqLeave.startDate) : null;
+          const end = reqLeave.endDate ? new Date(reqLeave.endDate) : null;
+          if (!start) return false;
+          start.setHours(0, 0, 0, 0);
+          if (end) end.setHours(0, 0, 0, 0);
+          // Prefer leave covering return date or still open / recently ended
+          if (start <= returnDt && (!end || end >= returnDt || end >= today)) return true;
+          if (start <= today && (!end || end >= today)) return true;
+          return false;
+        }) || candidates[0] || null;
+    }
+
+    if (leave) {
+      const actor = req.user?.username || req.user?.emailId || 'System';
+      const plannedEnd = leave.endDate ? new Date(leave.endDate) : null;
+      let remark = 'Vacation return date updated';
+      if (plannedEnd && !Number.isNaN(plannedEnd.getTime())) {
+        plannedEnd.setHours(0, 0, 0, 0);
+        if (returnDt < plannedEnd) remark = 'Returned earlier than planned; leave end date updated';
+        else if (returnDt > plannedEnd) remark = 'Vacation extended; leave end date updated';
+      }
+
+      leave.endDate = returnDt;
+      leave.changeStatus = 'Modified';
+      leave.changedBy = actor;
+      leave.changedByUser = req.user._id || req.user.id || null;
+      leave.changedOn = new Date();
+      leave.changeRemarks = remark;
+      if (Array.isArray(leave.statusChangeHistory)) {
+        leave.statusChangeHistory.push({
+          changeStatus: 'Modified',
+          changedBy: actor,
+          changedByUser: req.user._id || req.user.id || null,
+          changedOn: new Date(),
+          remarks: remark,
+        });
+      }
+      await leave.save();
+    }
+
+    employee.vacationStatus = 'Vacation Approved';
+    employee.returnDate = returnDt;
+    employee.firstWorkingDay = firstWork;
+    employee.attendance = 'Onsite';
+    await employee.save();
+    invalidateListCache();
+
+    // Best-effort attendance Onsite for return day
+    try {
+      await Attendance.findOneAndUpdate(
+        { employee: employee._id, date: returnDt },
+        {
+          $set: {
+            employee: employee._id,
+            date: returnDt,
+            status: 'Onsite',
+            updatedBy: req.user._id || req.user.id || null,
+          },
+        },
+        { upsert: true, new: true }
+      );
+    } catch (attErr) {
+      console.warn('[vacation-return] Attendance update skipped:', attErr.message);
+    }
+
+    res.json({
+      message: 'Vacation return updated successfully',
+      employee,
+      leave,
+    });
+  } catch (error) {
+    console.error('Error updating vacation return:', error);
+    res.status(400).json({
+      message: 'Error updating vacation return',
+      error: error.message,
+    });
   }
 });
 

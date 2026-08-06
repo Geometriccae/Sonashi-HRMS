@@ -474,22 +474,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Leave request not found' });
         }
 
-        if (req.user.role === 'viewer') {
+        if (req.user.role === 'viewer' || req.user.role === 'authorize_user') {
             const hasFieldEdits = employeeId || employeeName || company || leaveType || startDate || endDate || reason
                 || req.body.isPastLeave !== undefined || req.body.requestAirfare !== undefined || req.body.visaExpiryDate;
             if (!status || hasFieldEdits) {
-                return res.status(403).json({ message: 'This role can only approve or reject leave requests' });
-            }
-        } else if (req.user.role === 'authorize_user') {
-            // Approve/reject allowed; also allow endDate-only updates for early/late staff return sync.
-            const hasDisallowedFields = !!(
-                employeeId || employeeName || company || leaveType || startDate || reason
-                || req.body.isPastLeave !== undefined || req.body.requestAirfare !== undefined || req.body.visaExpiryDate
-            );
-            if (hasDisallowedFields) {
-                return res.status(403).json({ message: 'This role can only approve or reject leave requests' });
-            }
-            if (!status && endDate === undefined) {
                 return res.status(403).json({ message: 'This role can only approve or reject leave requests' });
             }
         }

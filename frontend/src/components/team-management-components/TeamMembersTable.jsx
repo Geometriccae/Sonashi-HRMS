@@ -35,16 +35,13 @@ import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
 import DateInput from "../DateInput";
 import { ACTIVE_OPTIONS } from "../../constants/employeeDropdownOptions";
+import { canUpdateVacationReturn } from "../../utils/permissions";
 import {
   formatEmployeeStatusDisplay,
   employeeStatusTagColor,
   isWorkingEmployeeStatus,
   isNonWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
-import { canManageVacationReturnDates, getUserRole } from "../../utils/permissions";
-import { saveVacationStatusWithDates } from "../../utils/vacationReturnSync";
-import leaveRequestService from "../../services/LeaveRequestService";
-import { findLeaveForEmployee } from "../../utils/yetToGoHelpers";
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -204,21 +201,17 @@ function TeamMembersTable() {
   const [error, setError] = useState(null);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
-  const canManageReturn = canManageVacationReturnDates(getUserRole() || userRole);
   const canEditEmployees =
     userRole !== "viewer" && userRole !== "authorize_user";
+  const canReturn = canUpdateVacationReturn(userRole);
   const canDeleteEmployees = userRole === "admin" || userRole === "hod";
   const [datePrompt, setDatePrompt] = useState(null);
   const [datePromptSaving, setDatePromptSaving] = useState(false);
   const [statusPrompt, setStatusPrompt] = useState(null);
   const [statusPromptSaving, setStatusPromptSaving] = useState(false);
-  const [leaveRequests, setLeaveRequests] = useState([]);
 
   useEffect(() => {
     fetchEmployees();
-    leaveRequestService.getLeaveRequests()
-      .then((data) => setLeaveRequests(Array.isArray(data) ? data : data?.data || []))
-      .catch(() => setLeaveRequests([]));
 
     // Listen for real-time employee creations so UI updates without manual refresh
     const socketUrl = getApiBaseUrl();
@@ -368,19 +361,17 @@ function TeamMembersTable() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem._id || employeeItem.id;
     try {
-      const leave =
-        findLeaveForEmployee(employeeItem, leaveRequests, employees, "returned") ||
-        findLeaveForEmployee(employeeItem, leaveRequests, employees, "onVacation");
-
-      await saveVacationStatusWithDates({
-        empId,
-        leaveId: leave?._id || null,
-        vacationStatus: newStatus,
-        extraFields,
-        leaveList: leaveRequests,
-        empList: employees,
-        employeeItem,
-      });
+      if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
+        const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
+        const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
+        await employeeService.markVacationReturn(empId, {
+          returnDate,
+          firstWorkingDay,
+          leaveId: employeeItem.linkedLeaveId || null,
+        });
+      } else {
+        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+      }
 
       // Update in-state
       setEmployees(prev =>
@@ -390,7 +381,7 @@ function TeamMembersTable() {
                 ...e,
                 vacationStatus: newStatus,
                 ...extraFields,
-                ...(newStatus === "Vacation Approved" ? { attendance: "Onsite" } : {}),
+                attendance: newStatus === "Vacation Approved" ? "Onsite" : e.attendance,
               }
             : e
         )
@@ -399,7 +390,7 @@ function TeamMembersTable() {
       showToast("Vacation status updated successfully.", "success");
     } catch (err) {
       console.error("Failed to update vacation status:", err);
-      showToast(err?.response?.data?.message || "Failed to update vacation status.", "error");
+      showToast(err?.message || "Failed to update vacation status.", "error");
       throw err;
     }
   };
@@ -407,25 +398,31 @@ function TeamMembersTable() {
   const handleStatusDropdownChange = (employeeItem, newStatus) => {
     const prompt = buildVacationDatePrompt(employeeItem, newStatus);
     if (prompt) {
+      // Prefill return dates from planned leave end when marking returned
+      if (newStatus === "Vacation Approved") {
+        const planned = toDateInputValue(employeeItem.endDate || employeeItem.returnDate) || toDateInputValue(new Date());
+        prompt.dateValue = prompt.dateValue || planned;
+        prompt.secondaryDateValue = prompt.secondaryDateValue || planned;
+      }
       setDatePrompt(prompt);
     } else {
       handleVacationStatusChange(employeeItem, newStatus);
     }
   };
 
-  const openEditVacationDates = (employeeItem) => {
-    const vs = employeeItem.vacationStatus || "Onsite";
-    const prompt = buildVacationDatePrompt(employeeItem, vs);
-    if (prompt) setDatePrompt(prompt);
-  };
-
   const handleDatePromptConfirm = async () => {
     if (!datePrompt || datePromptSaving) return;
     const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue } = datePrompt;
+    if (newStatus === "Vacation Approved" && !dateValue) {
+      showToast("Please select the Return / Entry Date.", "error");
+      return;
+    }
     const extraFields = {};
     if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
     if (secondaryFieldKey && secondaryDateValue) {
       extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+    } else if (newStatus === "Vacation Approved" && dateValue) {
+      extraFields.firstWorkingDay = new Date(dateValue).toISOString();
     }
     setDatePromptSaving(true);
     try {
@@ -678,7 +675,7 @@ function TeamMembersTable() {
           const vs = record.vacationStatus || "Onsite";
           const dateLines = formatVacationDates(record, vs);
 
-          if (canManageReturn) {
+          if (canReturn) {
             return (
               <Space direction="vertical" size={2}>
                 <Select
@@ -699,19 +696,6 @@ function TeamMembersTable() {
                     {line}
                   </Typography.Text>
                 ))}
-                {(vs === "Vacation Approved" || vs === "On Vacation" || vs === "Vacation Pending") && (
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: "auto", fontSize: 11 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditVacationDates(record);
-                    }}
-                  >
-                    Edit dates
-                  </Button>
-                )}
               </Space>
             );
           }
