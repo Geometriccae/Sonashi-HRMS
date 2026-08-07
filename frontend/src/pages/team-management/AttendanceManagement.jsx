@@ -6,6 +6,10 @@ import EmployeeService from "../../services/EmployeeService";
 import AttendanceService from "../../services/AttendanceService";
 import AttendanceUpdateModal from "../../components/team-management-components/AttendanceUpdateModal";
 import DateInput from "../../components/DateInput";
+import {
+  useUrlListPage,
+  useResetPageOnFilterChange,
+} from "../../hooks/usePersistedListPage";
 
 function AttendanceManagement() {
   const [employees, setEmployees] = useState([]);
@@ -29,10 +33,21 @@ function AttendanceManagement() {
   const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
   const [summaryData, setSummaryData] = useState([]);
 
-  // Pagination State
-  const [empPage, setEmpPage] = useState(1);
-  const [reportPage, setReportPage] = useState(1);
+  // Pagination — resume last page via URL + session (same as Leave/Team)
+  const [empPage, setEmpPage] = useUrlListPage({
+    storageKey: "attendance",
+    basePath: "/attendance-management",
+    paramName: "page",
+  });
+  const [reportPage, setReportPage, resetReportPage] = useUrlListPage({
+    storageKey: "attendance-report",
+    basePath: "/attendance-management",
+    paramName: "rpage",
+  });
   const itemsPerPage = 10;
+
+  // Only reset report page when the date range actually changes (not on every fetch)
+  useResetPageOnFilterChange(resetReportPage, { startDate, endDate });
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -117,7 +132,6 @@ function AttendanceManagement() {
   const fetchReport = async () => {
     setReportLoading(true);
     setReportError("");
-    setReportPage(1); // Reset to first page on new fetch
     try {
       if (!startDate || !endDate) {
         throw new Error("Please select start and end dates");
@@ -224,13 +238,26 @@ function AttendanceManagement() {
   };
 
   // Pagination Logic
-  const empStartIndex = (empPage - 1) * itemsPerPage;
+  const empTotalPages = Math.max(1, Math.ceil(employees.length / itemsPerPage) || 1);
+  const empPageSafe =
+    employees.length === 0 ? empPage : Math.min(empPage, empTotalPages);
+  const empStartIndex = (empPageSafe - 1) * itemsPerPage;
   const currentEmployees = employees.slice(empStartIndex, empStartIndex + itemsPerPage);
-  const empTotalPages = Math.ceil(employees.length / itemsPerPage);
 
-  const reportStartIndex = (reportPage - 1) * itemsPerPage;
+  const reportTotalPages = Math.max(1, Math.ceil(reportData.length / itemsPerPage) || 1);
+  const reportPageSafe =
+    reportData.length === 0 ? reportPage : Math.min(reportPage, reportTotalPages);
+  const reportStartIndex = (reportPageSafe - 1) * itemsPerPage;
   const currentReportData = reportData.slice(reportStartIndex, reportStartIndex + itemsPerPage);
-  const reportTotalPages = Math.ceil(reportData.length / itemsPerPage);
+
+  // Clamp only after data exists (avoid wiping restored page while loading)
+  useEffect(() => {
+    if (employees.length > 0 && empPage > empTotalPages) setEmpPage(empTotalPages);
+  }, [employees.length, empPage, empTotalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (reportData.length > 0 && reportPage > reportTotalPages) setReportPage(reportTotalPages);
+  }, [reportData.length, reportPage, reportTotalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={`${styles["dashboard-layout"]} ${pageLayoutStyles.pageLayout}`}>
@@ -342,15 +369,15 @@ function AttendanceManagement() {
           {empTotalPages > 1 && (
             <div className={styles["pagination"]}>
               <button 
-                disabled={empPage === 1} 
+                disabled={empPageSafe === 1} 
                 onClick={() => setEmpPage(p => p - 1)}
                 className={styles["page-btn"]}
               >
                 Previous
               </button>
-              <span>Page {empPage} of {empTotalPages}</span>
+              <span>Page {empPageSafe} of {empTotalPages}</span>
               <button 
-                disabled={empPage === empTotalPages} 
+                disabled={empPageSafe === empTotalPages} 
                 onClick={() => setEmpPage(p => p + 1)}
                 className={styles["page-btn"]}
               >
@@ -464,15 +491,15 @@ function AttendanceManagement() {
           {reportTotalPages > 1 && (
             <div className={styles["pagination"]}>
               <button 
-                disabled={reportPage === 1} 
+                disabled={reportPageSafe === 1} 
                 onClick={() => setReportPage(p => p - 1)}
                 className={styles["page-btn"]}
               >
                 Previous
               </button>
-              <span>Page {reportPage} of {reportTotalPages}</span>
+              <span>Page {reportPageSafe} of {reportTotalPages}</span>
               <button 
-                disabled={reportPage === reportTotalPages} 
+                disabled={reportPageSafe === reportTotalPages} 
                 onClick={() => setReportPage(p => p + 1)}
                 className={styles["page-btn"]}
               >

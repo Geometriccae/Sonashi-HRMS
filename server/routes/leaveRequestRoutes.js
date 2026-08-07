@@ -7,6 +7,114 @@ const Employee = require('../models/Employee');
 const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
+const { invalidateListCache } = require('../utils/employeeListCache');
+
+const CHANGE_STATUSES = ['Created', 'Modified', 'Cancelled', 'Approved', 'Rejected', 'Error'];
+
+function actorName(user) {
+    return user?.username || user?.emailId || user?.name || 'System';
+}
+
+function buildChangeEntry(changeStatus, user, remarks = '') {
+    const now = new Date();
+    return {
+        changeStatus,
+        changedBy: actorName(user),
+        changedByUser: user?._id || user?.id || null,
+        changedOn: now,
+        remarks: remarks || ''
+    };
+}
+
+function applyChangeAudit(updateData, changeStatus, user, remarks = '') {
+    const entry = buildChangeEntry(changeStatus, user, remarks);
+    updateData.changeStatus = entry.changeStatus;
+    updateData.changedBy = entry.changedBy;
+    updateData.changedByUser = entry.changedByUser;
+    updateData.changedOn = entry.changedOn;
+    updateData.changeRemarks = entry.remarks;
+    return entry;
+}
+
+/** Resolve Employee document linked to a leave request (User → Employee). */
+async function resolveEmployeeForLeave(leaveRequest) {
+    if (!leaveRequest) return null;
+
+    const empRef = leaveRequest.employee?._id || leaveRequest.employee;
+    if (empRef) {
+        const user = await User.findById(empRef).populate('employeeId');
+        if (user?.employeeId) {
+            const linkedId = user.employeeId._id || user.employeeId;
+            const emp = await Employee.findById(linkedId);
+            if (emp) return emp;
+        }
+        if (user) {
+            const byUser = await Employee.findOne({
+                $or: [
+                    { employeeName: user.username },
+                    { emailId: user.emailId },
+                ],
+            });
+            if (byUser) return byUser;
+        }
+
+        // leave.employee may be the Employee._id when no User account exists
+        const asEmployee = await Employee.findById(empRef);
+        if (asEmployee) return asEmployee;
+    }
+
+    if (leaveRequest.employeeId) {
+        const byCode = await Employee.findOne({ employeeId: leaveRequest.employeeId });
+        if (byCode) return byCode;
+        const byMongo = await Employee.findById(leaveRequest.employeeId);
+        if (byMongo) return byMongo;
+    }
+
+    if (leaveRequest.employeeName) {
+        return Employee.findOne({ employeeName: leaveRequest.employeeName });
+    }
+    return null;
+}
+
+/**
+ * After final leave approval: mark employee as Vacation Pending (Yet to go)
+ * when Vacation leave has not started yet. Does not override On Vacation.
+ */
+async function syncYetToGoVacationStatus(leaveRequest) {
+    try {
+        if (!leaveRequest || leaveRequest.status !== 'Approved') return;
+
+        // Match frontend Yet-to-go leave filter (Vacation only)
+        if (leaveRequest.leaveType !== 'Vacation') return;
+
+        const start = leaveRequest.startDate ? new Date(leaveRequest.startDate) : null;
+        if (!start || Number.isNaN(start.getTime())) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startDay = new Date(start);
+        startDay.setHours(0, 0, 0, 0);
+        if (startDay < today) return; // already started — not "yet to go"
+
+        const emp = await resolveEmployeeForLeave(leaveRequest);
+        if (!emp) {
+            console.warn('[Leave] Yet-to-go sync skipped: employee not found for', leaveRequest.employeeName);
+            return;
+        }
+
+        if (emp.vacationStatus === 'On Vacation') return;
+
+        if (emp.vacationStatus !== 'Vacation Pending') {
+            await Employee.findByIdAndUpdate(emp._id, { vacationStatus: 'Vacation Pending' });
+            console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id}`);
+        }
+
+        // Ensure Dashboard / Team list show updated Vacation Status immediately
+        invalidateListCache();
+    } catch (err) {
+        console.error('[Leave] Yet-to-go vacationStatus sync error:', err.message || err);
+    }
+}
 
 function getLeaveTransporter() {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -212,9 +320,10 @@ router.get('/', authMiddleware, async (req, res) => {
         }
 
         const leaveRequests = await LeaveRequest.find(filter)
-            .populate('employee', 'username emailId employeeId')
+            .populate('employee', 'username emailId employeeId role')
             .populate('hodApprovedBy', 'username')
             .populate('adminApprovedBy', 'username')
+            .populate('changedByUser', 'username')
             .sort({ appliedOn: -1 })
             .lean();
 
@@ -281,6 +390,20 @@ router.post('/', authMiddleware, async (req, res) => {
         }
 
         const isPastLeave = req.body.isPastLeave === true;
+        const createChangeStatus = isPastLeave ? 'Approved' : 'Created';
+        const createRemarks = isPastLeave
+            ? (req.body.changeRemarks || 'Past leave created as approved')
+            : (req.body.changeRemarks || 'Leave request created');
+        const createEntry = buildChangeEntry(createChangeStatus, req.user, createRemarks);
+
+        // Capture requester role for Admin → Authorize User approval routing
+        let requesterRole = '';
+        try {
+            const ownerUser = await User.findById(targetUserId).select('role').lean();
+            requesterRole = ownerUser?.role || req.user.role || '';
+        } catch (_) {
+            requesterRole = req.user.role || '';
+        }
 
         const newLeaveRequest = new LeaveRequest({
             employee: targetUserId,
@@ -296,7 +419,14 @@ router.post('/', authMiddleware, async (req, res) => {
             isPastLeave: isPastLeave,
             adminApprovedBy: isPastLeave ? req.user.id : undefined,
             adminApprovedAt: isPastLeave ? new Date() : undefined,
-            requestAirfare: req.body.requestAirfare === true || req.body.requestAirfare === 'true'
+            requestAirfare: req.body.requestAirfare === true || req.body.requestAirfare === 'true',
+            requesterRole,
+            changeStatus: createEntry.changeStatus,
+            changedBy: createEntry.changedBy,
+            changedByUser: createEntry.changedByUser,
+            changedOn: createEntry.changedOn,
+            changeRemarks: createEntry.remarks,
+            statusChangeHistory: [createEntry]
         });
 
         const savedRequest = await newLeaveRequest.save();
@@ -336,7 +466,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // Update leave request status (Admin/HOD) or edit request (Employee)
 router.put('/:id', authMiddleware, async (req, res) => {
     try {
-        const { employeeId, employeeName, company, status, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
+        const { employeeId, employeeName, company, status, leaveType, startDate, endDate, reason, requestAirfare, changeStatus, changeRemarks } = req.body;
         const updateData = {};
 
         const oldRequest = await LeaveRequest.findById(req.params.id);
@@ -358,6 +488,41 @@ router.put('/:id', authMiddleware, async (req, res) => {
         if (status && status !== oldRequest.status) {
             const userRole = req.user.role;
             const currentStatus = oldRequest.status;
+            const actorId = String(req.user._id || req.user.id || '');
+            const ownerId = String(oldRequest.employee?._id || oldRequest.employee || '');
+
+            // Nobody may approve/reject their own leave (especially Admin self-approve)
+            if (
+                actorId &&
+                ownerId &&
+                actorId === ownerId &&
+                (status === 'Approved' || status === 'Rejected' || status === 'HOD Approved')
+            ) {
+                return res.status(403).json({
+                    message:
+                        'You cannot approve or reject your own leave request. An Authorize User must review Admin leave requests.',
+                });
+            }
+
+            // Resolve whether this leave belongs to an Admin user
+            let requesterRole = String(oldRequest.requesterRole || '').toLowerCase();
+            if (!requesterRole && oldRequest.employee) {
+                const ownerUser = await User.findById(oldRequest.employee).select('role').lean();
+                requesterRole = String(ownerUser?.role || '').toLowerCase();
+            }
+            const isAdminLeave = requesterRole === 'admin';
+
+            // Admin leave requests can ONLY be finalized by Authorize Users
+            if (
+                isAdminLeave &&
+                (status === 'Approved' || status === 'Rejected') &&
+                userRole !== 'authorize_user'
+            ) {
+                return res.status(403).json({
+                    message:
+                        'Admin leave requests can only be approved or rejected by an Authorize User (Kailash / Mahesh).',
+                });
+            }
 
             // HOD Approval Logic
             if (userRole === 'hod') {
@@ -420,13 +585,30 @@ router.put('/:id', authMiddleware, async (req, res) => {
             }
         }
 
-        // Handle other field updates (for employee editing their own request)
-        if (employeeId) updateData.employee = employeeId;
+        // Handle other field updates (for employee editing their own request).
+        // employeeId from the form is Employee._id — resolve to User._id like create does.
+        if (employeeId) {
+            const equivalentUser = await User.findOne({ employeeId: employeeId });
+            if (equivalentUser) {
+                updateData.employee = equivalentUser._id;
+            } else {
+                const asUser = await User.findById(employeeId);
+                updateData.employee = asUser ? asUser._id : employeeId;
+            }
+        }
         if (employeeName) updateData.employeeName = employeeName;
         if (company) updateData.company = company;
+        if (req.body.department !== undefined) updateData.department = req.body.department;
+        if (req.body.reportingManager !== undefined) updateData.reportingManager = req.body.reportingManager;
         if (leaveType) updateData.leaveType = leaveType;
-        if (startDate) updateData.startDate = new Date(startDate);
-        if (endDate) updateData.endDate = new Date(endDate);
+        if (startDate) {
+            const parsed = new Date(startDate);
+            if (!Number.isNaN(parsed.getTime())) updateData.startDate = parsed;
+        }
+        if (endDate) {
+            const parsed = new Date(endDate);
+            if (!Number.isNaN(parsed.getTime())) updateData.endDate = parsed;
+        }
         if (reason) updateData.reason = reason;
         if (req.body.isPastLeave !== undefined) {
             updateData.isPastLeave = req.body.isPastLeave === true || req.body.isPastLeave === 'true';
@@ -507,17 +689,65 @@ router.put('/:id', authMiddleware, async (req, res) => {
             }
         }
 
-        const startStr = effectiveStart && (effectiveStart.toISOString ? effectiveStart.toISOString().split('T')[0] : effectiveStart);
-        const endStr = effectiveEnd && (effectiveEnd.toISOString ? effectiveEnd.toISOString().split('T')[0] : effectiveEnd);
+        // Derive Change Status audit (Created / Modified / Approved / Rejected / Cancelled / Error)
+        let auditStatus = null;
+        let auditRemarks = changeRemarks || '';
+        if (changeStatus && CHANGE_STATUSES.includes(changeStatus)) {
+            auditStatus = changeStatus;
+        } else if (updateData.status === 'Rejected') {
+            auditStatus = 'Rejected';
+            auditRemarks = auditRemarks || 'Leave request rejected';
+        } else if (updateData.status === 'Cancelled') {
+            auditStatus = 'Cancelled';
+            auditRemarks = auditRemarks || 'Leave request cancelled';
+        } else if (updateData.status === 'Approved' || updateData.status === 'HOD Approved') {
+            auditStatus = 'Approved';
+            auditRemarks = auditRemarks || (updateData.status === 'HOD Approved' ? 'HOD approved leave request' : 'Leave request approved');
+        } else if (
+            updateData.startDate ||
+            updateData.endDate ||
+            updateData.leaveType ||
+            updateData.reason ||
+            updateData.employeeName ||
+            updateData.company ||
+            updateData.department !== undefined ||
+            updateData.reportingManager !== undefined ||
+            updateData.requestAirfare !== undefined ||
+            updateData.isPastLeave !== undefined
+        ) {
+            auditStatus = 'Modified';
+            if (!auditRemarks) {
+                if (updateData.endDate && !updateData.startDate) {
+                    auditRemarks = 'Leave end date updated';
+                } else {
+                    auditRemarks = 'Leave request modified';
+                }
+            }
+        }
 
+        let historyEntry = null;
+        if (auditStatus) {
+            historyEntry = applyChangeAudit(updateData, auditStatus, req.user, auditRemarks);
+        }
+
+        const updateOps = Object.keys(updateData).length
+            ? (historyEntry
+                ? { $set: updateData, $push: { statusChangeHistory: historyEntry } }
+                : { $set: updateData })
+            : null;
+
+        if (!updateOps) {
+            return res.json(oldRequest);
+        }
 
         const updatedRequest = await LeaveRequest.findByIdAndUpdate(
             req.params.id,
-            updateData,
+            updateOps,
             { new: true, runValidators: true }
         ).populate('employee', 'username emailId')
             .populate('hodApprovedBy', 'username')
-            .populate('adminApprovedBy', 'username');
+            .populate('adminApprovedBy', 'username')
+            .populate('changedByUser', 'username');
 
         if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
             sendLeaveStatusToEmployee(updatedRequest, updateData.status)
@@ -529,9 +759,32 @@ router.put('/:id', authMiddleware, async (req, res) => {
                 .catch((e) => console.error('[Leave] Status notification error:', e));
         }
 
+        // Yet to go card: after Authorize/Approve, mark employee Vacation Pending
+        if (updateData.status === 'Approved') {
+            await syncYetToGoVacationStatus(updatedRequest);
+        }
+
         res.json(updatedRequest);
     } catch (error) {
         console.error('Error updating leave request:', error);
+        try {
+            // Best-effort Error audit when update fails after leave was found
+            if (req.params?.id && req.user) {
+                const errEntry = buildChangeEntry('Error', req.user, error.message || 'Error updating leave request');
+                await LeaveRequest.findByIdAndUpdate(req.params.id, {
+                    $set: {
+                        changeStatus: errEntry.changeStatus,
+                        changedBy: errEntry.changedBy,
+                        changedByUser: errEntry.changedByUser,
+                        changedOn: errEntry.changedOn,
+                        changeRemarks: errEntry.remarks,
+                    },
+                    $push: { statusChangeHistory: errEntry },
+                });
+            }
+        } catch (auditErr) {
+            console.error('Error writing leave Error audit:', auditErr);
+        }
         res.status(400).json({ message: 'Error updating leave request', error: error.message });
     }
 });
@@ -568,19 +821,34 @@ router.post('/:id/revert', authMiddleware, async (req, res) => {
 
         const creditedDays = calculateWorkingDays(leaveRequest.startDate, leaveRequest.endDate);
 
+        const cancelEntry = buildChangeEntry(
+            'Cancelled',
+            req.user,
+            req.body.changeRemarks || 'Leave reverted / cancelled'
+        );
+
         const updatedRequest = await LeaveRequest.findByIdAndUpdate(
             req.params.id,
             {
-                status: 'Cancelled',
-                cancelledAt: new Date(),
-                cancelledBy: req.user._id || req.user.id,
+                $set: {
+                    status: 'Cancelled',
+                    cancelledAt: new Date(),
+                    cancelledBy: req.user._id || req.user.id,
+                    changeStatus: cancelEntry.changeStatus,
+                    changedBy: cancelEntry.changedBy,
+                    changedByUser: cancelEntry.changedByUser,
+                    changedOn: cancelEntry.changedOn,
+                    changeRemarks: cancelEntry.remarks,
+                },
+                $push: { statusChangeHistory: cancelEntry },
             },
             { new: true, runValidators: true }
         )
             .populate('employee', 'username emailId')
             .populate('hodApprovedBy', 'username')
             .populate('adminApprovedBy', 'username')
-            .populate('cancelledBy', 'username');
+            .populate('cancelledBy', 'username')
+            .populate('changedByUser', 'username');
 
         const io = req.app.get('io');
         notifyLeaveStatusChange(io, updatedRequest, 'Cancelled', req.user.role)

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import styles from './SettingsPreferences.module.css';
 import Side from "./sidebar/Sidebar";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import { useTheme } from '../context/ThemeContext';
 import { FaCheckCircle as FaCheck } from 'react-icons/fa';
+import { writePersistedPath } from '../hooks/usePersistedListPage';
 
 const themes = [
   { id: 'classic', name: 'Classic', category: 'Light Themes', sidebar: '#0057b5', bg: '#ffffff', header: '#e6f2ff' },
@@ -25,6 +26,10 @@ const fonts = [
 
 const SettingsPreferences = () => {
   const { theme, setTheme, fontFamily, setFontFamily, fontSize, setFontSize } = useTheme();
+
+  useEffect(() => {
+    writePersistedPath("settings-preferences", "/settings-preferences");
+  }, []);
 
   const lightThemes = themes.filter(t => t.category === 'Light Themes');
   const darkThemes = themes.filter(t => t.category === 'Dark Themes');

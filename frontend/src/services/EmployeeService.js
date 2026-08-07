@@ -717,6 +717,29 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
     }
   }
 
+  /**
+   * Early or extended return from vacation.
+   * Updates leave end date, vacation status, return dates, attendance.
+   */
+  async markVacationReturn(employeeId, { returnDate, firstWorkingDay, leaveId } = {}) {
+    try {
+      const response = await fetch(`${this.baseURL}/${employeeId}/vacation-return`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ returnDate, firstWorkingDay, leaveId }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      this.invalidateCache();
+      return await response.json();
+    } catch (error) {
+      console.error('Error marking vacation return:', error);
+      throw error;
+    }
+  }
+
   async assignProjectToEmployee(id, projectName) {
     try {
       const response = await fetch(`${this.baseURL}/${id}/projects`, {

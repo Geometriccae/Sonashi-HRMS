@@ -5,6 +5,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
 const Employee = require("../models/Employee");
 const CompanySifSettings = require("../models/CompanySifSettings");
+const { workingStatusFilter } = require("../utils/employeeStatus");
 const {
   generateSifContent,
   parseSifContent,
@@ -50,7 +51,7 @@ function parseMonthYear(req) {
 }
 
 async function loadActiveEmployees() {
-  return Employee.find({ employeeStatus: "Active" }).lean();
+  return Employee.find(workingStatusFilter()).lean();
 }
 
 async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {

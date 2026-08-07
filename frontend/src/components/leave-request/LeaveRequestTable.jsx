@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import styles from "./LeaveRequestTable.module.css";
 import plus from "../../assets/dashboard/plus.svg";
 import leaveRequestService from "../../services/LeaveRequestService";
+import employeeService from "../../services/EmployeeService";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddLeaveRequestModal from "./AddLeaveRequestModal";
 import EditLeaveRequestModal from "./EditLeaveRequestModal";
@@ -14,11 +16,18 @@ import DateInput from "../DateInput";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import {
     canManageLeaves as checkCanManageLeaves,
-    canApproveLeaves,
     canCreateLeaves,
     canEditLeaves,
+    canApproveLeaveRequest,
     getUserRole,
 } from "../../utils/permissions";
+import { buildYearList, yearsFromLeaveRequests } from "../../utils/yearOptions";
+import {
+    readPersistedPage,
+    writePersistedPage,
+    writePersistedPath,
+    useResetPageOnFilterChange,
+} from "../../hooks/usePersistedListPage";
 
 const EditIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -56,7 +65,45 @@ function LeaveRequestTable({ onUpdate }) {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [userRole, setUserRole] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Page from URL, else last session page (survives sidebar navigation)
+    const currentPage = Math.max(
+        1,
+        Number(searchParams.get("page")) || readPersistedPage("leave-requests", 1)
+    );
+
+    const setCurrentPage = useCallback((page) => {
+        const safe = Math.max(1, Math.floor(Number(page) || 1));
+        writePersistedPage("leave-requests", safe);
+        const path = safe <= 1 ? "/leave-requests" : `/leave-requests?page=${safe}`;
+        writePersistedPath("leave-requests", path);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (safe <= 1) next.delete("page");
+            else next.set("page", String(safe));
+            return next;
+        }, { replace: true });
+    }, [setSearchParams]);
+
+    const resetToFirstPage = useCallback(() => {
+        setCurrentPage(1);
+    }, [setCurrentPage]);
+
+    // Sync session whenever page is shown (including restore from session into URL)
+    useEffect(() => {
+        writePersistedPage("leave-requests", currentPage);
+        const path = currentPage <= 1 ? "/leave-requests" : `/leave-requests?page=${currentPage}`;
+        writePersistedPath("leave-requests", path);
+        if (!searchParams.get("page") && currentPage > 1) {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set("page", String(currentPage));
+                return next;
+            }, { replace: true });
+        }
+    }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedDept, setSelectedDept] = useState("All");
     const [startDate, setStartDate] = useState("");
@@ -82,7 +129,6 @@ function LeaveRequestTable({ onUpdate }) {
     const canManageLeaves = checkCanManageLeaves(userRole);
     const canCreateLeaveRequests = canCreateLeaves(userRole);
     const canEditLeaveRequests = canEditLeaves(userRole);
-    const canApproveLeaveRequests = canApproveLeaves(userRole);
 
     const fetchLeaveRequests = async () => {
         setIsLoading(true);
@@ -194,6 +240,8 @@ function LeaveRequestTable({ onUpdate }) {
                 await leaveRequestService.approveLeaveRequest(request._id, "Rejected");
                 showToast("Leave request rejected successfully.", "success");
             }
+            // Yet to go uses employee vacationStatus — clear stale employee list cache
+            employeeService.invalidateCache();
             fetchLeaveRequests();
             setIsApprovalModalOpen(false);
             setApprovalAction(null);
@@ -201,6 +249,8 @@ function LeaveRequestTable({ onUpdate }) {
             console.error(`Error ${type}ing leave request:`, error);
             const errorMessage = error.response?.data?.message || `Failed to ${type} leave request.`;
             showToast(errorMessage, "error");
+            setIsApprovalModalOpen(false);
+            setApprovalAction(null);
         }
     };
 
@@ -241,19 +291,14 @@ function LeaveRequestTable({ onUpdate }) {
         }
     };
 
-    const currentYear = new Date().getFullYear();
-    const uniqueYears = [...new Set([
-        currentYear - 1,
-        currentYear,
-        currentYear + 1,
-        ...leaveRequests.map(req => {
-            const d = new Date(req.startDate);
-            return isNaN(d.getTime()) ? null : d.getUTCFullYear();
-        }).filter(Boolean)
-    ])].sort((a, b) => b - a);
+    const uniqueYears = buildYearList({
+        fromDataYears: yearsFromLeaveRequests(leaveRequests),
+        pastYears: 25,
+        futureYears: 5,
+    });
 
     const yearOptions = [
-        { value: "All", label: "Year" },
+        { value: "All", label: "All Years" },
         ...uniqueYears.map(year => ({ value: String(year), label: String(year) }))
     ];
 
@@ -324,11 +369,8 @@ function LeaveRequestTable({ onUpdate }) {
         return true;
     }).sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
 
-    // Determine which requests can be approved based on role
-    const canApprove = (request) => {
-        if (canApproveLeaveRequests && (request.status === "Pending" || request.status === "HOD Approved")) return true;
-        return false;
-    };
+    // Determine which requests can be approved based on role + Admin/self rules
+    const canApprove = (request) => canApproveLeaveRequest(request, userRole);
 
     // Strict UTC formatter for DD/MM/YYYY to completely prevent timezone shift
     const formatDisplayDate = (dateString) => {
@@ -342,15 +384,29 @@ function LeaveRequestTable({ onUpdate }) {
     };
 
     // Pagination calculations
-    const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    const totalPages = Math.max(1, Math.ceil(filteredRequests.length / itemsPerPage) || 1);
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const paginatedRequests = filteredRequests.slice(startIndex, endIndex);
 
-    // Reset to page 1 when filter changes
+    // Clamp only after data is loaded — empty list briefly has totalPages=1 and was wiping restored page
     useEffect(() => {
-        setCurrentPage(1);
-    }, [activeFilter, searchQuery, selectedDept, startDate, endDate, selectedManager, selectedMonth, selectedYear]);
+        if (leaveRequests.length === 0) return;
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [leaveRequests.length, currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Reset page only when filters actually change (Strict Mode safe)
+    useResetPageOnFilterChange(resetToFirstPage, {
+        activeFilter,
+        searchQuery,
+        selectedDept,
+        startDate,
+        endDate,
+        selectedManager,
+        selectedMonth,
+        selectedYear,
+    });
 
     // Handle page change
     const handlePageChange = (page) => {
@@ -444,6 +500,12 @@ function LeaveRequestTable({ onUpdate }) {
                         </>
                     )}
                     {canCreateLeaveRequests && isHR && (
+                        <button className={styles.addButton} onClick={() => setIsAddModalOpen(true)}>
+                            <span>Request Leave</span>
+                            <img src={plus} alt="" />
+                        </button>
+                    )}
+                    {canCreateLeaveRequests && isAdminRole && (
                         <button className={styles.addButton} onClick={() => setIsAddModalOpen(true)}>
                             <span>Request Leave</span>
                             <img src={plus} alt="" />
@@ -850,7 +912,7 @@ function LeaveRequestTable({ onUpdate }) {
                         {getPageNumbers().map((page, index) => (
                             <button
                                 key={index}
-                                className={`${styles.pageButton} ${page === currentPage ? styles.activePage : ''} ${page === '...' ? styles.ellipsis : ''}`}
+                                className={`${styles.pageButton} ${page === safePage ? styles.activePage : ''} ${page === '...' ? styles.ellipsis : ''}`}
                                 onClick={() => page !== '...' && handlePageChange(page)}
                                 disabled={page === '...'}
                             >

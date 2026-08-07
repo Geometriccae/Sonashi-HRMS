@@ -15,32 +15,63 @@ const crypto = require('crypto');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const Client = require('../models/Client');
+const CompanyDocument = require('../models/CompanyDocument');
 const { buildEmployeePayload } = require('../utils/employeeExcelImport');
 const { notifyEmployeeOnboarding } = require('../services/hrNotificationService');
+const {
+  EMPLOYEE_STATUS_VALUES,
+  workingStatusFilter,
+  nonWorkingStatusFilter,
+} = require('../utils/employeeStatus');
+const LeaveRequest = require('../models/LeaveRequest');
+const {
+  getListCache,
+  setListCache,
+  invalidateListCache,
+} = require('../utils/employeeListCache');
 
 // ========== SERVER-SIDE LIST CACHE ==========
-// The employee list query hits MongoDB Atlas (cloud) which adds 1.5-7s latency.
-// We cache the list in memory and serve it instantly. The cache is invalidated
-// whenever any employee is created, updated, deleted, or bulk-imported.
-const LIST_CACHE_TTL_MS = 300000; // 5 minutes max staleness (invalidated on writes)
-let _listCache = { data: null, ts: 0 };
+// Cached via employeeListCache; invalidated on employee writes and leave yet-to-go sync.
 
-function getListCache() {
-  if (_listCache.data && (Date.now() - _listCache.ts) < LIST_CACHE_TTL_MS) {
-    return _listCache.data;
+/** Map company document particulars → docNumber (Company Code). */
+async function getCompanyCodeMap() {
+  try {
+    const docs = await CompanyDocument.find({}).select('particulars docNumber updatedAt createdAt').lean();
+    const map = {};
+    const sorted = [...docs].sort((a, b) => {
+      const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return ta - tb;
+    });
+    for (const d of sorted) {
+      const key = String(d.particulars || '').trim().toLowerCase();
+      const code = String(d.docNumber || '').trim();
+      if (key && code) map[key] = code;
+    }
+    return map;
+  } catch (err) {
+    console.error('Failed to load company codes from Company Documents:', err.message);
+    return {};
   }
-  return null;
 }
 
-function setListCache(data) {
-  _listCache = { data, ts: Date.now() };
+/** Live Company Code from Company Documents (by employee.office / company name).
+ *  Preserve stored company codes. Empty → built-in JOINT VEN code.
+ */
+function applyLiveCompanyCodes(employees, codeMap) {
+  if (!Array.isArray(employees)) return employees;
+  const DEFAULT_COMPANY_CODE = '0000000246878';
+  return employees.map((e) => {
+    const stored = String(e.companyCode || '').trim();
+    if (stored) return e;
+    const key = String(e.office || '').trim().toLowerCase();
+    const live = key && codeMap ? codeMap[key] : '';
+    if (live) return { ...e, companyCode: live };
+    return { ...e, companyCode: DEFAULT_COMPANY_CODE };
+  });
 }
 
-function invalidateListCache() {
-  _listCache = { data: null, ts: 0 };
-}
-
-// Warm cache on startup so the very first user request is fast
+// warmListCache / invalidateListCache come from employeeListCache
 function warmListCache() {
   const mongoose = require('mongoose');
   if (mongoose.connection.readyState !== 1) {
@@ -283,8 +314,11 @@ const EMPLOYEE_LIST_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId', 'mobile',
   'role', 'department', 'attendance', 'doj', 'totalYearsExperience', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
-  'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay', 'reportingManager', 'assignedProjects',
-  'nationality', 'office', 'passportNo', 'emiratesId', 'airFare', 'createdAt', 'profilePhoto',
+  'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay',
+  'noticePeriod', 'provisionPeriod', 'noticePeriodStartDate', 'noticePeriodEndDate',
+  'provisionPeriodStartDate', 'provisionPeriodEndDate',
+  'reportingManager', 'assignedProjects',
+  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt', 'profilePhoto',
 ].join(' ');
 
 // Lightweight stats for dashboard / team management cards
@@ -292,8 +326,8 @@ router.get('/stats', authMiddleware, async (req, res) => {
   try {
     const [totalEmployees, activeEmployees, inactiveEmployees, projectRows] = await Promise.all([
       Employee.countDocuments(),
-      Employee.countDocuments({ employeeStatus: 'Active' }),
-      Employee.countDocuments({ employeeStatus: 'InActive' }),
+      Employee.countDocuments(workingStatusFilter()),
+      Employee.countDocuments(nonWorkingStatusFilter()),
       Employee.find({}, { assignedProjects: 1 }).lean(),
     ]);
 
@@ -333,12 +367,16 @@ router.get('/', authMiddleware, async (req, res) => {
     // Fast path: unfiltered list view served from in-memory cache
     if (view === 'list' && !paginate && !hasFilters) {
       const cached = getListCache();
-      if (cached) return res.json(cached);
+      if (cached) {
+        const codeMap = await getCompanyCodeMap();
+        return res.json(applyLiveCompanyCodes(cached, codeMap));
+      }
     }
 
     const filter = {};
-    if (status === 'Active') filter.employeeStatus = 'Active';
-    else if (status === 'InActive') filter.employeeStatus = 'InActive';
+    if (status === 'Active') Object.assign(filter, workingStatusFilter());
+    else if (status === 'InActive') Object.assign(filter, nonWorkingStatusFilter());
+    else if (status && EMPLOYEE_STATUS_VALUES.includes(status)) filter.employeeStatus = status;
 
     if (search) {
       const regex = new RegExp(search, 'i');
@@ -352,6 +390,8 @@ router.get('/', authMiddleware, async (req, res) => {
       ];
     }
 
+    const codeMap = await getCompanyCodeMap();
+
     if (paginate && view === 'list') {
       const [employees, total] = await Promise.all([
         Employee.find(filter)
@@ -362,7 +402,13 @@ router.get('/', authMiddleware, async (req, res) => {
           .lean(),
         Employee.countDocuments(filter),
       ]);
-      return res.json({ employees, total, page, limit, totalPages: Math.ceil(total / limit) });
+      return res.json({
+        employees: applyLiveCompanyCodes(employees, codeMap),
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      });
     }
 
     const query = Employee.find(filter).sort({ createdAt: -1 });
@@ -374,12 +420,12 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const employees = await query;
 
-    // Populate cache for unfiltered list queries
+    // Populate cache for unfiltered list queries (raw; company code applied on read)
     if (view === 'list' && !hasFilters) {
       setListCache(employees);
     }
 
-    res.json(employees);
+    res.json(applyLiveCompanyCodes(employees, codeMap));
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
   }
@@ -517,7 +563,7 @@ router.post('/import', authMiddleware, blockViewerWrites, uploadEmployeeImport.s
 
 
 
-        if (payload.employeeStatus && !['Active', 'InActive'].includes(payload.employeeStatus)) {
+        if (payload.employeeStatus && !EMPLOYEE_STATUS_VALUES.includes(payload.employeeStatus)) {
           delete payload.employeeStatus;
         }
         if (payload.attendance && !['Onsite', 'Leave'].includes(payload.attendance)) {
@@ -646,6 +692,13 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
     }
 
     ensureEmployeeEmailForDb(employeeData, `c${Date.now().toString(36)}`);
+
+    if (!String(employeeData.companyCode || '').trim()) {
+      employeeData.companyCode = '0000000246878';
+    }
+    if (!String(employeeData.office || '').trim()) {
+      employeeData.office = 'JOINT VEN TRADING CO (L.L.C) (BR)';
+    }
 
     const existingEmployee = await Employee.findOne({
       emailId: employeeData.emailId.toLowerCase().trim(),
@@ -786,6 +839,11 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
     // Normalize legacy vacationStatus value -> remap old label to new
     if (updateData.vacationStatus === 'Not on Vacation') {
       updateData.vacationStatus = 'Onsite';
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'companyCode')
+      && !String(updateData.companyCode || '').trim()) {
+      updateData.companyCode = '0000000246878';
     }
 
     // Use $set so nested salaryDetails / bank fields merge correctly on update
@@ -1074,11 +1132,13 @@ router.delete('/:id/increments/:incrementId', authMiddleware, requireAdminOrHod,
 // Get single employee by ID
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const employee = await Employee.findById(req.params.id);
+    const employee = await Employee.findById(req.params.id).lean();
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
-    res.json(employee);
+    const codeMap = await getCompanyCodeMap();
+    const [enriched] = applyLiveCompanyCodes([employee], codeMap);
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee', error: error.message });
   }
@@ -1631,6 +1691,144 @@ router.delete('/:id/events/:eventId', authMiddleware, blockViewerWrites, async (
     res.json({ message: 'Task deleted successfully', employee });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting task', error: error.message });
+  }
+});
+
+/**
+ * Mark / update staff return from vacation (early or extended).
+ * Allowed: admin, hod, hr, authorize_user.
+ * Updates leave end date, vacation status, return dates, and attendance.
+ * Does not change leave approval workflow.
+ */
+router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user?.role || '').toLowerCase();
+    const allowed = ['admin', 'hod', 'hr', 'authorize_user'];
+    if (!allowed.includes(role)) {
+      return res.status(403).json({
+        message: 'You do not have permission to update vacation return dates.',
+      });
+    }
+
+    const returnRaw = req.body?.returnDate;
+    if (!returnRaw) {
+      return res.status(400).json({ message: 'Return / Entry Date is required.' });
+    }
+
+    const returnDt = new Date(returnRaw);
+    if (Number.isNaN(returnDt.getTime())) {
+      return res.status(400).json({ message: 'Invalid return date.' });
+    }
+    returnDt.setHours(0, 0, 0, 0);
+
+    let firstWork = req.body?.firstWorkingDay
+      ? new Date(req.body.firstWorkingDay)
+      : new Date(returnDt);
+    if (Number.isNaN(firstWork.getTime())) firstWork = new Date(returnDt);
+    firstWork.setHours(0, 0, 0, 0);
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    let leave = null;
+    const leaveId = req.body?.leaveId;
+    if (leaveId && mongoose.Types.ObjectId.isValid(String(leaveId))) {
+      leave = await LeaveRequest.findById(leaveId);
+    }
+
+    if (!leave) {
+      const name = String(employee.employeeName || '').trim();
+      const vacationTypes = ['Vacation', 'Annual Leave'];
+      const candidates = await LeaveRequest.find({
+        status: { $in: ['Approved', 'HOD Approved'] },
+        leaveType: { $in: vacationTypes },
+        ...(name ? { employeeName: name } : {}),
+      })
+        .sort({ startDate: -1 })
+        .limit(20);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      leave =
+        candidates.find((reqLeave) => {
+          const start = reqLeave.startDate ? new Date(reqLeave.startDate) : null;
+          const end = reqLeave.endDate ? new Date(reqLeave.endDate) : null;
+          if (!start) return false;
+          start.setHours(0, 0, 0, 0);
+          if (end) end.setHours(0, 0, 0, 0);
+          // Prefer leave covering return date or still open / recently ended
+          if (start <= returnDt && (!end || end >= returnDt || end >= today)) return true;
+          if (start <= today && (!end || end >= today)) return true;
+          return false;
+        }) || candidates[0] || null;
+    }
+
+    if (leave) {
+      const actor = req.user?.username || req.user?.emailId || 'System';
+      const plannedEnd = leave.endDate ? new Date(leave.endDate) : null;
+      let remark = 'Vacation return date updated';
+      if (plannedEnd && !Number.isNaN(plannedEnd.getTime())) {
+        plannedEnd.setHours(0, 0, 0, 0);
+        if (returnDt < plannedEnd) remark = 'Returned earlier than planned; leave end date updated';
+        else if (returnDt > plannedEnd) remark = 'Vacation extended; leave end date updated';
+      }
+
+      leave.endDate = returnDt;
+      leave.changeStatus = 'Modified';
+      leave.changedBy = actor;
+      leave.changedByUser = req.user._id || req.user.id || null;
+      leave.changedOn = new Date();
+      leave.changeRemarks = remark;
+      if (Array.isArray(leave.statusChangeHistory)) {
+        leave.statusChangeHistory.push({
+          changeStatus: 'Modified',
+          changedBy: actor,
+          changedByUser: req.user._id || req.user.id || null,
+          changedOn: new Date(),
+          remarks: remark,
+        });
+      }
+      await leave.save();
+    }
+
+    employee.vacationStatus = 'Vacation Approved';
+    employee.returnDate = returnDt;
+    employee.firstWorkingDay = firstWork;
+    employee.attendance = 'Onsite';
+    await employee.save();
+    invalidateListCache();
+
+    // Best-effort attendance Onsite for return day
+    try {
+      await Attendance.findOneAndUpdate(
+        { employee: employee._id, date: returnDt },
+        {
+          $set: {
+            employee: employee._id,
+            date: returnDt,
+            status: 'Onsite',
+            updatedBy: req.user._id || req.user.id || null,
+          },
+        },
+        { upsert: true, new: true }
+      );
+    } catch (attErr) {
+      console.warn('[vacation-return] Attendance update skipped:', attErr.message);
+    }
+
+    res.json({
+      message: 'Vacation return updated successfully',
+      employee,
+      leave,
+    });
+  } catch (error) {
+    console.error('Error updating vacation return:', error);
+    res.status(400).json({
+      message: 'Error updating vacation return',
+      error: error.message,
+    });
   }
 });
 

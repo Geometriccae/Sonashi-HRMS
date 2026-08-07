@@ -10,8 +10,10 @@ import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import { buildYearList, yearsFromLeaveRequests } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
+import { isWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
 import "./LeaveForm.css";
 
 function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null }) {
@@ -299,11 +301,15 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     // Calculate History Logic (Same as View Template)
     const selectedEmp = employees.find(e => e._id === formData.employeeId);
     const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0 };
-    const years = [2026, 2025, 2024, 2023, 2022];
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
         const empNameSearch = String(selectedEmp?.employeeName || selectedEmp?.name || "").toLowerCase().trim();
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
+    });
+    const years = buildYearList({
+      fromDataYears: yearsFromLeaveRequests(employeeLeaves),
+      pastYears: 25,
+      futureYears: 2,
     });
 
     const getYearlyLeaves = (year) => {
@@ -368,13 +374,14 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         { value: "Sick Leave", label: "Sick Leave" },
         { value: "Vacation", label: "Vacation" },
         { value: "Personal Leave", label: "Personal Leave" },
+        { value: "Annual Leave", label: "Annual Leave" },
         { value: "Maternity/Paternity", label: "Maternity/Paternity" },
         { value: "Other", label: "Other" }
     ];
 
     const departmentOptions = dynamicDepartmentOptions;
 
-    const activeEmployees = employees.filter(emp => String(emp.employeeStatus || "Active").toLowerCase() === "active");
+    const activeEmployees = employees.filter(emp => isWorkingEmployeeStatus(emp.employeeStatus));
 
     const employeeOptions = activeEmployees.map(emp => ({
         value: emp._id,

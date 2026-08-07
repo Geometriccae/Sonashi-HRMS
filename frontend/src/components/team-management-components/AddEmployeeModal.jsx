@@ -15,14 +15,27 @@ import DocumentsService from "../../services/EmployeeDocumentService";
 import OptionService from "../../services/OptionService";
 import {
   ACTIVE_OPTIONS,
-  COMPANY_CODE_OPTIONS,
   VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
   EMERGENCY_RELATIONSHIP_OPTIONS,
   ROLE_OPTIONS_DEFAULT,
+  DEFAULT_COMPANY_CODE,
+  DEFAULT_COMPANY_NAME,
+  resolveDefaultCompanyCode,
+  resolveDefaultCompanyName,
   mergeWithDynamicOptions,
 } from "../../constants/employeeDropdownOptions";
+import {
+  formatEmployeeStatusDisplay,
+  isNonWorkingEmployeeStatus,
+  isWorkingEmployeeStatus,
+} from "../../utils/employeeStatusDisplay";
+import CompanyDocumentService from "../../services/CompanyDocumentService";
+import {
+  buildCompanyOptionsFromDocuments,
+  resolveCompanyCodeFromDocuments,
+} from "../../utils/companyCodeFromDocuments";
 
 function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -41,7 +54,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     // 1. Basic Information
     workPermitNo: "",
     employeeId: "",
-    office: "",
+    office: DEFAULT_COMPANY_NAME,
     employeeName: "",
     reportingManager: "",
     gender: "",
@@ -69,6 +82,10 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     doj: "",
     noticePeriod: "",
     provisionPeriod: "",
+    noticePeriodStartDate: "",
+    noticePeriodEndDate: "",
+    provisionPeriodStartDate: "",
+    provisionPeriodEndDate: "",
     lastWorkingDay: "",
     totalYearsExperience: "",
     dateOfBirth: "",
@@ -76,7 +93,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     passportExpiryDate: "",
     labourCardNumber: "",
     labourCardExpiryDate: "",
-    companyCode: "",
+    companyCode: DEFAULT_COMPANY_CODE,
     visaExpiryDate: "",
     emiratesIdExpiryDate: "",
     remarks: "",
@@ -102,6 +119,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   });
 
   const [clients, setClients] = useState([]);
+  const [companyDocuments, setCompanyDocuments] = useState([]);
   const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS_DEFAULT);
   const [departmentOptions, setDepartmentOptions] = useState(DEPARTMENT_OPTIONS_DEFAULT);
   const [toasts, setToasts] = useState([]);
@@ -111,6 +129,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   useEffect(() => {
     if (isOpen) {
       fetchClients();
+      fetchCompanyDocuments();
       fetchEmployeeDropdownValues();
     }
   }, [isOpen]);
@@ -125,6 +144,35 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       setClients([]);
       addToast("Failed to fetch clients.", "error");
     }
+  };
+
+  const fetchCompanyDocuments = async () => {
+    try {
+      const data = await CompanyDocumentService.getAll();
+      const docs = Array.isArray(data) ? data : [];
+      setCompanyDocuments(docs);
+      setFormData((prev) => {
+        const office = resolveDefaultCompanyName(prev.office);
+        const fromDocs = resolveCompanyCodeFromDocuments(office, docs);
+        return {
+          ...prev,
+          office,
+          companyCode: fromDocs || resolveDefaultCompanyCode(prev.companyCode),
+        };
+      });
+    } catch (err) {
+      console.error("Failed to fetch company documents:", err);
+      setCompanyDocuments([]);
+    }
+  };
+
+  const handleCompanyChange = (companyName) => {
+    const fromDocs = resolveCompanyCodeFromDocuments(companyName, companyDocuments);
+    setFormData((prev) => ({
+      ...prev,
+      office: companyName,
+      companyCode: fromDocs || resolveDefaultCompanyCode(""),
+    }));
   };
 
   const fetchEmployeeDropdownValues = async () => {
@@ -219,8 +267,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       setValidationErrors((prev) => ({ ...prev, [field]: false }));
     }
   };
-
-
 
   const addToast = (message, type = "error") => {
     const id = Date.now();
@@ -349,7 +395,8 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
       // Always persist bank / labour / company fields
       payload.labourCardNumber = formData.labourCardNumber || "";
-      payload.companyCode = formData.companyCode || "";
+      payload.companyCode = resolveDefaultCompanyCode(formData.companyCode);
+      payload.office = resolveDefaultCompanyName(formData.office);
       payload.salaryDetails = {
         basicSalary: parseFloat(formData.basicSalary) || 0,
         houseRent: parseFloat(formData.houseRent) || 0,
@@ -432,7 +479,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       setFormData({
         workPermitNo: "",
         employeeId: "",
-        office: "",
+        office: DEFAULT_COMPANY_NAME,
         employeeName: "",
         reportingManager: "",
         gender: "",
@@ -458,13 +505,18 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         doj: "",
         noticePeriod: "",
         provisionPeriod: "",
+        noticePeriodStartDate: "",
+        noticePeriodEndDate: "",
+        provisionPeriodStartDate: "",
+        provisionPeriodEndDate: "",
+        lastWorkingDay: "",
         totalYearsExperience: "",
         dateOfBirth: "",
         passportNo: "",
         passportExpiryDate: "",
         labourCardNumber: "",
         labourCardExpiryDate: "",
-        companyCode: "",
+        companyCode: DEFAULT_COMPANY_CODE,
         visaExpiryDate: "",
         emiratesIdExpiryDate: "",
         remarks: "",
@@ -529,10 +581,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
   };
 
   const activeOptions = ACTIVE_OPTIONS;
-  const companyCodeOptions = COMPANY_CODE_OPTIONS;
   const vacationStatusOptions = VACATION_STATUS_OPTIONS;
   const genderOptions = GENDER_OPTIONS;
   const emergencyRelationshipOptions = EMERGENCY_RELATIONSHIP_OPTIONS;
+
+  const companyOptions = buildCompanyOptionsFromDocuments(companyDocuments, formData.office);
 
   const clientOptions = clients.map((client) => ({
     value: client._id,
@@ -566,18 +619,18 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 hasError={validationErrors.employeeId}
               />
 
-              <InputField
-                label="Office"
-                placeholder="Office"
-                value={formData.office}
-                onChange={(e) => handleInputChange("office", e.target.value)}
+              <Dropdown
+                label="Company"
+                placeholder="Select company"
+                options={companyOptions}
+                value={formData.office || DEFAULT_COMPANY_NAME}
+                onChange={(e) => handleCompanyChange(e.target.value)}
               />
 
-              <Dropdown
+              <InputField
                 label="Company Code"
-                placeholder="Select company code"
-                options={companyCodeOptions}
-                value={formData.companyCode}
+                placeholder="Auto-filled from selected Company"
+                value={formData.companyCode || DEFAULT_COMPANY_CODE}
                 onChange={(e) => handleInputChange("companyCode", e.target.value)}
               />
 
@@ -692,17 +745,49 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               />
 
               <InputField
-                label="Notice Period"
+                label="Notice Period (Duration)"
                 placeholder="e.g. 30 days"
                 value={formData.noticePeriod}
                 onChange={(e) => handleInputChange("noticePeriod", e.target.value)}
               />
 
               <InputField
-                label="Provision Period"
+                label="Provision Period (Duration)"
                 placeholder="e.g. 3 months"
                 value={formData.provisionPeriod}
                 onChange={(e) => handleInputChange("provisionPeriod", e.target.value)}
+              />
+
+              <InputField
+                label="Notice Period Start Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.noticePeriodStartDate}
+                onChange={(e) => handleInputChange("noticePeriodStartDate", e.target.value)}
+              />
+
+              <InputField
+                label="Notice Period End Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.noticePeriodEndDate}
+                onChange={(e) => handleInputChange("noticePeriodEndDate", e.target.value)}
+              />
+
+              <InputField
+                label="Provision Period Start Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.provisionPeriodStartDate}
+                onChange={(e) => handleInputChange("provisionPeriodStartDate", e.target.value)}
+              />
+
+              <InputField
+                label="Provision Period End Date"
+                placeholder="YYYY-MM-DD"
+                type="date"
+                value={formData.provisionPeriodEndDate}
+                onChange={(e) => handleInputChange("provisionPeriodEndDate", e.target.value)}
               />
 
               {/* Emergency Contacts Section */}
@@ -876,7 +961,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 value={(() => {
                   if (!formData.doj) return "0.0";
                   const start = new Date(formData.doj);
-                  const end = (formData.employeeStatus === "InActive" && formData.lastWorkingDay)
+                  const end = (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
                     ? new Date(formData.lastWorkingDay)
                     : new Date();
 
@@ -985,7 +1070,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 }
               />
 
-              {formData.employeeStatus === "InActive" && (
+              {isNonWorkingEmployeeStatus(formData.employeeStatus) && (
                 <InputField
                   label="Last Working Day"
                   placeholder="YYYY-MM-DD"
@@ -995,7 +1080,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 />
               )}
 
-              {formData.employeeStatus === "Active" && (
+              {isWorkingEmployeeStatus(formData.employeeStatus) && (
                 <Dropdown
                   label="Vacation Status"
                   placeholder="Select vacation status"
@@ -1223,7 +1308,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
             },
             {
               label: "Employee Status",
-              value: formData.employeeStatus || "Not provided",
+              value: formatEmployeeStatusDisplay(formData) || "Not provided",
             },
           ],
           [
@@ -1238,12 +1323,22 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           ],
           [
             {
-              label: "Labour Card Number",
-              value: formData.labourCardNumber || "Not provided",
+              label: "Company",
+              value: formData.office || "Not provided",
             },
             {
               label: "Company Code",
               value: formData.companyCode || "Not provided",
+            },
+          ],
+          [
+            {
+              label: "Labour Card Number",
+              value: formData.labourCardNumber || "Not provided",
+            },
+            {
+              label: "Air Fare",
+              value: formData.airFare ? "Yes" : "No",
             },
           ],
           [
@@ -1254,16 +1349,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
             {
               label: "Medical Insurance",
               value: formData.medicalInsurance ? "Yes" : "No",
-            },
-          ],
-          [
-            {
-              label: "Air Fare",
-              value: formData.airFare ? "Yes" : "No",
-            },
-            {
-              label: "",
-              value: "",
             },
           ],
           [

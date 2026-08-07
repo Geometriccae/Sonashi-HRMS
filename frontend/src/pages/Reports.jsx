@@ -13,6 +13,38 @@ import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import sifService from "../services/SifService";
+import { buildYearList } from "../utils/yearOptions";
+import { calculateLeaveDays } from "../utils/leaveCalculator";
+import {
+  buildLeaveMasterTrackerData,
+  buildLeaveMasterTrackerSummaryRows,
+  buildLeaveMasterTrackerWorkbook,
+  downloadLeaveMasterTrackerWorkbook,
+} from "../utils/leaveMasterTrackerExport";
+import {
+  isNonWorkingEmployeeStatus,
+  isWorkingEmployeeStatus,
+} from "../utils/employeeStatusDisplay";
+import { findLinkedEmployee } from "../utils/yetToGoHelpers";
+import { useUrlListView } from "../hooks/usePersistedListPage";
+
+const REPORT_TYPES = [
+  "Leave Report",
+  "Airfare Report",
+  "Increment report",
+  "Document expiry",
+  "Salary report",
+  "Employee Experience",
+];
+
+const REPORT_TYPE_TO_SLUG = {
+  "Leave Report": "leave",
+  "Airfare Report": "airfare",
+  "Increment report": "increment",
+  "Document expiry": "document-expiry",
+  "Salary report": "salary",
+  "Employee Experience": "employee-experience",
+};
 
 const SIF_HEADERS = [
   "StaffID", "EMPID", "EMPNAME", "EMPLOYERID", "AGENTCODE",
@@ -115,7 +147,14 @@ const getEmployeeSelectStyles = (menuWidth) => ({
 });
 
 function Reports() {
-  const [reportType, setReportType] = useState("");
+  // Resume last selected report (e.g. Airfare) via URL + session — survives refresh & sidebar nav
+  const [reportType, setReportType] = useUrlListView({
+    storageKey: "reports",
+    basePath: "/reports",
+    paramName: "type",
+    valueToSlug: REPORT_TYPE_TO_SLUG,
+    fallback: "",
+  });
   const [format, setFormat] = useState("");
 
   // Filters
@@ -140,12 +179,8 @@ function Reports() {
   const [filterYear, setFilterYear] = useState("All");
 
   const monthsList = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const currentYear = new Date().getFullYear();
-  // Include a few future years plus past years (e.g. 2022–2031 when current is 2026)
-  const yearsList = ["All"];
-  for (let y = currentYear + 5; y >= currentYear - 14; y--) {
-    yearsList.push(String(y));
-  }
+  // Wide historical + future year range so reports are not limited to the current year
+  const yearsList = buildYearList({ pastYears: 25, futureYears: 5, includeAll: true });
 
   // Dynamic dropdown list selectors
   const [uniqueDepartments, setUniqueDepartments] = useState(["All"]);
@@ -309,32 +344,63 @@ function Reports() {
     return Array.isArray(data) ? data : (data.employees || data.data || []);
   };
 
-  const normalizeEmpStatus = (value) =>
-    String(value || "")
-      .trim()
-      .toLowerCase()
-      .replace(/[\s_-]+/g, "");
+  /** Build Staff Leave Report Master tracker data (summary + yearly sheets). */
+  const loadLeaveMasterTracker = async () => {
+    let leaves = await leaveRequestService.getLeaveRequests();
+    leaves = Array.isArray(leaves) ? leaves : (leaves.data || []);
 
-  const isInactiveEmployee = (emp) => {
-    const s = normalizeEmpStatus(emp?.employeeStatus);
-    return s === "inactive" || s === "nonworking" || s === "nonworkingemployee";
+    let empList = await fetchFullEmployees(
+      employeeStatus === "Active" ? "Active" : employeeStatus === "InActive" ? "InActive" : undefined
+    );
+    if (!Array.isArray(empList)) empList = [];
+
+    if (filterEmployee !== "All") {
+      const selectedEmp = employeeList.find(e => (e.employeeId || e._id) === filterEmployee)
+        || empList.find(e => (e.employeeId || e._id) === filterEmployee);
+      if (selectedEmp) {
+        empList = empList.filter(e =>
+          (e.employeeId && e.employeeId === selectedEmp.employeeId) ||
+          (e._id && String(e._id) === String(selectedEmp._id))
+        );
+        leaves = leaves.filter(l =>
+          l.employeeName === selectedEmp.employeeName ||
+          l.employeeId === selectedEmp.employeeId ||
+          l.employeeId === filterEmployee
+        );
+      }
+    }
+
+    if (filterDepartment !== "All") {
+      empList = empList.filter(e => e.department === filterDepartment);
+      leaves = leaves.filter(l => l.department === filterDepartment);
+    }
+
+    // Do not strip leave history by month/year — master tracker needs full yearly totals for LEAVE DUE.
+    // Year filter only affects the TILL (as-of) date used in calculations.
+
+    empList = [...empList].sort((a, b) =>
+      String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
+    );
+
+    let tillDate = new Date(new Date().getFullYear(), 11, 31);
+    if (filterYear !== "All" && !Number.isNaN(Number(filterYear))) {
+      tillDate = new Date(Number(filterYear), 11, 31);
+    } else if (endDate) {
+      const ed = new Date(endDate);
+      if (!Number.isNaN(ed.getTime())) tillDate = ed;
+    }
+
+    return buildLeaveMasterTrackerData({
+      employees: empList,
+      leaveRequests: leaves,
+      tillDate,
+    });
   };
 
-  const isActiveEmployee = (emp) => {
-    const s = normalizeEmpStatus(emp?.employeeStatus);
-    // Treat missing/empty as Active (schema default); never treat inactive variants as active
-    if (isInactiveEmployee(emp)) return false;
-    return !s || s === "active" || s === "working";
-  };
+  const isInactiveEmployee = (emp) => isNonWorkingEmployeeStatus(emp?.employeeStatus);
+  const isActiveEmployee = (emp) => isWorkingEmployeeStatus(emp?.employeeStatus);
 
-  const reportTypes = [
-    "Leave Report",
-    "Airfare Report",
-    "Increment report",
-    "Document expiry",
-    "Salary report",
-    "Employee Experience"
-  ];
+  const reportTypes = REPORT_TYPES;
   const formats = reportType === "Salary report"
     ? ["Excel", "PDF", "SIF"]
     : ["Excel", "PDF"];
@@ -474,52 +540,110 @@ function Reports() {
     };
 
     if (type === "Leave Report") {
-      let leaves = await leaveRequestService.getLeaveRequests();
-      leaves = Array.isArray(leaves) ? leaves : (leaves.data || []);
+      // Flat historical leave rows for preview/PDF (Excel master tracker keeps its own calc path).
+      let leaves = [];
+      try {
+        const leaveData = await leaveRequestService.getLeaveRequests();
+        leaves = Array.isArray(leaveData) ? leaveData : (leaveData?.data || []);
+      } catch (err) {
+        console.error("Leave report: failed to load leave history", err);
+        leaves = [];
+      }
+
+      let empList = await fetchFullEmployees(
+        employeeStatus === "Active"
+          ? "Active"
+          : employeeStatus === "InActive"
+            ? "InActive"
+            : undefined
+      );
+      if (!Array.isArray(empList)) empList = [];
 
       if (filterEmployee !== "All") {
-        const selectedEmp = employeeList.find(e => (e.employeeId || e._id) === filterEmployee);
+        const selectedEmp =
+          employeeList.find((e) => (e.employeeId || e._id) === filterEmployee) ||
+          empList.find((e) => (e.employeeId || e._id) === filterEmployee);
         if (selectedEmp) {
-          leaves = leaves.filter(l => l.employeeName === selectedEmp.employeeName || l.employeeId === filterEmployee);
+          empList = empList.filter(
+            (e) =>
+              (e.employeeId && e.employeeId === selectedEmp.employeeId) ||
+              (e._id && String(e._id) === String(selectedEmp._id))
+          );
+          leaves = leaves.filter(
+            (l) =>
+              l.employeeName === selectedEmp.employeeName ||
+              l.employeeId === selectedEmp.employeeId ||
+              l.employeeId === filterEmployee ||
+              findLinkedEmployee(l, [selectedEmp])
+          );
         }
       }
 
       if (filterDepartment !== "All") {
-        leaves = leaves.filter(l => l.department === filterDepartment);
+        empList = empList.filter((e) => e.department === filterDepartment);
+        leaves = leaves.filter((l) => {
+          const emp = findLinkedEmployee(l, empList);
+          return (
+            l.department === filterDepartment ||
+            (emp && emp.department === filterDepartment)
+          );
+        });
       }
 
-      if (hasDateFilter) {
-        leaves = leaves.filter(l => isDateMatch(l.appliedOn || l.createdAt));
+      const rows = [];
+      for (const leave of leaves) {
+        if (!leave || leave.status === "Cancelled") continue;
+
+        const emp = findLinkedEmployee(leave, empList);
+        // Keep orphan historical leaves only when no status/employee filter requires a linked employee
+        if (filterEmployee !== "All" && !emp) continue;
+        if (employeeStatus !== "All" && !emp) continue;
+        if (filterDepartment !== "All" && !emp && leave.department !== filterDepartment) {
+          continue;
+        }
+
+        const start = leave.startDate ? new Date(leave.startDate) : null;
+        const end = leave.endDate ? new Date(leave.endDate) : start;
+        if (!start || Number.isNaN(start.getTime())) continue;
+
+        if (hasDateFilter && !isDateMatch(start)) continue;
+
+        const days = calculateLeaveDays(start, end || start) || 0;
+
+        rows.push({
+          "Employee ID": emp?.employeeId || leave.employeeId || "",
+          "Employee Name":
+            emp?.employeeName || leave.employeeName || leave.employee?.username || "",
+          "Leave Year": String(start.getFullYear()),
+          "Number of Leave Days": days,
+          "Start Date": start.toLocaleDateString("en-GB"),
+          "End Date":
+            end && !Number.isNaN(end.getTime())
+              ? end.toLocaleDateString("en-GB")
+              : "",
+          "Leave Type": leave.leaveType || "",
+          Status: leave.status || "",
+          Department: emp?.department || leave.department || "",
+          Company: emp?.office || leave.company || "",
+          "Airfare Requested": leave.requestAirfare ? "Yes" : "No",
+          Reason: leave.reason || leave.changeRemarks || "",
+        });
       }
 
-      return leaves.map(l => {
-        const start = new Date(l.startDate);
-        const end = new Date(l.endDate);
-        const durationDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-
-        return {
-          "Employee Name": l.employeeName || "",
-          "Company": l.company || "",
-          "Department": l.department || "",
-          "Reporting Manager": l.reportingManager || "",
-          "Leave Type": l.leaveType || "",
-          "Start Date": l.startDate ? new Date(l.startDate).toLocaleDateString('en-GB') : "",
-          "End Date": l.endDate ? new Date(l.endDate).toLocaleDateString('en-GB') : "",
-          "Duration (Days)": isNaN(durationDays) ? 0 : durationDays,
-          "Status": l.status || "",
-          "Applied On": l.appliedOn ? new Date(l.appliedOn).toLocaleDateString('en-GB') : "",
-          "Request Airfare": l.requestAirfare ? "Yes" : "No",
-          "Airfare Status": l.airfareStatus || "",
-          "Reason": l.reason || ""
-        };
+      rows.sort((a, b) => {
+        const y = String(a["Leave Year"]).localeCompare(String(b["Leave Year"]));
+        if (y !== 0) return y;
+        return String(a["Employee Name"]).localeCompare(String(b["Employee Name"]));
       });
+
+      return rows;
     }
 
     if (type === "Airfare Report") {
       let data = await employeeService.getEmployeesList({ force: true });
       let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
 
-      // Dedupe by employeeId/_id so the report has no duplicate rows
+      // Dedupe by employeeId/_id so the report has no duplicate employee masters
       const seen = new Set();
       empList = empList.filter((e) => {
         const key = String(e.employeeId || e._id || "");
@@ -535,35 +659,136 @@ function Reports() {
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
       empList = filterByExperience(empList);
-      if (hasDateFilter) {
-        empList = empList.filter(e => isDateMatch(e.travellingDate));
+
+      const airfareYesOf = (e) =>
+        e?.airFare === true || e?.airFare === "true" || e?.airFare === "Yes";
+
+      const fmtSet = (d) =>
+        d ? new Date(d).toLocaleDateString("en-GB") : "Not set";
+      const fmtOpt = (d) =>
+        d ? new Date(d).toLocaleDateString("en-GB") : "";
+
+      const buildAirfareRow = (e, dates = {}) => ({
+        "Employee ID": e.employeeId || "",
+        "Name": e.employeeName || "",
+        "Department": e.department || "",
+        "Role": e.role || "",
+        "Office Location": e.office || "",
+        "Company Code": e.companyCode || "",
+        "Airfare Entitlement": airfareYesOf(e) ? "Yes" : "No",
+        "Last Working Day": fmtSet(dates.lastWorkingDay),
+        "Travelling Date": fmtSet(dates.travellingDate),
+        "Return / Entry Date": fmtOpt(dates.returnDate),
+        "First Working Day": fmtOpt(dates.firstWorkingDay),
+        "Passport No": e.passportNo || "",
+        "Passport Expiry": e.passportExpiryDate
+          ? new Date(e.passportExpiryDate).toLocaleDateString("en-GB")
+          : "",
+      });
+
+      // Fetch all leave records so historical airfare / vacation trips (2022–2026+) are included
+      let leaves = [];
+      try {
+        const leaveData = await leaveRequestService.getLeaveRequests();
+        leaves = Array.isArray(leaveData) ? leaveData : (leaveData?.data || []);
+      } catch (err) {
+        console.error("Airfare report: failed to load leave history", err);
+        leaves = [];
       }
 
-      return empList.map(e => {
-        const airfareYes =
-          e.airFare === true || e.airFare === "true" || e.airFare === "Yes";
-        return {
-          "Employee ID": e.employeeId || "",
-          "Name": e.employeeName || "",
-          "Department": e.department || "",
-          "Role": e.role || "",
-          "Office Location": e.office || "",
-          "Airfare Entitlement": airfareYes ? "Yes" : "No",
-          "Last Working Day": e.lastWorkingDay ? new Date(e.lastWorkingDay).toLocaleDateString('en-GB') : "Not set",
-          "Travelling Date": e.travellingDate ? new Date(e.travellingDate).toLocaleDateString('en-GB') : "Not set",
-          "Return / Entry Date": e.returnDate ? new Date(e.returnDate).toLocaleDateString('en-GB') : "",
-          "First Working Day": e.firstWorkingDay ? new Date(e.firstWorkingDay).toLocaleDateString('en-GB') : "",
-          "Passport No": e.passportNo || "",
-          "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : ""
+      const rows = [];
+      const coveredTripKeys = new Set();
+
+      const tripKey = (empKey, dateVal) => {
+        const day = dateVal ? new Date(dateVal).toISOString().slice(0, 10) : "";
+        return `${empKey}|${day}`;
+      };
+
+      for (const leave of leaves) {
+        if (!leave || leave.status === "Cancelled") continue;
+
+        const leaveType = String(leave.leaveType || "");
+        const isTravelOrAirfareLeave =
+          leave.requestAirfare === true ||
+          leave.isPastLeave === true ||
+          leaveType === "Vacation" ||
+          leaveType === "Annual Leave";
+        if (!isTravelOrAirfareLeave) continue;
+
+        const emp = findLinkedEmployee(leave, empList);
+        if (!emp) continue;
+
+        const lastWorkingDay = leave.lastWorkingDay || leave.startDate || null;
+        const travellingDate = leave.travellingDate || leave.startDate || null;
+        const returnDate = leave.returnDate || leave.endDate || null;
+        const firstWorkingDay = leave.firstWorkingDay || leave.endDate || null;
+        const dateForFilter = travellingDate || lastWorkingDay || leave.startDate;
+
+        if (hasDateFilter && !isDateMatch(dateForFilter)) continue;
+
+        const empKey = String(emp.employeeId || emp._id || "");
+        coveredTripKeys.add(tripKey(empKey, dateForFilter));
+        rows.push(
+          buildAirfareRow(emp, {
+            lastWorkingDay,
+            travellingDate,
+            returnDate,
+            firstWorkingDay,
+          })
+        );
+      }
+
+      // Keep existing employee-snapshot rows (current travel dates) when not already covered by leave history
+      for (const e of empList) {
+        if (hasDateFilter && !isDateMatch(e.travellingDate)) continue;
+
+        const empKey = String(e.employeeId || e._id || "");
+        const key = tripKey(empKey, e.travellingDate || e.lastWorkingDay);
+        if (coveredTripKeys.has(key)) continue;
+
+        rows.push(
+          buildAirfareRow(e, {
+            lastWorkingDay: e.lastWorkingDay,
+            travellingDate: e.travellingDate,
+            returnDate: e.returnDate,
+            firstWorkingDay: e.firstWorkingDay,
+          })
+        );
+      }
+
+      rows.sort((a, b) => {
+        const parse = (v) => {
+          if (!v || v === "Not set") return 0;
+          const [dd, mm, yyyy] = String(v).split("/");
+          const t = new Date(Number(yyyy), Number(mm) - 1, Number(dd)).getTime();
+          return Number.isNaN(t) ? 0 : t;
         };
+        return parse(a["Travelling Date"]) - parse(b["Travelling Date"]);
       });
+
+      return rows;
     }
 
     if (type === "Increment report") {
-      let empList = await fetchFullEmployees();
+      let empList = await fetchFullEmployees(
+        employeeStatus === "Active"
+          ? "Active"
+          : employeeStatus === "InActive"
+            ? "InActive"
+            : undefined
+      );
+      if (!Array.isArray(empList)) empList = [];
 
       if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
-      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
+      if (employeeStatus !== "All") {
+        empList = empList.filter(
+          (e) =>
+            e.employeeStatus === employeeStatus ||
+            e.attendance === employeeStatus ||
+            (employeeStatus === "Active" && isActiveEmployee(e)) ||
+            (employeeStatus === "InActive" && isInactiveEmployee(e))
+        );
+      }
       if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
       if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
@@ -571,39 +796,56 @@ function Reports() {
       empList = filterByExperience(empList);
 
       let incrementRows = [];
-      empList.forEach(e => {
-        if (Array.isArray(e.increments) && e.increments.length > 0) {
-          e.increments.forEach(inc => {
-            incrementRows.push({
-              employeeId: e.employeeId,
-              name: e.employeeName,
-              department: e.department,
-              role: e.role,
-              date: inc.date,
-              previousSalary: inc.previousSalary,
-              incrementAmount: inc.incrementAmount,
-              newSalary: inc.newSalary,
-              reason: inc.reason
-            });
+      empList.forEach((e) => {
+        const increments = Array.isArray(e.increments) ? e.increments : [];
+        increments.forEach((inc) => {
+          if (!inc) return;
+          incrementRows.push({
+            employeeId: e.employeeId,
+            name: e.employeeName,
+            department: e.department,
+            role: e.role,
+            date: inc.date,
+            previousSalary: inc.previousSalary,
+            incrementAmount: inc.incrementAmount,
+            newSalary: inc.newSalary,
+            reason: inc.reason,
           });
-        }
+        });
       });
 
+      // Only narrow by date when a date/year/month filter is explicitly set
       if (hasDateFilter) {
-        incrementRows = incrementRows.filter(row => isDateMatch(row.date));
+        incrementRows = incrementRows.filter((row) => {
+          if (!row.date) return false;
+          return isDateMatch(row.date);
+        });
       }
 
-      return incrementRows.map(row => ({
-        "Employee ID": row.employeeId || "",
-        "Name": row.name || "",
-        "Department": row.department || "",
-        "Role": row.role || "",
-        "Increment Date": row.date ? new Date(row.date).toLocaleDateString('en-GB') : "",
-        "Previous Salary": row.previousSalary || 0,
-        "Increment Amount": row.incrementAmount || 0,
-        "New Salary": row.newSalary || 0,
-        "Reason/Remarks": row.reason || ""
-      }));
+      const rows = incrementRows.map((row) => {
+        const d = row.date ? new Date(row.date) : null;
+        const validDate = d && !Number.isNaN(d.getTime());
+        return {
+          "Employee ID": row.employeeId || "",
+          Name: row.name || "",
+          Department: row.department || "",
+          Role: row.role || "",
+          "Increment Year": validDate ? String(d.getFullYear()) : "",
+          "Increment Date": validDate ? d.toLocaleDateString("en-GB") : "",
+          "Previous Salary": row.previousSalary || 0,
+          "Increment Amount": row.incrementAmount || 0,
+          "New Salary": row.newSalary || 0,
+          "Reason/Remarks": row.reason || "",
+        };
+      });
+
+      rows.sort((a, b) => {
+        const y = String(a["Increment Year"]).localeCompare(String(b["Increment Year"]));
+        if (y !== 0) return y;
+        return String(a.Name).localeCompare(String(b.Name));
+      });
+
+      return rows;
     }
 
     if (type === "Document expiry") {
@@ -647,6 +889,8 @@ function Reports() {
           "Name": e.employeeName || "",
           "Department": e.department || "",
           "Role": e.role || "",
+          "Company": e.office || "",
+          "Company Code": e.companyCode || "",
           "Passport No": e.passportNo || "",
           "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : "Not set",
           "Passport Status": passportStatus,
@@ -683,6 +927,8 @@ function Reports() {
           "Status": e.employeeStatus || "",
           "Department": e.department || "",
           "Role": e.role || "",
+          "Company": e.office || "",
+          "Company Code": e.companyCode || "",
           "Basic Salary": Number(sal.basicSalary) || 0,
           "House Rent Allowance": Number(sal.houseRent) || 0,
           "Travel Allowance": Number(sal.travelExp) || 0,
@@ -724,6 +970,7 @@ function Reports() {
           "Department": e.department || "",
           "Role": e.role || "",
           "Office Location": e.office || "",
+          "Company Code": e.companyCode || "",
           "Nationality": e.nationality || "",
           "Status": e.employeeStatus || "",
           "Date of Joining": e.doj ? new Date(e.doj).toLocaleDateString('en-GB') : "Not set",
@@ -791,11 +1038,26 @@ function Reports() {
   };
 
   const generateLeaveReport = async () => {
-    const exportData = await fetchReportData("Leave Report");
-    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "Excel") {
-      exportToExcel(exportData, "Leave_Report");
-    } else if (format === "PDF") {
+      // Excel keeps existing master-tracker workbook + calculations unchanged
+      const tracker = await loadLeaveMasterTracker();
+      const exportData = buildLeaveMasterTrackerSummaryRows(tracker);
+      if (exportData.length === 0) {
+        alert("No data found for the selected filters.");
+        return;
+      }
+      const wb = buildLeaveMasterTrackerWorkbook(tracker);
+      await downloadLeaveMasterTrackerWorkbook(wb, "Staff_Leave_Report_Master_tracker", saveAs);
+      return;
+    }
+
+    // PDF / other: full historical leave rows (2022–2026+)
+    const exportData = await fetchReportData("Leave Report");
+    if (exportData.length === 0) {
+      alert("No data found for the selected filters.");
+      return;
+    }
+    if (format === "PDF") {
       exportToPDF(exportData, "Leave_Report");
     }
   };

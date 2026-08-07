@@ -8,6 +8,7 @@ const User = require('../models/User');
 const Employee = require('../models/Employee');
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
+const { workingStatusFilter } = require('../utils/employeeStatus');
 
 // One-time cleanup to remove stale database indexes that cause import failures
 SalarySlip.on('index', (err) => {
@@ -165,8 +166,8 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
             return res.status(400).json({ message: 'Month and Year are required' });
         }
 
-        // Fetch all active employees with salaryDetails
-        const employees = await Employee.find({ employeeStatus: "Active" }).lean();
+        // Fetch all working employees with salaryDetails
+        const employees = await Employee.find(workingStatusFilter()).lean();
         
         const results = [];
         const skipped = [];

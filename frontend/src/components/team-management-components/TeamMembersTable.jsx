@@ -34,6 +34,19 @@ import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
 import DateInput from "../DateInput";
+import { ACTIVE_OPTIONS } from "../../constants/employeeDropdownOptions";
+import { canUpdateVacationReturn } from "../../utils/permissions";
+import {
+  readPersistedPage,
+  writePersistedPage,
+  writePersistedPath,
+} from "../../hooks/usePersistedListPage";
+import {
+  formatEmployeeStatusDisplay,
+  employeeStatusTagColor,
+  isWorkingEmployeeStatus,
+  isNonWorkingEmployeeStatus,
+} from "../../utils/employeeStatusDisplay";
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -160,6 +173,25 @@ function TeamMembersTable() {
     return query ? `/teammanagement?${query}` : "/teammanagement";
   }, [searchParams]);
 
+  // Restore last page from session when URL has no page (e.g. sidebar click)
+  useEffect(() => {
+    if (searchParams.get("page")) return;
+    const saved = readPersistedPage("teammanagement", 1);
+    if (saved > 1) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("page", String(saved));
+        return next;
+      }, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep session in sync so Back / sidebar can resume this list position
+  useEffect(() => {
+    writePersistedPage("teammanagement", currentPage);
+    writePersistedPath("teammanagement", listReturnPath);
+  }, [currentPage, listReturnPath]);
+
   const patchSearchParams = (updates, { resetPage = false } = {}) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -195,6 +227,7 @@ function TeamMembersTable() {
   const isAdmin = userRole === "admin" || userRole === "hod";
   const canEditEmployees =
     userRole !== "viewer" && userRole !== "authorize_user";
+  const canReturn = canUpdateVacationReturn(userRole);
   const canDeleteEmployees = userRole === "admin" || userRole === "hod";
   const [datePrompt, setDatePrompt] = useState(null);
   const [datePromptSaving, setDatePromptSaving] = useState(false);
@@ -352,19 +385,36 @@ function TeamMembersTable() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem._id || employeeItem.id;
     try {
-      await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+      if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
+        const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
+        const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
+        await employeeService.markVacationReturn(empId, {
+          returnDate,
+          firstWorkingDay,
+          leaveId: employeeItem.linkedLeaveId || null,
+        });
+      } else {
+        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+      }
 
       // Update in-state
       setEmployees(prev =>
         prev.map(e =>
-          (e._id === empId || e.id === empId) ? { ...e, vacationStatus: newStatus, ...extraFields } : e
+          (e._id === empId || e.id === empId)
+            ? {
+                ...e,
+                vacationStatus: newStatus,
+                ...extraFields,
+                attendance: newStatus === "Vacation Approved" ? "Onsite" : e.attendance,
+              }
+            : e
         )
       );
 
       showToast("Vacation status updated successfully.", "success");
     } catch (err) {
       console.error("Failed to update vacation status:", err);
-      showToast("Failed to update vacation status.", "error");
+      showToast(err?.message || "Failed to update vacation status.", "error");
       throw err;
     }
   };
@@ -372,6 +422,12 @@ function TeamMembersTable() {
   const handleStatusDropdownChange = (employeeItem, newStatus) => {
     const prompt = buildVacationDatePrompt(employeeItem, newStatus);
     if (prompt) {
+      // Prefill return dates from planned leave end when marking returned
+      if (newStatus === "Vacation Approved") {
+        const planned = toDateInputValue(employeeItem.endDate || employeeItem.returnDate) || toDateInputValue(new Date());
+        prompt.dateValue = prompt.dateValue || planned;
+        prompt.secondaryDateValue = prompt.secondaryDateValue || planned;
+      }
       setDatePrompt(prompt);
     } else {
       handleVacationStatusChange(employeeItem, newStatus);
@@ -381,10 +437,16 @@ function TeamMembersTable() {
   const handleDatePromptConfirm = async () => {
     if (!datePrompt || datePromptSaving) return;
     const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue } = datePrompt;
+    if (newStatus === "Vacation Approved" && !dateValue) {
+      showToast("Please select the Return / Entry Date.", "error");
+      return;
+    }
     const extraFields = {};
     if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
     if (secondaryFieldKey && secondaryDateValue) {
       extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+    } else if (newStatus === "Vacation Approved" && dateValue) {
+      extraFields.firstWorkingDay = new Date(dateValue).toISOString();
     }
     setDatePromptSaving(true);
     try {
@@ -403,46 +465,93 @@ function TeamMembersTable() {
   };
 
   const handleEmployeeStatusChange = (employeeItem, newStatus) => {
-    if (newStatus === "InActive") {
-      setStatusPrompt({ employeeItem, newStatus, lastWorkingDay: "" });
-    } else {
-      confirmEmployeeStatusChange(employeeItem, "Active", null);
+    if (newStatus === "Notice Period") {
+      setStatusPrompt({
+        employeeItem,
+        newStatus,
+        mode: "notice",
+        noticePeriodStartDate: toDateInputValue(employeeItem.noticePeriodStartDate),
+        noticePeriodEndDate: toDateInputValue(
+          employeeItem.noticePeriodEndDate || employeeItem.lastWorkingDay
+        ),
+        lastWorkingDay: "",
+        provisionPeriodStartDate: "",
+        provisionPeriodEndDate: "",
+      });
+      return;
     }
+    if (newStatus === "Provision Period") {
+      setStatusPrompt({
+        employeeItem,
+        newStatus,
+        mode: "provision",
+        provisionPeriodStartDate: toDateInputValue(employeeItem.provisionPeriodStartDate),
+        provisionPeriodEndDate: toDateInputValue(employeeItem.provisionPeriodEndDate),
+        lastWorkingDay: "",
+        noticePeriodStartDate: "",
+        noticePeriodEndDate: "",
+      });
+      return;
+    }
+    if (isNonWorkingEmployeeStatus(newStatus)) {
+      setStatusPrompt({
+        employeeItem,
+        newStatus,
+        mode: "exit",
+        lastWorkingDay: toDateInputValue(employeeItem.lastWorkingDay),
+        noticePeriodStartDate: "",
+        noticePeriodEndDate: "",
+        provisionPeriodStartDate: "",
+        provisionPeriodEndDate: "",
+      });
+      return;
+    }
+    confirmEmployeeStatusChange(employeeItem, newStatus, {});
   };
 
-  const confirmEmployeeStatusChange = async (employeeItem, newStatus, lastWorkingDay) => {
+  const confirmEmployeeStatusChange = async (employeeItem, newStatus, dates = {}) => {
     const empId = employeeItem._id || employeeItem.id;
     setStatusPromptSaving(true);
     try {
-      const payload = {
-        employeeStatus: newStatus,
-        lastWorkingDay: newStatus === "InActive" && lastWorkingDay
-          ? new Date(lastWorkingDay).toISOString()
-          : null,
-      };
-      if (newStatus === "InActive") {
+      const payload = { employeeStatus: newStatus };
+
+      if (newStatus === "Notice Period") {
+        if (dates.noticePeriodStartDate) {
+          payload.noticePeriodStartDate = new Date(dates.noticePeriodStartDate).toISOString();
+        }
+        if (dates.noticePeriodEndDate) {
+          payload.noticePeriodEndDate = new Date(dates.noticePeriodEndDate).toISOString();
+          payload.lastWorkingDay = new Date(dates.noticePeriodEndDate).toISOString();
+        }
+      } else if (newStatus === "Provision Period") {
+        if (dates.provisionPeriodStartDate) {
+          payload.provisionPeriodStartDate = new Date(dates.provisionPeriodStartDate).toISOString();
+        }
+        if (dates.provisionPeriodEndDate) {
+          payload.provisionPeriodEndDate = new Date(dates.provisionPeriodEndDate).toISOString();
+        }
+      } else if (isNonWorkingEmployeeStatus(newStatus)) {
+        payload.lastWorkingDay = dates.lastWorkingDay
+          ? new Date(dates.lastWorkingDay).toISOString()
+          : null;
         payload.vacationStatus = "Onsite";
         payload.attendance = "Onsite";
       }
-      await employeeService.updateEmployee(empId, payload);
+
+      const updated = await employeeService.updateEmployee(empId, payload);
       setEmployees(prev =>
         prev.map(e =>
           (e._id === empId || e.id === empId)
-            ? { ...e, ...payload }
+            ? { ...e, ...payload, ...(updated && typeof updated === "object" ? updated : {}) }
             : e
         )
       );
       employeeService.invalidateCache?.();
-      showToast(
-        newStatus === "Active"
-          ? "Employee activated successfully."
-          : "Employee deactivated successfully.",
-        "success"
-      );
+      showToast("Employee status updated successfully.", "success");
       setStatusPrompt(null);
     } catch (err) {
       console.error("Failed to update employee status:", err);
-      showToast("Failed to update employee status.", "error");
+      showToast(err?.message || "Failed to update employee status.", "error");
     } finally {
       setStatusPromptSaving(false);
     }
@@ -453,7 +562,13 @@ function TeamMembersTable() {
     await confirmEmployeeStatusChange(
       statusPrompt.employeeItem,
       statusPrompt.newStatus,
-      statusPrompt.lastWorkingDay
+      {
+        lastWorkingDay: statusPrompt.lastWorkingDay,
+        noticePeriodStartDate: statusPrompt.noticePeriodStartDate,
+        noticePeriodEndDate: statusPrompt.noticePeriodEndDate,
+        provisionPeriodStartDate: statusPrompt.provisionPeriodStartDate,
+        provisionPeriodEndDate: statusPrompt.provisionPeriodEndDate,
+      }
     );
   };
 
@@ -466,9 +581,9 @@ function TeamMembersTable() {
     return employees.filter((member) => {
       let matchesFilter = true;
       if (activeFilter === "Active") {
-        matchesFilter = member.employeeStatus !== "InActive";
+        matchesFilter = isWorkingEmployeeStatus(member.employeeStatus);
       } else if (activeFilter === "Inactive") {
-        matchesFilter = member.employeeStatus === "InActive";
+        matchesFilter = isNonWorkingEmployeeStatus(member.employeeStatus);
       }
 
       const q = searchTerm.toLowerCase();
@@ -486,10 +601,12 @@ function TeamMembersTable() {
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
 
   useEffect(() => {
+    // Don't clamp while employees are still loading (empty list → totalPages=1 wipes restored page)
+    if (employees.length === 0) return;
     if (currentPage > totalPages) {
       patchSearchParams({ page: totalPages === 1 ? undefined : totalPages });
     }
-  }, [currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [employees.length, currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allFilteredSelected =
     filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
@@ -539,35 +656,35 @@ function TeamMembersTable() {
         title: "Employee Status",
         dataIndex: "employeeStatus",
         key: "employeeStatus",
-        width: 200,
-        sorter: (a, b) => (a.employeeStatus || "").localeCompare(b.employeeStatus || ""),
+        width: 240,
+        sorter: (a, b) =>
+          formatEmployeeStatusDisplay(a).localeCompare(formatEmployeeStatusDisplay(b)),
         render: (status, record) => {
-          const isActive = status !== "InActive";
-          const statusLabel = isActive
-            ? "Active (Working)"
-            : "Inactive (Non-Working)";
+          const displayLabel = formatEmployeeStatusDisplay(record);
+          const statusOptions = ACTIVE_OPTIONS.filter((o) => o.value).map((o) => ({
+            value: o.value,
+            label: o.label,
+          }));
           if (canEditEmployees) {
             return (
               <Select
                 size="small"
                 value={status || "Active"}
-                style={{ minWidth: 180 }}
+                style={{ minWidth: 220 }}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(val) => handleEmployeeStatusChange(record, val)}
-                options={[
-                  { value: "Active", label: "Active (Working Employee)" },
-                  { value: "InActive", label: "Inactive (Non-Working Employee)" },
-                ]}
-                optionLabelProp="label"
+                options={statusOptions}
+                popupMatchSelectWidth={false}
+                labelRender={() => displayLabel}
               />
             );
           }
           return (
             <Tag
-              color={isActive ? "success" : "error"}
-              style={{ borderRadius: 20, fontWeight: 600 }}
+              color={employeeStatusTagColor(status || "Active")}
+              style={{ borderRadius: 20, fontWeight: 600, whiteSpace: "normal" }}
             >
-              {statusLabel}
+              {displayLabel}
             </Tag>
           );
         },
@@ -578,13 +695,13 @@ function TeamMembersTable() {
         key: "vacationStatus",
         width: 200,
         render: (_, record) => {
-          const isActive = record.employeeStatus !== "InActive";
+          const isActive = isWorkingEmployeeStatus(record.employeeStatus);
           if (!isActive) return <Typography.Text type="secondary">—</Typography.Text>;
 
           const vs = record.vacationStatus || "Onsite";
           const dateLines = formatVacationDates(record, vs);
 
-          if (isAdmin) {
+          if (canReturn) {
             return (
               <Space direction="vertical" size={2}>
                 <Select
@@ -1128,19 +1245,47 @@ function TeamMembersTable() {
         );
       })()}
 
-      {/* Last Working Day Prompt Modal for Employee Status Change */}
+      {/* Status date prompt modal (notice / provision / exit) */}
       {statusPrompt && (() => {
         const nameInitials = statusPrompt.employeeItem.employeeName
           ? statusPrompt.employeeItem.employeeName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
           : "EE";
+        const mode = statusPrompt.mode || "exit";
+        const statusLabel =
+          ACTIVE_OPTIONS.find((o) => o.value === statusPrompt.newStatus)?.label ||
+          statusPrompt.newStatus;
+        const title =
+          mode === "notice"
+            ? "Set Notice Period"
+            : mode === "provision"
+              ? "Set Provision Period"
+              : "Update Employee Status";
+        const description =
+          mode === "notice"
+            ? <>Please set notice period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
+            : mode === "provision"
+              ? <>Please set provision period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
+              : <>Please select the last working day for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>;
+        const dateInputStyle = {
+          border: "2px solid #e2e8f0",
+          borderRadius: "12px",
+          padding: "12px 16px",
+          fontSize: "15px",
+          color: "#0f172a",
+          fontWeight: "600",
+          outline: "none",
+          width: "100%",
+          boxSizing: "border-box",
+          transition: "all 0.2s ease",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+          cursor: "pointer",
+        };
 
         return (
           <div
             style={{
               position: "fixed", inset: 0, zIndex: 100001,
-              background: "rgba(15, 23, 42, 0.6)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
+              background: "rgba(15, 23, 42, 0.45)",
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "20px"
             }}
@@ -1178,7 +1323,6 @@ function TeamMembersTable() {
               }}
               onClick={e => e.stopPropagation()}
             >
-              {/* Top Accent Gradient Bar */}
               <div style={{
                 position: "absolute",
                 top: 0, left: 0, right: 0,
@@ -1186,7 +1330,6 @@ function TeamMembersTable() {
                 background: "linear-gradient(90deg, #ef4444, #f97316, #eab308)"
               }} />
 
-              {/* Close Button */}
               <button
                 onClick={handleStatusPromptCancel}
                 disabled={statusPromptSaving}
@@ -1206,7 +1349,6 @@ function TeamMembersTable() {
                 onMouseLeave={e => { if (!statusPromptSaving) { e.target.style.background = "#f1f5f9"; e.target.style.color = "#64748b"; } }}
               >&times;</button>
 
-              {/* Avatar & Header */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "8px", marginTop: "10px" }}>
                 <div style={{
                   width: "60px",
@@ -1224,14 +1366,13 @@ function TeamMembersTable() {
                   {nameInitials}
                 </div>
                 <h3 style={{ margin: "10px 0 2px", fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
-                  Deactivate Employee
+                  {title}
                 </h3>
                 <p style={{ margin: 0, fontSize: "14px", color: "#64748b", lineHeight: "1.5" }}>
-                  Please select the last working day for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong> before deactivating.
+                  {description}
                 </p>
               </div>
 
-              {/* Status Badge */}
               <div style={{
                 background: "#fef2f2",
                 borderRadius: "16px",
@@ -1241,11 +1382,9 @@ function TeamMembersTable() {
                 flexDirection: "column",
                 gap: "8px"
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Changing Status to:
-                  </span>
-                </div>
+                <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Changing Status to:
+                </span>
                 <div style={{ display: "inline-flex", alignSelf: "flex-start" }}>
                   <span style={{
                     display: "inline-flex",
@@ -1267,38 +1406,79 @@ function TeamMembersTable() {
                       background: "#ef4444",
                       boxShadow: "0 0 0 2px #ef444425"
                     }} />
-                    Inactive (Non-Working Employee)
+                    {statusLabel}
                   </span>
                 </div>
               </div>
 
-              {/* Date Input */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Last Working Day
-                </label>
-                <DateInput
-                  value={statusPrompt.lastWorkingDay}
-                  className="status-prompt-date"
-                  onChange={e => setStatusPrompt(prev => ({ ...prev, lastWorkingDay: e.target.value }))}
-                  style={{
-                    border: "2px solid #e2e8f0",
-                    borderRadius: "12px",
-                    padding: "12px 16px",
-                    fontSize: "15px",
-                    color: "#0f172a",
-                    fontWeight: "600",
-                    outline: "none",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    transition: "all 0.2s ease",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
-                    cursor: "pointer"
-                  }}
-                />
-              </div>
+              {mode === "notice" && (
+                <>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Notice Period Start Date
+                    </label>
+                    <DateInput
+                      value={statusPrompt.noticePeriodStartDate || ""}
+                      className="status-prompt-date"
+                      onChange={e => setStatusPrompt(prev => ({ ...prev, noticePeriodStartDate: e.target.value }))}
+                      style={dateInputStyle}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Notice Period End Date / Last Working Day
+                    </label>
+                    <DateInput
+                      value={statusPrompt.noticePeriodEndDate || ""}
+                      className="status-prompt-date"
+                      onChange={e => setStatusPrompt(prev => ({ ...prev, noticePeriodEndDate: e.target.value }))}
+                      style={dateInputStyle}
+                    />
+                  </div>
+                </>
+              )}
 
-              {/* Footer Buttons */}
+              {mode === "provision" && (
+                <>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Provision Period Start Date
+                    </label>
+                    <DateInput
+                      value={statusPrompt.provisionPeriodStartDate || ""}
+                      className="status-prompt-date"
+                      onChange={e => setStatusPrompt(prev => ({ ...prev, provisionPeriodStartDate: e.target.value }))}
+                      style={dateInputStyle}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Provision Period End Date
+                    </label>
+                    <DateInput
+                      value={statusPrompt.provisionPeriodEndDate || ""}
+                      className="status-prompt-date"
+                      onChange={e => setStatusPrompt(prev => ({ ...prev, provisionPeriodEndDate: e.target.value }))}
+                      style={dateInputStyle}
+                    />
+                  </div>
+                </>
+              )}
+
+              {mode === "exit" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Last Working Day
+                  </label>
+                  <DateInput
+                    value={statusPrompt.lastWorkingDay || ""}
+                    className="status-prompt-date"
+                    onChange={e => setStatusPrompt(prev => ({ ...prev, lastWorkingDay: e.target.value }))}
+                    style={dateInputStyle}
+                  />
+                </div>
+              )}
+
               <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px" }}>
                 <button
                   onClick={handleStatusPromptCancel}
@@ -1356,7 +1536,7 @@ function TeamMembersTable() {
                       }}
                     />
                   )}
-                  {statusPromptSaving ? "Saving..." : "Confirm Deactivation"}
+                  {statusPromptSaving ? "Saving..." : "Confirm"}
                 </button>
               </div>
             </div>

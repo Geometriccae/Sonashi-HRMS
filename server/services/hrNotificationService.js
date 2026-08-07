@@ -2,6 +2,7 @@ const Notification = require('../models/Notification');
 const Employee = require('../models/Employee');
 const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
+const { workingStatusFilter } = require('../utils/employeeStatus');
 
 const HR_NOTIFY_ROLES = ['admin', 'hr', 'viewer', 'hod'];
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -86,7 +87,7 @@ async function getHrAlerts() {
   today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().slice(0, 10);
 
-  const employees = await Employee.find({ employeeStatus: 'Active' })
+  const employees = await Employee.find(workingStatusFilter())
     .select('employeeName employeeStatus vacationStatus doj passportExpiryDate visaExpiryDate labourCardExpiryDate emiratesIdExpiryDate contractRenewalDate firstWorkingDay')
     .lean();
 

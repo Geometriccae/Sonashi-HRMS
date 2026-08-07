@@ -107,6 +107,18 @@ const HEADER_ALIASES = {
   'employee status': 'employeeStatus',
   'active status': 'employeeStatus',
   status: 'employeeStatus',
+  noticeperiodstartdate: 'noticePeriodStartDate',
+  'notice period start date': 'noticePeriodStartDate',
+  'notice period start': 'noticePeriodStartDate',
+  noticeperiodenddate: 'noticePeriodEndDate',
+  'notice period end date': 'noticePeriodEndDate',
+  'notice period end': 'noticePeriodEndDate',
+  provisionperiodstartdate: 'provisionPeriodStartDate',
+  'provision period start date': 'provisionPeriodStartDate',
+  'probation period start date': 'provisionPeriodStartDate',
+  provisionperiodenddate: 'provisionPeriodEndDate',
+  'provision period end date': 'provisionPeriodEndDate',
+  'probation period end date': 'provisionPeriodEndDate',
   attendance: 'attendance',
   lifeinsurance: 'lifeInsurance',
   'life insurance': 'lifeInsurance',
@@ -305,10 +317,27 @@ function buildEmployeePayload(row, nameToId) {
 
   const es = String(pickRaw(map, 'employeeStatus') || '').trim();
   if (es) {
-    if (/inactive/i.test(es)) payload.employeeStatus = 'InActive';
-    else if (/active/i.test(es)) payload.employeeStatus = 'Active';
+    const lower = es.toLowerCase();
+    if (/^in.?active|inactive|non.?working/.test(lower)) payload.employeeStatus = 'InActive';
+    else if (/provision|probation/.test(lower)) payload.employeeStatus = 'Provision Period';
+    else if (/notice/.test(lower)) payload.employeeStatus = 'Notice Period';
+    else if (/confirm/.test(lower)) payload.employeeStatus = 'Confirmed';
+    else if (/resign/.test(lower)) payload.employeeStatus = 'Resigned';
+    else if (/terminat/.test(lower)) payload.employeeStatus = 'Terminated';
+    else if (/reliev/.test(lower)) payload.employeeStatus = 'Relieved';
+    else if (/on.?hold|hold/.test(lower)) payload.employeeStatus = 'On Hold';
+    else if (/^active|working/.test(lower)) payload.employeeStatus = 'Active';
     else payload.employeeStatus = es;
   }
+
+  const nps = parseExcelDate(pickRaw(map, 'noticePeriodStartDate'));
+  if (nps) payload.noticePeriodStartDate = nps;
+  const npe = parseExcelDate(pickRaw(map, 'noticePeriodEndDate'));
+  if (npe) payload.noticePeriodEndDate = npe;
+  const pps = parseExcelDate(pickRaw(map, 'provisionPeriodStartDate'));
+  if (pps) payload.provisionPeriodStartDate = pps;
+  const ppe = parseExcelDate(pickRaw(map, 'provisionPeriodEndDate'));
+  if (ppe) payload.provisionPeriodEndDate = ppe;
 
   const att = String(pickRaw(map, 'attendance') || '').trim();
   if (att) {

@@ -14,6 +14,10 @@ const employeeSchema = new mongoose.Schema({
   doj: { type: Date, default: null },
   noticePeriod: { type: String, default: "" },
   provisionPeriod: { type: String, default: "" },
+  noticePeriodStartDate: { type: Date, default: null },
+  noticePeriodEndDate: { type: Date, default: null },
+  provisionPeriodStartDate: { type: Date, default: null },
+  provisionPeriodEndDate: { type: Date, default: null },
   lastWorkingDay: { type: Date, default: null },
   travellingDate: { type: Date, default: null },
   returnDate: { type: Date, default: null },
@@ -24,7 +28,7 @@ const employeeSchema = new mongoose.Schema({
   passportExpiryDate: { type: Date, default: null },
   labourCardNumber: { type: String, default: "" },
   labourCardExpiryDate: { type: Date, default: null },
-  companyCode: { type: String, default: "" },
+  companyCode: { type: String, default: "0000000246878" },
   visaExpiryDate: { type: Date, default: null },
   remarks: { type: String, default: "" },
 
@@ -33,7 +37,17 @@ const employeeSchema = new mongoose.Schema({
 
   employeeStatus: {
     type: String,
-    enum: ["Active", "InActive"],
+    enum: [
+      "Active",
+      "Provision Period",
+      "Notice Period",
+      "Confirmed",
+      "Resigned",
+      "Terminated",
+      "Relieved",
+      "On Hold",
+      "InActive",
+    ],
     default: "Active"
   },
 

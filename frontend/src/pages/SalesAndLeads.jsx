@@ -152,7 +152,7 @@ function SalesAndLeads() {
                 </div> */}
               </div>
               <div className={styles.cardamount}>
-                <div className={styles.cardamountvalue}>&#8377;{isLoadingMetrics ? '--' : salesMetrics.totalOpportunityValue.toLocaleString('en-IN')}</div>
+                <div className={styles.cardamountvalue}>AED {isLoadingMetrics ? '--' : salesMetrics.totalOpportunityValue.toLocaleString()}</div>
                 <div className={styles.cardneutral}>&#8599; {isLoadingMetrics ? '--' : `${salesMetrics.monthlyGrowth >= 0 ? '+' : ''}${salesMetrics.monthlyGrowth}%`}</div>
               </div>
 
