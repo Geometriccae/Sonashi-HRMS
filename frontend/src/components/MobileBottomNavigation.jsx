@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import styles from "./MobileBottomNavigation.module.css";
+import { readPersistedPath } from "../hooks/usePersistedListPage";
 
 function MobileBottomNavigation() {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ function MobileBottomNavigation() {
     {
       id: "dashboard",
       label: "Dashboard",
+      matchPath: "/dashboard",
       path: "/dashboard",
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -23,7 +25,8 @@ function MobileBottomNavigation() {
     {
       id: "sales",
       label: "Sales & Leads",
-      path: "/salesandleads",
+      matchPath: "/salesandleads",
+      path: readPersistedPath("salesandleads", "/salesandleads"),
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
           <path
@@ -36,6 +39,7 @@ function MobileBottomNavigation() {
     {
       id: "calendar",
       label: "Calendar",
+      matchPath: "/yourcalendar",
       path: "/yourcalendar",
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -49,6 +53,7 @@ function MobileBottomNavigation() {
     {
       id: "settings",
       label: "Settings",
+      matchPath: "/profile",
       path: "/profile",
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -68,8 +73,9 @@ function MobileBottomNavigation() {
   return (
     <nav className={styles.bottomNavigation}>
       {navItems.map((item) => {
-        // mark active when exact or when current path starts with the nav path (handles nested routes)
-        const isActive = location.pathname === item.path || location.pathname.startsWith(item.path);
+        const match = item.matchPath || item.path;
+        const isActive =
+          location.pathname === match || location.pathname.startsWith(match);
         return (
           <button
             key={item.id}

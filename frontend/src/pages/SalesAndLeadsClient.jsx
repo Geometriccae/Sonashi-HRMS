@@ -32,8 +32,10 @@ import deletewhite from "../assets/dashboard/delete-white.svg";
 import ProfileAvatar from "../components/ProfileAvatar";
 import { io as ioClient } from 'socket.io-client';
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
+import { readPersistedPath } from "../hooks/usePersistedListPage";
 
 function SalesAndLeadsClient(clientId ) {
+  const salesListPath = readPersistedPath("salesandleads", "/salesandleads");
   const [activeTab, setActiveTab] = useState("basicInfo");
   const basicInfoRef = useRef(null);
   const meetingsRef = useRef(null);
@@ -316,7 +318,7 @@ function SalesAndLeadsClient(clientId ) {
     try {
       if (deleteType === "entry") {
         await clientService.deleteClient(id);
-        navigate("/salesandleads");
+        navigate(salesListPath);
         return; // no further cleanup needed, leaving page
       } else if (deleteType === "data") {
         // Optional: implement bulk document delete for this client in backend later
@@ -607,7 +609,7 @@ const handleTaskCreated = (newTask) => {
           title="Sales & Leads"
           breadcrumbs={[
             { label: "Home", path: "/dashboard" },
-            { label: "Sales and Leads", path: "/salesandleads" },
+            { label: "Sales and Leads", path: salesListPath },
             { label: clientData?.companyName || "Client" },
           ]}
         />

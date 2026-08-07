@@ -8,6 +8,7 @@ import config from "../config/config";
 import ProfileAvatar from "../components/ProfileAvatar";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import LogoutModal from "../components/logout-modal/LogoutModal";
+import { writePersistedPath } from "../hooks/usePersistedListPage";
 
 function Profile() {
   const [username, setUsername] = useState("");
@@ -25,6 +26,7 @@ function Profile() {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
+    writePersistedPath("profile", "/profile");
     setUsername(localStorage.getItem("username") || "");
     setUserRole(localStorage.getItem("role") || "");
     (async () => {

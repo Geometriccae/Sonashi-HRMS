@@ -29,6 +29,7 @@ import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
+import { readPersistedPath } from "../../hooks/usePersistedListPage";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -110,7 +111,7 @@ function TeamManagementSalesLeads() {
   const exportButtonRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const teamListPath = location.state?.from || "/teammanagement";
+  const teamListPath = location.state?.from || readPersistedPath("teammanagement", "/teammanagement");
   // const { employeeId } = useParams();
 
   const { id: employeeId } = useParams();

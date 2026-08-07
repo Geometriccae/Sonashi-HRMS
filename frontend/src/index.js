@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { resetListUiOnHardReload } from './hooks/usePersistedListPage';
 
+// Refresh → page 1 / default view; in-app sidebar navigation still resumes last position
+resetListUiOnHardReload();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

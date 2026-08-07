@@ -14,6 +14,10 @@ import SalarySlipEditModal from "./SalarySlipEditModal";
 import DateInput from "../DateInput";
 import { formatAed } from "../../utils/currency";
 import { buildYearList, yearsFromSalarySlips } from "../../utils/yearOptions";
+import {
+    useUrlListPage,
+    useResetPageOnFilterChange,
+} from "../../hooks/usePersistedListPage";
 
 const DownloadIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -360,8 +364,12 @@ function SalarySlipTable({ userRole }) {
     const [salarySlips, setSalarySlips] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
+    // Pagination — resume last page via URL + session (same as Leave/Team)
+    const [currentPage, setCurrentPage, resetToFirstPage] = useUrlListPage({
+        storageKey: "salary-slips",
+        basePath: "/salary-slips",
+    });
+
     const itemsPerPage = 10;
 
     // Delete confirmation state
@@ -470,7 +478,6 @@ function SalarySlipTable({ userRole }) {
                     setMyExpenses(data || []);
                 }
             }
-            setCurrentPage(1); // Reset to first page on data change
         } catch (error) {
             console.error("Error fetching data:", error);
             showToast(error.message || "Failed to fetch data.", "error");
@@ -482,6 +489,16 @@ function SalarySlipTable({ userRole }) {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    // Reset page only when filters actually change (Strict Mode safe)
+    useResetPageOnFilterChange(resetToFirstPage, {
+        selectedMonth,
+        selectedYear,
+        reportType,
+        employeeTab,
+        searchQuery,
+        selectedDepartment,
+    });
 
     // Pagination calculations - works for both salary slips and expenses
     const filteredSalarySlips = salarySlips.filter(slip => {
@@ -499,12 +516,20 @@ function SalarySlipTable({ userRole }) {
     const currentData = isAdmin
         ? (reportType === 'expense' ? filteredExpenses : filteredSalarySlips)
         : (employeeTab === 'expense' ? myExpenses : salarySlips);
-    const totalPages = Math.ceil(currentData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    const totalPages = Math.max(1, Math.ceil(currentData.length / itemsPerPage) || 1);
+    const safePage = Math.min(currentPage, currentData.length === 0 ? currentPage : totalPages);
+    const startIndex = (safePage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentSlips = filteredSalarySlips.slice(startIndex, endIndex);
     const currentExpenses = filteredExpenses.slice(startIndex, endIndex);
     const currentMyExpenses = myExpenses.slice(startIndex, endIndex);
+
+    // Clamp restored page only after rows exist (avoid empty → page 1 wipe)
+    useEffect(() => {
+        if (currentData.length === 0) return;
+        if (currentData.length === 0) return;
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentData.length, currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handlePageChange = (page) => {
         if (page >= 1 && page <= totalPages) {

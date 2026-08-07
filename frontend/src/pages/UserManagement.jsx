@@ -6,6 +6,7 @@ import EditUserModal from '../components/EditUserModal';
 import Side from "./sidebar/Sidebar";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import DeleteModal from '../components/delete-modal/DeleteModal';
+import { writePersistedPath } from '../hooks/usePersistedListPage';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -17,6 +18,7 @@ const UserManagement = () => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [userToEdit, setUserToEdit] = useState(null); // New state for User to Edit
   useEffect(() => {
+    writePersistedPath("user-management", "/user-management");
     fetchUsers();
   }, []);
 

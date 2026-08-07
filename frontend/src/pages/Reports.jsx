@@ -26,6 +26,25 @@ import {
   isWorkingEmployeeStatus,
 } from "../utils/employeeStatusDisplay";
 import { findLinkedEmployee } from "../utils/yetToGoHelpers";
+import { useUrlListView } from "../hooks/usePersistedListPage";
+
+const REPORT_TYPES = [
+  "Leave Report",
+  "Airfare Report",
+  "Increment report",
+  "Document expiry",
+  "Salary report",
+  "Employee Experience",
+];
+
+const REPORT_TYPE_TO_SLUG = {
+  "Leave Report": "leave",
+  "Airfare Report": "airfare",
+  "Increment report": "increment",
+  "Document expiry": "document-expiry",
+  "Salary report": "salary",
+  "Employee Experience": "employee-experience",
+};
 
 const SIF_HEADERS = [
   "StaffID", "EMPID", "EMPNAME", "EMPLOYERID", "AGENTCODE",
@@ -128,7 +147,14 @@ const getEmployeeSelectStyles = (menuWidth) => ({
 });
 
 function Reports() {
-  const [reportType, setReportType] = useState("");
+  // Resume last selected report (e.g. Airfare) via URL + session — survives refresh & sidebar nav
+  const [reportType, setReportType] = useUrlListView({
+    storageKey: "reports",
+    basePath: "/reports",
+    paramName: "type",
+    valueToSlug: REPORT_TYPE_TO_SLUG,
+    fallback: "",
+  });
   const [format, setFormat] = useState("");
 
   // Filters
@@ -374,14 +400,7 @@ function Reports() {
   const isInactiveEmployee = (emp) => isNonWorkingEmployeeStatus(emp?.employeeStatus);
   const isActiveEmployee = (emp) => isWorkingEmployeeStatus(emp?.employeeStatus);
 
-  const reportTypes = [
-    "Leave Report",
-    "Airfare Report",
-    "Increment report",
-    "Document expiry",
-    "Salary report",
-    "Employee Experience"
-  ];
+  const reportTypes = REPORT_TYPES;
   const formats = reportType === "Salary report"
     ? ["Excel", "PDF", "SIF"]
     : ["Excel", "PDF"];

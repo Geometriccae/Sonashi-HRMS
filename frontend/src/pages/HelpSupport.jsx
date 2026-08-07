@@ -1,22 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styles from "./HelpSupport.module.css";
 import Side from "./sidebar/Sidebar";
 import { useToast } from "../context/ToastContext";
 import axios from "axios";
 import InputField from "../components/InputField";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
+import { writePersistedPath } from "../hooks/usePersistedListPage";
 
 const HelpSupport = () => {
-  const { showToast } = useToast();
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    subject: "",
-    message: "",
-  });
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
+    const { showToast } = useToast();
+    const [formData, setFormData] = useState({
+      name: "",
+      email: "",
+      phone: "",
+      subject: "",
+      message: "",
+    });
+    const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState({});
+
+    useEffect(() => {
+      writePersistedPath("help-support", "/help-support");
+    }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

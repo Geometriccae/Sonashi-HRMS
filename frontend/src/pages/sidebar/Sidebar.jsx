@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import styles from "./Sidebar.module.css";
 import DateRangePickerModal from "../../components/DateRangePickerModal";
 import useDateRange from "../../hooks/useDateRange";
+import { readPersistedPath } from "../../hooks/usePersistedListPage";
 import { useSidebar } from "../../context/SidebarContext";
 import LogoutModal from "../../components/logout-modal/LogoutModal";
 
@@ -144,42 +145,42 @@ function Sidebar() {
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/teammanagement"
+                  to={readPersistedPath("teammanagement", "/teammanagement")}
                   icon={users}
                   label="Team Management"
                   active={isActive("/teammanagement")}
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/leave-requests"
+                  to={readPersistedPath("leave-requests", "/leave-requests")}
                   icon={calendar}
                   label="Leave Management"
                   active={isActive("/leave-requests")}
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/annual-vacations"
+                  to={readPersistedPath("annual-vacations", "/annual-vacations")}
                   icon={calendar}
                   label="Annual Vacations"
                   active={isActive("/annual-vacations")}
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/salary-slips"
+                  to={readPersistedPath("salary-slips", "/salary-slips")}
                   icon={filechartcolumn}
                   label="Salary Slips"
                   active={isActive("/salary-slips")}
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/reports"
+                  to={readPersistedPath("reports", "/reports")}
                   icon={filechartcolumn}
                   label="Reports"
                   active={isActive("/reports")}
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/company-document"
+                  to={readPersistedPath("company-document", "/company-document")}
                   icon={cloud}
                   label="Company Document"
                   active={isActive("/company-document")}
@@ -187,7 +188,7 @@ function Sidebar() {
                 />
                 {["admin", "hod"].includes(userRole) && (
                   <NavItem
-                    to="/user-management"
+                    to={readPersistedPath("user-management", "/user-management")}
                     icon={addcontact}
                     label="User Management"
                     active={isActive("/user-management")}
@@ -201,14 +202,14 @@ function Sidebar() {
               <p className={styles["section-title"]}>ADDITIONAL</p>
               <ul>
                 <NavItem
-                  to="/settings-preferences"
+                  to={readPersistedPath("settings-preferences", "/settings-preferences")}
                   icon={settings}
                   label="Settings preferences"
                   active={isActive("/settings-preferences")}
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/profile"
+                  to={readPersistedPath("profile", "/profile")}
                   icon={settings}
                   label="Settings"
                   active={isActive("/profile")}
@@ -222,7 +223,7 @@ function Sidebar() {
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/help-support"
+                  to={readPersistedPath("help-support", "/help-support")}
                   icon={circlehelp}
                   label="Help & Support"
                   active={isActive("/help-support")}

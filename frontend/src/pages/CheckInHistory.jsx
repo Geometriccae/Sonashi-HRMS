@@ -8,6 +8,7 @@ import ProfileAvatar from "../components/ProfileAvatar";
 import CheckInService from "../services/CheckInService";
 import config from "../config/config";
 import DeleteModal from "../components/delete-modal/DeleteModal";
+import { useUrlListPage } from "../hooks/usePersistedListPage";
 
 function CheckInHistory() {
   const [checkIns, setCheckIns] = useState([]);
@@ -15,7 +16,10 @@ function CheckInHistory() {
   const [error, setError] = useState(null);
   const [selectedCheckIn, setSelectedCheckIn] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useUrlListPage({
+    storageKey: "checkin-history",
+    basePath: "/checkin-history",
+  });
   const [totalPages, setTotalPages] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);

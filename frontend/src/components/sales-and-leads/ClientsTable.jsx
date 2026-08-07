@@ -10,6 +10,10 @@ import config from "../../config/config";
 import plus from "../../assets/dashboard/plus.svg";
 import ImportCsvModal from "./ImportCsvModal";
 import { useToast } from "../../context/ToastContext";
+import {
+  useUrlListPage,
+  useResetPageOnFilterChange,
+} from "../../hooks/usePersistedListPage";
 
 // SVG Components
 const UserPlusIcon = () => (
@@ -170,7 +174,10 @@ function ClientsTable() {
   const [selectedClientIds, setSelectedClientIds] = useState([]);
 
   // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage, resetToFirstPage] = useUrlListPage({
+    storageKey: "salesandleads",
+    basePath: "/salesandleads",
+  });
   const pageSize = 10;
 
   // Fetch clients data from backend (moved out so callers can reuse)
@@ -419,14 +426,24 @@ function ClientsTable() {
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
-  const currentPageSafe = Math.min(currentPage, totalPages);
+  const currentPageSafe =
+    filteredData.length === 0 ? currentPage : Math.min(currentPage, totalPages);
   const pagedData = filteredData.slice((currentPageSafe - 1) * pageSize, currentPageSafe * pageSize);
 
   const goPrev = () => setCurrentPage((p) => Math.max(1, p - 1));
   const goNext = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
 
-  // Reset to first page when filters/search change
-  useEffect(() => { setCurrentPage(1); }, [activeFilter, activeSearchField, searchTerm, clientsData.length]);
+  useEffect(() => {
+    if (filteredData.length === 0) return;
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [filteredData.length, currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset page only when filters actually change (Strict Mode safe)
+  useResetPageOnFilterChange(resetToFirstPage, {
+    activeFilter,
+    activeSearchField,
+    searchTerm,
+  });
 
   const triggerImport = () => {
     console.log("Import button clicked, opening modal");

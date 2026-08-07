@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { writePersistedPath } from "../hooks/usePersistedListPage";
 import styles from "./CompanyDocument.module.css";
 import Side from "./sidebar/Sidebar";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
@@ -44,6 +45,7 @@ const CompanyDocument = () => {
   };
 
   useEffect(() => {
+    writePersistedPath("company-document", "/company-document");
     fetchDocuments();
   }, []);
 

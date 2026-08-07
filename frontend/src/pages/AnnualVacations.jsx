@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Side from "./sidebar/Sidebar";
 import TopNavbar, { PageBody } from "../components/TopNavbar";
 import ModalPortal from "../components/ModalPortal";
@@ -19,6 +19,10 @@ import {
   buildYetToGoFromLeaves,
 } from "../utils/yetToGoHelpers";
 import { canUpdateVacationReturn } from "../utils/permissions";
+import { writePersistedPath } from "../hooks/usePersistedListPage";
+
+const TAB_STORAGE_KEY = "hrms:listPage:annual-vacations-tab";
+const VALID_TABS = new Set(["onVacation", "yetToGo", "returned"]);
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const fmt = (d) => {
@@ -163,12 +167,39 @@ function AnnualVacations() {
   const navigate = useNavigate();
   const userRole = localStorage.getItem("role");
   const canReturn = canUpdateVacationReturn(userRole);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [isLoading, setIsLoading]       = useState(true);
   const [employees, setEmployees]       = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [counts, setCounts]             = useState({ onVacation: 0, yetToGo: 0, returned: 0 });
-  const [activeTab, setActiveTab]       = useState(null);
+
+  // Resume last vacation tab via URL (?tab=) + session (same pattern as Leave/Team)
+  const activeTab = (() => {
+    const fromUrl = searchParams.get("tab");
+    if (fromUrl && VALID_TABS.has(fromUrl)) return fromUrl;
+    try {
+      const saved = sessionStorage.getItem(TAB_STORAGE_KEY);
+      if (saved && VALID_TABS.has(saved)) return saved;
+    } catch { /* ignore */ }
+    return null;
+  })();
+
+  const setActiveTab = useCallback((tab) => {
+    const next = tab && VALID_TABS.has(tab) ? tab : null;
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next) params.set("tab", next);
+      else params.delete("tab");
+      return params;
+    }, { replace: true });
+    try {
+      if (next) sessionStorage.setItem(TAB_STORAGE_KEY, next);
+      else sessionStorage.removeItem(TAB_STORAGE_KEY);
+    } catch { /* ignore */ }
+    const path = next ? `/annual-vacations?tab=${next}` : "/annual-vacations";
+    writePersistedPath("annual-vacations", path);
+  }, [setSearchParams]);
 
   // tabList = full unfiltered category list (rebuilt only when tab or raw data changes)
   const [tabList, setTabList]           = useState([]);
@@ -229,6 +260,31 @@ function AnnualVacations() {
   }, []); // eslint-disable-line
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Keep URL + sidebar path in sync when restoring tab from session
+  useEffect(() => {
+    if (!activeTab) {
+      writePersistedPath("annual-vacations", "/annual-vacations");
+      return;
+    }
+    try {
+      sessionStorage.setItem(TAB_STORAGE_KEY, activeTab);
+    } catch { /* ignore */ }
+    writePersistedPath("annual-vacations", `/annual-vacations?tab=${activeTab}`);
+    if (!searchParams.get("tab")) {
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        params.set("tab", activeTab);
+        return params;
+      }, { replace: true });
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Rebuild tab list when returning with a saved tab and data loaded
+  useEffect(() => {
+    if (!activeTab || !employees.length) return;
+    setTabList(buildTabList(activeTab, employees, leaveRequests));
+  }, [employees, leaveRequests]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Compute Counts (no filters applied to counts) ──────────────────────
   // Only the employee's vacationStatus field is authoritative.

@@ -37,6 +37,11 @@ import DateInput from "../DateInput";
 import { ACTIVE_OPTIONS } from "../../constants/employeeDropdownOptions";
 import { canUpdateVacationReturn } from "../../utils/permissions";
 import {
+  readPersistedPage,
+  writePersistedPage,
+  writePersistedPath,
+} from "../../hooks/usePersistedListPage";
+import {
   formatEmployeeStatusDisplay,
   employeeStatusTagColor,
   isWorkingEmployeeStatus,
@@ -167,6 +172,25 @@ function TeamMembersTable() {
     const query = searchParams.toString();
     return query ? `/teammanagement?${query}` : "/teammanagement";
   }, [searchParams]);
+
+  // Restore last page from session when URL has no page (e.g. sidebar click)
+  useEffect(() => {
+    if (searchParams.get("page")) return;
+    const saved = readPersistedPage("teammanagement", 1);
+    if (saved > 1) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("page", String(saved));
+        return next;
+      }, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep session in sync so Back / sidebar can resume this list position
+  useEffect(() => {
+    writePersistedPage("teammanagement", currentPage);
+    writePersistedPath("teammanagement", listReturnPath);
+  }, [currentPage, listReturnPath]);
 
   const patchSearchParams = (updates, { resetPage = false } = {}) => {
     setSearchParams((prev) => {
@@ -577,10 +601,12 @@ function TeamMembersTable() {
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
 
   useEffect(() => {
+    // Don't clamp while employees are still loading (empty list → totalPages=1 wipes restored page)
+    if (employees.length === 0) return;
     if (currentPage > totalPages) {
       patchSearchParams({ page: totalPages === 1 ? undefined : totalPages });
     }
-  }, [currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [employees.length, currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allFilteredSelected =
     filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
