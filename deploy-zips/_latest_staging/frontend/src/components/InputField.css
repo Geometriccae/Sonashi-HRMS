@@ -1,0 +1,113 @@
+.input-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.input-label-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.input-label {
+  color: var(--slate-600, #475569);
+  font: 600 0.8125rem/1.3 var(--font-sans, Inter, sans-serif);
+  letter-spacing: 0.01em;
+}
+
+.input-container {
+  display: flex;
+  width: 100%;
+  height: 2.75rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.875rem;
+  align-items: center;
+  border-radius: var(--radius-md, 0.75rem);
+  border: 1px solid var(--border-default, #e2e8f0);
+  box-sizing: border-box;
+  background-color: var(--bg-surface, #fff);
+  transition: border-color var(--transition, 0.2s ease), box-shadow var(--transition, 0.2s ease), background var(--transition, 0.2s ease);
+}
+
+.input-container:hover {
+  border-color: var(--brand-200, #7ab8ff);
+}
+
+.input-container:focus-within {
+  border-color: var(--brand-500, #0078e7);
+  box-shadow: var(--shadow-glow, 0 0 0 3px rgba(0, 120, 231, 0.15));
+  background: #fff;
+}
+
+.input-container.input-error {
+  border-color: var(--danger, #ef4444);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.input-field-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--slate-900, #0f172a);
+  font: 500 0.9375rem/1.5 var(--font-sans, Inter, sans-serif);
+}
+
+.input-field-input::placeholder {
+  color: var(--slate-400, #94a3b8);
+  font-weight: 400;
+}
+
+.dropdown-field {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.dropdown-select {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--slate-900, #0f172a);
+  font: 500 0.9375rem/1.5 var(--font-sans, Inter, sans-serif);
+  appearance: none;
+  cursor: pointer;
+}
+
+.dropdown-select option:first-child {
+  color: var(--slate-400, #94a3b8);
+}
+
+.dropdown-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+@media (max-width: 1536px) {
+  .input-field { width: 100%; }
+  .input-container { height: 2.5rem; min-height: 2.5rem; }
+}
+
+@media (max-width: 1440px) {
+  .input-field { width: 100%; }
+  .input-container { height: 2.5rem; min-height: 2.5rem; }
+}
+
+@media (max-width: 991px) {
+  .input-field { width: 100%; max-width: 450px; }
+}
+
+@media (max-width: 640px) {
+  .input-field { width: 100%; max-width: 450px; }
+}

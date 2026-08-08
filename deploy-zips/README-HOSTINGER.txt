@@ -1,18 +1,14 @@
-﻿Hostinger full project zips (supported structure)
-================================================
-Upload these in Deployments → Upload new files:
+﻿Sonashi HRMS - Hostinger deploy zips (latest)
+Generated: 2026-08-08 12:43
 
-1) hostinger-frontend.zip  (for hrms.sonashi.in)
-   - package.json is at ZIP ROOT (Create React App)
-   - Build command: npm run build
-   - Output directory: build
-   - Framework: React / Create React App (auto-detect)
+Files:
+  hostinger-frontend.zip  - React frontend (hrms.sonashi.in)
+  hostinger-backend.zip   - Node/Express API (backend.sonashi.in)
 
-2) hostinger-backend.zip   (for backend.sonashi.in)
-   - package.json + server.js at ZIP ROOT (Express/Node)
-   - Entry file: server.js
-   - Framework: Other or Express
-   - Start: npm start  (node server.js)
-   - Do NOT upload .env — keep Hostinger Environment Variables
+package.json is at ZIP ROOT for both.
 
-Excluded: node_modules, .env, build, uploads
+Excluded: node_modules, .env, build, logs, uploads
+
+Frontend: npm run build, output directory: build
+Backend: entry server.js, npm start
+Keep env vars in Hostinger panel (do not put .env in zip).
