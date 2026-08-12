@@ -28,7 +28,7 @@ const employeeSchema = new mongoose.Schema({
   passportExpiryDate: { type: Date, default: null },
   labourCardNumber: { type: String, default: "" },
   labourCardExpiryDate: { type: Date, default: null },
-  companyCode: { type: String, default: "0000000246878" },
+  companyCode: { type: String, default: "0000000172509" },
   visaExpiryDate: { type: Date, default: null },
   remarks: { type: String, default: "" },
 

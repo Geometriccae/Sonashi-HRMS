@@ -6,7 +6,7 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import "./LeaveForm.css"; // Reusing the shared clean modal styles
 
-function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequests }) {
+function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequests, onEditLeave, canEdit = false }) {
     const [employeeDetails, setEmployeeDetails] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const [expandedYear, setExpandedYear] = useState(null);
@@ -220,7 +220,33 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                                                                         <tr key={leave._id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>{leave.leaveType || 'Annual'}</td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>
-                                                                                {new Date(leave.startDate).toLocaleDateString('en-GB')} - {new Date(leave.endDate).toLocaleDateString('en-GB')}
+                                                                                {canEdit && onEditLeave ? (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            onEditLeave(leave);
+                                                                                        }}
+                                                                                        title="Click to edit this leave"
+                                                                                        style={{
+                                                                                            background: "none",
+                                                                                            border: "none",
+                                                                                            padding: 0,
+                                                                                            color: "#2563eb",
+                                                                                            fontWeight: 600,
+                                                                                            fontSize: "13px",
+                                                                                            cursor: "pointer",
+                                                                                            textDecoration: "underline",
+                                                                                            textAlign: "left",
+                                                                                        }}
+                                                                                    >
+                                                                                        {new Date(leave.startDate).toLocaleDateString('en-GB')} - {new Date(leave.endDate).toLocaleDateString('en-GB')}
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        {new Date(leave.startDate).toLocaleDateString('en-GB')} - {new Date(leave.endDate).toLocaleDateString('en-GB')}
+                                                                                    </>
+                                                                                )}
                                                                             </td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155", textAlign: "right" }}>
                                                                                 {Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days

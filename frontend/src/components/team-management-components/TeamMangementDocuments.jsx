@@ -245,7 +245,9 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole !== "viewer" && (userRole === "admin" || userRole === "hod");
 
-  const buildDocumentUrl = (path) => {
+  const buildDocumentUrl = (path, docId) => {
+    // Prefer API file route so server can resolve server/uploads vs ../uploads
+    if (docId) return DocumentsService.getFileUrl(docId);
     if (!path) return "";
     const cleaned = String(path).replace(
       /\/uploads\/employeedocuments\/employeedocuments\//g,
@@ -286,7 +288,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
       userRole: d.userRole || "",
       filetype: d.fileType || "",
       uploadedDate: d.uploadedDate ? new Date(d.uploadedDate).toLocaleDateString() : "",
-      filePath: buildDocumentUrl(d.filePath),
+      filePath: buildDocumentUrl(d.filePath, d._id),
     }));
 
   const handleReplace = async (docId, file, type) => {
@@ -302,7 +304,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
                 : (updated.fileType || "").includes("video") ? "video" : "document",
               filetype: updated.fileType || "",
               type: updated.type || d.type,
-              filePath: buildDocumentUrl(updated.filePath),
+              filePath: buildDocumentUrl(updated.filePath, updated._id || docId),
               uploadedDate: updated.uploadedDate
                 ? new Date(updated.uploadedDate).toLocaleDateString() : d.uploadedDate,
             }
@@ -330,7 +332,10 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
     if (!doc?.filePath) return;
     try {
       const response = await fetch(doc.filePath);
-      if (!response.ok) throw new Error("Download failed");
+      if (!response.ok) {
+        const msg = await response.text().catch(() => "");
+        throw new Error(msg || "Download failed");
+      }
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -341,8 +346,11 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
       link.remove();
       URL.revokeObjectURL(objectUrl);
     } catch (err) {
-      // Fallback: open in new tab so browser can save
-      window.open(doc.filePath, "_blank", "noopener,noreferrer");
+      alert(
+        err?.message?.includes("missing") || err?.message?.includes("not found")
+          ? `File missing on server for "${doc.fileName || "document"}". Please re-upload this document.`
+          : `Unable to open "${doc.fileName || "document"}". Please re-upload if the file is missing.`
+      );
     }
   };
 
@@ -374,18 +382,33 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
       <section className={styles["documents-table-section"]}>
         <DataTable
           data={documents}
-          onOpen={(item) => {
+          onOpen={async (item) => {
             if (!item?.filePath) return;
             const isImage =
               String(item.filetype || "").toLowerCase().startsWith("image/") ||
               /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(item.fileName || "");
-            if (isImage) {
-              setPreviewDoc(item);
-              setSetTypeValue(item.type || "Extra");
-              setSetTypeMsg("");
-              return;
+            try {
+              const response = await fetch(item.filePath, { method: "GET" });
+              if (!response.ok) {
+                const msg = await response.text().catch(() => "");
+                throw new Error(msg || "File missing");
+              }
+              if (isImage) {
+                setPreviewDoc(item);
+                setSetTypeValue(item.type || "Extra");
+                setSetTypeMsg("");
+                return;
+              }
+              // Open blob URL so PDFs still work when API route is used
+              const blob = await response.blob();
+              const objectUrl = URL.createObjectURL(blob);
+              window.open(objectUrl, "_blank", "noopener,noreferrer");
+              setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+            } catch (err) {
+              alert(
+                `File missing on server for "${item.fileName || "document"}".\n\nThe upload record exists, but the file is not on disk.\nPlease re-upload this document.\n\nTip: when redeploying backend, keep the server "uploads" folder.`
+              );
             }
-            window.open(item.filePath, "_blank", "noopener,noreferrer");
           }}
           onEdit={isAdmin ? (item) => setEditItem(item) : undefined}
           onDelete={isAdmin ? async (docId) => {

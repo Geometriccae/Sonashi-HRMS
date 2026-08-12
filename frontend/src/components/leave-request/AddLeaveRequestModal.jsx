@@ -16,7 +16,7 @@ import OptionService from "../../services/OptionService";
 import { isWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
 import "./LeaveForm.css";
 
-function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null }) {
+function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null, onEditLeave }) {
     const { showToast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [employees, setEmployees] = useState([]);
@@ -761,7 +761,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                             {selectedYearDetails.leaves.length > 0 ? (
                                                                                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                                                                     {selectedYearDetails.leaves.map((req, idx) => (
-                                                                                        <div key={idx} style={{ 
+                                                                                        <div key={req._id || idx} style={{ 
                                                                                             background: "#fff", 
                                                                                             padding: "12px", 
                                                                                             borderRadius: "8px", 
@@ -771,9 +771,30 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                                             alignItems: "center"
                                                                                         }}>
                                                                                             <div>
-                                                                                                <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
-                                                                                                    {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
-                                                                                                </div>
+                                                                                                {onEditLeave ? (
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => onEditLeave(req)}
+                                                                                                        title="Click to edit this leave"
+                                                                                                        style={{
+                                                                                                            fontSize: "13px",
+                                                                                                            fontWeight: "600",
+                                                                                                            color: "#2563eb",
+                                                                                                            background: "none",
+                                                                                                            border: "none",
+                                                                                                            padding: 0,
+                                                                                                            cursor: "pointer",
+                                                                                                            textDecoration: "underline",
+                                                                                                            textAlign: "left",
+                                                                                                        }}
+                                                                                                    >
+                                                                                                        {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
+                                                                                                    </button>
+                                                                                                ) : (
+                                                                                                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                                                                                                        {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
+                                                                                                    </div>
+                                                                                                )}
                                                                                                 <div style={{ fontSize: "11px", color: "#64748b" }}>
                                                                                                     {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
                                                                                                 </div>

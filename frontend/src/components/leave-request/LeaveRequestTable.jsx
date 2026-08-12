@@ -163,6 +163,12 @@ function LeaveRequestTable({ onUpdate }) {
         setIsEditModalOpen(true);
     };
 
+    const handleEditFromOverview = (leave) => {
+        setIsFormModalOpen(false);
+        setSelectedRequest(leave);
+        setIsEditModalOpen(true);
+    };
+
     const handleDelete = (request) => {
         setSelectedRequest(request);
         setIsDeleteModalOpen(true);
@@ -818,7 +824,7 @@ function LeaveRequestTable({ onUpdate }) {
                                                     <ViewIcon />
                                                 </button>
 
-                                                {canEditLeaveRequests && isHR && (
+                                                {canEditLeaveRequests && (
                                                     <>
                                                         <button className={styles.iconButton} onClick={() => handleEdit(req)} title="Edit">
                                                             <EditIcon />
@@ -935,6 +941,10 @@ function LeaveRequestTable({ onUpdate }) {
                 onClose={() => setIsAddModalOpen(false)}
                 onSubmit={fetchLeaveRequests}
                 allLeaveRequests={leaveRequests}
+                onEditLeave={(leave) => {
+                    setIsAddModalOpen(false);
+                    handleEdit(leave);
+                }}
             />
 
             <EditLeaveRequestModal
@@ -958,6 +968,8 @@ function LeaveRequestTable({ onUpdate }) {
                 onClose={() => setIsFormModalOpen(false)}
                 leaveRequest={selectedRequest}
                 allLeaveRequests={leaveRequests}
+                canEdit={canEditLeaveRequests}
+                onEditLeave={handleEditFromOverview}
             />
 
             <ImportLeaveExcelModal

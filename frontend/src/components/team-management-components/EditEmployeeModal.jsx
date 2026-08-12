@@ -151,7 +151,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     return null;
   };
 
-  const buildDocumentUrl = (path) => {
+  const buildDocumentUrl = (path, docId) => {
+    if (docId) return DocumentsService.getFileUrl(docId);
     if (!path) return "";
     const cleaned = String(path).replace(
       /\/uploads\/employeedocuments\/employeedocuments\//g,
@@ -285,7 +286,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       for (const doc of ordered) {
         const key = mapStoredTypeToField(doc.type);
         if (!key || typed[key]) continue;
-        typed[key] = { ...doc, filePath: buildDocumentUrl(doc.filePath) };
+        typed[key] = { ...doc, filePath: buildDocumentUrl(doc.filePath, doc._id) };
       }
       setExistingEmployeeDocuments(typed);
     } catch (err) {

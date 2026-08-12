@@ -103,8 +103,14 @@ export const findLeaveForEmployee = (emp, leaveList, empList, tabKey) => {
   );
   if (candidates.length === 0) return null;
 
+  // Yet to go: any leave type. Other tabs prefer Vacation when present.
   const vacationLeaves = candidates.filter((req) => req.leaveType === "Vacation");
-  const pool = vacationLeaves.length > 0 ? vacationLeaves : candidates;
+  const pool =
+    tabKey === "yetToGo"
+      ? candidates
+      : vacationLeaves.length > 0
+        ? vacationLeaves
+        : candidates;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -161,8 +167,8 @@ const getEmployeeDedupeKey = (req, empList) => {
 };
 
 /**
- * All employees yet to go on vacation — no 60-day window.
- * Includes approved/pending vacation leave with future start dates,
+ * All employees yet to go — no 60-day window.
+ * Includes pending/approved leave of any type with future start dates,
  * plus employees marked Vacation Pending.
  */
 export const buildYetToGoFromLeaves = (empList, leaveList) => {
@@ -173,11 +179,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
   const safeLeaveList = Array.isArray(leaveList) ? leaveList : [];
 
   const upcoming = safeLeaveList
-    .filter(
-      (req) =>
-        YET_TO_GO_LEAVE_STATUSES.includes(req.status) &&
-        req.leaveType === "Vacation"
-    )
+    .filter((req) => YET_TO_GO_LEAVE_STATUSES.includes(req.status))
     .filter((req) => {
       const start = toDayStart(req.startDate);
       return start && start >= today;

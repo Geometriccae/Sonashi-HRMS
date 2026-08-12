@@ -14,6 +14,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 
 console.log('=== ENVIRONMENT VARIABLES ===');
@@ -239,10 +240,22 @@ app.use(cors({
 // ====== MIDDLEWARE ======
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads/employeeDocuments', express.static(path.join(__dirname, '../uploads/employeeDocuments')));
-app.use('/uploads/employeedocuments', express.static(path.join(__dirname, '../uploads/employeedocuments')));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use('/Uploades', express.static(path.join(__dirname, '../Uploades')));
+// Serve uploads from server/uploads (preferred) and monorepo ../uploads (legacy)
+const { getUploadsRoot } = require('./utils/uploadsPath');
+const uploadsRoot = getUploadsRoot();
+const legacyUploadsRoot = path.join(__dirname, '../uploads');
+const legacyUploadesRoot = path.join(__dirname, '../Uploades');
+app.use('/uploads/employeeDocuments', express.static(path.join(uploadsRoot, 'employeedocuments')));
+app.use('/uploads/employeedocuments', express.static(path.join(uploadsRoot, 'employeedocuments')));
+app.use('/uploads', express.static(uploadsRoot));
+if (legacyUploadsRoot !== uploadsRoot && fs.existsSync(legacyUploadsRoot)) {
+  app.use('/uploads/employeeDocuments', express.static(path.join(legacyUploadsRoot, 'employeeDocuments')));
+  app.use('/uploads/employeedocuments', express.static(path.join(legacyUploadsRoot, 'employeedocuments')));
+  app.use('/uploads', express.static(legacyUploadsRoot));
+}
+if (fs.existsSync(legacyUploadesRoot)) {
+  app.use('/Uploades', express.static(legacyUploadesRoot));
+}
 
 /* health check moved to top */
 

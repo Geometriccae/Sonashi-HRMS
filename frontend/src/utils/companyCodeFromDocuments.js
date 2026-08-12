@@ -6,6 +6,8 @@
 import {
   DEFAULT_COMPANY_CODE,
   DEFAULT_COMPANY_NAME,
+  LEGACY_COMPANY_CODE,
+  LEGACY_COMPANY_NAME,
 } from "../constants/employeeDropdownOptions";
 
 export function resolveCompanyCodeFromDocuments(companyName, documents = []) {
@@ -17,6 +19,7 @@ export function resolveCompanyCodeFromDocuments(companyName, documents = []) {
   );
   if (matches.length === 0) {
     if (key === DEFAULT_COMPANY_NAME.toLowerCase()) return DEFAULT_COMPANY_CODE;
+    if (key === LEGACY_COMPANY_NAME.toLowerCase()) return LEGACY_COMPANY_CODE;
     return "";
   }
 
@@ -31,6 +34,7 @@ export function resolveCompanyCodeFromDocuments(companyName, documents = []) {
 
   if (withCode.length > 0) return String(withCode[0].docNumber).trim();
   if (key === DEFAULT_COMPANY_NAME.toLowerCase()) return DEFAULT_COMPANY_CODE;
+  if (key === LEGACY_COMPANY_NAME.toLowerCase()) return LEGACY_COMPANY_CODE;
   return "";
 }
 
@@ -42,6 +46,10 @@ export function buildCompanyOptionsFromDocuments(documents = [], currentCompany 
   byName.set(DEFAULT_COMPANY_NAME.toLowerCase(), {
     name: DEFAULT_COMPANY_NAME,
     code: DEFAULT_COMPANY_CODE,
+  });
+  byName.set(LEGACY_COMPANY_NAME.toLowerCase(), {
+    name: LEGACY_COMPANY_NAME,
+    code: LEGACY_COMPANY_CODE,
   });
 
   (documents || []).forEach((d) => {

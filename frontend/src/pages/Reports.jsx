@@ -22,6 +22,11 @@ import {
   downloadLeaveMasterTrackerWorkbook,
 } from "../utils/leaveMasterTrackerExport";
 import {
+  buildStaffSalaryWorkbook,
+  downloadStaffSalaryWorkbook,
+  getSalaryReportDays,
+} from "../utils/staffSalaryExport";
+import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../utils/employeeStatusDisplay";
@@ -1130,11 +1135,37 @@ function Reports() {
       }
       return;
     }
+
+    // Excel: Staff Salary report layout (department sections + /30*days + SUM + yearly increments)
+    if (format === "Excel") {
+      const statusForApi = employeeStatus === "InActive" ? "InActive" : "Active";
+      let empList = await fetchFullEmployees(statusForApi);
+      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
+      if (employeeStatus === "InActive") {
+        empList = empList.filter(isInactiveEmployee);
+      } else {
+        empList = empList.filter(isActiveEmployee);
+      }
+      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
+      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
+      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
+      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
+      empList = filterByExperience(empList);
+
+      if (!empList.length) {
+        alert("No data found for the selected filters.");
+        return;
+      }
+
+      const days = getSalaryReportDays(filterMonth, filterYear);
+      const wb = buildStaffSalaryWorkbook(empList, { days, tillYear: y });
+      await downloadStaffSalaryWorkbook(wb, "Staff_Salary_Report", saveAs);
+      return;
+    }
+
     const exportData = await fetchReportData("Salary report");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
-    if (format === "Excel") {
-      exportToExcel(exportData, "Salary_Report");
-    } else if (format === "PDF") {
+    if (format === "PDF") {
       exportToPDF(exportData, "Salary_Report");
     }
   };

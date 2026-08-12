@@ -38,13 +38,47 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
+    // Which leave record the form is editing (click a date in history to switch)
+    const [activeLeave, setActiveLeave] = useState(leaveRequest || null);
 
     const currentRole = String(userRole || "").toLowerCase();
     const isAdmin = currentRole === "admin";
     const isHR = currentRole === "hr";
-    const isManager = isAdmin || isHR;
-    const isEditable = isManager || leaveRequest?.status === "Pending";
-    const isPastLeaveRequest = leaveRequest?.isPastLeave || (leaveRequest?.status === 'Approved' && leaveRequest?.startDate && new Date(leaveRequest.startDate) < new Date());
+    const isHOD = currentRole === "hod";
+    const isManager = isAdmin || isHR || isHOD;
+    const targetLeave = activeLeave || leaveRequest;
+    const isEditable = isManager || targetLeave?.status === "Pending";
+    const isPastLeaveRequest = targetLeave?.isPastLeave || (targetLeave?.status === 'Approved' && targetLeave?.startDate && new Date(targetLeave.startDate) < new Date());
+
+    const populateFormFromLeave = (req) => {
+        if (!req) return;
+        const empId = req.employee?._id || req.employee || req.employeeId || req.employeeName || "";
+        const empName = req.employeeName || req.employee?.employeeName || req.employee?.username || req.employee?.name || "";
+        setFormData({
+            employeeId: empId,
+            employeeName: empName,
+            company: req.company || "Sonashi",
+            department: req.department || "",
+            reportingManager: req.reportingManager || "",
+            leaveType: req.leaveType || "Personal Leave",
+            startDate: req.startDate ? new Date(req.startDate).toISOString().split('T')[0] : "",
+            endDate: req.endDate ? new Date(req.endDate).toISOString().split('T')[0] : "",
+            reason: req.reason || "",
+            status: req.status || "Pending",
+            requestAirfare: req.requestAirfare || false,
+            visaExpiryDate: (req.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate)
+                ? new Date(req.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate).toISOString().split('T')[0]
+                : ""
+        });
+        setError("");
+    };
+
+    const handleSelectLeaveFromHistory = (req) => {
+        if (!req?._id) return;
+        setActiveLeave(req);
+        populateFormFromLeave(req);
+        showToast("Loaded leave for editing — update dates and save.", "success");
+    };
 
     const handleDateSelect = (date) => {
         if (error) setError("");
@@ -57,7 +91,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                        const fName = String(formData.employeeName || "").toLowerCase().trim();
                                        return eName === fName && fName !== "";
                                    })) || 
-                                   leaveRequest?.employee;
+                                   targetLeave?.employee;
 
         if (currentSelectedEmp && currentSelectedEmp.doj) {
             const joiningDate = new Date(currentSelectedEmp.doj);
@@ -80,7 +114,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const role = localStorage.getItem("role") || "";
         setUserRole(role);
         if (isOpen) {
-            if (role.toLowerCase() === "admin" || role.toLowerCase() === "hr") {
+            if (role.toLowerCase() === "admin" || role.toLowerCase() === "hr" || role.toLowerCase() === "hod") {
                 fetchEmployees();
             }
             fetchDepartmentOptions();
@@ -132,6 +166,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     useEffect(() => {
         if (leaveRequest) {
+            setActiveLeave(leaveRequest);
             const empId = leaveRequest.employee?._id || leaveRequest.employee || leaveRequest.employeeId || leaveRequest.employeeName || "";
             const empName = leaveRequest.employeeName || leaveRequest.employee?.employeeName || leaveRequest.employee?.username || leaveRequest.employee?.name || "";
             
@@ -206,7 +241,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             delete payload.employeeId;
         }
         // Field edits must not re-submit unchanged status (avoids approval/self-approve guards)
-        if (!leaveRequest?.status || payload.status === leaveRequest.status) {
+        if (!targetLeave?.status || payload.status === targetLeave.status) {
             delete payload.status;
         }
 
@@ -221,7 +256,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                        const fName = String(formData.employeeName || "").toLowerCase().trim();
                                        return eName === fName && fName !== "";
                                    })) || 
-                                   leaveRequest?.employee;
+                                   targetLeave?.employee;
 
         if (currentSelectedEmp && currentSelectedEmp.doj) {
             const joiningDate = new Date(currentSelectedEmp.doj);
@@ -235,7 +270,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         setError("");
         setIsSubmitting(true);
         try {
-            const result = await leaveRequestService.updateLeaveRequest(leaveRequest._id, payload);
+            const leaveId = targetLeave?._id || leaveRequest?._id;
+            const result = await leaveRequestService.updateLeaveRequest(leaveId, payload);
             showToast("Leave request updated successfully.", "success");
             onSubmit(result);
             onClose();
@@ -292,7 +328,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                             const fName = String(formData.employeeName || "").toLowerCase().trim();
                             return eName === fName && fName !== "";
                         })) || 
-                        leaveRequest?.employee;
+                        targetLeave?.employee;
                         
     const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
@@ -749,20 +785,37 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                     </div>
                                                                     {selectedYearDetails.leaves.length > 0 ? (
                                                                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                                                            {selectedYearDetails.leaves.map((req, idx) => (
-                                                                                <div key={idx} style={{ 
-                                                                                    background: "#fff", 
+                                                                            {selectedYearDetails.leaves.map((req, idx) => {
+                                                                                const isActiveRow = targetLeave?._id && req._id && String(targetLeave._id) === String(req._id);
+                                                                                return (
+                                                                                <div key={req._id || idx} style={{ 
+                                                                                    background: isActiveRow ? "#eff6ff" : "#fff", 
                                                                                     padding: "12px", 
                                                                                     borderRadius: "8px", 
-                                                                                    border: "1px solid #e2e8f0",
+                                                                                    border: isActiveRow ? "1px solid #93c5fd" : "1px solid #e2e8f0",
                                                                                     display: "flex",
                                                                                     justifyContent: "space-between",
                                                                                     alignItems: "center"
                                                                                 }}>
                                                                                     <div>
-                                                                                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleSelectLeaveFromHistory(req)}
+                                                                                            title="Click to edit this leave"
+                                                                                            style={{
+                                                                                                fontSize: "13px",
+                                                                                                fontWeight: "600",
+                                                                                                color: "#2563eb",
+                                                                                                background: "none",
+                                                                                                border: "none",
+                                                                                                padding: 0,
+                                                                                                cursor: "pointer",
+                                                                                                textDecoration: "underline",
+                                                                                                textAlign: "left",
+                                                                                            }}
+                                                                                        >
                                                                                             {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
-                                                                                        </div>
+                                                                                        </button>
                                                                                         <div style={{ fontSize: "11px", color: "#64748b" }}>
                                                                                             {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
                                                                                         </div>
@@ -778,7 +831,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
-                                                                            ))}
+                                                                                );
+                                                                            })}
                                                                         </div>
                                                                     ) : (
                                                                         <div style={{ fontSize: "13px", color: "#94a3b8", fontStyle: "italic" }}>No approved leaves found for this year.</div>

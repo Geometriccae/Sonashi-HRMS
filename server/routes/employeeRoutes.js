@@ -60,7 +60,7 @@ async function getCompanyCodeMap() {
  */
 function applyLiveCompanyCodes(employees, codeMap) {
   if (!Array.isArray(employees)) return employees;
-  const DEFAULT_COMPANY_CODE = '0000000246878';
+  const DEFAULT_COMPANY_CODE = '0000000172509';
   return employees.map((e) => {
     const stored = String(e.companyCode || '').trim();
     if (stored) return e;
@@ -694,10 +694,10 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
     ensureEmployeeEmailForDb(employeeData, `c${Date.now().toString(36)}`);
 
     if (!String(employeeData.companyCode || '').trim()) {
-      employeeData.companyCode = '0000000246878';
+      employeeData.companyCode = '0000000172509';
     }
     if (!String(employeeData.office || '').trim()) {
-      employeeData.office = 'JOINT VEN TRADING CO (L.L.C) (BR)';
+      employeeData.office = 'JOINT VEN TRADING CO LLC';
     }
 
     const existingEmployee = await Employee.findOne({
@@ -843,7 +843,7 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'companyCode')
       && !String(updateData.companyCode || '').trim()) {
-      updateData.companyCode = '0000000246878';
+      updateData.companyCode = '0000000172509';
     }
 
     // Use $set so nested salaryDetails / bank fields merge correctly on update

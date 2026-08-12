@@ -11,8 +11,13 @@ import styles from "./AnnualVacations.module.css";
 import {
   FaSearch, FaTimes, FaEdit, FaUndoAlt,
   FaFilter, FaSyncAlt, FaChevronDown, FaChevronUp,
+  FaFileExcel, FaFilePdf,
 } from "react-icons/fa";
 import { MdFlightTakeoff, MdBeachAccess, MdFlightLand } from "react-icons/md";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   computeExperienceYears,
   findLeaveForEmployee,
@@ -32,9 +37,15 @@ const fmt = (d) => {
 
 const VACATION_TABS = [
   { key: "onVacation", label: "On Vacation",  icon: <MdBeachAccess />,   color: "#3b82f6", bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", statusVal: "On Vacation",      subLabel: "Currently away",          description: "Employees currently on vacation" },
-  { key: "yetToGo",   label: "Yet to Go",     icon: <MdFlightTakeoff />, color: "#8b5cf6", bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", statusVal: "Vacation Pending",  subLabel: "Approved & pending", description: "Employees with approved or pending vacation leave who are yet to travel" },
+  { key: "yetToGo",   label: "Yet to Go",     icon: <MdFlightTakeoff />, color: "#8b5cf6", bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", statusVal: "Vacation Pending",  subLabel: "Approved & pending", description: "Employees with approved or pending leave (any type) who are yet to travel" },
   { key: "returned",  label: "Returned Back", icon: <MdFlightLand />,    color: "#10b981", bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", statusVal: "Vacation Approved", subLabel: "Last 1 month",            description: "Employees who returned from vacation in the last month" },
 ];
+
+const STATUS_LABEL = {
+  "On Vacation": "On Vacation",
+  "Vacation Pending": "Yet to Go",
+  "Vacation Approved": "Returned Back",
+};
 
 const STATUS_CONFIG = {
   "Onsite":            { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", label: "Onsite" },
@@ -104,6 +115,58 @@ const getNavEmployeeId = (item) => {
 };
 
 const displayLastWorkingDay = (item) => fmt(item.lastWorkingDay || item.startDate);
+
+const buildVacationExportRows = (list, tabKey) =>
+  (list || []).map((item, idx) => {
+    const vs =
+      item.vacationStatus ||
+      (tabKey === "onVacation"
+        ? "On Vacation"
+        : tabKey === "yetToGo"
+          ? "Vacation Pending"
+          : "Vacation Approved");
+    const expYears =
+      item.experienceYears ??
+      computeExperienceYears(item.doj, item.totalYearsExperience);
+
+    const base = {
+      "#": idx + 1,
+      Employee: item.employeeName || item.name || "",
+      ID: item.employeeId || "",
+      Department: item.department || "",
+      Role: item.role || "",
+      Office: item.office || "",
+      Country: item.nationality || "",
+      DOJ: fmt(item.doj),
+      "Exp (yrs)":
+        expYears != null && !Number.isNaN(Number(expYears))
+          ? Number(expYears).toFixed(1)
+          : "",
+      Status: STATUS_LABEL[vs] || vs || "",
+    };
+
+    if (tabKey === "onVacation") {
+      return {
+        ...base,
+        "Leave End Date": fmt(item.endDate),
+        "Travelling Date": fmt(item.travellingDate),
+        "Last Working Day": fmt(item.lastWorkingDay),
+      };
+    }
+    if (tabKey === "yetToGo") {
+      return {
+        ...base,
+        "Last Working Day": displayLastWorkingDay(item),
+        "Travelling Date": fmt(item.travellingDate),
+        "Leave End Date": fmt(item.endDate),
+      };
+    }
+    return {
+      ...base,
+      "Return Date": fmt(item.returnDate),
+      "First Working Day": fmt(item.firstWorkingDay),
+    };
+  });
 
 const getDateConfigForStatus = (status) => {
   const configs = {
@@ -425,6 +488,69 @@ function AnnualVacations() {
     setPendingFilters(updated);
   };
 
+  const handleExportExcel = () => {
+    if (!activeTab || filteredList.length === 0) {
+      alert("No records to export for this category.");
+      return;
+    }
+    const tab = getTabConfig(activeTab);
+    const rows = buildVacationExportRows(filteredList, activeTab);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
+    XLSX.utils.book_append_sheet(wb, ws, (tab?.label || "Report").slice(0, 31));
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+    });
+    const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
+    saveAs(blob, `Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
+  };
+
+  const handleExportPdf = () => {
+    if (!activeTab || filteredList.length === 0) {
+      alert("No records to export for this category.");
+      return;
+    }
+    const tab = getTabConfig(activeTab);
+    const rows = buildVacationExportRows(filteredList, activeTab);
+    const headers = Object.keys(rows[0]);
+    const body = rows.map((row) => headers.map((h) => (row[h] != null ? String(row[h]) : "")));
+
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Annual Vacations — ${tab?.label || activeTab}`, 14, 15);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      `Generated on: ${new Date().toLocaleDateString("en-GB")} | Total Records: ${rows.length}`,
+      14,
+      21
+    );
+
+    autoTable(doc, {
+      startY: 26,
+      head: [headers],
+      body,
+      theme: "grid",
+      styles: { fontSize: 7.5, cellPadding: 2.5, overflow: "linebreak", valign: "middle" },
+      headStyles: {
+        fillColor: [22, 163, 74],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8,
+      },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 25, bottom: 15, left: 10, right: 10 },
+    });
+
+    const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
+    doc.save(`Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
   const activePills = useMemo(() => {
     const pills = [];
     if (filters.department)                        pills.push({ key:"department", label:`Dept: ${filters.department}` });
@@ -743,6 +869,24 @@ function AnnualVacations() {
                             className={styles.searchInput} />
                           {searchQuery && <button className={styles.clearSearch} onClick={() => setSearchQuery("")}><FaTimes /></button>}
                         </div>
+                        <button
+                          type="button"
+                          className={styles.exportExcelBtn}
+                          onClick={handleExportExcel}
+                          disabled={filteredList.length === 0}
+                          title="Download Excel for this category"
+                        >
+                          <FaFileExcel /> Excel
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.exportPdfBtn}
+                          onClick={handleExportPdf}
+                          disabled={filteredList.length === 0}
+                          title="Download PDF for this category"
+                        >
+                          <FaFilePdf /> PDF
+                        </button>
                         <button className={styles.closeDetailBtn} onClick={() => setActiveTab(null)}>
                           <FaTimes /> Close
                         </button>

@@ -78,14 +78,11 @@ async function resolveEmployeeForLeave(leaveRequest) {
 
 /**
  * After final leave approval: mark employee as Vacation Pending (Yet to go)
- * when Vacation leave has not started yet. Does not override On Vacation.
+ * for any leave type that has not started yet. Does not override On Vacation.
  */
 async function syncYetToGoVacationStatus(leaveRequest) {
     try {
         if (!leaveRequest || leaveRequest.status !== 'Approved') return;
-
-        // Match frontend Yet-to-go leave filter (Vacation only)
-        if (leaveRequest.leaveType !== 'Vacation') return;
 
         const start = leaveRequest.startDate ? new Date(leaveRequest.startDate) : null;
         if (!start || Number.isNaN(start.getTime())) return;
@@ -106,7 +103,7 @@ async function syncYetToGoVacationStatus(leaveRequest) {
 
         if (emp.vacationStatus !== 'Vacation Pending') {
             await Employee.findByIdAndUpdate(emp._id, { vacationStatus: 'Vacation Pending' });
-            console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id}`);
+            console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id} (${leaveRequest.leaveType || 'leave'})`);
         }
 
         // Ensure Dashboard / Team list show updated Vacation Status immediately
