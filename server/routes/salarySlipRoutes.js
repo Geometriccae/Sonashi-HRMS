@@ -182,17 +182,19 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
 
                 const email = emp.emailId.trim().toLowerCase();
                 
-                // Prepare slip data from employee records
+                // Prepare slip data from this employee's salaryDetails only (no invented defaults).
+                // Keep 0 as 0 — do not treat empty rent as basic/2.
                 const salary = emp.salaryDetails || {};
-                const basic = parseFloat(salary.basicSalary) || 0;
-                
-                // Auto-calculate logic if fields are 0/empty
-                const houseRent = parseFloat(salary.houseRent) || (basic / 2);
-                const travelExp = parseFloat(salary.travelExp) || 0;
-                // If other is not set, use (Total Allowance - HouseRent - Travel) if positive
-                const other = parseFloat(salary.other) || Math.max(0, (parseFloat(salary.totalAllowance) || 0) - houseRent - travelExp);
-                const deduction = parseFloat(salary.deduction) || 0;
-                
+                const toAmt = (v) => {
+                    const n = parseFloat(v);
+                    return Number.isFinite(n) ? n : 0;
+                };
+                const basic = toAmt(salary.basicSalary);
+                const houseRent = toAmt(salary.houseRent);
+                const travelExp = toAmt(salary.travelExp);
+                const other = toAmt(salary.other);
+                const deduction = toAmt(salary.deduction);
+
                 const grossSalary = basic + houseRent + travelExp + other;
                 const netSalary = grossSalary - deduction;
 

@@ -20,7 +20,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                 const emp = leaveRequest.employee;
                 const empIdToFetch = emp?._id || emp;
                 
-                if (empIdToFetch && String(empIdToFetch).length === 24) {
+                if (empIdToFetch && /^[a-fA-F0-9]{24}$/.test(String(empIdToFetch))) {
                     const data = await EmployeeService.getEmployee(empIdToFetch);
                     if (data) setEmployeeDetails(data);
                 } else if (leaveRequest.employeeName) {

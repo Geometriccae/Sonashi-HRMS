@@ -31,8 +31,13 @@ export function buildYearList({
 export function yearsFromLeaveRequests(leaveRequests = []) {
   return (leaveRequests || [])
     .map((req) => {
-      const d = new Date(req.startDate || req.appliedOn || req.createdAt);
-      return Number.isNaN(d.getTime()) ? null : d.getFullYear();
+      const dateVal = req.startDate || req.appliedOn || req.createdAt;
+      if (!dateVal) return null;
+      if (typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
+        return Number(dateVal.slice(0, 4));
+      }
+      const d = new Date(dateVal);
+      return Number.isNaN(d.getTime()) ? null : d.getUTCFullYear();
     })
     .filter((y) => y != null);
 }

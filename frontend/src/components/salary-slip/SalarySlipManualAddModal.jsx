@@ -76,13 +76,17 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
         const employeeId = e.target.value;
         const emp = employees.find(emp => emp._id === employeeId);
         if (emp) {
-            // Priority: Use the detailed fields if they exist in salaryDetails
-            // Otherwise, fallback to the old calculation logic (AED label only)
-            const basic = emp.salaryDetails?.basicSalary || 0;
-            const houseRent = emp.salaryDetails?.houseRent !== undefined ? emp.salaryDetails.houseRent : (basic / 2);
-            const travelExp = emp.salaryDetails?.travelExp || 0;
-            const other = emp.salaryDetails?.other !== undefined ? emp.salaryDetails.other : Math.max(0, (emp.salaryDetails?.allowance || 0) - houseRent);
-            const deduction = emp.salaryDetails?.deduction || 0;
+            // Copy amounts from this employee's salaryDetails only (0 stays 0).
+            const toAmt = (v) => {
+                const n = Number(v);
+                return Number.isFinite(n) ? n : 0;
+            };
+            const sal = emp.salaryDetails || {};
+            const basic = toAmt(sal.basicSalary);
+            const houseRent = toAmt(sal.houseRent);
+            const travelExp = toAmt(sal.travelExp);
+            const other = toAmt(sal.other);
+            const deduction = toAmt(sal.deduction);
 
             const grossSalary = basic + houseRent + travelExp + other;
             const netSalary = grossSalary - deduction;

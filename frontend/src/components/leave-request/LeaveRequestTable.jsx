@@ -110,7 +110,8 @@ function LeaveRequestTable({ onUpdate }) {
     const [endDate, setEndDate] = useState("");
     const [selectedManager, setSelectedManager] = useState("All");
     const [selectedMonth, setSelectedMonth] = useState("All");
-    const [selectedYear, setSelectedYear] = useState("All");
+    // Default current year so Leave Management shows that year's records (change dropdown for 2022–2025 etc.)
+    const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
     const [departments, setDepartments] = useState([]);
     const [managers, setManagers] = useState([]);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
@@ -308,6 +309,17 @@ function LeaveRequestTable({ onUpdate }) {
         ...uniqueYears.map(year => ({ value: String(year), label: String(year) }))
     ];
 
+    /** Calendar year of leave start — matches Duration year display (UTC / ISO date). */
+    const getLeaveStartYear = (dateVal) => {
+        if (!dateVal) return null;
+        if (typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
+            return Number(dateVal.slice(0, 4));
+        }
+        const d = new Date(dateVal);
+        if (Number.isNaN(d.getTime())) return null;
+        return d.getUTCFullYear();
+    };
+
     const monthOptions = [
         { value: "All", label: "Month" },
         { value: "0", label: "January" },
@@ -362,14 +374,16 @@ function LeaveRequestTable({ onUpdate }) {
 
         // Month Filter
         if (selectedMonth !== "All") {
-            const reqMonth = new Date(req.startDate).getUTCMonth(); // 0 to 11
-            if (reqMonth !== parseInt(selectedMonth)) return false;
+            const d = new Date(req.startDate);
+            if (Number.isNaN(d.getTime())) return false;
+            const reqMonth = d.getUTCMonth(); // 0 to 11
+            if (reqMonth !== parseInt(selectedMonth, 10)) return false;
         }
 
-        // Year Filter
+        // Year Filter — leave start year must match selected Year
         if (selectedYear !== "All") {
-            const reqYear = new Date(req.startDate).getUTCFullYear();
-            if (reqYear !== parseInt(selectedYear)) return false;
+            const reqYear = getLeaveStartYear(req.startDate);
+            if (reqYear == null || reqYear !== parseInt(selectedYear, 10)) return false;
         }
 
         return true;
@@ -528,6 +542,39 @@ function LeaveRequestTable({ onUpdate }) {
 
             <div className={styles.controls}>
                 <div className={styles.filterBar}>
+                    <Select
+                        placeholder="Year"
+                        options={yearOptions}
+                        value={
+                            yearOptions.find((opt) => opt.value === selectedYear) || {
+                                value: selectedYear,
+                                label: selectedYear === "All" ? "All Years" : String(selectedYear),
+                            }
+                        }
+                        onChange={(opt) => setSelectedYear(opt?.value || String(new Date().getFullYear()))}
+                        styles={{
+                            control: (base) => ({
+                                ...base,
+                                minHeight: "42px",
+                                borderRadius: "8px",
+                                borderColor: selectedYear !== "All" ? "#007aff" : "#e4e4e4",
+                                fontSize: "0.875rem",
+                                minWidth: "140px",
+                                flex: "0 0 auto",
+                                cursor: "pointer",
+                                boxShadow:
+                                    selectedYear !== "All"
+                                        ? "0 0 0 2px rgba(0, 122, 255, 0.15)"
+                                        : "none",
+                            }),
+                            menu: (base) => ({
+                                ...base,
+                                zIndex: 100,
+                            }),
+                        }}
+                        maxMenuHeight={200}
+                    />
+
                     <div className={styles.searchSection}>
                         <div className={styles.inputWrapper}>
                             <svg className={styles.searchIcon} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -619,29 +666,6 @@ function LeaveRequestTable({ onUpdate }) {
                             }}
                             maxMenuHeight={200}
                         />
-
-                        <Select
-                            placeholder="Year"
-                            options={yearOptions}
-                            value={yearOptions.find(opt => opt.value === selectedYear)}
-                            onChange={(opt) => setSelectedYear(opt.value)}
-                            styles={{
-                                control: (base) => ({
-                                    ...base,
-                                    minHeight: '42px',
-                                    borderRadius: '8px',
-                                    borderColor: '#e4e4e4',
-                                    fontSize: '0.875rem',
-                                    minWidth: '140px',
-                                    cursor: 'pointer'
-                                }),
-                                menu: (base) => ({
-                                    ...base,
-                                    zIndex: 100
-                                })
-                            }}
-                            maxMenuHeight={200}
-                        />
                     </div>
 
                     <div className={styles.dateSection}>
@@ -670,7 +694,7 @@ function LeaveRequestTable({ onUpdate }) {
                                 setStartDate("");
                                 setEndDate("");
                                 setSelectedMonth("All");
-                                setSelectedYear("All");
+                                setSelectedYear(String(new Date().getFullYear()));
                             }}
                         >
                             Reset

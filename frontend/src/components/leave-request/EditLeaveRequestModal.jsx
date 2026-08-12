@@ -52,7 +52,12 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const populateFormFromLeave = (req) => {
         if (!req) return;
-        const empId = req.employee?._id || req.employee || req.employeeId || req.employeeName || "";
+        const rawEmpId = req.employee?._id || req.employee || req.employeeId || "";
+        const empIdStr =
+            rawEmpId && typeof rawEmpId === "object"
+                ? String(rawEmpId._id || rawEmpId)
+                : String(rawEmpId || "");
+        const empId = /^[a-fA-F0-9]{24}$/.test(empIdStr) ? empIdStr : "";
         const empName = req.employeeName || req.employee?.employeeName || req.employee?.username || req.employee?.name || "";
         setFormData({
             employeeId: empId,
@@ -167,9 +172,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     useEffect(() => {
         if (leaveRequest) {
             setActiveLeave(leaveRequest);
-            const empId = leaveRequest.employee?._id || leaveRequest.employee || leaveRequest.employeeId || leaveRequest.employeeName || "";
+            const rawEmpId =
+                leaveRequest.employee?._id ||
+                leaveRequest.employee ||
+                leaveRequest.employeeId ||
+                "";
+            const empIdStr = rawEmpId != null ? String(rawEmpId) : "";
+            const empId = /^[a-fA-F0-9]{24}$/.test(empIdStr) ? empIdStr : "";
             const empName = leaveRequest.employeeName || leaveRequest.employee?.employeeName || leaveRequest.employee?.username || leaveRequest.employee?.name || "";
-            
+
             setFormData({
                 employeeId: empId,
                 employeeName: empName,
@@ -236,8 +247,13 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         }
 
         const payload = { ...formData };
-        // Prevent sending invalid ObjectIds to the backend for historical records
-        if (!payload.employeeId || payload.employeeId === "unknown" || (typeof payload.employeeId === 'string' && payload.employeeId.length !== 24)) {
+        // Only send real Mongo ObjectIds (24-char names like "MAHESH CHAINANI RAMCHAND" must not be sent)
+        if (
+            !payload.employeeId ||
+            payload.employeeId === "unknown" ||
+            typeof payload.employeeId !== "string" ||
+            !/^[a-fA-F0-9]{24}$/.test(payload.employeeId)
+        ) {
             delete payload.employeeId;
         }
         // Field edits must not re-submit unchanged status (avoids approval/self-approve guards)

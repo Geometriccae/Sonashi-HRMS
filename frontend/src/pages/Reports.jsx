@@ -547,10 +547,14 @@ function Reports() {
       }
       if (filterMonth !== "All") {
         const monthMap = { "January": 0, "February": 1, "March": 2, "April": 3, "May": 4, "June": 5, "July": 6, "August": 7, "September": 8, "October": 9, "November": 10, "December": 11 };
-        if (date.getMonth() !== monthMap[filterMonth]) match = false;
+        if (date.getUTCMonth() !== monthMap[filterMonth]) match = false;
       }
       if (filterYear !== "All") {
-        if (date.getFullYear().toString() !== filterYear) match = false;
+        const y =
+          typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)
+            ? Number(dateVal.slice(0, 4))
+            : date.getUTCFullYear();
+        if (String(y) !== String(filterYear)) match = false;
       }
       return match;
     };
@@ -641,7 +645,11 @@ function Reports() {
           "Employee ID": emp?.employeeId || leave.employeeId || "",
           "Employee Name":
             emp?.employeeName || leave.employeeName || leave.employee?.username || "",
-          "Leave Year": String(start.getFullYear()),
+          "Leave Year": String(
+            typeof leave.startDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(leave.startDate)
+              ? Number(leave.startDate.slice(0, 4))
+              : start.getUTCFullYear()
+          ),
           "Number of Leave Days": days,
           "Start Date": start.toLocaleDateString("en-GB"),
           "End Date":
@@ -728,7 +736,11 @@ function Reports() {
         if (!dateForYear) continue;
         const d = new Date(dateForYear);
         if (Number.isNaN(d.getTime())) continue;
-        if (d.getFullYear() !== selectedYear) continue;
+        const y =
+          typeof dateForYear === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateForYear)
+            ? Number(dateForYear.slice(0, 4))
+            : d.getUTCFullYear();
+        if (y !== selectedYear) continue;
 
         const empKey = String(emp.employeeId || emp._id || "");
         if (empKey) paidInSelectedYear.add(empKey);
@@ -773,7 +785,11 @@ function Reports() {
         if (!dateVal) return false;
         const date = new Date(dateVal);
         if (Number.isNaN(date.getTime())) return false;
-        if (date.getFullYear() !== selectedYear) return false;
+        const y =
+          typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)
+            ? Number(dateVal.slice(0, 4))
+            : date.getUTCFullYear();
+        if (y !== selectedYear) return false;
         if (startDate && endDate) {
           const start = new Date(startDate);
           const end = new Date(endDate);
@@ -785,7 +801,7 @@ function Reports() {
             January: 0, February: 1, March: 2, April: 3, May: 4, June: 5,
             July: 6, August: 7, September: 8, October: 9, November: 10, December: 11,
           };
-          if (date.getMonth() !== monthMap[filterMonth]) return false;
+          if (date.getUTCMonth() !== monthMap[filterMonth]) return false;
         }
         return true;
       };
@@ -921,7 +937,13 @@ function Reports() {
           Name: row.name || "",
           Department: row.department || "",
           Role: row.role || "",
-          "Increment Year": validDate ? String(d.getFullYear()) : "",
+          "Increment Year": validDate
+            ? String(
+                typeof row.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(row.date)
+                  ? Number(row.date.slice(0, 4))
+                  : d.getUTCFullYear()
+              )
+            : "",
           "Increment Date": validDate ? d.toLocaleDateString("en-GB") : "",
           "Previous Salary": row.previousSalary || 0,
           "Increment Amount": row.incrementAmount || 0,

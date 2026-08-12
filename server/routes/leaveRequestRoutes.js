@@ -342,13 +342,15 @@ router.post('/', authMiddleware, async (req, res) => {
 
 
         let targetUserId = req.user.id; // Fallback to current acting user
-        if (employeeId) {
-            // employeeId from the frontend frontend dropdown is an Employee document _id. We need to find the equivalent User _id
+        const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
+        if (employeeId && isObjectIdStr(employeeId)) {
+            // employeeId from the frontend dropdown is an Employee document _id. We need to find the equivalent User _id
             const equivalentUser = await User.findOne({ employeeId: employeeId });
             if (equivalentUser) {
                 targetUserId = equivalentUser._id;
             } else {
-                targetUserId = employeeId; // In case the frontend actually sends a User ID or for non-user employees
+                const asUser = await User.findById(employeeId);
+                if (asUser) targetUserId = asUser._id;
             }
         }
 
@@ -584,13 +586,15 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
         // Handle other field updates (for employee editing their own request).
         // employeeId from the form is Employee._id — resolve to User._id like create does.
-        if (employeeId) {
+        // Ignore non-ObjectId values (e.g. employee display names that are exactly 24 chars).
+        const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
+        if (employeeId && isObjectIdStr(employeeId)) {
             const equivalentUser = await User.findOne({ employeeId: employeeId });
             if (equivalentUser) {
                 updateData.employee = equivalentUser._id;
             } else {
                 const asUser = await User.findById(employeeId);
-                updateData.employee = asUser ? asUser._id : employeeId;
+                if (asUser) updateData.employee = asUser._id;
             }
         }
         if (employeeName) updateData.employeeName = employeeName;
