@@ -181,7 +181,7 @@ function Reports() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [filterMonth, setFilterMonth] = useState("All");
-  const [filterYear, setFilterYear] = useState("All");
+  const [filterYear, setFilterYear] = useState(() => String(new Date().getFullYear()));
 
   const monthsList = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   // Wide historical + future year range so reports are not limited to the current year
@@ -695,25 +695,13 @@ function Reports() {
       const fmtOpt = (d) =>
         d ? new Date(d).toLocaleDateString("en-GB") : "";
 
-      const buildAirfareRow = (e, dates = {}) => ({
-        "Employee ID": e.employeeId || "",
-        "Name": e.employeeName || "",
-        "Department": e.department || "",
-        "Role": e.role || "",
-        "Office Location": e.office || "",
-        "Company Code": e.companyCode || "",
-        "Airfare Entitlement": airfareYesOf(e) ? "Yes" : "No",
-        "Last Working Day": fmtSet(dates.lastWorkingDay),
-        "Travelling Date": fmtSet(dates.travellingDate),
-        "Return / Entry Date": fmtOpt(dates.returnDate),
-        "First Working Day": fmtOpt(dates.firstWorkingDay),
-        "Passport No": e.passportNo || "",
-        "Passport Expiry": e.passportExpiryDate
-          ? new Date(e.passportExpiryDate).toLocaleDateString("en-GB")
-          : "",
-      });
+      // Selected year from existing Year filter (default current year for this report)
+      const selectedYear =
+        filterYear !== "All" && !Number.isNaN(Number(filterYear))
+          ? Number(filterYear)
+          : new Date().getFullYear();
 
-      // Fetch all leave records so historical airfare / vacation trips (2022–2026+) are included
+      // Fetch all leave records (existing airfare / vacation history) — year filter applied below
       let leaves = [];
       try {
         const leaveData = await leaveRequestService.getLeaveRequests();
@@ -723,12 +711,83 @@ function Reports() {
         leaves = [];
       }
 
+      const APPROVED_LEAVE = new Set(["Approved", "HOD Approved", "Imported"]);
+
+      // Paid in selected year from existing leave.requestAirfare (no new records)
+      const paidInSelectedYear = new Set();
+      for (const leave of leaves) {
+        if (!leave || leave.status === "Cancelled") continue;
+        if (leave.requestAirfare !== true) continue;
+        if (!APPROVED_LEAVE.has(leave.status)) continue;
+
+        const emp = findLinkedEmployee(leave, empList);
+        if (!emp) continue;
+
+        const dateForYear =
+          leave.travellingDate || leave.startDate || leave.lastWorkingDay || null;
+        if (!dateForYear) continue;
+        const d = new Date(dateForYear);
+        if (Number.isNaN(d.getTime())) continue;
+        if (d.getFullYear() !== selectedYear) continue;
+
+        const empKey = String(emp.employeeId || emp._id || "");
+        if (empKey) paidInSelectedYear.add(empKey);
+      }
+
+      // Existing columns + single Paid/Not Paid for the selected Year (no year columns)
+      const buildAirfareRow = (e, dates = {}, tripPaid = null) => {
+        const empKey = String(e.employeeId || e._id || "");
+        const paid =
+          tripPaid != null ? !!tripPaid : paidInSelectedYear.has(empKey);
+        return {
+          "Employee ID": e.employeeId || "",
+          Name: e.employeeName || "",
+          Department: e.department || "",
+          Role: e.role || "",
+          "Office Location": e.office || "",
+          "Company Code": e.companyCode || "",
+          "Airfare Entitlement": airfareYesOf(e) ? "Yes" : "No",
+          "Last Working Day": fmtSet(dates.lastWorkingDay),
+          "Travelling Date": fmtSet(dates.travellingDate),
+          "Return / Entry Date": fmtOpt(dates.returnDate),
+          "First Working Day": fmtOpt(dates.firstWorkingDay),
+          "Passport No": e.passportNo || "",
+          "Passport Expiry": e.passportExpiryDate
+            ? new Date(e.passportExpiryDate).toLocaleDateString("en-GB")
+            : "",
+          Year: String(selectedYear),
+          "Paid / Not Paid": paid ? "Paid" : "Not Paid",
+        };
+      };
+
       const rows = [];
       const coveredTripKeys = new Set();
 
       const tripKey = (empKey, dateVal) => {
         const day = dateVal ? new Date(dateVal).toISOString().slice(0, 10) : "";
         return `${empKey}|${day}`;
+      };
+
+      // Scope rows to selected Year (existing Year filter); still honour month / date-range
+      const matchesSelectedYear = (dateVal) => {
+        if (!dateVal) return false;
+        const date = new Date(dateVal);
+        if (Number.isNaN(date.getTime())) return false;
+        if (date.getFullYear() !== selectedYear) return false;
+        if (startDate && endDate) {
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (date < start || date > end) return false;
+        }
+        if (filterMonth !== "All") {
+          const monthMap = {
+            January: 0, February: 1, March: 2, April: 3, May: 4, June: 5,
+            July: 6, August: 7, September: 8, October: 9, November: 10, December: 11,
+          };
+          if (date.getMonth() !== monthMap[filterMonth]) return false;
+        }
+        return true;
       };
 
       for (const leave of leaves) {
@@ -751,23 +810,28 @@ function Reports() {
         const firstWorkingDay = leave.firstWorkingDay || leave.endDate || null;
         const dateForFilter = travellingDate || lastWorkingDay || leave.startDate;
 
-        if (hasDateFilter && !isDateMatch(dateForFilter)) continue;
+        if (!matchesSelectedYear(dateForFilter)) continue;
 
         const empKey = String(emp.employeeId || emp._id || "");
         coveredTripKeys.add(tripKey(empKey, dateForFilter));
         rows.push(
-          buildAirfareRow(emp, {
-            lastWorkingDay,
-            travellingDate,
-            returnDate,
-            firstWorkingDay,
-          })
+          buildAirfareRow(
+            emp,
+            {
+              lastWorkingDay,
+              travellingDate,
+              returnDate,
+              firstWorkingDay,
+            },
+            leave.requestAirfare === true
+          )
         );
       }
 
-      // Keep existing employee-snapshot rows (current travel dates) when not already covered by leave history
+      // Employee-snapshot rows for selected year when not already covered by leave history
       for (const e of empList) {
-        if (hasDateFilter && !isDateMatch(e.travellingDate)) continue;
+        const snapDate = e.travellingDate || e.lastWorkingDay;
+        if (!matchesSelectedYear(snapDate)) continue;
 
         const empKey = String(e.employeeId || e._id || "");
         const key = tripKey(empKey, e.travellingDate || e.lastWorkingDay);
@@ -1462,7 +1526,8 @@ function Reports() {
                     className={styles["select-field"]}
                     value={reportType}
                     onChange={e => {
-                      setReportType(e.target.value);
+                      const nextType = e.target.value;
+                      setReportType(nextType);
                       setFormat("");
                       setLeadType("All");
                       setFollowupStatus("All");
@@ -1476,7 +1541,16 @@ function Reports() {
                       setExperienceMode("minimum");
                       setFilterEmployee("All");
                       setFilterMonth("All");
-                      setFilterYear("All");
+                      // Leave / Airfare / Increment: default Year = current (existing Year filter)
+                      if (
+                        nextType === "Leave Report" ||
+                        nextType === "Airfare Report" ||
+                        nextType === "Increment report"
+                      ) {
+                        setFilterYear(String(new Date().getFullYear()));
+                      } else {
+                        setFilterYear("All");
+                      }
                     }}
                   >
                     <option value="">Select type</option>
