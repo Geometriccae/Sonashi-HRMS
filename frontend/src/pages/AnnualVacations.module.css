@@ -911,11 +911,13 @@
 .expBadge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 9px;
-  border-radius: 999px;
+  padding: 4px 10px;
+  border-radius: 8px;
   background: #f0fdf4;
   color: #15803d;
   font-size: 11px;
   font-weight: 700;
   border: 1px solid #bbf7d0;
+  white-space: nowrap;
+  max-width: 100%;
 }

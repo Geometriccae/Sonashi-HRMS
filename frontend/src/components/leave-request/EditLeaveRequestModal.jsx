@@ -50,6 +50,27 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const isEditable = isManager || targetLeave?.status === "Pending";
     const isPastLeaveRequest = targetLeave?.isPastLeave || (targetLeave?.status === 'Approved' && targetLeave?.startDate && new Date(targetLeave.startDate) < new Date());
 
+    const resolveEmployeeRecord = (empId, empName, leaveEmp) => {
+        const linkedId =
+            leaveEmp?.employeeId?._id ||
+            leaveEmp?.employeeId ||
+            "";
+        return (
+            (empId && employees.find((e) => String(e._id) === String(empId))) ||
+            (linkedId && employees.find((e) => String(e._id) === String(linkedId))) ||
+            (empName &&
+                employees.find((e) => {
+                    const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+                    const fName = String(empName || "").toLowerCase().trim();
+                    return eName === fName && fName !== "";
+                })) ||
+            null
+        );
+    };
+
+    const formatVisaInputDate = (val) =>
+        val ? new Date(val).toISOString().split("T")[0] : "";
+
     const populateFormFromLeave = (req) => {
         if (!req) return;
         const rawEmpId = req.employee?._id || req.employee || req.employeeId || "";
@@ -59,8 +80,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 : String(rawEmpId || "");
         const empId = /^[a-fA-F0-9]{24}$/.test(empIdStr) ? empIdStr : "";
         const empName = req.employeeName || req.employee?.employeeName || req.employee?.username || req.employee?.name || "";
+        const matchedEmp = resolveEmployeeRecord(empId, empName, req.employee);
+        const visaSrc = req.employee?.visaExpiryDate || matchedEmp?.visaExpiryDate;
         setFormData({
-            employeeId: empId,
+            employeeId: matchedEmp?._id || empId,
             employeeName: empName,
             company: req.company || "Sonashi",
             department: req.department || "",
@@ -71,9 +94,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             reason: req.reason || "",
             status: req.status || "Pending",
             requestAirfare: req.requestAirfare || false,
-            visaExpiryDate: (req.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate)
-                ? new Date(req.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate).toISOString().split('T')[0]
-                : ""
+            visaExpiryDate: formatVisaInputDate(visaSrc)
         });
         setError("");
     };
@@ -180,9 +201,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             const empIdStr = rawEmpId != null ? String(rawEmpId) : "";
             const empId = /^[a-fA-F0-9]{24}$/.test(empIdStr) ? empIdStr : "";
             const empName = leaveRequest.employeeName || leaveRequest.employee?.employeeName || leaveRequest.employee?.username || leaveRequest.employee?.name || "";
+            const matchedEmp = resolveEmployeeRecord(empId, empName, leaveRequest.employee);
+            const visaSrc = leaveRequest.employee?.visaExpiryDate || matchedEmp?.visaExpiryDate;
 
             setFormData({
-                employeeId: empId,
+                employeeId: matchedEmp?._id || empId,
                 employeeName: empName,
                 company: leaveRequest.company || "Sonashi",
                 department: leaveRequest.department || "",
@@ -193,12 +216,12 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 reason: leaveRequest.reason || "",
                 status: leaveRequest.status || "Pending",
                 requestAirfare: leaveRequest.requestAirfare || false,
-                visaExpiryDate: (leaveRequest.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate) ? new Date(leaveRequest.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate).toISOString().split('T')[0] : ""
+                visaExpiryDate: formatVisaInputDate(visaSrc)
             });
             setError("");
             setSelectedYearDetails(null);
         }
-    }, [leaveRequest, isOpen]);
+    }, [leaveRequest, isOpen, employees]);
 
     const fetchEmployees = async () => {
         try {
@@ -337,14 +360,23 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         reportingManagerOptions.push({ value: formData.reportingManager, label: formData.reportingManager });
     }
 
-    // Calculate History Logic
-    const selectedEmp = employees.find(e => e._id === formData.employeeId) || 
+    // Resolve Employee master (doj / visa live on Employee, not User on leaveRequest.employee)
+    const linkedEmployeeId =
+        targetLeave?.employee?.employeeId?._id ||
+        targetLeave?.employee?.employeeId ||
+        leaveRequest?.employee?.employeeId?._id ||
+        leaveRequest?.employee?.employeeId ||
+        "";
+    const selectedEmp = employees.find(e => e._id === formData.employeeId) ||
+                        (linkedEmployeeId && employees.find(e => String(e._id) === String(linkedEmployeeId))) ||
                         (formData.employeeName && employees.find(e => {
                             const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
                             const fName = String(formData.employeeName || "").toLowerCase().trim();
                             return eName === fName && fName !== "";
-                        })) || 
-                        targetLeave?.employee;
+                        })) ||
+                        (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
+                            ? targetLeave.employee
+                            : null);
                         
     const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
@@ -602,7 +634,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={leaveRequest?.employee?.doj ? new Date(leaveRequest.employee.doj).toLocaleDateString('en-GB') : 'N/A'} 
+                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString('en-GB') : 'N/A'} 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -621,7 +653,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         {(isPastLeaveRequest && isEditable) ? (
                                             <DateInput
                                                 className="input-field-input"
-                                                value={formData.visaExpiryDate || ""}
+                                                value={formData.visaExpiryDate || (selectedEmp?.visaExpiryDate ? new Date(selectedEmp.visaExpiryDate).toISOString().split("T")[0] : "")}
                                                 onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)}
                                             />
                                         ) : (
@@ -629,7 +661,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                 type="text" 
                                                 className="input-field-input" 
                                                 disabled 
-                                                value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
+                                                value={
+                                                    (formData.visaExpiryDate || selectedEmp?.visaExpiryDate)
+                                                        ? new Date(formData.visaExpiryDate || selectedEmp.visaExpiryDate).toLocaleDateString('en-GB')
+                                                        : 'Not Set'
+                                                } 
                                                 style={{ background: "#f8fafc" }} 
                                             />
                                         )}

@@ -12,20 +12,56 @@ export const toDayStart = (value) => {
 export const normalizeName = (name) =>
   String(name || "").toLowerCase().replace(/[\s_.-]+/g, "").trim();
 
-export const computeExperienceYears = (doj, totalYearsExperience) => {
-  if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
-    return Number(totalYearsExperience);
-  }
+/** Completed years + months from DOJ as of today (calendar tenure). */
+export const computeExperienceMonthsFromDoj = (doj, asOf = new Date()) => {
   if (!doj) return null;
   const joinDate = new Date(doj);
   if (Number.isNaN(joinDate.getTime())) return null;
-  const now = new Date();
+  const now = new Date(asOf);
+  joinDate.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  if (now < joinDate) return 0;
+
   let years = now.getFullYear() - joinDate.getFullYear();
-  const monthDiff = now.getMonth() - joinDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < joinDate.getDate())) {
-    years -= 1;
+  let months = now.getMonth() - joinDate.getMonth();
+  let totalMonths = years * 12 + months;
+  if (now.getDate() < joinDate.getDate()) totalMonths -= 1;
+  return Math.max(0, totalMonths);
+};
+
+/** Display: "2 Years and 6 months" (from DOJ as of today; fallback to stored years only if no DOJ). */
+export const formatExperienceLabel = (doj, totalYearsExperience) => {
+  let totalMonths = computeExperienceMonthsFromDoj(doj);
+  if (totalMonths == null) {
+    if (totalYearsExperience == null || Number.isNaN(Number(totalYearsExperience))) return null;
+    totalMonths = Math.round(Number(totalYearsExperience) * 12);
   }
-  return Math.max(0, years);
+  const y = Math.floor(totalMonths / 12);
+  const m = totalMonths % 12;
+  if (y === 0 && m === 0) return "0 months";
+  if (y === 0) return `${m} month${m !== 1 ? "s" : ""}`;
+  if (m === 0) return `${y} Year${y !== 1 ? "s" : ""}`;
+  return `${y} Year${y !== 1 ? "s" : ""} and ${m} month${m !== 1 ? "s" : ""}`;
+};
+
+/**
+ * Numeric years for filters — always prefer DOJ as of today (same day-fraction as leave tenure).
+ * Stored totalYearsExperience is only a fallback when DOJ is missing (it can be stale).
+ */
+export const computeExperienceYears = (doj, totalYearsExperience) => {
+  if (doj) {
+    const joinDate = new Date(doj);
+    if (!Number.isNaN(joinDate.getTime())) {
+      const now = new Date();
+      if (now < joinDate) return 0;
+      const years = (now - joinDate) / (1000 * 60 * 60 * 24 * 365.25);
+      return Math.round(years * 10) / 10;
+    }
+  }
+  if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
+    return Number(totalYearsExperience);
+  }
+  return null;
 };
 
 export const findLinkedEmployee = (req, empList) => {

@@ -1,5 +1,5 @@
-﻿Sonashi HRMS - Hostinger deploy zips (latest)
-Generated: 2026-08-12 10:45
+Sonashi HRMS - Hostinger deploy zips (latest)
+Generated: 2026-08-12 11:25
 
 Files:
   hostinger-frontend.zip  - React frontend (hrms.sonashi.in)

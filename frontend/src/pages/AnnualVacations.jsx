@@ -20,6 +20,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
   computeExperienceYears,
+  formatExperienceLabel,
   findLeaveForEmployee,
   buildYetToGoFromLeaves,
 } from "../utils/yetToGoHelpers";
@@ -125,9 +126,11 @@ const buildVacationExportRows = (list, tabKey) =>
         : tabKey === "yetToGo"
           ? "Vacation Pending"
           : "Vacation Approved");
-    const expYears =
-      item.experienceYears ??
-      computeExperienceYears(item.doj, item.totalYearsExperience);
+    const expLabel =
+      formatExperienceLabel(item.doj, item.totalYearsExperience) ||
+      (item.experienceYears != null && !Number.isNaN(Number(item.experienceYears))
+        ? formatExperienceLabel(null, item.experienceYears)
+        : "");
 
     const base = {
       "#": idx + 1,
@@ -138,10 +141,7 @@ const buildVacationExportRows = (list, tabKey) =>
       Office: item.office || "",
       Country: item.nationality || "",
       DOJ: fmt(item.doj),
-      "Exp (yrs)":
-        expYears != null && !Number.isNaN(Number(expYears))
-          ? Number(expYears).toFixed(1)
-          : "",
+      Experience: expLabel,
       Status: STATUS_LABEL[vs] || vs || "",
     };
 
@@ -446,8 +446,8 @@ function AnnualVacations() {
         if (filters.dojTo   && doj > new Date(filters.dojTo))   return false;
       }
 
-      // ── Years of Experience Range ──
-      const exp = item.experienceYears ?? computeExperienceYears(item.doj, item.totalYearsExperience);
+      // ── Years of Experience Range (from DOJ as of today) ──
+      const exp = computeExperienceYears(item.doj, item.totalYearsExperience);
       if (filters.expMin !== "" && filters.expMin !== null) {
         if (exp == null || exp < Number(filters.expMin)) return false;
       }
@@ -914,7 +914,7 @@ function AnnualVacations() {
                               <th>Office</th>
                               <th>Country</th>
                               <th>DOJ</th>
-                              <th>Exp (yrs)</th>
+                              <th>Experience</th>
                               {activeTab === "onVacation" && <><th>Leave End Date</th><th>Travelling Date</th><th>Last Working Day</th></>}
                               {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th></>}
                               {activeTab === "returned"  && <><th>Return Date</th><th>First Working Day</th></>}
@@ -926,7 +926,7 @@ function AnnualVacations() {
                             {filteredList.map((item, idx) => {
                               const empId = item._id || item.id;
                               const vs    = item.vacationStatus || (activeTab === "onVacation" ? "On Vacation" : activeTab === "yetToGo" ? "Vacation Pending" : "Vacation Approved");
-                              const expYears = item.experienceYears ?? computeExperienceYears(item.doj, item.totalYearsExperience);
+                              const expLabel = formatExperienceLabel(item.doj, item.totalYearsExperience);
                               return (
                                 <tr key={item._source === "leave" ? `leave-${item._id}` : (empId || idx)} className={styles.tableRow}
                                   onClick={() => { const navId = getNavEmployeeId(item); if (navId) navigate(`/teammanagement_salesleads/${navId}`); }}>
@@ -949,8 +949,8 @@ function AnnualVacations() {
                                   <td>{item.nationality||"—"}</td>
                                   <td>{fmt(item.doj)}</td>
                                   <td className={styles.tdCenter}>
-                                    {expYears != null
-                                      ? <span className={styles.expBadge}>{expYears} yrs</span>
+                                    {expLabel
+                                      ? <span className={styles.expBadge}>{expLabel}</span>
                                       : "—"}
                                   </td>
 
