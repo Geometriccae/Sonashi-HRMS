@@ -134,14 +134,14 @@ function DashboardOverview() {
           if (vs === "On Vacation") attOnVacation++;
           else if (vs === "Vacation Approved") attVacReturn++;
 
-          if (emp.visaExpiryDate) {
+          if (emp.visaExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
             const expiry = new Date(emp.visaExpiryDate);
             if (expiry > today && expiry <= next90Days) {
               visaExpiry++;
             }
           }
 
-          if (emp.passportExpiryDate) {
+          if (emp.passportExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
             const expiry = new Date(emp.passportExpiryDate);
             if (expiry > today && expiry <= next6Months) {
               passportExpiry++;
@@ -376,6 +376,7 @@ function DashboardOverview() {
       }
       case "Visa Expiry":
         list = empSource.filter(e => {
+          if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
           if (!e.visaExpiryDate) return false;
           const expiry = new Date(e.visaExpiryDate);
           return expiry > today && expiry <= next90Days;
@@ -383,6 +384,7 @@ function DashboardOverview() {
         break;
       case "Passport Expiry":
         list = empSource.filter(e => {
+          if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
           if (!e.passportExpiryDate) return false;
           const expiry = new Date(e.passportExpiryDate);
           return expiry > today && expiry <= next6Months;
