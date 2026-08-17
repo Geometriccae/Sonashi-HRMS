@@ -8,15 +8,15 @@ const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const nodemailer = require("nodemailer");
 const { sendEventAssignedTemplate } = require('../services/interaktWhatsAppService');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
 
 // Storage config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../../uploads/clients');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
+    cb(null, ensureUploadSubdir('clients'));
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname)); // unique filename

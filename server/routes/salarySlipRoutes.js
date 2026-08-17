@@ -9,6 +9,7 @@ const Employee = require('../models/Employee');
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
 const { workingStatusFilter } = require('../utils/employeeStatus');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
 
 // One-time cleanup to remove stale database indexes that cause import failures
 SalarySlip.on('index', (err) => {
@@ -107,9 +108,9 @@ const requireAdmin = async (req, res, next) => {
     }
 };
 
-// Multer setup
+// Multer setup — outer Hostinger uploads root
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
+  destination: (req, file, cb) => cb(null, ensureUploadSubdir()),
     filename: (req, file, cb) => cb(null, `salary-import-${Date.now()}${path.extname(file.originalname)}`)
 });
 const upload = multer({ storage });

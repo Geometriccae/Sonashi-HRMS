@@ -7,14 +7,10 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
 
-// Configure multer for file uploads
-const uploadDir = path.join(__dirname, '../../uploads/expense-documents');
-
-// Ensure upload directory exists
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Configure multer for file uploads (outer Hostinger uploads)
+const uploadDir = ensureUploadSubdir('expense-documents');
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {

@@ -3,7 +3,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const Document = require("../models/EmployeeDocuments");
-const { getUploadsRoot, resolveUploadDiskPath } = require("../utils/uploadsPath");
+const { resolveUploadDiskPath, ensureUploadSubdir } = require("../utils/uploadsPath");
 
 const router = express.Router();
 
@@ -15,19 +15,15 @@ const sanitizeDocType = (rawType) => {
   return cleaned || "Other";
 };
 
-const employeeDocsDir = (...parts) =>
-  path.join(getUploadsRoot(), "employeedocuments", ...parts);
+/** Disk folder: uploads/employeeDocuments/<employeeId>/<docType> (outer Hostinger root) */
+const employeeDocsDir = (...parts) => ensureUploadSubdir("employeeDocuments", ...parts);
 
-// Configure multer for disk storage in uploads/employeedocuments/<employeeId>/<docType>
+// Configure multer for disk storage in uploads/employeeDocuments/<employeeId>/<docType>
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const employeeId = req.params.employeeId || "unknown";
     const docType = sanitizeDocType(req.body && req.body.type);
-    const uploadDir = employeeDocsDir(employeeId, docType);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
+    cb(null, employeeDocsDir(employeeId, docType));
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + "-" + file.originalname);
@@ -38,10 +34,16 @@ const memUpload = multer({ storage: multer.memoryStorage() });
 
 const normalizeDoc = (doc) => {
   const raw = String(doc.filePath || "");
-  const fixed = raw.replace(
-    /\/uploads\/employeedocuments\/employeedocuments\//gi,
-    "/uploads/employeedocuments/"
-  );
+  const fixed = raw
+    .replace(
+      /\/uploads\/employeedocuments\/employeedocuments\//gi,
+      "/uploads/employeeDocuments/"
+    )
+    .replace(
+      /\/uploads\/employeeDocuments\/employeeDocuments\//gi,
+      "/uploads/employeeDocuments/"
+    )
+    .replace(/\/uploads\/employeedocuments\//gi, "/uploads/employeeDocuments/");
   return { ...doc, filePath: fixed };
 };
 
@@ -102,7 +104,7 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
       fileName: req.file.originalname,
       fileType: req.file.mimetype,
       fileSize: req.file.size,
-      filePath: `/uploads/employeedocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
+      filePath: `/uploads/employeeDocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
       uploadedBy: req.body.uploadedBy,
       userRole: req.body.userRole,
       type: req.body.type || "Extra",
@@ -140,10 +142,9 @@ router.put("/:docId", memUpload.single("file"), async (req, res) => {
 
     const newFilename = Date.now() + "-" + req.file.originalname;
     const uploadDir = employeeDocsDir(employeeId, docType);
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     fs.writeFileSync(path.join(uploadDir, newFilename), req.file.buffer);
 
-    const newFilePath = `/uploads/employeedocuments/${employeeId}/${docType}/${newFilename}`;
+    const newFilePath = `/uploads/employeeDocuments/${employeeId}/${docType}/${newFilename}`;
 
     const updated = await Document.findByIdAndUpdate(
       req.params.docId,

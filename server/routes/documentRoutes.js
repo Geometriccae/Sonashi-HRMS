@@ -3,12 +3,13 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const Document = require("../models/Documents");
+const { ensureUploadSubdir } = require("../utils/uploadsPath");
 
 const router = express.Router();
 
-// Configure multer for file uploads to server/uploads
+// Configure multer for file uploads to outer Hostinger uploads/clientdocuments
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, "../../uploads/clientdocuments")),
+  destination: (req, file, cb) => cb(null, ensureUploadSubdir("clientdocuments")),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });

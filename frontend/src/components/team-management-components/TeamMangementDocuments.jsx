@@ -244,6 +244,37 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   const apiHost = (config.API_BASE_URL || "").replace(/\/api\/?$/, "");
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole !== "viewer" && (userRole === "admin" || userRole === "hod");
+  const isLocalHost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+
+  /** Prefer local API file route; on localhost fall back to production if disk file is missing. */
+  const getDocumentFetchUrls = (item) => {
+    const urls = [];
+    if (item?.filePath) urls.push(item.filePath);
+    if (item?.id && isLocalHost) {
+      const prod = `https://backend.sonashi.in/api/employeedocuments/file/${item.id}`;
+      if (!urls.includes(prod)) urls.push(prod);
+    }
+    return urls;
+  };
+
+  const fetchDocumentResponse = async (item) => {
+    const urls = getDocumentFetchUrls(item);
+    let lastError = null;
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { method: "GET" });
+        if (response.ok) return response;
+        const msg = await response.text().catch(() => "");
+        lastError = new Error(msg || `HTTP ${response.status}`);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error("File missing");
+  };
 
   const buildDocumentUrl = (path, docId) => {
     // Prefer API file route so server can resolve server/uploads vs ../uploads
@@ -251,8 +282,9 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
     if (!path) return "";
     const cleaned = String(path).replace(
       /\/uploads\/employeedocuments\/employeedocuments\//g,
-      "/uploads/employeedocuments/"
-    );
+      "/uploads/employeeDocuments/"
+    )
+    .replace(/\/uploads\/employeedocuments\//gi, "/uploads/employeeDocuments/");
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
     const host = apiHost.replace(/\/$/, "");
     const relativePath = cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
@@ -324,18 +356,21 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   };
 
   const closePreview = () => {
+    if (previewDoc?._blobUrl) {
+      try {
+        URL.revokeObjectURL(previewDoc._blobUrl);
+      } catch (_) {
+        /* ignore */
+      }
+    }
     setPreviewDoc(null);
     setSetTypeMsg("");
   };
 
   const downloadDocument = async (doc, { saveAs = false } = {}) => {
-    if (!doc?.filePath) return;
+    if (!doc?.filePath && !doc?.id) return;
     try {
-      const response = await fetch(doc.filePath);
-      if (!response.ok) {
-        const msg = await response.text().catch(() => "");
-        throw new Error(msg || "Download failed");
-      }
+      const response = await fetchDocumentResponse(doc);
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -388,25 +423,23 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
               String(item.filetype || "").toLowerCase().startsWith("image/") ||
               /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(item.fileName || "");
             try {
-              const response = await fetch(item.filePath, { method: "GET" });
-              if (!response.ok) {
-                const msg = await response.text().catch(() => "");
-                throw new Error(msg || "File missing");
-              }
+              const response = await fetchDocumentResponse(item);
               if (isImage) {
-                setPreviewDoc(item);
+                // Use blob URL so preview works whether local or production fallback served the bytes
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                setPreviewDoc({ ...item, filePath: objectUrl, _blobUrl: objectUrl });
                 setSetTypeValue(item.type || "Extra");
                 setSetTypeMsg("");
                 return;
               }
-              // Open blob URL so PDFs still work when API route is used
               const blob = await response.blob();
               const objectUrl = URL.createObjectURL(blob);
               window.open(objectUrl, "_blank", "noopener,noreferrer");
               setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
             } catch (err) {
               alert(
-                `File missing on server for "${item.fileName || "document"}".\n\nThe upload record exists, but the file is not on disk.\nPlease re-upload this document.\n\nTip: when redeploying backend, keep the server "uploads" folder.`
+                `File missing on server for "${item.fileName || "document"}".\n\nThe upload record exists, but the file is not on disk.\nPlease re-upload this document.\n\nTip: when redeploying backend, keep the outer "uploads" folder.`
               );
             }
           }}

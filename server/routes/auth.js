@@ -9,6 +9,7 @@ const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const Notification = require('../models/Notification');
 const fs = require('fs');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
 
 
 let otpStore = {}; // TEMP store (better use Redis or DB)
@@ -117,9 +118,9 @@ function getUserIdFromReq(req) {
   return userId ? String(userId) : null;
 }
 
-// Storage for profile pictures
+// Storage for profile pictures (outer Hostinger uploads)
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
+  destination: (req, file, cb) => cb(null, ensureUploadSubdir()),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });

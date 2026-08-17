@@ -18,6 +18,7 @@ const Client = require('../models/Client');
 const CompanyDocument = require('../models/CompanyDocument');
 const { buildEmployeePayload } = require('../utils/employeeExcelImport');
 const { notifyEmployeeOnboarding } = require('../services/hrNotificationService');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
 const {
   EMPLOYEE_STATUS_VALUES,
   workingStatusFilter,
@@ -159,7 +160,7 @@ const deriveEventDateTime = (dateValue, timeValue) => {
 
 const importStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../uploads'));
+    cb(null, ensureUploadSubdir());
   },
   filename: (req, file, cb) => {
     cb(null, `employee-import-${Date.now()}${path.extname(file.originalname)}`);
@@ -177,11 +178,7 @@ const uploadEmployeeImport = multer({
 
 const profilePhotoStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads/employees');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
+    cb(null, ensureUploadSubdir('employees'));
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -223,8 +220,7 @@ function persistBase64ProfilePhoto(value, idHint) {
     ? Buffer.from(payload, 'base64')
     : Buffer.from(decodeURIComponent(payload), 'utf8');
 
-  const uploadDir = path.join(__dirname, '../../uploads/employees');
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  const uploadDir = ensureUploadSubdir('employees');
 
   const safeId = String(idHint || 'emp').replace(/[^a-zA-Z0-9_-]/g, '-');
   const filename = `${safeId}-${Date.now()}.${ext}`;

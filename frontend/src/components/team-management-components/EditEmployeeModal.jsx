@@ -154,10 +154,12 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const buildDocumentUrl = (path, docId) => {
     if (docId) return DocumentsService.getFileUrl(docId);
     if (!path) return "";
-    const cleaned = String(path).replace(
-      /\/uploads\/employeedocuments\/employeedocuments\//g,
-      "/uploads/employeedocuments/"
-    );
+    const cleaned = String(path)
+      .replace(
+        /\/uploads\/employeedocuments\/employeedocuments\//gi,
+        "/uploads/employeeDocuments/"
+      )
+      .replace(/\/uploads\/employeedocuments\//gi, "/uploads/employeeDocuments/");
     return buildImageUrl(cleaned);
   };
 
