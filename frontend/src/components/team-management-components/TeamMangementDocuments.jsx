@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import styles from "./TeamManagementDocuments.module.css";
 import DataTable from "../DataTable";
 import DocumentsService from "../../services/EmployeeDocumentService";
-import config from "../../config/config";
 
 export const DOC_TYPE_OPTIONS = [
   "Passport", "Emirates ID", "Visa", "Labour Card", "Work Permit",
@@ -241,54 +240,25 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   const [setTypeSaving, setSetTypeSaving] = useState(false);
   const [setTypeMsg, setSetTypeMsg] = useState("");
   const [editItem, setEditItem] = useState(null);
-  const apiHost = (config.API_BASE_URL || "").replace(/\/api\/?$/, "");
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole !== "viewer" && (userRole === "admin" || userRole === "hod");
-  const isLocalHost =
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1");
 
-  /** Prefer local API file route; on localhost fall back to production if disk file is missing. */
-  const getDocumentFetchUrls = (item) => {
-    const urls = [];
-    if (item?.filePath) urls.push(item.filePath);
-    if (item?.id && isLocalHost) {
-      const prod = `https://backend.sonashi.in/api/employeedocuments/file/${item.id}`;
-      if (!urls.includes(prod)) urls.push(prod);
+  const isImageDoc = (item) =>
+    String(item?.filetype || "").toLowerCase().startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(item?.fileName || "");
+
+  const fileMissingMessage = (name) =>
+    `File missing on server for "${name || "document"}".\n\nThe upload record exists, but the file is not on disk.\nPlease re-upload this document.`;
+
+  const fetchDocumentFile = async (docId) => {
+    const url = DocumentsService.getFileUrl(docId);
+    if (!url) throw new Error("File missing");
+    const response = await fetch(url, { method: "GET" });
+    if (!response.ok) {
+      const msg = await response.text().catch(() => "");
+      throw new Error(msg || `HTTP ${response.status}`);
     }
-    return urls;
-  };
-
-  const fetchDocumentResponse = async (item) => {
-    const urls = getDocumentFetchUrls(item);
-    let lastError = null;
-    for (const url of urls) {
-      try {
-        const response = await fetch(url, { method: "GET" });
-        if (response.ok) return response;
-        const msg = await response.text().catch(() => "");
-        lastError = new Error(msg || `HTTP ${response.status}`);
-      } catch (err) {
-        lastError = err;
-      }
-    }
-    throw lastError || new Error("File missing");
-  };
-
-  const buildDocumentUrl = (path, docId) => {
-    // Prefer API file route so server can resolve server/uploads vs ../uploads
-    if (docId) return DocumentsService.getFileUrl(docId);
-    if (!path) return "";
-    const cleaned = String(path).replace(
-      /\/uploads\/employeedocuments\/employeedocuments\//g,
-      "/uploads/employeeDocuments/"
-    )
-    .replace(/\/uploads\/employeedocuments\//gi, "/uploads/employeeDocuments/");
-    if (/^https?:\/\//i.test(cleaned)) return cleaned;
-    const host = apiHost.replace(/\/$/, "");
-    const relativePath = cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
-    return `${host}${relativePath}`;
+    return response;
   };
 
   useEffect(() => {
@@ -320,7 +290,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
       userRole: d.userRole || "",
       filetype: d.fileType || "",
       uploadedDate: d.uploadedDate ? new Date(d.uploadedDate).toLocaleDateString() : "",
-      filePath: buildDocumentUrl(d.filePath, d._id),
+      filePath: DocumentsService.getFileUrl(d._id),
     }));
 
   const handleReplace = async (docId, file, type) => {
@@ -336,7 +306,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
                 : (updated.fileType || "").includes("video") ? "video" : "document",
               filetype: updated.fileType || "",
               type: updated.type || d.type,
-              filePath: buildDocumentUrl(updated.filePath, updated._id || docId),
+              filePath: DocumentsService.getFileUrl(updated._id || docId),
               uploadedDate: updated.uploadedDate
                 ? new Date(updated.uploadedDate).toLocaleDateString() : d.uploadedDate,
             }
@@ -367,25 +337,21 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
     setSetTypeMsg("");
   };
 
-  const downloadDocument = async (doc, { saveAs = false } = {}) => {
-    if (!doc?.filePath && !doc?.id) return;
+  const downloadDocument = async (doc) => {
+    if (!doc?.id) return;
     try {
-      const response = await fetchDocumentResponse(doc);
+      const response = await fetchDocumentFile(doc.id);
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
-      link.download = doc.fileName || (saveAs ? "document-save" : "document");
+      link.download = doc.fileName || "document";
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(objectUrl);
-    } catch (err) {
-      alert(
-        err?.message?.includes("missing") || err?.message?.includes("not found")
-          ? `File missing on server for "${doc.fileName || "document"}". Please re-upload this document.`
-          : `Unable to open "${doc.fileName || "document"}". Please re-upload if the file is missing.`
-      );
+    } catch {
+      alert(fileMissingMessage(doc.fileName));
     }
   };
 
@@ -418,29 +384,21 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
         <DataTable
           data={documents}
           onOpen={async (item) => {
-            if (!item?.filePath) return;
-            const isImage =
-              String(item.filetype || "").toLowerCase().startsWith("image/") ||
-              /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(item.fileName || "");
+            if (!item?.id) return;
             try {
-              const response = await fetchDocumentResponse(item);
-              if (isImage) {
-                // Use blob URL so preview works whether local or production fallback served the bytes
-                const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
-                setPreviewDoc({ ...item, filePath: objectUrl, _blobUrl: objectUrl });
+              const response = await fetchDocumentFile(item.id);
+              const blob = await response.blob();
+              const objectUrl = URL.createObjectURL(blob);
+              if (isImageDoc(item)) {
+                setPreviewDoc({ ...item, previewUrl: objectUrl, _blobUrl: objectUrl });
                 setSetTypeValue(item.type || "Extra");
                 setSetTypeMsg("");
                 return;
               }
-              const blob = await response.blob();
-              const objectUrl = URL.createObjectURL(blob);
               window.open(objectUrl, "_blank", "noopener,noreferrer");
               setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-            } catch (err) {
-              alert(
-                `File missing on server for "${item.fileName || "document"}".\n\nThe upload record exists, but the file is not on disk.\nPlease re-upload this document.\n\nTip: when redeploying backend, keep the outer "uploads" folder.`
-              );
+            } catch {
+              alert(fileMissingMessage(item.fileName));
             }
           }}
           onEdit={isAdmin ? (item) => setEditItem(item) : undefined}
@@ -498,7 +456,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={() => downloadDocument(previewDoc, { saveAs: true })}
+                  onClick={() => downloadDocument(previewDoc)}
                   style={{
                     border: "1px solid #c5ddf0", background: "#fff", color: "#004494",
                     borderRadius: 8, padding: "8px 12px", fontWeight: 600, fontSize: 13, cursor: "pointer",
@@ -581,7 +539,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
 
             <div style={{ overflow: "auto", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <img
-                src={previewDoc.filePath}
+                src={previewDoc.previewUrl}
                 alt={previewDoc.fileName || "Document preview"}
                 style={{ display: "block", maxWidth: "92vw", maxHeight: "78vh", objectFit: "contain" }}
               />

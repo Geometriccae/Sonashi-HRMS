@@ -8,36 +8,17 @@ const isLocalhost = typeof window !== 'undefined' &&
    window.location.hostname.endsWith('.local') ||
    window.location.hostname === '0.0.0.0');
 
-const PRODUCTION_API = 'https://backend.sonashi.in/api';
-const PRODUCTION_HOST = 'https://backend.sonashi.in';
-
-const envApi = (process.env.REACT_APP_API_URL || '').trim();
-const envLooksLocal = /localhost|127\.0\.0\.1/i.test(envApi);
-
-// On Hostinger (hrms.sonashi.in), never use a localhost API URL even if it was
-// baked into the build from frontend/.env — that caused "Failed to load employees".
-const resolvedApiUrl = isLocalhost
-  ? (envApi || `http://${window.location.hostname}:5000/api`)
-  : (envApi && !envLooksLocal ? envApi : PRODUCTION_API);
+const envApi = (process.env.REACT_APP_API_URL || '').trim().replace(/\/$/, '');
 
 const config = {
-  API_BASE_URL: resolvedApiUrl,
+  API_BASE_URL: envApi,
 };
 
 /**
  * Returns the base URL for API requests (no trailing /api).
  */
 export function getApiBaseUrl() {
-  if (isLocalhost) {
-    if (envApi && !envLooksLocal) {
-      return String(envApi).replace(/\/api\/?$/, '');
-    }
-    return `http://${window.location.hostname}:5000`;
-  }
-  if (envApi && !envLooksLocal) {
-    return String(envApi).replace(/\/api\/?$/, '');
-  }
-  return PRODUCTION_HOST;
+  return String(envApi || '').replace(/\/api\/?$/, '');
 }
 
 /**
@@ -77,17 +58,16 @@ export function getAuthApiUrl(path) {
 }
 
 /**
- * Shared error handler for images to fallback to production backend.
+ * If an image fails to load from another host, retry using REACT_APP_API_URL.
  */
 export const handleImageError = (e) => {
   const currentSrc = e.target.src;
-  const productionBase = PRODUCTION_HOST;
-  
-  if (currentSrc && !currentSrc.startsWith(productionBase) && !currentSrc.startsWith('blob:')) {
-    // Try production fallback
+  const apiHost = getApiBaseUrl();
+
+  if (currentSrc && apiHost && !currentSrc.startsWith(apiHost) && !currentSrc.startsWith('blob:')) {
     try {
       const url = new URL(currentSrc);
-      e.target.src = `${productionBase}${url.pathname}`;
+      e.target.src = `${apiHost}${url.pathname}`;
     } catch (err) {
       e.target.style.display = 'none';
     }

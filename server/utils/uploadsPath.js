@@ -4,6 +4,12 @@ const fs = require("fs");
 const SERVER_DIR = path.join(__dirname, "..");
 const PARENT_DIR = path.join(SERVER_DIR, "..");
 
+function isInsideServerDir(p) {
+  const resolved = path.resolve(p).toLowerCase();
+  const server = path.resolve(SERVER_DIR).toLowerCase();
+  return resolved === server || resolved.startsWith(server + path.sep);
+}
+
 /**
  * WRITE root: always outer Hostinger/project uploads (sibling of server/), never server/uploads.
  * Prefer UPLOADS_ROOT env, then ../@uploads, then ../uploads (create ../uploads if missing).
@@ -16,16 +22,20 @@ function getUploadsRoot() {
   let chosen;
   if (fromEnv) {
     chosen = path.resolve(fromEnv);
-    fs.mkdirSync(chosen, { recursive: true });
   } else if (fs.existsSync(outerAt) && fs.statSync(outerAt).isDirectory()) {
     chosen = outerAt;
   } else if (fs.existsSync(outerUploads) && fs.statSync(outerUploads).isDirectory()) {
     chosen = outerUploads;
   } else {
-    fs.mkdirSync(outerUploads, { recursive: true });
     chosen = outerUploads;
   }
 
+  // Never write under server/ — force the sibling outer folder.
+  if (isInsideServerDir(chosen)) {
+    chosen = outerUploads;
+  }
+
+  fs.mkdirSync(chosen, { recursive: true });
   return chosen;
 }
 

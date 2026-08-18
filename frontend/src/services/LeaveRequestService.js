@@ -1,7 +1,7 @@
 import axios from "axios";
 import config from "../config/config";
 
-let baseURL = config.API_BASE_URL || 'http://localhost:5000/api';
+let baseURL = config.API_BASE_URL || '';
 if (!baseURL.endsWith('/api')) {
     baseURL = baseURL.endsWith('/') ? baseURL + 'api' : baseURL + '/api';
 }

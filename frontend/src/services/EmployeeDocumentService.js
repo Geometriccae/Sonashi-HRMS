@@ -3,7 +3,7 @@ import config from "../config/config";
 const apiRoot = (config.API_BASE_URL || "").replace(/\/$/, "");
 const baseUrl = `${apiRoot}/employeedocuments`;
 
-/** Stable viewer URL — uses API file route (handles disk path resolution). */
+/** Stable viewer URL — uses API file route from frontend/.env (REACT_APP_API_URL). */
 const getFileUrl = (docId) => {
   if (!docId) return "";
   return `${baseUrl}/file/${docId}`;

@@ -16,5 +16,4 @@ npm-debug.log*
 # Coverage
 /coverage
 
-# Uploads
-/uploads/expense-documents
+# Uploads live outside this folder (../uploads). Do not keep an inner server/uploads.

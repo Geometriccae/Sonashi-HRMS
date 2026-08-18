@@ -685,7 +685,7 @@ function SalarySlipTable({ userRole }) {
             const photoY = currentY + 2;
             if (slip.emailId) {
                 try {
-                    let apiBase = config.API_BASE_URL || 'http://localhost:5000/api';
+                    let apiBase = config.API_BASE_URL || '';
                     if (!apiBase.endsWith('/api')) {
                         apiBase = apiBase.endsWith('/') ? apiBase + 'api' : apiBase + '/api';
                     }
