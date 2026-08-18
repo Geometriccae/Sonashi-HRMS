@@ -25,6 +25,7 @@ import SalarySlips from "./pages/SalarySlips";
 import CompanyDocument from "./pages/CompanyDocument";
 import AnnualVacations from "./pages/AnnualVacations";
 import SettingsPreferences from "./pages/SettingsPreferences";
+import HrMetricsDashboardPage from "./pages/HrMetricsDashboardPage";
 
 import { ToastProvider } from "./context/ToastContext";
 import { SidebarProvider } from "./context/SidebarContext";
@@ -58,6 +59,7 @@ function App() {
             <Route path="/leave-requests" element={<ProtectedRoute><LeaveRequests /></ProtectedRoute>} />
             <Route path="/annual-vacations" element={<ProtectedRoute><AnnualVacations /></ProtectedRoute>} />
             <Route path="/salary-slips" element={<ProtectedRoute><SalarySlips /></ProtectedRoute>} />
+            <Route path="/hr-metrics-dashboard" element={<ProtectedRoute><HrMetricsDashboardPage /></ProtectedRoute>} />
             <Route path="/venkat" element={<ProtectedRoute><Venkat /></ProtectedRoute>} />
             <Route path="/settings-preferences" element={<ProtectedRoute><SettingsPreferences /></ProtectedRoute>} />
             <Route path="/example" element={<Example />} />
