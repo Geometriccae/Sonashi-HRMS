@@ -229,7 +229,6 @@ app.use(compression());
 
 app.use(cors({
   origin: (origin, cb) => {
-    console.log('[CORS DEBUG] Request from origin:', origin);
     if (!origin || allowedOrigins.indexOf(origin) !== -1 || ALLOW_ALL) return cb(null, true);
     console.warn('HTTP CORS blocked origin:', origin);
     return cb(new Error('Not allowed by CORS'), false);

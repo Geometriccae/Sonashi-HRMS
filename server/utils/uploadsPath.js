@@ -4,49 +4,26 @@ const fs = require("fs");
 const SERVER_DIR = path.join(__dirname, "..");
 const PARENT_DIR = path.join(SERVER_DIR, "..");
 
-function isInsideServerDir(p) {
-  const resolved = path.resolve(p).toLowerCase();
-  const server = path.resolve(SERVER_DIR).toLowerCase();
-  return resolved === server || resolved.startsWith(server + path.sep);
-}
-
 /**
- * WRITE root: always outer Hostinger/project uploads (sibling of server/), never server/uploads.
- * Prefer UPLOADS_ROOT env, then ../@uploads, then ../uploads (create ../uploads if missing).
+ * Uploads root from UPLOADS_ROOT in .env.
+ * Local example: ../uploads
+ * Hostinger: /home/u435871798/domains/backend.sonashi.in/uploads
  */
 function getUploadsRoot() {
   const fromEnv = (process.env.UPLOADS_ROOT || "").trim();
-  const outerAt = path.join(PARENT_DIR, "@uploads");
-  const outerUploads = path.join(PARENT_DIR, "uploads");
-
-  let chosen;
-  if (fromEnv) {
-    chosen = path.resolve(fromEnv);
-  } else if (fs.existsSync(outerAt) && fs.statSync(outerAt).isDirectory()) {
-    chosen = outerAt;
-  } else if (fs.existsSync(outerUploads) && fs.statSync(outerUploads).isDirectory()) {
-    chosen = outerUploads;
-  } else {
-    chosen = outerUploads;
-  }
-
-  // Never write under server/ — force the sibling outer folder.
-  if (isInsideServerDir(chosen)) {
-    chosen = outerUploads;
-  }
-
+  const chosen = fromEnv
+    ? path.resolve(fromEnv)
+    : path.join(PARENT_DIR, "uploads");
   fs.mkdirSync(chosen, { recursive: true });
   return chosen;
 }
 
-/** Read roots: write root first, then legacy locations (including old server/uploads). */
 function listUploadRoots() {
   const roots = [
     getUploadsRoot(),
     path.join(PARENT_DIR, "@uploads"),
     path.join(PARENT_DIR, "uploads"),
-    path.join(SERVER_DIR, "uploads"), // legacy READ only
-    path.join(PARENT_DIR, "Uploades"),
+    path.join(SERVER_DIR, "uploads"),
   ];
   return [...new Set(roots.map((p) => path.resolve(p)))];
 }
@@ -87,13 +64,7 @@ function findFileByBasename(dir, basename, maxDepth) {
   return null;
 }
 
-/**
- * Try several on-disk locations for a stored filePath.
- * Returns absolute path if found, otherwise null.
- */
-function resolveUploadDiskPath(filePath) {
-  if (!filePath) return null;
-
+function buildUploadCandidates(filePath) {
   const relative = normalizeUploadRelative(filePath);
   const basename = path.basename(relative);
   const uniqueRoots = listUploadRoots();
@@ -114,6 +85,14 @@ function resolveUploadDiskPath(filePath) {
     candidates.push(path.join(root, "employeeDocuments", basename));
     candidates.push(path.join(root, "employeedocuments", basename));
   }
+
+  return { relative, basename, uniqueRoots, candidates };
+}
+
+function resolveUploadDiskPath(filePath) {
+  if (!filePath) return null;
+
+  const { uniqueRoots, basename, candidates } = buildUploadCandidates(filePath);
 
   for (const candidate of candidates) {
     try {
@@ -136,10 +115,6 @@ function resolveUploadDiskPath(filePath) {
   return null;
 }
 
-/**
- * Ensure a subdirectory under the OUTER uploads root exists; return absolute path.
- * Never writes under server/uploads.
- */
 function ensureUploadSubdir(...parts) {
   const root = getUploadsRoot();
   const dir = path.join(root, ...parts);
@@ -153,6 +128,7 @@ module.exports = {
   getUploadsRoot,
   listUploadRoots,
   normalizeUploadRelative,
+  buildUploadCandidates,
   resolveUploadDiskPath,
   ensureUploadSubdir,
   SERVER_DIR,
