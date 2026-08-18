@@ -20,6 +20,7 @@ const employeeSchema = new mongoose.Schema({
   provisionPeriodEndDate: { type: Date, default: null },
   lastWorkingDay: { type: Date, default: null },
   travellingDate: { type: Date, default: null },
+  leaveEndDate: { type: Date, default: null },
   returnDate: { type: Date, default: null },
   firstWorkingDay: { type: Date, default: null },
   totalYearsExperience: { type: Number, default: null },
@@ -50,6 +51,9 @@ const employeeSchema = new mongoose.Schema({
     ],
     default: "Active"
   },
+
+  /** Status before Notice Period / Provision Period, used to restore on Reset. */
+  previousEmployeeStatus: { type: String, default: null },
 
   vacationStatus: {
     type: String,

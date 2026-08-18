@@ -10,7 +10,7 @@ import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
-import { buildYearList, yearsFromLeaveRequests } from "../../utils/yearOptions";
+import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import { isWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
@@ -306,14 +306,10 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         const empNameSearch = String(selectedEmp?.employeeName || selectedEmp?.name || "").toLowerCase().trim();
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
     });
-    const years = buildYearList({
-      fromDataYears: yearsFromLeaveRequests(employeeLeaves),
-      pastYears: 25,
-      futureYears: 2,
-    });
+    const years = buildLeaveHistoryYears(selectedEmp?.doj);
 
     const getYearlyLeaves = (year) => {
-        return employeeLeaves.filter(req => new Date(req.startDate).getFullYear() === year);
+        return employeeLeaves.filter((req) => leaveBelongsToHistoryYear(req, year, selectedEmp?.doj));
     };
 
     const getYearlyTotal = (year) => {
@@ -709,7 +705,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                             {leaveEntitlementType === 'New Leave' && (
                                 <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                                     <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
-                                        <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History (Last 5 Years)</h3>
+                                        <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History</h3>
                                     </div>
                                     <div style={{ overflowX: "auto" }}>
                                         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "400px" }}>

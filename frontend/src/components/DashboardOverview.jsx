@@ -35,12 +35,16 @@ const getDateConfigForStatus = (status) => {
       fieldKey: "lastWorkingDay",
       secondaryLabel: "Travelling Date",
       secondaryFieldKey: "travellingDate",
+      tertiaryLabel: "Leave End Date",
+      tertiaryFieldKey: "leaveEndDate",
     },
     "Vacation Pending": {
       label: "Last Working Day",
       fieldKey: "lastWorkingDay",
       secondaryLabel: "Travelling Date",
       secondaryFieldKey: "travellingDate",
+      tertiaryLabel: "Leave End Date",
+      tertiaryFieldKey: "leaveEndDate",
     },
     "Vacation Approved": {
       label: "Return / Entry Date",
@@ -64,6 +68,11 @@ const buildVacationDatePrompt = (employeeItem, newStatus) => {
     secondaryLabel: cfg.secondaryLabel,
     secondaryFieldKey: cfg.secondaryFieldKey,
     secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(employeeItem[cfg.secondaryFieldKey]) : "",
+    tertiaryLabel: cfg.tertiaryLabel,
+    tertiaryFieldKey: cfg.tertiaryFieldKey,
+    tertiaryDateValue: cfg.tertiaryFieldKey
+      ? toDateInputValue(employeeItem.endDate || employeeItem.leaveEndDate)
+      : "",
   };
 };
 
@@ -276,7 +285,7 @@ function DashboardOverview() {
   // Confirm date modal → save both status + date, then reopen table
   const handleDatePromptConfirm = async () => {
     if (!datePrompt || datePromptSaving) return;
-    const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, categoryToReopen } = datePrompt;
+    const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, tertiaryFieldKey, tertiaryDateValue, categoryToReopen } = datePrompt;
     if (newStatus === "Vacation Approved" && !dateValue) {
       alert("Please select the Return / Entry Date.");
       return;
@@ -288,9 +297,19 @@ function DashboardOverview() {
     } else if (newStatus === "Vacation Approved" && dateValue) {
       extraFields.firstWorkingDay = new Date(dateValue).toISOString();
     }
+    if (tertiaryFieldKey && tertiaryDateValue) {
+      extraFields[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
+    }
     setDatePromptSaving(true);
     try {
       const updatedEmployees = await handleVacationStatusChange(employeeItem, newStatus, extraFields);
+      if (employeeItem.linkedLeaveId && tertiaryDateValue) {
+        try {
+          await leaveRequestService.updateLeaveRequest(employeeItem.linkedLeaveId, {
+            endDate: new Date(tertiaryDateValue).toISOString(),
+          });
+        } catch (_) { /* employee dates already saved */ }
+      }
       // Refresh leave list so Leave Status / end dates stay in sync
       try {
         const leaveRequests = await leaveRequestService.getLeaveRequests();
@@ -330,71 +349,76 @@ function DashboardOverview() {
     const leaveSource = data.leaveRequests || [];
 
     let list = [];
-    switch (category) {
-      case "Total Employees":
-        list = empSource;
-        break;
-      case "Active Employees":
-        list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
-        break;
-      case "Inactive Employees":
-        list = empSource.filter(e => isNonWorkingEmployeeStatus(e.employeeStatus));
-        break;
-      case "On vacation": {
-        list = empSource
-          .filter(e => e.vacationStatus === "On Vacation")
-          .map(e => {
-            const leave = findLeaveForEmployee(e, leaveSource, empSource, "onVacation");
-            return {
-              ...e,
-              linkedEmployeeId: e._id,
-              linkedLeaveId: leave?._id || null,
-              startDate: leave?.startDate || e.lastWorkingDay || null,
-              endDate: leave?.endDate || e.returnDate || null,
-            };
+    try {
+      switch (category) {
+        case "Total Employees":
+          list = empSource;
+          break;
+        case "Active Employees":
+          list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
+          break;
+        case "Inactive Employees":
+          list = empSource.filter(e => isNonWorkingEmployeeStatus(e.employeeStatus));
+          break;
+        case "On vacation": {
+          list = empSource
+            .filter(e => e.vacationStatus === "On Vacation")
+            .map(e => {
+              const leave = findLeaveForEmployee(e, leaveSource, empSource, "onVacation");
+              return {
+                ...e,
+                linkedEmployeeId: e._id,
+                linkedLeaveId: leave?._id || null,
+                startDate: leave?.startDate || e.lastWorkingDay || null,
+                endDate: leave?.endDate || e.leaveEndDate || e.returnDate || null,
+              };
+            });
+          break;
+        }
+        case "Yet to go": {
+          list = buildYetToGoFromLeaves(empSource, leaveSource);
+          break;
+        }
+        case "Returned back from vacation": {
+          list = empSource
+            .filter(e => e.vacationStatus === "Vacation Approved")
+            .map(e => {
+              const leave = findLeaveForEmployee(e, leaveSource, empSource, "returned");
+              return {
+                ...e,
+                linkedEmployeeId: e._id,
+                linkedLeaveId: leave?._id || null,
+                startDate: leave?.startDate || e.lastWorkingDay || null,
+                endDate: leave?.endDate || e.firstWorkingDay || e.returnDate || null,
+              };
+            });
+          break;
+        }
+        case "Visa Expiry":
+          list = empSource.filter(e => {
+            if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
+            if (!e.visaExpiryDate) return false;
+            const expiry = new Date(e.visaExpiryDate);
+            return expiry > today && expiry <= next90Days;
           });
-        break;
-      }
-      case "Yet to go": {
-        list = buildYetToGoFromLeaves(empSource, leaveSource);
-        break;
-      }
-      case "Returned back from vacation": {
-        list = empSource
-          .filter(e => e.vacationStatus === "Vacation Approved")
-          .map(e => {
-            const leave = findLeaveForEmployee(e, leaveSource, empSource, "returned");
-            return {
-              ...e,
-              linkedEmployeeId: e._id,
-              linkedLeaveId: leave?._id || null,
-              startDate: leave?.startDate || e.lastWorkingDay || null,
-              endDate: leave?.endDate || e.firstWorkingDay || e.returnDate || null,
-            };
+          break;
+        case "Passport Expiry":
+          list = empSource.filter(e => {
+            if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
+            if (!e.passportExpiryDate) return false;
+            const expiry = new Date(e.passportExpiryDate);
+            return expiry > today && expiry <= next6Months;
           });
-        break;
+          break;
+        case "ONBOARDING":
+          list = [];
+          break;
+        default:
+          list = [];
       }
-      case "Visa Expiry":
-        list = empSource.filter(e => {
-          if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
-          if (!e.visaExpiryDate) return false;
-          const expiry = new Date(e.visaExpiryDate);
-          return expiry > today && expiry <= next90Days;
-        });
-        break;
-      case "Passport Expiry":
-        list = empSource.filter(e => {
-          if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
-          if (!e.passportExpiryDate) return false;
-          const expiry = new Date(e.passportExpiryDate);
-          return expiry > today && expiry <= next6Months;
-        });
-        break;
-      case "ONBOARDING":
-        list = [];
-        break;
-      default:
-        list = [];
+    } catch (error) {
+      console.error(`Failed to open dashboard card "${category}":`, error);
+      list = [];
     }
     setFilteredList(list);
     setSelectedCategory(category);
@@ -502,7 +526,7 @@ function DashboardOverview() {
                           {(selectedCategory === "On vacation" || selectedCategory === "Yet to go" || selectedCategory === "Returned back from vacation") ? (
                             <>
                               <td>{item.startDate ? new Date(item.startDate).toLocaleDateString('en-GB') : "—"}</td>
-                              <td>{item.endDate ? new Date(item.endDate).toLocaleDateString('en-GB') : "—"}</td>
+                              <td>{(item.endDate || item.leaveEndDate) ? new Date(item.endDate || item.leaveEndDate).toLocaleDateString('en-GB') : "—"}</td>
                               {selectedCategory === "On vacation" && canUpdateVacationReturn() && (
                                 <td>
                                   <button
@@ -869,6 +893,32 @@ function DashboardOverview() {
                       value={datePrompt.secondaryDateValue}
                       className="premium-input-date"
                       onChange={e => setDatePrompt(prev => ({ ...prev, secondaryDateValue: e.target.value }))}
+                      style={{
+                        border: "2px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "12px 16px",
+                        fontSize: "15px",
+                        color: "#0f172a",
+                        fontWeight: "600",
+                        outline: "none",
+                        width: "100%",
+                        boxSizing: "border-box",
+                        transition: "all 0.2s ease",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+                        cursor: "pointer"
+                      }}
+                    />
+                  </div>
+                )}
+                {datePrompt.tertiaryFieldKey && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Select {datePrompt.tertiaryLabel}
+                    </label>
+                    <DateInput
+                      value={datePrompt.tertiaryDateValue}
+                      className="premium-input-date"
+                      onChange={e => setDatePrompt(prev => ({ ...prev, tertiaryDateValue: e.target.value }))}
                       style={{
                         border: "2px solid #e2e8f0",
                         borderRadius: "12px",

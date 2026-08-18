@@ -775,8 +775,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             />
             <div className="form-fields-grid">
               <InputField
-                label="Work Permit No."
-                placeholder="Work Permit No."
+                label="Person Code"
+                placeholder="Person Code"
                 value={formData.workPermitNo}
                 onChange={(e) =>
                   handleInputChange("workPermitNo", e.target.value)

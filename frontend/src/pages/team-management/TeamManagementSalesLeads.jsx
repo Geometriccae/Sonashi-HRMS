@@ -939,7 +939,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column5}><span className={styles.text9}>Office</span><span className={styles.text10}>{employee.office || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}><span className={styles.text9}>Work Permit No</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Person Code</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Reporting Manager</span><span className={styles.text10}>{employee.reportingManager || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Employee Status</span><span className={styles.text10}>{formatEmployeeStatusDisplay(employee)}</span></div>
                         {isNonWorkingEmployeeStatus(employee.employeeStatus) ? (
@@ -1002,6 +1002,12 @@ function TeamManagementSalesLeads() {
                                 <span className={styles.text9}>Travelling Date</span>
                                 <span className={styles.text10}>
                                   {employee.travellingDate ? new Date(employee.travellingDate).toLocaleDateString('en-GB') : "Not provided"}
+                                </span>
+                              </div>
+                              <div className={styles.column4}>
+                                <span className={styles.text9}>Leave End Date</span>
+                                <span className={styles.text10}>
+                                  {(employee.leaveEndDate || employee.endDate) ? new Date(employee.leaveEndDate || employee.endDate).toLocaleDateString('en-GB') : "Not provided"}
                                 </span>
                               </div>
                             </>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import EmployeeService from "../../services/EmployeeService";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
-import { buildYearList } from "../../utils/yearOptions";
+import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import "./LeaveForm.css"; // Reusing the shared clean modal styles
@@ -51,18 +51,13 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
     });
 
-    // Leave history years: all years present in data + wide range (no hardcoded 2026)
-    const yearsFromLeaves = employeeLeaves
-      .map((req) => {
-        const d = new Date(req.startDate);
-        return Number.isNaN(d.getTime()) ? null : d.getFullYear();
-      })
-      .filter((y) => y != null);
-    const years = buildYearList({ fromDataYears: yearsFromLeaves, pastYears: 25, futureYears: 2 });
+    const years = buildLeaveHistoryYears(employee.doj);
+
+    const getYearlyLeaves = (year) =>
+        employeeLeaves.filter((req) => leaveBelongsToHistoryYear(req, year, employee.doj));
 
     const getYearlyTotal = (year) => {
-        return employeeLeaves
-            .filter(req => new Date(req.startDate).getFullYear() === year)
+        return getYearlyLeaves(year)
             .reduce((total, req) => {
                 const s = new Date(req.startDate);
                 const e = new Date(req.endDate);
@@ -161,7 +156,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                     {/* Yearly History Table */}
                     <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                         <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <h3 style={{ fontSize: "16px", fontWeight: "600", margin: 0 }}>Leave History (Last 5 Years)</h3>
+                            <h3 style={{ fontSize: "16px", fontWeight: "600", margin: 0 }}>Leave History</h3>
                             <button 
                                 onClick={handleDownloadExcel}
                                 style={{ fontSize: "12px", color: "#007aff", background: "none", border: "none", cursor: "pointer", fontWeight: "600" }}
@@ -180,7 +175,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                             <tbody>
                                 {years.map(year => {
                                     const total = getYearlyTotal(year);
-                                    const yearLeaves = employeeLeaves.filter(req => new Date(req.startDate).getFullYear() === year);
+                                    const yearLeaves = getYearlyLeaves(year);
                                     const isExpanded = expandedYear === year;
                                     return (
                                         <React.Fragment key={year}>

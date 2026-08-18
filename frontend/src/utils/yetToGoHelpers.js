@@ -1,12 +1,18 @@
 export const APPROVED_LEAVE_STATUSES = ["Approved", "HOD Approved"];
-export const YET_TO_GO_LEAVE_STATUSES = ["Pending", "HOD Approved", "Approved"];
+export const YET_TO_GO_LEAVE_STATUSES = APPROVED_LEAVE_STATUSES;
 
 export const toDayStart = (value) => {
   if (!value) return null;
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+  }
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return null;
-  dt.setHours(0, 0, 0, 0);
-  return dt;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
 };
 
 export const normalizeName = (name) =>
@@ -92,6 +98,23 @@ export const findLinkedEmployee = (req, empList) => {
   );
 };
 
+export const getLeaveTravelDate = (req, linkedEmployee) =>
+  toDayStart(linkedEmployee?.travellingDate || req.travellingDate || req.startDate);
+
+export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new Date()) => {
+  if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
+
+  const today = toDayStart(todayValue);
+  const travelDate = getLeaveTravelDate(req, linkedEmployee);
+  const leaveEndDate = toDayStart(req?.endDate);
+
+  if (!today || !travelDate || !leaveEndDate) return null;
+  if (today < travelDate) return "Vacation Pending";
+  if (today >= travelDate && today <= leaveEndDate) return "On Vacation";
+  if (today > leaveEndDate) return "Vacation Approved";
+  return null;
+};
+
 export const mapLeaveRow = (req, empList, targetStatus) => {
   const linked = findLinkedEmployee(req, empList);
   const empName = req.employeeName || linked?.employeeName || req.employee?.username || "Unknown";
@@ -133,9 +156,8 @@ export const leaveMatchesEmployee = (req, emp, empList) => {
 };
 
 export const findLeaveForEmployee = (emp, leaveList, empList, tabKey) => {
-  const statusFilter = tabKey === "yetToGo" ? YET_TO_GO_LEAVE_STATUSES : APPROVED_LEAVE_STATUSES;
   const candidates = leaveList.filter(
-    (req) => statusFilter.includes(req.status) && leaveMatchesEmployee(req, emp, empList)
+    (req) => APPROVED_LEAVE_STATUSES.includes(req.status) && leaveMatchesEmployee(req, emp, empList)
   );
   if (candidates.length === 0) return null;
 
@@ -149,43 +171,27 @@ export const findLeaveForEmployee = (emp, leaveList, empList, tabKey) => {
         : candidates;
 
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   if (tabKey === "onVacation") {
-    const active = pool.find((req) => {
-      const start = toDayStart(req.startDate);
-      const end = toDayStart(req.endDate);
-      return start && end && start <= today && end >= today;
-    });
+    const active = pool.find((req) => getEffectiveVacationStatus(req, emp, today) === "On Vacation");
     if (active) return active;
-
-    const open = pool
-      .filter((req) => {
-        const end = toDayStart(req.endDate);
-        return end && end >= today;
-      })
-      .sort((a, b) => toDayStart(a.endDate) - toDayStart(b.endDate));
-    if (open.length > 0) return open[0];
+    return null;
   }
 
   if (tabKey === "yetToGo") {
     const upcoming = pool
-      .filter((req) => {
-        const start = toDayStart(req.startDate);
-        return start && start >= today;
-      })
-      .sort((a, b) => toDayStart(a.startDate) - toDayStart(b.startDate));
+      .filter((req) => getEffectiveVacationStatus(req, emp, today) === "Vacation Pending")
+      .sort((a, b) => getLeaveTravelDate(a, emp) - getLeaveTravelDate(b, emp));
     if (upcoming.length > 0) return upcoming[0];
+    return null;
   }
 
   if (tabKey === "returned") {
     const past = pool
-      .filter((req) => {
-        const end = toDayStart(req.endDate);
-        return end && end < today;
-      })
+      .filter((req) => getEffectiveVacationStatus(req, emp, today) === "Vacation Approved")
       .sort((a, b) => toDayStart(b.endDate) - toDayStart(a.endDate));
     if (past.length > 0) return past[0];
+    return null;
   }
 
   return pool.sort(
@@ -208,19 +214,23 @@ const getEmployeeDedupeKey = (req, empList) => {
  * plus employees marked Vacation Pending.
  */
 export const buildYetToGoFromLeaves = (empList, leaveList) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const safeEmpList = Array.isArray(empList) ? empList : [];
   const safeLeaveList = Array.isArray(leaveList) ? leaveList : [];
 
   const upcoming = safeLeaveList
     .filter((req) => YET_TO_GO_LEAVE_STATUSES.includes(req.status))
     .filter((req) => {
-      const start = toDayStart(req.startDate);
-      return start && start >= today;
+      const linked = findLinkedEmployee(req, safeEmpList);
+      return getEffectiveVacationStatus(req, linked) === "Vacation Pending";
     })
-    .sort((a, b) => toDayStart(a.startDate) - toDayStart(b.startDate));
+    .sort((a, b) => {
+      const aTravel = getLeaveTravelDate(a, findLinkedEmployee(a, safeEmpList));
+      const bTravel = getLeaveTravelDate(b, findLinkedEmployee(b, safeEmpList));
+      if (!aTravel && !bTravel) return 0;
+      if (!aTravel) return 1;
+      if (!bTravel) return -1;
+      return aTravel - bTravel;
+    });
 
   const seen = new Set();
   const rows = [];
@@ -241,7 +251,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         endDate: req.endDate,
         leaveStatus: req.status,
         experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience),
-        vacationStatus: linked.vacationStatus || "Vacation Pending",
+        vacationStatus: "Vacation Pending",
       });
     } else {
       rows.push({ ...mapLeaveRow(req, safeEmpList, "Vacation Pending"), leaveStatus: req.status });
@@ -249,7 +259,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
   });
 
   safeEmpList
-    .filter((e) => e.vacationStatus === "Vacation Pending")
+    .filter((e) => Boolean(findLeaveForEmployee(e, safeLeaveList, safeEmpList, "yetToGo")))
     .forEach((e) => {
       const dedupeKey = String(e._id);
       if (seen.has(dedupeKey)) return;
@@ -265,7 +275,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         endDate: leave?.endDate || null,
         leaveStatus: leave?.status || null,
         experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
-        vacationStatus: e.vacationStatus || "Vacation Pending",
+        vacationStatus: "Vacation Pending",
       });
     });
 

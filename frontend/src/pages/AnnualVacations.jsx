@@ -148,7 +148,7 @@ const buildVacationExportRows = (list, tabKey) =>
     if (tabKey === "onVacation") {
       return {
         ...base,
-        "Leave End Date": fmt(item.endDate),
+        "Leave End Date": fmt(item.endDate || item.leaveEndDate),
         "Travelling Date": fmt(item.travellingDate),
         "Last Working Day": fmt(item.lastWorkingDay),
       };
@@ -158,7 +158,7 @@ const buildVacationExportRows = (list, tabKey) =>
         ...base,
         "Last Working Day": displayLastWorkingDay(item),
         "Travelling Date": fmt(item.travellingDate),
-        "Leave End Date": fmt(item.endDate),
+        "Leave End Date": fmt(item.endDate || item.leaveEndDate),
       };
     }
     return {
@@ -175,12 +175,16 @@ const getDateConfigForStatus = (status) => {
       fieldKey: "lastWorkingDay",
       secondaryLabel: "Travelling Date",
       secondaryFieldKey: "travellingDate",
+      tertiaryLabel: "Leave End Date",
+      tertiaryFieldKey: "leaveEndDate",
     },
     "Vacation Pending": {
       label: "Last Working Day",
       fieldKey: "lastWorkingDay",
       secondaryLabel: "Travelling Date",
       secondaryFieldKey: "travellingDate",
+      tertiaryLabel: "Leave End Date",
+      tertiaryFieldKey: "leaveEndDate",
     },
     "Vacation Approved": {
       label: "Return / Entry Date",
@@ -212,6 +216,11 @@ const buildEditModalState = (item, status, mode = "date") => {
     secondaryLabel: cfg.secondaryLabel,
     secondaryFieldKey: cfg.secondaryFieldKey,
     secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(item[cfg.secondaryFieldKey]) : "",
+    tertiaryLabel: cfg.tertiaryLabel,
+    tertiaryFieldKey: cfg.tertiaryFieldKey,
+    tertiaryDateValue: cfg.tertiaryFieldKey
+      ? toDateInputValue(item.endDate || item.leaveEndDate)
+      : "",
     mode,
   };
 };
@@ -381,7 +390,7 @@ function AnnualVacations() {
           linkedEmployeeId: e._id,
           linkedLeaveId: leave?._id || null,
           startDate: leave?.startDate || null,
-          endDate: leave?.endDate || null,
+          endDate: leave?.endDate || e.leaveEndDate || null,
           experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
         };
       });
@@ -625,7 +634,11 @@ function AnnualVacations() {
 
   const handleEditDateConfirm = async () => {
     if (!editModal || editModalSaving) return;
-    const { item, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, mode } = editModal;
+    const {
+      item, newStatus, fieldKey, dateValue,
+      secondaryFieldKey, secondaryDateValue,
+      tertiaryFieldKey, tertiaryDateValue, mode,
+    } = editModal;
 
     if ((newStatus === "Vacation Approved" || mode === "markReturn") && !dateValue) {
       showToast("Please select the Return / Entry Date.", "error");
@@ -647,10 +660,20 @@ function AnnualVacations() {
           if (secondaryFieldKey && secondaryDateValue) {
             extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
           }
+          if (tertiaryFieldKey && tertiaryDateValue) {
+            extra[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
+          }
         }
         const empId = getEmployeeIdFromItem(item);
         if (empId) {
           await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
+        }
+        if (item.linkedLeaveId && tertiaryDateValue) {
+          try {
+            await leaveRequestService.updateLeaveRequest(item.linkedLeaveId, {
+              endDate: new Date(tertiaryDateValue).toISOString(),
+            });
+          } catch (_) { /* employee dates already saved */ }
         }
         showToast("Status updated successfully.");
         const [empRes, leaveRes] = await Promise.all([
@@ -954,8 +977,8 @@ function AnnualVacations() {
                                       : "—"}
                                   </td>
 
-                                  {activeTab === "onVacation" && <><td>{fmt(item.endDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
-                                  {activeTab === "yetToGo"   && <><td>{displayLastWorkingDay(item)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.endDate)}</td></>}
+                                  {activeTab === "onVacation" && <><td>{fmt(item.endDate || item.leaveEndDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
+                                  {activeTab === "yetToGo"   && <><td>{displayLastWorkingDay(item)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.endDate || item.leaveEndDate)}</td></>}
                                   {activeTab === "returned"  && <><td>{fmt(item.returnDate)}</td><td>{fmt(item.firstWorkingDay)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
@@ -1057,6 +1080,13 @@ function AnnualVacations() {
                     <label className={styles.modalLabel}>{editModal.secondaryLabel}</label>
                     <DateInput className={styles.modalInput} value={editModal.secondaryDateValue}
                       onChange={e => setEditModal(prev => ({ ...prev, secondaryDateValue:e.target.value }))} />
+                  </div>
+                )}
+                {editModal.tertiaryFieldKey && (
+                  <div className={styles.modalField}>
+                    <label className={styles.modalLabel}>{editModal.tertiaryLabel}</label>
+                    <DateInput className={styles.modalInput} value={editModal.tertiaryDateValue}
+                      onChange={e => setEditModal(prev => ({ ...prev, tertiaryDateValue:e.target.value }))} />
                   </div>
                 )}
               </>
