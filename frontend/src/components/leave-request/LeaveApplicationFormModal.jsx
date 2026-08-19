@@ -42,7 +42,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
     if (!isOpen || !leaveRequest) return null;
 
     const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
-    const leaveStats = calculateLeaveBalance(employee, allLeaveRequests, leaveRequest.startDate);
+    const leaveStats = calculateLeaveBalance(employee, allLeaveRequests);
 
     const empNameSearch = String(employee.employeeName || employee.name || "").toLowerCase().trim();
 

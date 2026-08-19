@@ -1,7 +1,13 @@
 import ExcelJS from "exceljs";
-import { calculateLeaveDays } from "./leaveCalculator";
+import {
+  calculateLeaveDays,
+  computeExcelLeaveCalculation,
+  getApprovedLeavesForEmployee,
+  getLeaveTillDate,
+  lastFiveLeaveYears,
+  toLeaveCalendarDate,
+} from "./leaveCalculator";
 
-const APPROVED = new Set(["Approved", "HOD Approved"]);
 const MIN_LEAVE_SLOTS = 3;
 /** Master tracker year columns/sheets start from 2015 (per requirement). */
 const MASTER_TRACKER_START_YEAR = 2015;
@@ -23,17 +29,7 @@ const applyYellow = (cell) => {
   if (cell) cell.fill = YELLOW_FILL;
 };
 
-const excelSerialFromDate = (d) => {
-  if (!d || isNaN(d.getTime())) return null;
-  const utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  return Math.round((utc - Date.UTC(1899, 11, 30)) / 86400000);
-};
-
-const parseDate = (val) => {
-  if (!val) return null;
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? null : d;
-};
+const parseDate = (val) => toLeaveCalendarDate(val);
 
 const formatJoinMonthYear = (d) => {
   if (!d) return "";
@@ -47,33 +43,6 @@ const formatSheetDate = (d) => {
   const y = String(d.getFullYear()).slice(-2);
   return `${m}/${day}/${y}`;
 };
-
-const nameKey = (name) => String(name || "").toLowerCase().trim();
-
-const matchesEmployee = (req, emp) => {
-  const reqName = nameKey(req.employeeName);
-  const empName = nameKey(emp.employeeName || emp.name);
-  if (reqName && empName && reqName === empName) return true;
-
-  const empMongoId = String(emp._id || "").toLowerCase();
-  const empCode = String(emp.employeeId || "").toLowerCase();
-  const linked = req.employee;
-  if (linked) {
-    const linkedId = String(
-      linked.employeeId?._id || linked._id || linked.employeeId || linked || ""
-    ).toLowerCase();
-    if (linkedId && (linkedId === empMongoId || linkedId === empCode)) return true;
-  }
-  if (req.employeeId && empCode && String(req.employeeId).toLowerCase() === empCode) {
-    return true;
-  }
-  return false;
-};
-
-const getApprovedLeavesForEmployee = (emp, leaveRequests) =>
-  (leaveRequests || []).filter(
-    (req) => APPROVED.has(req.status) && matchesEmployee(req, emp)
-  );
 
 /**
  * Group approved leaves by calendar year of startDate.
@@ -130,14 +99,6 @@ const buildYearRange = (employees, leaveRequests, tillDate) => {
   return years;
 };
 
-/** CALCULATE LEAVE date ≈ max(DOJ, TILL − 5 years), matching master tracker window. */
-const getCalculateLeaveDate = (doj, tillDate) => {
-  const fiveYearsAgo = new Date(tillDate);
-  fiveYearsAgo.setFullYear(tillDate.getFullYear() - 5);
-  if (!doj) return fiveYearsAgo;
-  return doj > fiveYearsAgo ? doj : fiveYearsAgo;
-};
-
 const ordinal = (n) => {
   const labels = ["1ST", "2ND", "3RD", "4TH", "5TH", "6TH", "7TH", "8TH", "9TH", "10TH"];
   if (n <= labels.length) return `${labels[n - 1]} LEAVE`;
@@ -152,17 +113,13 @@ export function buildLeaveMasterTrackerData({
   leaveRequests = [],
   tillDate = null,
 } = {}) {
-  const till = tillDate ? new Date(tillDate) : new Date(new Date().getFullYear(), 11, 31);
-  till.setHours(0, 0, 0, 0);
+  const till = toLeaveCalendarDate(tillDate) || getLeaveTillDate();
 
   const years = buildYearRange(employees, leaveRequests, till);
-  // Last 5 calendar years up to TILL year (matches Excel SUM of those year columns)
-  const tillYear = till.getFullYear();
-  const last5Years = years.filter((y) => y >= tillYear - 4 && y <= tillYear);
+  const last5Years = lastFiveLeaveYears(till).filter((y) => years.includes(y));
 
   const employeeRows = employees.map((emp, idx) => {
-    const doj = parseDate(emp.doj);
-    const calcLeave = getCalculateLeaveDate(doj, till);
+    const calc = computeExcelLeaveCalculation(emp, leaveRequests, till);
     const leavesByYear = groupLeavesByYear(
       getApprovedLeavesForEmployee(emp, leaveRequests)
     );
@@ -171,49 +128,26 @@ export function buildLeaveMasterTrackerData({
     const yearHasCompanyTicket = {};
     years.forEach((y) => {
       const list = leavesByYear[y] || [];
-      yearTotals[y] = list.reduce((sum, l) => sum + (l.days || 0), 0);
+      yearTotals[y] = calc.yearTotals[y] || 0;
       yearHasCompanyTicket[y] = list.some((l) => l.requestAirfare);
     });
-
-    const last5Taken = last5Years.reduce((sum, y) => sum + (yearTotals[y] || 0), 0);
-
-    const tillSerialDays = excelSerialFromDate(till);
-    const calcSerialDays = excelSerialFromDate(calcLeave);
-    const joinSerialDays = excelSerialFromDate(doj);
-    const last5WindowDays =
-      tillSerialDays != null && calcSerialDays != null
-        ? Math.max(0, tillSerialDays - calcSerialDays)
-        : 0;
-
-    // Match Excel cell precision (2 d.p.) so LEAVE DUE matches =(30-Avrg)*yrs
-    const avrg = Number((last5Taken / 5).toFixed(2));
-    const yrs = Number((last5WindowDays / 365).toFixed(2));
-    const workingYrs = Number(
-      (
-        tillSerialDays != null && joinSerialDays != null
-          ? Math.max(0, (tillSerialDays - joinSerialDays) / 365)
-          : 0
-      ).toFixed(2)
-    );
-    // Master tracker Excel: LEAVE DUE = (30 - Avrg) * yrs
-    const leaveDue = Number(((30 - avrg) * yrs).toFixed(2));
 
     return {
       sno: idx + 1,
       employeeId: emp.employeeId || "",
       staffName: emp.employeeName || emp.name || "",
       salesman: "",
-      joiningDate: doj,
-      calculateLeave: calcLeave,
+      joiningDate: calc.joiningDate,
+      calculateLeave: calc.calculateLeaveDate,
       yearTotals,
       yearHasCompanyTicket,
       leavesByYear,
-      last5Taken,
-      avrg,
-      leaveDue,
-      last5WindowDays,
-      yrs,
-      workingYrs,
+      last5Taken: calc.totalTaken,
+      avrg: calc.averageLeave,
+      leaveDue: calc.leaveDue,
+      last5WindowDays: calc.workingDays,
+      yrs: calc.workingYears,
+      workingYrs: calc.workingYears,
       till,
     };
   });
@@ -351,16 +285,16 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
       last5Cell.value = row.last5Taken;
     }
 
-    // Avrg = last 5 years leave taken / 5
+    // Avrg = Working Years capped at 5
     avrgCell.value = {
-      formula: `ROUND(${colLetter(colLast5Taken)}${excelRow}/5,2)`,
+      formula: `ROUND(MIN(${colLetter(colLast5Days)}${excelRow}/365,5),2)`,
       result: row.avrg,
     };
     avrgCell.numFmt = "0.00";
 
     r.getCell(colLast5Days).value = row.last5WindowDays;
 
-    // yrs = (last 5 years day-window) / 365
+    // yrs = Working Days / 365 (Till − Calculate Leave Date)
     const yrsCell = r.getCell(colYrs);
     yrsCell.value = {
       formula: `ROUND(${colLetter(colLast5Days)}${excelRow}/365,2)`,
@@ -368,9 +302,9 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
     };
     yrsCell.numFmt = "0.00";
 
-    // LEAVE DUE = (30 - Avrg) * yrs  (same as Excel =(30-V3)*Y3)
+    // LEAVE DUE = (Average Leave × 30) − Leave Taken
     dueCell.value = {
-      formula: `ROUND((30-${colLetter(colAvrg)}${excelRow})*${colLetter(colYrs)}${excelRow},2)`,
+      formula: `ROUND(${colLetter(colAvrg)}${excelRow}*30-${colLetter(colLast5Taken)}${excelRow},2)`,
       result: row.leaveDue,
     };
     dueCell.numFmt = "0.00";

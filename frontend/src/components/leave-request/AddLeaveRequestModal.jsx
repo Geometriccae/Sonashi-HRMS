@@ -300,7 +300,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     // Calculate History Logic (Same as View Template)
     const selectedEmp = employees.find(e => e._id === formData.employeeId);
-    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0 };
+    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0 };
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
         const empNameSearch = String(selectedEmp?.employeeName || selectedEmp?.name || "").toLowerCase().trim();
