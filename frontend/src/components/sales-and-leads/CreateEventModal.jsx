@@ -8,6 +8,7 @@ import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { createEvent } from "../../services/CreateEventService"; // We'll create this
 import employeeService from "../../services/EmployeeService";
 import Select from "react-select";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 import { useToast } from "../../context/ToastContext";
 
 const DEFAULT_REMINDERS = Object.freeze([1, 15, 60, 180, 1440]); // minutes -> 1m,15m,1h,3h,1d
@@ -227,10 +228,8 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
               <label className="field-label">Assign Team Members</label>
               <Select
                 isMulti
-                options={employees.map((emp) => ({
-                  value: emp._id,
-                  label: emp.employeeName,
-                }))}
+                options={employees.map((emp) => toSearchableEmployeeOption(emp, { label: emp.employeeName }))}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employees
                   .filter((emp) =>
                     formData.assignedTeamMembers.includes(emp._id)

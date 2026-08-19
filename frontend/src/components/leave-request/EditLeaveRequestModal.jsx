@@ -10,6 +10,7 @@ import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
@@ -341,14 +342,14 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const baseDepartmentOptions = dynamicDepartmentOptions;
 
-    const employeeOptions = employees.map(emp => ({
-        value: emp._id,
-        label: `${emp.employeeName || emp.name || "Unknown"} (${emp.employeeId || "N/A"})`
-    }));
+    const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp));
 
     const reportingManagerOptions = employees.map(emp => ({
         value: emp.employeeName || emp.name || "Unknown",
-        label: emp.employeeName || emp.name || "Unknown"
+        label: emp.employeeName || emp.name || "Unknown",
+        employeeId: emp.employeeId || "",
+        name: emp.employeeName || emp.name || "",
+        hideUnlessSearch: isNonWorkingEmployeeStatus(emp.employeeStatus),
     }));
 
     const departmentOptions = [...baseDepartmentOptions];
@@ -475,8 +476,9 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                 (formData.employeeName ? { value: formData.employeeId || "unknown", label: formData.employeeName } : null)
                                             }
                                             onChange={handleEmployeeChange}
-                                            placeholder="Select employee..."
+                                            placeholder="Search employee..."
                                             isSearchable
+                                            filterOption={filterReactSelectEmployeeOption}
                                             isDisabled={!isEditable}
                                             styles={{
                                                 control: (base) => ({

@@ -137,6 +137,23 @@ export const matchesHrMetricsListFilters = (employee, params, asOfDate) => {
   return true;
 };
 
+export const HR_METRICS_LIST_PARAM_KEYS = [
+  "year",
+  "month",
+  "gender",
+  "department",
+  "designation",
+  "office",
+  "nationality",
+  "employeeType",
+  "joined",
+  "exited",
+  "ageMin",
+  "ageMax",
+  "salaryMin",
+  "salaryMax",
+];
+
 export const readHrMetricsListParams = (searchParams) => {
   const num = (key) => {
     const raw = searchParams.get(key);

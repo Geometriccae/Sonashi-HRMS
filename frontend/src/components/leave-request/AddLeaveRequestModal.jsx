@@ -13,7 +13,7 @@ import { calculateLeaveBalance } from "../../utils/leaveCalculator";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
-import { isWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
 import "./LeaveForm.css";
 
 function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null, onEditLeave }) {
@@ -377,16 +377,14 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     const departmentOptions = dynamicDepartmentOptions;
 
-    const activeEmployees = employees.filter(emp => isWorkingEmployeeStatus(emp.employeeStatus));
-
-    const employeeOptions = activeEmployees.map(emp => ({
-        value: emp._id,
-        label: `${emp.employeeName || emp.name || "Unknown"} (${emp.employeeId || "N/A"})`
-    }));
+    const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp));
 
     const reportingManagerOptions = employees.map(emp => ({
         value: (emp.employeeName || emp.name || "").trim(),
-        label: (emp.employeeName || emp.name || "Unknown").trim()
+        label: (emp.employeeName || emp.name || "Unknown").trim(),
+        employeeId: emp.employeeId || "",
+        name: emp.employeeName || emp.name || "",
+        hideUnlessSearch: isNonWorkingEmployeeStatus(emp.employeeStatus),
     })).filter(opt => opt.value !== "");
 
     const currentManager = (formData.reportingManager || "").trim();
@@ -440,7 +438,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                         options={employeeOptions}
                                         value={employeeOptions.find(opt => opt.value === formData.employeeId) || null}
                                         onChange={handleEmployeeChange}
-                                        placeholder="Select employee..."
+                                        placeholder="Search employee..."
+                                        filterOption={filterReactSelectEmployeeOption}
                                         styles={{
                                             control: (base) => ({
                                                 ...base,

@@ -5,6 +5,7 @@ import Side from "../sidebar/Sidebar";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavbar";
 import EmployeeService from "../../services/EmployeeService";
 import AttendanceService from "../../services/AttendanceService";
+import { filterEmployeesForDefaultList } from "../../utils/employeeStatusDisplay";
 import AttendanceUpdateModal from "../../components/team-management-components/AttendanceUpdateModal";
 import DateInput from "../../components/DateInput";
 import {
@@ -15,6 +16,7 @@ import {
 function AttendanceManagement() {
   const [searchParams] = useSearchParams();
   const [employees, setEmployees] = useState([]);
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [employeeError, setEmployeeError] = useState("");
 
@@ -69,6 +71,8 @@ function AttendanceManagement() {
     loadEmployees();
   }, []);
 
+  const visibleEmployees = filterEmployeesForDefaultList(employees, employeeSearch);
+
   const handleAttendanceChange = async (employeeId, status) => {
     setUpdatingId(employeeId);
     try {
@@ -103,12 +107,12 @@ function AttendanceManagement() {
   };
 
   const setAllAttendance = async (status) => {
-    if (!Array.isArray(employees) || employees.length === 0) return;
+    if (!Array.isArray(visibleEmployees) || visibleEmployees.length === 0) return;
     if (!window.confirm(`Are you sure you want to mark ALL employees as ${status}?`)) return;
     
     setBulkUpdating(true);
     try {
-      for (const emp of employees) {
+      for (const emp of visibleEmployees) {
         try {
           // Optimistically update UI first
           setEmployees((prev) =>
@@ -242,11 +246,11 @@ function AttendanceManagement() {
   };
 
   // Pagination Logic
-  const empTotalPages = Math.max(1, Math.ceil(employees.length / itemsPerPage) || 1);
+  const empTotalPages = Math.max(1, Math.ceil(visibleEmployees.length / itemsPerPage) || 1);
   const empPageSafe =
-    employees.length === 0 ? empPage : Math.min(empPage, empTotalPages);
+    visibleEmployees.length === 0 ? empPage : Math.min(empPage, empTotalPages);
   const empStartIndex = (empPageSafe - 1) * itemsPerPage;
-  const currentEmployees = employees.slice(empStartIndex, empStartIndex + itemsPerPage);
+  const currentEmployees = visibleEmployees.slice(empStartIndex, empStartIndex + itemsPerPage);
 
   const reportTotalPages = Math.max(1, Math.ceil(reportData.length / itemsPerPage) || 1);
   const reportPageSafe =
@@ -256,8 +260,8 @@ function AttendanceManagement() {
 
   // Clamp only after data exists (avoid wiping restored page while loading)
   useEffect(() => {
-    if (employees.length > 0 && empPage > empTotalPages) setEmpPage(empTotalPages);
-  }, [employees.length, empPage, empTotalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (visibleEmployees.length > 0 && empPage > empTotalPages) setEmpPage(empTotalPages);
+  }, [visibleEmployees.length, empPage, empTotalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (reportData.length > 0 && reportPage > reportTotalPages) setReportPage(reportTotalPages);
@@ -274,6 +278,14 @@ function AttendanceManagement() {
           <div className={styles["section-header"]}>
             <h3>Mark Attendance</h3>
             <div className={styles["actions"]}>
+              <input
+                type="search"
+                className={styles["input-small"]}
+                placeholder="Search employee..."
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+                aria-label="Search employee"
+              />
               <button
                 className={`${styles["action-btn"]} ${styles["btn-onsite"]}`}
                 disabled={bulkUpdating || loadingEmployees}
@@ -316,7 +328,7 @@ function AttendanceManagement() {
                   <tr>
                     <td colSpan="7" className={styles["center"]}>Loading employees...</td>
                   </tr>
-                ) : employees.length === 0 ? (
+                ) : visibleEmployees.length === 0 ? (
                   <tr>
                     <td colSpan="7" className={styles["center"]}>No employees found</td>
                   </tr>

@@ -96,7 +96,14 @@ function Dropdown({
   const filteredOptions = safeOptions.filter((option) => {
     if (!option) return false;
     const label = option.label != null ? String(option.label) : "";
-    return label.toLowerCase().includes(search);
+    const extra = [option.employeeId, option.name, option.emailId, option.mobile, option.employeeNumber]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const matchesSearch = !search || label.toLowerCase().includes(search) || extra.includes(search);
+    if (!matchesSearch) return false;
+    if (option.hideUnlessSearch && !search) return false;
+    return true;
   });
 
   const selectedOption = safeOptions.find((opt) => opt.value === value);

@@ -29,6 +29,8 @@ import {
 import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
+  toSearchableEmployeeOption,
+  filterReactSelectEmployeeOption,
 } from "../utils/employeeStatusDisplay";
 import { findLinkedEmployee } from "../utils/yetToGoHelpers";
 import { useUrlListView } from "../hooks/usePersistedListPage";
@@ -196,11 +198,9 @@ function Reports() {
     );
     return [
       { value: "All", label: "All Employees", name: "All Employees", employeeId: "" },
-      ...sorted.map((emp) => ({
+      ...sorted.map((emp) => toSearchableEmployeeOption(emp, {
         value: emp.employeeId || emp._id,
         label: `${emp.employeeName || "Unknown"}${emp.employeeId ? ` (${emp.employeeId})` : ""}`,
-        name: emp.employeeName || "Unknown",
-        employeeId: emp.employeeId || "",
       })),
     ];
   }, [employeeList]);
@@ -1296,14 +1296,11 @@ function Reports() {
                       onMenuOpen={handleEmployeeMenuOpen}
                       onMenuClose={handleEmployeeMenuClose}
                       filterOption={(option, inputValue) => {
-                        if (!inputValue) return true;
-                        const search = inputValue.trim().toLowerCase();
-                        const data = option.data || {};
-                        return (
-                          (option.label || "").toLowerCase().includes(search) ||
-                          (data.name || "").toLowerCase().includes(search) ||
-                          (data.employeeId || "").toLowerCase().includes(search)
-                        );
+                        if (option.value === "All") {
+                          if (!inputValue) return true;
+                          return String(option.label || "").toLowerCase().includes(inputValue.trim().toLowerCase());
+                        }
+                        return filterReactSelectEmployeeOption(option, inputValue);
                       }}
                     />
                   </div>

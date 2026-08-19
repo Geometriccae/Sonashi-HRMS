@@ -26,6 +26,7 @@ import {
 } from "../utils/yetToGoHelpers";
 import { canUpdateVacationReturn } from "../utils/permissions";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
+import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
 
 const TAB_STORAGE_KEY = "hrms:listPage:annual-vacations-tab";
 const VALID_TABS = new Set(["onVacation", "yetToGo", "returned"]);
@@ -363,9 +364,11 @@ function AnnualVacations() {
   // Leave-request date ranges are NOT used to inflate counts — the status
   // dropdown on Team Management / Dashboard is the single source of truth.
   const computeCounts = (empList, leaveList) => {
-    const onVacation = empList.filter(e => e.vacationStatus === "On Vacation").length;
-    const yetToGo    = buildYetToGoFromLeaves(empList, leaveList).length;
-    const returned   = empList.filter(e => e.vacationStatus === "Vacation Approved").length;
+    const working = empList.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
+    const onVacation = working.filter(e => e.vacationStatus === "On Vacation").length;
+    const yetToGo    = buildYetToGoFromLeaves(empList, leaveList)
+      .filter(row => isWorkingEmployeeStatus(row.employeeStatus)).length;
+    const returned   = working.filter(e => e.vacationStatus === "Vacation Approved").length;
     setCounts({ onVacation, yetToGo, returned });
   };
 
@@ -415,12 +418,15 @@ function AnnualVacations() {
         const haystack = [
           item.employeeName || item.name || "",
           item.employeeId   || "",
+          item.employeeNumber || "",
           item.department   || "",
           item.role         || "",
           item.office       || "",
           item.nationality  || "",
         ].join(" ").toLowerCase();
         if (!haystack.includes(q)) return false;
+      } else if (isNonWorkingEmployeeStatus(item.employeeStatus)) {
+        return false;
       }
 
       // ── Department ──

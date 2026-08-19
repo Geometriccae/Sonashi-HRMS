@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styles from "./AddUserModal.module.css";
 import EmployeeService from "../services/EmployeeService";
+import { employeesForNativeSelect } from "../utils/employeeStatusDisplay";
 
 const EditUserModal = ({ isOpen, onClose, onSubmit, userToEdit }) => {
   const [formData, setFormData] = useState({
@@ -107,7 +108,7 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, userToEdit }) => {
               disabled={loading}
             >
               <option value="">-- Select Employee --</option>
-              {employees.map((emp) => (
+              {employeesForNativeSelect(employees, formData.employeeId).map((emp) => (
                 <option key={emp._id} value={emp._id}>
                   {emp.employeeName} ({emp.employeeId})
                 </option>

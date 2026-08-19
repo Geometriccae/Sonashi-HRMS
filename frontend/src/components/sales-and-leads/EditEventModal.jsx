@@ -5,6 +5,7 @@ import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { updateEvent } from "../../services/CreateEventService";
 import employeeService from "../../services/EmployeeService";
 import Select from "react-select";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 
 function EditEventModal({
   isOpen,
@@ -111,7 +112,7 @@ function EditEventModal({
   }, [employees, formData.assignedTeamMembers]);
 
   // build employee options (value are strings) and use them for Select value
-  const employeeOptions = employees.map((emp) => ({ value: String(emp._id), label: emp.employeeName }));
+  const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp, { label: emp.employeeName, value: String(emp._id) }));
 
   if (!isOpen) return null;
 
@@ -302,6 +303,7 @@ function EditEventModal({
               <Select
                 isMulti
                 options={employeeOptions}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employeeOptions.filter(o => (formData.assignedTeamMembers || []).map(String).includes(o.value))}
                 onChange={(selectedOptions) => {
                   const values = selectedOptions ? selectedOptions.map((o) => String(o.value)) : [];

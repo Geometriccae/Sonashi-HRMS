@@ -6,6 +6,7 @@ import { updateTask } from "../../services/TaskService";
 import employeeService from "../../services/EmployeeService";
 import clientService from "../../services/ClientService";
 import Select from "react-select";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 
 function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
   const [formData, setFormData] = useState({
@@ -289,10 +290,8 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
               <label className="field-label">Assign Team Members</label>
               <Select
                 isMulti
-                options={employees.map((emp) => ({
-                  value: emp._id.toString(),
-                  label: emp.employeeName,
-                }))}
+                options={employees.map((emp) => toSearchableEmployeeOption(emp, { label: emp.employeeName, value: emp._id.toString() }))}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employees
                   .filter((emp) =>
                     formData.assignedTeamMembers.includes(emp._id.toString())

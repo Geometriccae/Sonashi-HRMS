@@ -5,6 +5,7 @@ import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { updateEvent } from "../../services/AssignEventService";
 import employeeService from "../../services/EmployeeService";
 import Select from "react-select";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 
 function EditAssignTaskModal({
   isOpen,
@@ -213,10 +214,7 @@ function EditAssignTaskModal({
 
  
     // build employeeOptions once employees loaded - SIMPLIFIED
-  const employeeOptions = employees.map((emp) => ({
-    value: String(emp._id),
-    label: emp.employeeName || emp.employeeId || String(emp._id),
-  }));
+  const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp, { label: emp.employeeName }));
 
   // Debug log to see the actual data
    // Comprehensive debug logging
@@ -438,6 +436,7 @@ function EditAssignTaskModal({
               <Select
                 isMulti
                 options={employeeOptions}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employeeOptions.filter(o => 
                   (formData.assignedTeamMembers || []).map(String).includes(String(o.value))
                 )}

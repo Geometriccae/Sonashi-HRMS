@@ -51,10 +51,7 @@ import {
   isNonWorkingEmployeeStatus,
   EMPLOYEE_STATUS_VALUES,
 } from "../../utils/employeeStatusDisplay";
-import {
-  matchesHrMetricsListFilters,
-  readHrMetricsListParams,
-} from "../../utils/hrMetricsFilters";
+import { HR_METRICS_LIST_PARAM_KEYS } from "../../utils/hrMetricsFilters";
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -199,11 +196,21 @@ function TeamMembersTable() {
   const itemsPerPage = Number(searchParams.get("size")) || 20;
   const activeFilter = searchParams.get("filter") || "Active";
   const searchTerm = searchParams.get("q") || "";
-  const metricsListParams = useMemo(() => readHrMetricsListParams(searchParams), [searchParams]);
   const listReturnPath = useMemo(() => {
     const query = searchParams.toString();
     return query ? `/teammanagement?${query}` : "/teammanagement";
   }, [searchParams]);
+
+  // HR Metrics year/filters belong on the metrics dashboard, not this list.
+  useEffect(() => {
+    const hasMetricsParams = HR_METRICS_LIST_PARAM_KEYS.some((key) => searchParams.has(key));
+    if (!hasMetricsParams) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      HR_METRICS_LIST_PARAM_KEYS.forEach((key) => next.delete(key));
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Restore last page from session when URL has no page (e.g. sidebar click)
   useEffect(() => {
@@ -714,32 +721,30 @@ function TeamMembersTable() {
   };
 
   const filteredData = useMemo(() => {
-    const asOf = metricsListParams.year
-      ? new Date(Number(metricsListParams.year), 11, 31, 23, 59, 59, 999)
-      : new Date();
-
     return employees.filter((member) => {
+      const q = searchTerm.trim().toLowerCase();
       let matchesFilter = true;
       if (activeFilter === "Active") {
-        matchesFilter = isWorkingEmployeeStatus(member.employeeStatus);
+        // Empty search: current staff only. Typing a search also finds matching ex-employees.
+        matchesFilter = q
+          ? true
+          : isWorkingEmployeeStatus(member.employeeStatus);
       } else if (activeFilter === "Inactive") {
         matchesFilter = isNonWorkingEmployeeStatus(member.employeeStatus);
       }
 
-      const q = searchTerm.toLowerCase();
       const matchesSearch =
         !q ||
         (member.employeeName || "").toLowerCase().includes(q) ||
         (member.employeeId || "").toLowerCase().includes(q) ||
+        (member.employeeNumber || "").toLowerCase().includes(q) ||
         (member.emailId || "").toLowerCase().includes(q) ||
         (member.mobile || "").toLowerCase().includes(q) ||
         (member.role || "").toLowerCase().includes(q);
 
-      const matchesMetrics = matchesHrMetricsListFilters(member, metricsListParams, asOf);
-
-      return matchesFilter && matchesSearch && matchesMetrics;
+      return matchesFilter && matchesSearch;
     });
-  }, [employees, activeFilter, searchTerm, metricsListParams]);
+  }, [employees, activeFilter, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
 
@@ -1059,7 +1064,7 @@ function TeamMembersTable() {
           onChange={(value) => patchSearchParams({ filter: value }, { resetPage: true })}
           options={[
             { label: "Active", value: "Active" },
-            { label: "Inactive", value: "Inactive" },
+            { label: "Ex-Employees", value: "Inactive" },
             { label: "All", value: "All" },
           ]}
           style={{ background: "#f5f5f5", padding: 4, borderRadius: 24 }}
@@ -1074,15 +1079,6 @@ function TeamMembersTable() {
           style={{ width: 320, borderRadius: 24 }}
         />
       </div>
-
-      {metricsListParams.year ? (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={`Showing employees for ${metricsListParams.year}${metricsListParams.month ? ` / ${metricsListParams.month}` : ""}${metricsListParams.gender ? ` · ${metricsListParams.gender}` : ""}${metricsListParams.department ? ` · ${metricsListParams.department}` : ""}${metricsListParams.joined === "1" ? " · New joiners" : ""}${metricsListParams.exited === "1" ? " · Exits" : ""}.`}
-        />
-      ) : null}
 
       <div className={styles.tableScrollWrap}>
       <Table

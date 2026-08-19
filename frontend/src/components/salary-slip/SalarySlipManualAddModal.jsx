@@ -10,6 +10,7 @@ import DateInput from '../DateInput';
 import { formatAed } from '../../utils/currency';
 import leaveRequestService from '../../services/LeaveRequestService';
 import { computePayablePayrollDays, getPayrollPeriod } from '../../utils/payrollPayableDays';
+import { isNonWorkingEmployeeStatus } from '../../utils/employeeStatusDisplay';
 
 const createInitialFormData = (month, year) => ({
     selectedEmployeeId: '',
@@ -371,6 +372,9 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                                     options={employees.map((employee) => ({
                                         label: `${employee.employeeName} (${employee.employeeId || 'No ID'})`,
                                         value: employee._id,
+                                        employeeId: employee.employeeId || '',
+                                        name: employee.employeeName || '',
+                                        hideUnlessSearch: isNonWorkingEmployeeStatus(employee.employeeStatus),
                                     }))}
                                     onChange={handleEmployeeSelect}
                                     required

@@ -139,9 +139,11 @@ function DashboardOverview() {
           if (isWorkingEmployeeStatus(emp.employeeStatus)) active++;
           else if (isNonWorkingEmployeeStatus(emp.employeeStatus)) inactive++;
 
-          // Count vacation statuses
-          if (vs === "On Vacation") attOnVacation++;
-          else if (vs === "Vacation Approved") attVacReturn++;
+          // Count vacation statuses for current staff only
+          if (isWorkingEmployeeStatus(emp.employeeStatus)) {
+            if (vs === "On Vacation") attOnVacation++;
+            else if (vs === "Vacation Approved") attVacReturn++;
+          }
 
           if (emp.visaExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
             const expiry = new Date(emp.visaExpiryDate);
@@ -159,7 +161,9 @@ function DashboardOverview() {
         });
 
         // Yet to go = all upcoming leave (any type) + Vacation Pending (no 60-day limit)
-        const yetToGoList = buildYetToGoFromLeaves(empList, leaveList);
+        const yetToGoList = buildYetToGoFromLeaves(empList, leaveList).filter(
+          (row) => isWorkingEmployeeStatus(row.employeeStatus)
+        );
         let onVacation = attOnVacation;
         let upcomingVacation = yetToGoList.length;
         let vacationReturn = attVacReturn;
@@ -167,7 +171,7 @@ function DashboardOverview() {
         if (isMounted) {
           setData({ employees: empList, leaveRequests: leaveList });
           setCounts({
-            total: empList.length,
+            total: active,
             active,
             inactive,
             onVacation,
@@ -352,7 +356,7 @@ function DashboardOverview() {
     try {
       switch (category) {
         case "Total Employees":
-          list = empSource;
+          list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
           break;
         case "Active Employees":
           list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
@@ -362,7 +366,7 @@ function DashboardOverview() {
           break;
         case "On vacation": {
           list = empSource
-            .filter(e => e.vacationStatus === "On Vacation")
+            .filter(e => isWorkingEmployeeStatus(e.employeeStatus) && e.vacationStatus === "On Vacation")
             .map(e => {
               const leave = findLeaveForEmployee(e, leaveSource, empSource, "onVacation");
               return {
@@ -376,12 +380,13 @@ function DashboardOverview() {
           break;
         }
         case "Yet to go": {
-          list = buildYetToGoFromLeaves(empSource, leaveSource);
+          list = buildYetToGoFromLeaves(empSource, leaveSource)
+            .filter(e => isWorkingEmployeeStatus(e.employeeStatus));
           break;
         }
         case "Returned back from vacation": {
           list = empSource
-            .filter(e => e.vacationStatus === "Vacation Approved")
+            .filter(e => isWorkingEmployeeStatus(e.employeeStatus) && e.vacationStatus === "Vacation Approved")
             .map(e => {
               const leave = findLeaveForEmployee(e, leaveSource, empSource, "returned");
               return {
