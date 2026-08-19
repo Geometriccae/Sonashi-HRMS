@@ -35,8 +35,6 @@ import { useUrlListView } from "../hooks/usePersistedListPage";
 
 const REPORT_TYPES = [
   "Leave Report",
-  "Airfare Report",
-  "Increment report",
   "Document expiry",
   "Salary report",
   "Employee Experience",
@@ -44,8 +42,6 @@ const REPORT_TYPES = [
 
 const REPORT_TYPE_TO_SLUG = {
   "Leave Report": "leave",
-  "Airfare Report": "airfare",
-  "Increment report": "increment",
   "Document expiry": "document-expiry",
   "Salary report": "salary",
   "Employee Experience": "employee-experience",
@@ -152,7 +148,7 @@ const getEmployeeSelectStyles = (menuWidth) => ({
 });
 
 function Reports() {
-  // Resume last selected report (e.g. Airfare) via URL + session — survives refresh & sidebar nav
+  // Resume last selected report (e.g. Leave) via URL + session — survives refresh & sidebar nav
   const [reportType, setReportType] = useUrlListView({
     storageKey: "reports",
     basePath: "/reports",
@@ -339,7 +335,7 @@ function Reports() {
   };
 
   // Full employee data (includes salaryDetails, increments, etc.)
-  // needed for Salary report and Increment report. Fetched once and cached.
+  // needed for Salary report. Fetched once and cached.
   // Optional statusFilter: 'Active' | 'InActive' — applied server-side.
   const fetchFullEmployees = async (statusFilter) => {
     const data = await employeeService.getEmployees({
@@ -359,7 +355,7 @@ function Reports() {
     );
     if (!Array.isArray(empList)) empList = [];
 
-    // Same status matching as Airfare / Increment (Active / InActive)
+    // Same status matching as other employee reports (Active / InActive)
     if (employeeStatus !== "All") {
       empList = empList.filter(
         (e) =>
@@ -579,7 +575,7 @@ function Reports() {
       );
       if (!Array.isArray(empList)) empList = [];
 
-      // Same status matching as Airfare / Increment (Active / InActive)
+      // Same status matching as other employee reports (Active / InActive)
       if (employeeStatus !== "All") {
         empList = empList.filter(
           (e) =>
@@ -669,293 +665,6 @@ function Reports() {
         const y = String(a["Leave Year"]).localeCompare(String(b["Leave Year"]));
         if (y !== 0) return y;
         return String(a["Employee Name"]).localeCompare(String(b["Employee Name"]));
-      });
-
-      return rows;
-    }
-
-    if (type === "Airfare Report") {
-      let data = await employeeService.getEmployeesList({ force: true });
-      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
-
-      // Dedupe by employeeId/_id so the report has no duplicate employee masters
-      const seen = new Set();
-      empList = empList.filter((e) => {
-        const key = String(e.employeeId || e._id || "");
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
-      if (employeeStatus !== "All") empList = empList.filter(e => e.employeeStatus === employeeStatus || e.attendance === employeeStatus);
-      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
-      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
-      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
-      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      empList = filterByExperience(empList);
-
-      const airfareYesOf = (e) =>
-        e?.airFare === true || e?.airFare === "true" || e?.airFare === "Yes";
-
-      const fmtSet = (d) =>
-        d ? new Date(d).toLocaleDateString("en-GB") : "Not set";
-      const fmtOpt = (d) =>
-        d ? new Date(d).toLocaleDateString("en-GB") : "";
-
-      // Selected year from existing Year filter (default current year for this report)
-      const selectedYear =
-        filterYear !== "All" && !Number.isNaN(Number(filterYear))
-          ? Number(filterYear)
-          : new Date().getFullYear();
-
-      // Fetch all leave records (existing airfare / vacation history) — year filter applied below
-      let leaves = [];
-      try {
-        const leaveData = await leaveRequestService.getLeaveRequests();
-        leaves = Array.isArray(leaveData) ? leaveData : (leaveData?.data || []);
-      } catch (err) {
-        console.error("Airfare report: failed to load leave history", err);
-        leaves = [];
-      }
-
-      const APPROVED_LEAVE = new Set(["Approved", "HOD Approved", "Imported"]);
-
-      // Paid in selected year from existing leave.requestAirfare (no new records)
-      const paidInSelectedYear = new Set();
-      for (const leave of leaves) {
-        if (!leave || leave.status === "Cancelled") continue;
-        if (leave.requestAirfare !== true) continue;
-        if (!APPROVED_LEAVE.has(leave.status)) continue;
-
-        const emp = findLinkedEmployee(leave, empList);
-        if (!emp) continue;
-
-        const dateForYear =
-          leave.travellingDate || leave.startDate || leave.lastWorkingDay || null;
-        if (!dateForYear) continue;
-        const d = new Date(dateForYear);
-        if (Number.isNaN(d.getTime())) continue;
-        const y =
-          typeof dateForYear === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateForYear)
-            ? Number(dateForYear.slice(0, 4))
-            : d.getUTCFullYear();
-        if (y !== selectedYear) continue;
-
-        const empKey = String(emp.employeeId || emp._id || "");
-        if (empKey) paidInSelectedYear.add(empKey);
-      }
-
-      // Existing columns + single Paid/Not Paid for the selected Year (no year columns)
-      const buildAirfareRow = (e, dates = {}, tripPaid = null) => {
-        const empKey = String(e.employeeId || e._id || "");
-        const paid =
-          tripPaid != null ? !!tripPaid : paidInSelectedYear.has(empKey);
-        return {
-          "Employee ID": e.employeeId || "",
-          Name: e.employeeName || "",
-          Department: e.department || "",
-          Role: e.role || "",
-          "Office Location": e.office || "",
-          "Company Code": e.companyCode || "",
-          "Airfare Entitlement": airfareYesOf(e) ? "Yes" : "No",
-          "Last Working Day": fmtSet(dates.lastWorkingDay),
-          "Travelling Date": fmtSet(dates.travellingDate),
-          "Return / Entry Date": fmtOpt(dates.returnDate),
-          "First Working Day": fmtOpt(dates.firstWorkingDay),
-          "Passport No": e.passportNo || "",
-          "Passport Expiry": e.passportExpiryDate
-            ? new Date(e.passportExpiryDate).toLocaleDateString("en-GB")
-            : "",
-          Year: String(selectedYear),
-          "Paid / Not Paid": paid ? "Paid" : "Not Paid",
-        };
-      };
-
-      const rows = [];
-      const coveredTripKeys = new Set();
-
-      const tripKey = (empKey, dateVal) => {
-        const day = dateVal ? new Date(dateVal).toISOString().slice(0, 10) : "";
-        return `${empKey}|${day}`;
-      };
-
-      // Scope rows to selected Year (existing Year filter); still honour month / date-range
-      const matchesSelectedYear = (dateVal) => {
-        if (!dateVal) return false;
-        const date = new Date(dateVal);
-        if (Number.isNaN(date.getTime())) return false;
-        const y =
-          typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)
-            ? Number(dateVal.slice(0, 4))
-            : date.getUTCFullYear();
-        if (y !== selectedYear) return false;
-        if (startDate && endDate) {
-          const start = new Date(startDate);
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999);
-          if (date < start || date > end) return false;
-        }
-        if (filterMonth !== "All") {
-          const monthMap = {
-            January: 0, February: 1, March: 2, April: 3, May: 4, June: 5,
-            July: 6, August: 7, September: 8, October: 9, November: 10, December: 11,
-          };
-          if (date.getUTCMonth() !== monthMap[filterMonth]) return false;
-        }
-        return true;
-      };
-
-      for (const leave of leaves) {
-        if (!leave || leave.status === "Cancelled") continue;
-
-        const leaveType = String(leave.leaveType || "");
-        const isTravelOrAirfareLeave =
-          leave.requestAirfare === true ||
-          leave.isPastLeave === true ||
-          leaveType === "Vacation" ||
-          leaveType === "Annual Leave";
-        if (!isTravelOrAirfareLeave) continue;
-
-        const emp = findLinkedEmployee(leave, empList);
-        if (!emp) continue;
-
-        const lastWorkingDay = leave.lastWorkingDay || leave.startDate || null;
-        const travellingDate = leave.travellingDate || leave.startDate || null;
-        const returnDate = leave.returnDate || leave.endDate || null;
-        const firstWorkingDay = leave.firstWorkingDay || leave.endDate || null;
-        const dateForFilter = travellingDate || lastWorkingDay || leave.startDate;
-
-        if (!matchesSelectedYear(dateForFilter)) continue;
-
-        const empKey = String(emp.employeeId || emp._id || "");
-        coveredTripKeys.add(tripKey(empKey, dateForFilter));
-        rows.push(
-          buildAirfareRow(
-            emp,
-            {
-              lastWorkingDay,
-              travellingDate,
-              returnDate,
-              firstWorkingDay,
-            },
-            leave.requestAirfare === true
-          )
-        );
-      }
-
-      // Employee-snapshot rows for selected year when not already covered by leave history
-      for (const e of empList) {
-        const snapDate = e.travellingDate || e.lastWorkingDay;
-        if (!matchesSelectedYear(snapDate)) continue;
-
-        const empKey = String(e.employeeId || e._id || "");
-        const key = tripKey(empKey, e.travellingDate || e.lastWorkingDay);
-        if (coveredTripKeys.has(key)) continue;
-
-        rows.push(
-          buildAirfareRow(e, {
-            lastWorkingDay: e.lastWorkingDay,
-            travellingDate: e.travellingDate,
-            returnDate: e.returnDate,
-            firstWorkingDay: e.firstWorkingDay,
-          })
-        );
-      }
-
-      rows.sort((a, b) => {
-        const parse = (v) => {
-          if (!v || v === "Not set") return 0;
-          const [dd, mm, yyyy] = String(v).split("/");
-          const t = new Date(Number(yyyy), Number(mm) - 1, Number(dd)).getTime();
-          return Number.isNaN(t) ? 0 : t;
-        };
-        return parse(a["Travelling Date"]) - parse(b["Travelling Date"]);
-      });
-
-      return rows;
-    }
-
-    if (type === "Increment report") {
-      let empList = await fetchFullEmployees(
-        employeeStatus === "Active"
-          ? "Active"
-          : employeeStatus === "InActive"
-            ? "InActive"
-            : undefined
-      );
-      if (!Array.isArray(empList)) empList = [];
-
-      if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
-      if (employeeStatus !== "All") {
-        empList = empList.filter(
-          (e) =>
-            e.employeeStatus === employeeStatus ||
-            e.attendance === employeeStatus ||
-            (employeeStatus === "Active" && isActiveEmployee(e)) ||
-            (employeeStatus === "InActive" && isInactiveEmployee(e))
-        );
-      }
-      if (filterDepartment !== "All") empList = empList.filter(e => e.department === filterDepartment);
-      if (filterRole !== "All") empList = empList.filter(e => e.role === filterRole);
-      if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
-      if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
-      empList = filterByExperience(empList);
-
-      let incrementRows = [];
-      empList.forEach((e) => {
-        const increments = Array.isArray(e.increments) ? e.increments : [];
-        increments.forEach((inc) => {
-          if (!inc) return;
-          incrementRows.push({
-            employeeId: e.employeeId,
-            name: e.employeeName,
-            department: e.department,
-            role: e.role,
-            date: inc.date,
-            previousSalary: inc.previousSalary,
-            incrementAmount: inc.incrementAmount,
-            newSalary: inc.newSalary,
-            reason: inc.reason,
-          });
-        });
-      });
-
-      // Only narrow by date when a date/year/month filter is explicitly set
-      if (hasDateFilter) {
-        incrementRows = incrementRows.filter((row) => {
-          if (!row.date) return false;
-          return isDateMatch(row.date);
-        });
-      }
-
-      const rows = incrementRows.map((row) => {
-        const d = row.date ? new Date(row.date) : null;
-        const validDate = d && !Number.isNaN(d.getTime());
-        return {
-          "Employee ID": row.employeeId || "",
-          Name: row.name || "",
-          Department: row.department || "",
-          Role: row.role || "",
-          "Increment Year": validDate
-            ? String(
-                typeof row.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(row.date)
-                  ? Number(row.date.slice(0, 4))
-                  : d.getUTCFullYear()
-              )
-            : "",
-          "Increment Date": validDate ? d.toLocaleDateString("en-GB") : "",
-          "Previous Salary": row.previousSalary || 0,
-          "Increment Amount": row.incrementAmount || 0,
-          "New Salary": row.newSalary || 0,
-          "Reason/Remarks": row.reason || "",
-        };
-      });
-
-      rows.sort((a, b) => {
-        const y = String(a["Increment Year"]).localeCompare(String(b["Increment Year"]));
-        if (y !== 0) return y;
-        return String(a.Name).localeCompare(String(b.Name));
       });
 
       return rows;
@@ -1131,10 +840,6 @@ function Reports() {
     try {
       if (reportType === "Leave Report") {
         await generateLeaveReport();
-      } else if (reportType === "Airfare Report") {
-        await generateAirfareReport();
-      } else if (reportType === "Increment report") {
-        await generateIncrementReport();
       } else if (reportType === "Document expiry") {
         await generateDocumentExpiryReport();
       } else if (reportType === "Salary report") {
@@ -1172,26 +877,6 @@ function Reports() {
     }
     if (format === "PDF") {
       exportToPDF(exportData, "Leave_Report");
-    }
-  };
-
-  const generateAirfareReport = async () => {
-    const exportData = await fetchReportData("Airfare Report");
-    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
-    if (format === "Excel") {
-      exportToExcel(exportData, "Airfare_Report");
-    } else if (format === "PDF") {
-      exportToPDF(exportData, "Airfare_Report");
-    }
-  };
-
-  const generateIncrementReport = async () => {
-    const exportData = await fetchReportData("Increment report");
-    if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
-    if (format === "Excel") {
-      exportToExcel(exportData, "Increment_Report");
-    } else if (format === "PDF") {
-      exportToPDF(exportData, "Increment_Report");
     }
   };
 
@@ -1563,12 +1248,8 @@ function Reports() {
                       setExperienceMode("minimum");
                       setFilterEmployee("All");
                       setFilterMonth("All");
-                      // Leave / Airfare / Increment: default Year = current (existing Year filter)
-                      if (
-                        nextType === "Leave Report" ||
-                        nextType === "Airfare Report" ||
-                        nextType === "Increment report"
-                      ) {
+                      // Leave: default Year = current (existing Year filter)
+                      if (nextType === "Leave Report") {
                         setFilterYear(String(new Date().getFullYear()));
                       } else {
                         setFilterYear("All");
@@ -1630,14 +1311,12 @@ function Reports() {
               )}
 
               {/* Employee & Leave Report Filters */}
-              {(reportType === "Airfare Report" ||
-                reportType === "Increment report" ||
-                reportType === "Document expiry" ||
+              {(reportType === "Document expiry" ||
                 reportType === "Salary report" ||
                 reportType === "Employee Experience" ||
                 reportType === "Leave Report") && (
                 <div className={styles.filtersPanel}>
-                  {/* Status — same as Airfare / other employee reports (filters Active / InActive) */}
+                  {/* Status — same as other employee reports (filters Active / InActive) */}
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Status</div>
                     <div className={styles["form-field"]}>

@@ -253,14 +253,14 @@ export function useUrlListPage({ storageKey, basePath, paramName = "page" }) {
 }
 
 /**
- * Persist a selected view/tab/type in URL + session (e.g. Reports → Airfare).
+ * Persist a selected view/tab/type in URL + session (e.g. Reports → Leave).
  * Survives sidebar navigation and browser refresh.
  *
  * @param {object} opts
  * @param {string} opts.storageKey
  * @param {string} opts.basePath
  * @param {string} [opts.paramName] default "type"
- * @param {Record<string, string>} opts.valueToSlug  e.g. { "Airfare Report": "airfare" }
+ * @param {Record<string, string>} opts.valueToSlug  e.g. { "Leave Report": "leave" }
  * @param {string} [opts.fallback] default ""
  */
 export function useUrlListView({
@@ -323,7 +323,27 @@ export function useUrlListView({
   );
 
   // Restore URL from session when landing without ?type=
+  // Drop unknown/removed slugs so old links (e.g. airfare) are not kept in the URL.
   useEffect(() => {
+    const urlSlug = searchParams.get(paramName) || "";
+    if (urlSlug && !slugToValue[urlSlug]) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete(paramName);
+          const qs = next.toString();
+          writePersistedPath(storageKey, qs ? `${basePath}?${qs}` : basePath);
+          return next;
+        },
+        { replace: true }
+      );
+      try {
+        sessionStorage.removeItem(PAGE_PREFIX + storageKey);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     if (!value) {
       writePersistedPath(storageKey, basePath);
       return;
