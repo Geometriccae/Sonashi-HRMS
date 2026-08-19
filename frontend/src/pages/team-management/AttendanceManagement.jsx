@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import styles from "./AttendanceManagement.module.css";
 import Side from "../sidebar/Sidebar";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavbar";
@@ -12,6 +13,7 @@ import {
 } from "../../hooks/usePersistedListPage";
 
 function AttendanceManagement() {
+  const [searchParams] = useSearchParams();
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [employeeError, setEmployeeError] = useState("");
@@ -21,8 +23,8 @@ function AttendanceManagement() {
 
   // Default report to today's date
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [startDate, setStartDate] = useState(todayStr);
-  const [endDate, setEndDate] = useState(todayStr);
+  const [startDate, setStartDate] = useState(searchParams.get("start") || todayStr);
+  const [endDate, setEndDate] = useState(searchParams.get("end") || todayStr);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
   const [reportData, setReportData] = useState([]);
@@ -30,7 +32,9 @@ function AttendanceManagement() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [summaryType, setSummaryType] = useState("Monthly");
-  const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
+  const [summaryYear, setSummaryYear] = useState(
+    Number(searchParams.get("year")) || new Date().getFullYear()
+  );
   const [summaryData, setSummaryData] = useState([]);
 
   // Pagination — resume last page via URL + session (same as Leave/Team)

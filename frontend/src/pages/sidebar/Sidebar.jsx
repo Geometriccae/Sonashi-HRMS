@@ -180,7 +180,7 @@ function Sidebar() {
                   onNavigate={handleNavClick}
                 />
                 <NavItem
-                  to="/hr-metrics-dashboard"
+                  to={readPersistedPath("hr-metrics", "/hr-metrics-dashboard")}
                   icon={filechartcolumn}
                   label="HR Metrics Dashboard"
                   active={isActive("/hr-metrics-dashboard")}

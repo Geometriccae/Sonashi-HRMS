@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ResponsiveContainer,
   BarChart,
@@ -20,13 +21,24 @@ import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import attendanceService from "../services/AttendanceService";
 import salarySlipService from "../services/SalarySlipService";
-import { buildYearList } from "../utils/yearOptions";
 import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../utils/employeeStatusDisplay";
 import { calculateLeaveBalance, calculateLeaveDays } from "../utils/leaveCalculator";
 import { CURRENCY_CODE } from "../utils/currency";
+import { writePersistedPath } from "../hooks/usePersistedListPage";
+import {
+  HR_METRICS_BASE_PATH,
+  HR_METRICS_STORAGE_KEY,
+  buildEmployeeListPath,
+  buildHrMetricsYearOptions,
+  employeeInWorkforceRange,
+  getAgeAsOf,
+  getSalaryAmount as getSalaryAmountFromFilters,
+  leaveMonthParam,
+  yearRangeBounds,
+} from "../utils/hrMetricsFilters";
 
 const MONTH_NAMES = [
   "January",
@@ -102,30 +114,7 @@ const formatCurrency = (value) => {
   }).format(Number(value) || 0);
 };
 
-const getSalaryAmount = (employee) => {
-  const salary = employee?.salaryDetails || {};
-  if (Number(salary.totalSalary) > 0) return Number(salary.totalSalary);
-  const basic = Number(salary.basicSalary) || 0;
-  const house = Number(salary.houseRent) || 0;
-  const travel = Number(salary.travelExp) || 0;
-  const other = Number(salary.other) || 0;
-  const allowance = Number(salary.totalAllowance) || house + travel + other;
-  const deduction = Number(salary.deduction) || 0;
-  const total = basic + allowance - deduction;
-  return total > 0 ? total : 0;
-};
-
-const getAge = (employee) => {
-  const dob = toDate(employee?.dateOfBirth);
-  if (!dob) return null;
-  const now = new Date();
-  let age = now.getFullYear() - dob.getFullYear();
-  const hasBirthdayPassed =
-    now.getMonth() > dob.getMonth() ||
-    (now.getMonth() === dob.getMonth() && now.getDate() >= dob.getDate());
-  if (!hasBirthdayPassed) age -= 1;
-  return age >= 0 ? age : null;
-};
+const getSalaryAmount = getSalaryAmountFromFilters;
 
 const getValueLabelPairs = (items, accessor) => {
   const counts = new Map();
@@ -151,7 +140,9 @@ const limitCategories = (items, limit = DEFAULT_CATEGORY_LIMIT) => {
 
   const topItems = items.slice(0, limit);
   const otherValue = items.slice(limit).reduce((sum, item) => sum + (Number(item.value) || 0), 0);
-  const grouped = otherValue > 0 ? [...topItems, { name: "Other", value: otherValue }] : topItems;
+  const grouped = otherValue > 0
+    ? [...topItems, { name: "Other", value: otherValue, isOther: true }]
+    : topItems;
   return addPercentages(grouped);
 };
 
@@ -161,7 +152,7 @@ const truncateLabel = (value, maxLength = 18) => {
   return `${label.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 };
 
-const getAgeBands = (employees) => {
+const getAgeBands = (employees, asOfDate) => {
   const buckets = [
     { name: "18-25", min: 18, max: 25, value: 0 },
     { name: "26-35", min: 26, max: 35, value: 0 },
@@ -171,7 +162,7 @@ const getAgeBands = (employees) => {
   ];
 
   employees.forEach((employee) => {
-    const age = getAge(employee);
+    const age = getAgeAsOf(employee, asOfDate);
     if (age == null) return;
     const bucket = buckets.find((item) => age >= item.min && age <= item.max);
     if (bucket) bucket.value += 1;
@@ -217,7 +208,7 @@ const getSalaryBands = (employees) => {
     band.value += 1;
   });
 
-  return bands.map(({ name, value }) => ({ name, value }));
+  return bands.map(({ name, value, min, max }) => ({ name, value, min, max }));
 };
 
 const getDateRangeFromFilters = ({ year, month, startDate, endDate }) => {
@@ -267,9 +258,20 @@ const monthNumberFromValue = (value) => {
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= 12 ? parsed : null;
 };
 
-function MetricCard({ label, value, subtext }) {
+function MetricCard({ label, value, subtext, onClick }) {
   return (
-    <div className={styles.metricCard}>
+    <div
+      className={`${styles.metricCard} ${onClick ? styles.metricCardClickable : ""}`}
+      onClick={onClick}
+      onKeyDown={onClick ? (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      } : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       <div className={styles.metricLabel}>{label}</div>
       <div className={styles.metricValue}>{value}</div>
       {subtext ? <div className={styles.metricSubtext}>{subtext}</div> : null}
@@ -300,7 +302,19 @@ function SummaryList({ items }) {
   return (
     <div className={styles.summaryList}>
       {items.map((item) => (
-        <div key={item.label} className={styles.summaryRow}>
+        <div
+          key={item.label}
+          className={`${styles.summaryRow} ${item.onClick ? styles.summaryRowClickable : ""}`}
+          onClick={item.onClick}
+          onKeyDown={item.onClick ? (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              item.onClick();
+            }
+          } : undefined}
+          role={item.onClick ? "button" : undefined}
+          tabIndex={item.onClick ? 0 : undefined}
+        >
           <span>{item.label}</span>
           <strong>{item.value}</strong>
         </div>
@@ -330,6 +344,8 @@ function CategoryTooltip({ active, payload, labelPrefix = "Category" }) {
 }
 
 export default function HrMetricsDashboard() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [employees, setEmployees] = useState([]);
@@ -339,23 +355,49 @@ export default function HrMetricsDashboard() {
   const [attendanceMonthlySummary, setAttendanceMonthlySummary] = useState([]);
   const [activeBreakdown, setActiveBreakdown] = useState(null);
   const currentYear = String(new Date().getFullYear());
+  const yearFromUrl = searchParams.get("year");
   const [filters, setFilters] = useState({
-    year: currentYear,
-    month: "All",
-    startDate: "",
-    endDate: "",
-    department: "All",
-    designation: "All",
-    location: "All",
-    employeeType: "All",
-    gender: "All",
+    year: yearFromUrl && yearFromUrl !== "All" ? yearFromUrl : currentYear,
+    month: searchParams.get("month") || "All",
+    startDate: searchParams.get("startDate") || "",
+    endDate: searchParams.get("endDate") || "",
+    department: searchParams.get("department") || "All",
+    designation: searchParams.get("designation") || "All",
+    location: searchParams.get("location") || "All",
+    employeeType: searchParams.get("employeeType") || "All",
+    gender: searchParams.get("gender") || "All",
   });
 
   const selectedRange = useMemo(() => getDateRangeFromFilters(filters), [filters]);
   const activeYear = useMemo(() => {
     const parsed = Number(filters.year);
-    return Number.isFinite(parsed) ? parsed : new Date().getFullYear();
+    const liveYear = new Date().getFullYear();
+    if (!Number.isFinite(parsed) || parsed > liveYear) return liveYear;
+    return parsed;
   }, [filters.year]);
+  const asOfDate = useMemo(
+    () => selectedRange.end || new Date(activeYear, 11, 31, 23, 59, 59, 999),
+    [selectedRange.end, activeYear]
+  );
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("year", String(activeYear));
+    if (filters.month && filters.month !== "All") params.set("month", filters.month);
+    if (filters.startDate) params.set("startDate", filters.startDate);
+    if (filters.endDate) params.set("endDate", filters.endDate);
+    if (filters.department !== "All") params.set("department", filters.department);
+    if (filters.designation !== "All") params.set("designation", filters.designation);
+    if (filters.location !== "All") params.set("location", filters.location);
+    if (filters.employeeType !== "All") params.set("employeeType", filters.employeeType);
+    if (filters.gender !== "All") params.set("gender", filters.gender);
+    const qs = params.toString();
+    const path = qs ? `${HR_METRICS_BASE_PATH}?${qs}` : HR_METRICS_BASE_PATH;
+    writePersistedPath(HR_METRICS_STORAGE_KEY, path);
+    if (searchParams.toString() !== qs) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [activeYear, filters, searchParams, setSearchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -415,34 +457,29 @@ export default function HrMetricsDashboard() {
       ...[...new Set(employees.map(getter).filter(Boolean).map((value) => String(value).trim()))].sort(),
     ];
 
-    const yearsFromData = [
-      ...employees
-        .map((employee) => {
-          const joinDate = toDate(employee.doj || employee.createdAt);
-          return joinDate ? joinDate.getFullYear() : null;
-        })
-        .filter(Boolean),
-      ...leaves
-        .map((leave) => {
-          const leaveDate = toDate(leave.startDate);
-          return leaveDate ? leaveDate.getFullYear() : null;
-        })
-        .filter(Boolean),
-      ...salarySlips.map((slip) => Number(slip.year)).filter(Number.isFinite),
-    ];
+    const yearsFromJoining = buildHrMetricsYearOptions(employees);
+    if (!yearsFromJoining.includes(String(activeYear))) {
+      yearsFromJoining.push(String(activeYear));
+      yearsFromJoining.sort((a, b) => Number(b) - Number(a));
+    }
 
     return {
-      years: buildYearList({ fromDataYears: yearsFromData, pastYears: 10, futureYears: 2, includeAll: true }),
+      years: yearsFromJoining,
       departments: buildOptions((employee) => employee.department),
       designations: buildOptions((employee) => employee.designation || employee.role),
       locations: buildOptions((employee) => employee.office),
       employeeTypes: buildOptions((employee) => employee.employeeStatus),
       genders: buildOptions((employee) => employee.gender),
     };
-  }, [employees, leaves, salarySlips]);
+  }, [employees, activeYear]);
 
   const filteredEmployees = useMemo(() => {
+    const workforceRange = selectedRange.start && selectedRange.end
+      ? selectedRange
+      : yearRangeBounds(activeYear, filters.month);
+
     return employees.filter((employee) => {
+      if (!employeeInWorkforceRange(employee, workforceRange)) return false;
       if (filters.department !== "All" && employee.department !== filters.department) return false;
       if (filters.designation !== "All" && (employee.designation || employee.role) !== filters.designation) return false;
       if (filters.location !== "All" && employee.office !== filters.location) return false;
@@ -450,7 +487,7 @@ export default function HrMetricsDashboard() {
       if (filters.gender !== "All" && employee.gender !== filters.gender) return false;
       return true;
     });
-  }, [employees, filters]);
+  }, [employees, filters, selectedRange, activeYear]);
 
   const employeeIdSet = useMemo(
     () => new Set(filteredEmployees.map((employee) => String(employee._id || employee.id || employee.employeeId || ""))),
@@ -515,7 +552,7 @@ export default function HrMetricsDashboard() {
     );
 
     const salaries = workforce.map(getSalaryAmount).filter((amount) => Number.isFinite(amount) && amount > 0);
-    const ages = workforce.map(getAge).filter((age) => age != null);
+    const ages = workforce.map((employee) => getAgeAsOf(employee, asOfDate)).filter((age) => age != null);
 
     return {
       totalEmployees: workforce.length,
@@ -527,7 +564,7 @@ export default function HrMetricsDashboard() {
       totalPayroll: salaries.length ? salaries.reduce((sum, amount) => sum + amount, 0) : null,
       attrition: workforce.length ? (exits.length / workforce.length) * 100 : null,
     };
-  }, [filteredEmployees, selectedRange, activeYear]);
+  }, [filteredEmployees, selectedRange, activeYear, asOfDate]);
 
   const attendanceOverview = useMemo(() => {
     if (!filteredAttendanceRecords.length) return emptyAttendanceSummary;
@@ -631,12 +668,12 @@ export default function HrMetricsDashboard() {
       locationsAll: addPercentages(locations),
       locations: limitCategories(locations, DEFAULT_CATEGORY_LIMIT),
       genders: getValueLabelPairs(filteredEmployees, (employee) => employee.gender),
-      ageGroups: getAgeBands(filteredEmployees),
+      ageGroups: getAgeBands(filteredEmployees, asOfDate),
       nationalitiesAll: addPercentages(nationalities),
       nationalities: limitCategories(nationalities, NATIONALITY_CATEGORY_LIMIT),
       salaryBands: getSalaryBands(filteredEmployees),
     };
-  }, [filteredEmployees]);
+  }, [filteredEmployees, asOfDate]);
 
   const breakdownColumns = useMemo(
     () => [
@@ -729,6 +766,91 @@ export default function HrMetricsDashboard() {
       };
     });
   }, [attendanceMonthlySummary, filteredEmployees, filteredSalarySlips, activeYear]);
+
+  const listContext = useMemo(() => ({
+    year: String(activeYear),
+    month: filters.month !== "All" ? filters.month : undefined,
+    department: filters.department !== "All" ? filters.department : undefined,
+    designation: filters.designation !== "All" ? filters.designation : undefined,
+    office: filters.location !== "All" ? filters.location : undefined,
+    gender: filters.gender !== "All" ? filters.gender : undefined,
+    employeeType: filters.employeeType !== "All" ? filters.employeeType : undefined,
+  }), [activeYear, filters]);
+
+  const openEmployeeList = useCallback((extra = {}) => {
+    navigate(buildEmployeeListPath({ ...listContext, ...extra }));
+  }, [navigate, listContext]);
+
+  const openLeaveList = useCallback((extra = {}) => {
+    const params = new URLSearchParams();
+    params.set("year", String(activeYear));
+    const monthParam = leaveMonthParam(filters.month);
+    if (monthParam) params.set("month", monthParam);
+    if (extra.leaveType) params.set("leaveType", extra.leaveType);
+    navigate(`/leave-requests?${params.toString()}`);
+  }, [navigate, activeYear, filters.month]);
+
+  const openAttendance = useCallback((monthName) => {
+    const range = yearRangeBounds(activeYear, monthName || filters.month);
+    const params = new URLSearchParams();
+    if (range.start) params.set("start", range.start.toISOString().slice(0, 10));
+    if (range.end) params.set("end", range.end.toISOString().slice(0, 10));
+    params.set("year", String(activeYear));
+    navigate(`/attendance-management?${params.toString()}`);
+  }, [navigate, activeYear, filters.month]);
+
+  const openSalarySlips = useCallback((monthName) => {
+    const params = new URLSearchParams();
+    params.set("year", String(activeYear));
+    const month = monthName || (filters.month !== "All" ? filters.month : "");
+    if (month) params.set("month", month);
+    navigate(`/salary-slips?${params.toString()}`);
+  }, [navigate, activeYear, filters.month]);
+
+  const handleCategoryClick = useCallback((field, point, allRows, breakdownTitle) => {
+    const data = point?.payload || point;
+    if (!data) return;
+    if (data.isOther && allRows) {
+      setActiveBreakdown({
+        title: breakdownTitle,
+        label: breakdownTitle,
+        field,
+        rows: allRows.map((item) => ({ ...item, key: item.name })),
+      });
+      return;
+    }
+    if (field === "ageMin") {
+      openEmployeeList({
+        filter: "All",
+        ageMin: data.min,
+        ageMax: Number.isFinite(data.max) ? data.max : undefined,
+      });
+      return;
+    }
+    openEmployeeList({ [field]: data.name, filter: "All" });
+  }, [openEmployeeList]);
+
+  const handleTrendClick = useCallback((event, maybePayload) => {
+    const payload = maybePayload?.payload || event?.payload || maybePayload || event;
+    if (!payload?.name) return;
+    const monthName = MONTH_NAMES.find((month) => month.slice(0, 3) === payload.name);
+    const dataKey = maybePayload?.dataKey || event?.dataKey;
+    if (dataKey === "attendance") {
+      openAttendance(monthName);
+      return;
+    }
+    if (dataKey === "payroll") {
+      openSalarySlips(monthName);
+      return;
+    }
+    const extra = { filter: "All", month: monthName };
+    if (dataKey === "joiners") extra.joined = "1";
+    if (dataKey === "exits" || dataKey === "attrition") {
+      extra.exited = "1";
+      extra.filter = "Inactive";
+    }
+    openEmployeeList(extra);
+  }, [openAttendance, openSalarySlips, openEmployeeList]);
 
   const sectionNoData = {
     recruitment: true,
@@ -867,14 +989,46 @@ export default function HrMetricsDashboard() {
       </section>
 
       <div className={styles.metricsGrid}>
-        <MetricCard label="Total Employees" value={formatCount(kpis.totalEmployees)} />
-        <MetricCard label="Active Employees" value={formatCount(kpis.activeEmployees)} />
-        <MetricCard label="New Joiners" value={formatCount(kpis.newJoiners)} />
-        <MetricCard label="Total Exits" value={formatCount(kpis.totalExits)} />
-        <MetricCard label="Average Age" value={kpis.averageAge == null ? "No data" : `${kpis.averageAge.toFixed(1)} yrs`} />
-        <MetricCard label="Average Salary" value={formatCurrency(kpis.averageSalary)} />
-        <MetricCard label="Total Payroll" value={formatCurrency(kpis.totalPayroll)} />
-        <MetricCard label="Attrition %" value={formatPercent(kpis.attrition)} />
+        <MetricCard
+          label={`Total Employees (${activeYear})`}
+          value={formatCount(kpis.totalEmployees)}
+          onClick={() => openEmployeeList({ filter: "All" })}
+        />
+        <MetricCard
+          label="Active Employees"
+          value={formatCount(kpis.activeEmployees)}
+          onClick={() => openEmployeeList({ filter: "Active" })}
+        />
+        <MetricCard
+          label="New Joiners"
+          value={formatCount(kpis.newJoiners)}
+          onClick={() => openEmployeeList({ filter: "All", joined: "1" })}
+        />
+        <MetricCard
+          label="Total Exits"
+          value={formatCount(kpis.totalExits)}
+          onClick={() => openEmployeeList({ filter: "Inactive", exited: "1" })}
+        />
+        <MetricCard
+          label="Average Age"
+          value={kpis.averageAge == null ? "No data" : `${kpis.averageAge.toFixed(1)} yrs`}
+          onClick={() => openEmployeeList({ filter: "All" })}
+        />
+        <MetricCard
+          label="Average Salary"
+          value={formatCurrency(kpis.averageSalary)}
+          onClick={() => openEmployeeList({ filter: "All" })}
+        />
+        <MetricCard
+          label="Total Payroll"
+          value={formatCurrency(kpis.totalPayroll)}
+          onClick={() => openSalarySlips()}
+        />
+        <MetricCard
+          label="Attrition %"
+          value={formatPercent(kpis.attrition)}
+          onClick={() => openEmployeeList({ filter: "Inactive", exited: "1" })}
+        />
       </div>
 
       <div className={styles.threeColumnGrid}>
@@ -892,7 +1046,18 @@ export default function HrMetricsDashboard() {
                   tickFormatter={(value) => truncateLabel(value, 16)}
                 />
                 <Tooltip content={<CategoryTooltip labelPrefix="Department" />} />
-                <Bar dataKey="value" fill="#3b82f6" radius={[0, 8, 8, 0]} />
+                <Bar
+                  dataKey="value"
+                  fill="#3b82f6"
+                  radius={[0, 8, 8, 0]}
+                  cursor="pointer"
+                  onClick={(point) => handleCategoryClick(
+                    "department",
+                    point,
+                    employeeOverviewCharts.departmentsAll,
+                    "All Departments"
+                  )}
+                />
               </BarChart>
             </ResponsiveContainer>
           </DashboardChart>
@@ -910,6 +1075,7 @@ export default function HrMetricsDashboard() {
                   setActiveBreakdown({
                     title: "All Designations",
                     label: "Designation",
+                    field: "designation",
                     rows: employeeOverviewCharts.designationsAll.map((item) => ({ ...item, key: item.name })),
                   })
                 }
@@ -938,7 +1104,18 @@ export default function HrMetricsDashboard() {
                   tickFormatter={(value) => truncateLabel(value, 16)}
                 />
                 <Tooltip content={<CategoryTooltip labelPrefix="Designation" />} />
-                <Bar dataKey="value" fill="#14b8a6" radius={[0, 8, 8, 0]} />
+                <Bar
+                  dataKey="value"
+                  fill="#14b8a6"
+                  radius={[0, 8, 8, 0]}
+                  cursor="pointer"
+                  onClick={(point) => handleCategoryClick(
+                    "designation",
+                    point,
+                    employeeOverviewCharts.designationsAll,
+                    "All Designations"
+                  )}
+                />
               </BarChart>
             </ResponsiveContainer>
           </DashboardChart>
@@ -956,6 +1133,7 @@ export default function HrMetricsDashboard() {
                   setActiveBreakdown({
                     title: "All Locations",
                     label: "Location",
+                    field: "office",
                     rows: employeeOverviewCharts.locationsAll.map((item) => ({ ...item, key: item.name })),
                   })
                 }
@@ -984,7 +1162,18 @@ export default function HrMetricsDashboard() {
                   tickFormatter={(value) => truncateLabel(value, 16)}
                 />
                 <Tooltip content={<CategoryTooltip labelPrefix="Location" />} />
-                <Bar dataKey="value" fill="#8b5cf6" radius={[0, 8, 8, 0]} />
+                <Bar
+                  dataKey="value"
+                  fill="#8b5cf6"
+                  radius={[0, 8, 8, 0]}
+                  cursor="pointer"
+                  onClick={(point) => handleCategoryClick(
+                    "office",
+                    point,
+                    employeeOverviewCharts.locationsAll,
+                    "All Locations"
+                  )}
+                />
               </BarChart>
             </ResponsiveContainer>
           </DashboardChart>
@@ -996,7 +1185,14 @@ export default function HrMetricsDashboard() {
           <DashboardChart hasData={employeeOverviewCharts.genders.length > 0}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={employeeOverviewCharts.genders} dataKey="value" nameKey="name" outerRadius={90}>
+                <Pie
+                  data={employeeOverviewCharts.genders}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={90}
+                  cursor="pointer"
+                  onClick={(point) => openEmployeeList({ filter: "All", gender: (point?.payload || point)?.name })}
+                >
                   {employeeOverviewCharts.genders.map((entry, index) => (
                     <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
@@ -1016,7 +1212,13 @@ export default function HrMetricsDashboard() {
                 <XAxis dataKey="name" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="value" fill="#14b8a6" radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="value"
+                  fill="#14b8a6"
+                  radius={[8, 8, 0, 0]}
+                  cursor="pointer"
+                  onClick={(point) => handleCategoryClick("ageMin", point)}
+                />
               </BarChart>
             </ResponsiveContainer>
           </DashboardChart>
@@ -1040,7 +1242,18 @@ export default function HrMetricsDashboard() {
                   tickFormatter={(value) => truncateLabel(value, 16)}
                 />
                 <Tooltip content={<CategoryTooltip labelPrefix="Nationality" />} />
-                <Bar dataKey="value" fill="#8b5cf6" radius={[0, 8, 8, 0]} />
+                <Bar
+                  dataKey="value"
+                  fill="#8b5cf6"
+                  radius={[0, 8, 8, 0]}
+                  cursor="pointer"
+                  onClick={(point) => handleCategoryClick(
+                    "nationality",
+                    point,
+                    employeeOverviewCharts.nationalitiesAll,
+                    "All Nationalities"
+                  )}
+                />
               </BarChart>
             </ResponsiveContainer>
           </DashboardChart>
@@ -1051,10 +1264,10 @@ export default function HrMetricsDashboard() {
         <SectionCard title="Salary Analysis: Salary Overview">
           <SummaryList
             items={[
-              { label: "Average Salary", value: formatCurrency(salaryOverview.average) },
-              { label: "Minimum Salary", value: formatCurrency(salaryOverview.minimum) },
-              { label: "Maximum Salary", value: formatCurrency(salaryOverview.maximum) },
-              { label: "Total Salary", value: formatCurrency(salaryOverview.total) },
+              { label: "Average Salary", value: formatCurrency(salaryOverview.average), onClick: () => openEmployeeList({ filter: "All" }) },
+              { label: "Minimum Salary", value: formatCurrency(salaryOverview.minimum), onClick: () => openEmployeeList({ filter: "All" }) },
+              { label: "Maximum Salary", value: formatCurrency(salaryOverview.maximum), onClick: () => openEmployeeList({ filter: "All" }) },
+              { label: "Total Salary", value: formatCurrency(salaryOverview.total), onClick: () => openSalarySlips() },
             ]}
           />
         </SectionCard>
@@ -1067,7 +1280,20 @@ export default function HrMetricsDashboard() {
                 <XAxis dataKey="name" hide />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="value" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="value"
+                  fill="#f59e0b"
+                  radius={[8, 8, 0, 0]}
+                  cursor="pointer"
+                  onClick={(point) => {
+                    const data = point?.payload || point;
+                    openEmployeeList({
+                      filter: "All",
+                      salaryMin: data?.min,
+                      salaryMax: data?.max,
+                    });
+                  }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </DashboardChart>
@@ -1078,11 +1304,11 @@ export default function HrMetricsDashboard() {
         <SectionCard title="Attendance Overview" note="Late and absent values are not available in the current attendance dataset.">
           <SummaryList
             items={[
-              { label: "Attendance %", value: formatPercent(attendanceOverview.percentage) },
-              { label: "Present", value: formatCount(attendanceOverview.present) },
+              { label: "Attendance %", value: formatPercent(attendanceOverview.percentage), onClick: () => openAttendance() },
+              { label: "Present", value: formatCount(attendanceOverview.present), onClick: () => openAttendance() },
               { label: "Absent", value: attendanceOverview.absent == null ? "No data" : formatCount(attendanceOverview.absent) },
               { label: "Late", value: attendanceOverview.late == null ? "No data" : formatCount(attendanceOverview.late) },
-              { label: "Leave", value: formatCount(attendanceOverview.leave) },
+              { label: "Leave", value: formatCount(attendanceOverview.leave), onClick: () => openAttendance() },
             ]}
           />
         </SectionCard>
@@ -1090,11 +1316,11 @@ export default function HrMetricsDashboard() {
         <SectionCard title="Leave Overview" note="Emergency and unpaid leave types are not present in the current leave workflow.">
           <SummaryList
             items={[
-              { label: "Total Leave", value: formatCount(leaveOverview.totalLeave) },
-              { label: "Leave Taken", value: formatCount(leaveOverview.leaveTaken) },
-              { label: "Leave Balance", value: leaveOverview.leaveBalance == null ? "No data" : formatCount(leaveOverview.leaveBalance) },
-              { label: "Sick Leave", value: formatCount(leaveOverview.sickLeave) },
-              { label: "Annual Leave", value: formatCount(leaveOverview.annualLeave) },
+              { label: "Total Leave", value: formatCount(leaveOverview.totalLeave), onClick: () => openLeaveList() },
+              { label: "Leave Taken", value: formatCount(leaveOverview.leaveTaken), onClick: () => openLeaveList() },
+              { label: "Leave Balance", value: leaveOverview.leaveBalance == null ? "No data" : formatCount(leaveOverview.leaveBalance), onClick: () => openLeaveList() },
+              { label: "Sick Leave", value: formatCount(leaveOverview.sickLeave), onClick: () => openLeaveList({ leaveType: "Sick Leave" }) },
+              { label: "Annual Leave", value: formatCount(leaveOverview.annualLeave), onClick: () => openLeaveList({ leaveType: "Annual Leave" }) },
               { label: "Emergency Leave", value: "No data" },
               { label: "Unpaid Leave", value: "No data" },
             ]}
@@ -1120,8 +1346,8 @@ export default function HrMetricsDashboard() {
         <SectionCard title="Exit Analysis">
           <SummaryList
             items={[
-              { label: "Total Exits", value: formatCount(exitOverview.totalExits) },
-              { label: "Attrition %", value: formatPercent(exitOverview.attrition) },
+              { label: "Total Exits", value: formatCount(exitOverview.totalExits), onClick: () => openEmployeeList({ filter: "Inactive", exited: "1" }) },
+              { label: "Attrition %", value: formatPercent(exitOverview.attrition), onClick: () => openEmployeeList({ filter: "Inactive", exited: "1" }) },
               { label: "Rehire Eligible", value: "No data" },
             ]}
           />
@@ -1135,7 +1361,16 @@ export default function HrMetricsDashboard() {
                 <XAxis dataKey="name" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="value" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="value"
+                  fill="#ef4444"
+                  radius={[8, 8, 0, 0]}
+                  cursor="pointer"
+                  onClick={(point) => {
+                    const data = point?.payload || point;
+                    openEmployeeList({ filter: "Inactive", employeeType: data?.name, exited: "1" });
+                  }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </DashboardChart>
@@ -1152,12 +1387,12 @@ export default function HrMetricsDashboard() {
               <YAxis yAxisId="right" orientation="right" />
               <Tooltip />
               <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="headcount" stroke="#2563eb" strokeWidth={2} />
-              <Line yAxisId="left" type="monotone" dataKey="joiners" stroke="#14b8a6" strokeWidth={2} />
-              <Line yAxisId="left" type="monotone" dataKey="exits" stroke="#ef4444" strokeWidth={2} />
-              <Line yAxisId="right" type="monotone" dataKey="attrition" stroke="#8b5cf6" strokeWidth={2} />
-              <Line yAxisId="right" type="monotone" dataKey="attendance" stroke="#f59e0b" strokeWidth={2} />
-              <Line yAxisId="right" type="monotone" dataKey="payroll" stroke="#0f766e" strokeWidth={2} />
+              <Line yAxisId="left" type="monotone" dataKey="headcount" stroke="#2563eb" strokeWidth={2} activeDot={{ r: 6, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "headcount" }) }} dot={{ r: 3, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "headcount" }) }} />
+              <Line yAxisId="left" type="monotone" dataKey="joiners" stroke="#14b8a6" strokeWidth={2} activeDot={{ r: 6, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "joiners" }) }} dot={{ r: 3, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "joiners" }) }} />
+              <Line yAxisId="left" type="monotone" dataKey="exits" stroke="#ef4444" strokeWidth={2} activeDot={{ r: 6, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "exits" }) }} dot={{ r: 3, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "exits" }) }} />
+              <Line yAxisId="right" type="monotone" dataKey="attrition" stroke="#8b5cf6" strokeWidth={2} activeDot={{ r: 6, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "attrition" }) }} dot={{ r: 3, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "attrition" }) }} />
+              <Line yAxisId="right" type="monotone" dataKey="attendance" stroke="#f59e0b" strokeWidth={2} activeDot={{ r: 6, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "attendance" }) }} dot={{ r: 3, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "attendance" }) }} />
+              <Line yAxisId="right" type="monotone" dataKey="payroll" stroke="#0f766e" strokeWidth={2} activeDot={{ r: 6, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "payroll" }) }} dot={{ r: 3, cursor: "pointer", onClick: (event) => handleTrendClick(event, { payload: event?.payload, dataKey: "payroll" }) }} />
             </LineChart>
           </ResponsiveContainer>
         </DashboardChart>
@@ -1176,6 +1411,14 @@ export default function HrMetricsDashboard() {
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
           size="small"
           scroll={{ x: 500 }}
+          onRow={(row) => ({
+            onClick: () => {
+              if (!activeBreakdown?.field || row.isOther) return;
+              setActiveBreakdown(null);
+              openEmployeeList({ filter: "All", [activeBreakdown.field]: row.name });
+            },
+            style: activeBreakdown?.field ? { cursor: "pointer" } : undefined,
+          })}
         />
       </Modal>
     </div>

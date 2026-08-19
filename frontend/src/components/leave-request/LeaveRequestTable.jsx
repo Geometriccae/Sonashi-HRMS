@@ -109,9 +109,10 @@ function LeaveRequestTable({ onUpdate }) {
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [selectedManager, setSelectedManager] = useState("All");
-    const [selectedMonth, setSelectedMonth] = useState("All");
+    const [selectedMonth, setSelectedMonth] = useState(() => searchParams.get("month") || "All");
     // Default current year so Leave Management shows that year's records (change dropdown for 2022–2025 etc.)
-    const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
+    const [selectedYear, setSelectedYear] = useState(() => searchParams.get("year") || String(new Date().getFullYear()));
+    const [selectedLeaveType] = useState(() => searchParams.get("leaveType") || "All");
     const [departments, setDepartments] = useState([]);
     const [managers, setManagers] = useState([]);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
@@ -386,6 +387,14 @@ function LeaveRequestTable({ onUpdate }) {
             if (reqYear == null || reqYear !== parseInt(selectedYear, 10)) return false;
         }
 
+        if (selectedLeaveType && selectedLeaveType !== "All") {
+            if (selectedLeaveType === "Annual Leave") {
+                if (req.leaveType !== "Annual Leave" && req.leaveType !== "Vacation") return false;
+            } else if (req.leaveType !== selectedLeaveType) {
+                return false;
+            }
+        }
+
         return true;
     }).sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
 
@@ -426,6 +435,7 @@ function LeaveRequestTable({ onUpdate }) {
         selectedManager,
         selectedMonth,
         selectedYear,
+        selectedLeaveType,
     });
 
     // Handle page change

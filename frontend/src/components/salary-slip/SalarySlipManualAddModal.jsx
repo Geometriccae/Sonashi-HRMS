@@ -8,21 +8,8 @@ import { useToast } from '../../context/ToastContext';
 import Dropdown from '../DropDown';
 import DateInput from '../DateInput';
 import { formatAed } from '../../utils/currency';
-
-const MONTH_NAMES = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-];
+import leaveRequestService from '../../services/LeaveRequestService';
+import { computePayablePayrollDays, getPayrollPeriod } from '../../utils/payrollPayableDays';
 
 const createInitialFormData = (month, year) => ({
     selectedEmployeeId: '',
@@ -64,35 +51,6 @@ const toIsoDate = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return date.toISOString().split('T')[0];
-};
-
-const getMonthIndex = (monthValue) => {
-    const normalized = String(monthValue || '').trim().toLowerCase();
-    return MONTH_NAMES.findIndex((monthName) => monthName.toLowerCase() === normalized);
-};
-
-const getPayrollPeriod = (monthValue, yearValue) => {
-    const monthIndex = getMonthIndex(monthValue);
-    const numericYear = Number(yearValue);
-    if (monthIndex < 0 || !Number.isFinite(numericYear)) return null;
-
-    const start = new Date(numericYear, monthIndex, 1);
-    const end = new Date(numericYear, monthIndex + 1, 0);
-
-    return {
-        monthIndex,
-        year: numericYear,
-        start,
-        end,
-        totalCalendarDays: end.getDate(),
-    };
-};
-
-const getDateKey = (value) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toISOString().slice(0, 10);
 };
 
 const recalculateSalaryFields = (draft, baseAmounts) => {
@@ -149,6 +107,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
     const { showToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [employees, setEmployees] = useState([]);
+    const [leaveRequests, setLeaveRequests] = useState([]);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
     const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
     const [baseAmounts, setBaseAmounts] = useState(createInitialBaseAmounts());
@@ -165,8 +124,12 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
         const fetchEmployees = async () => {
             setIsLoadingEmployees(true);
             try {
-                const data = await employeeService.getEmployees();
+                const [data, leaves] = await Promise.all([
+                    employeeService.getEmployees(),
+                    leaveRequestService.getLeaveRequests().catch(() => []),
+                ]);
                 setEmployees(Array.isArray(data) ? data : []);
+                setLeaveRequests(Array.isArray(leaves) ? leaves : (leaves?.data || []));
             } catch (error) {
                 console.error('Error fetching employees:', error);
             } finally {
@@ -188,6 +151,9 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
         const loadAttendanceDefaults = async () => {
             setIsLoadingAttendance(true);
             try {
+                const employee = employees.find((item) => item._id === formData.selectedEmployeeId);
+                if (!employee) return;
+
                 const rangeRecords = await attendanceService.getByRange(
                     period.start.toISOString().slice(0, 10),
                     period.end.toISOString().slice(0, 10)
@@ -195,29 +161,22 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
 
                 if (!isMounted) return;
 
-                const allRecords = Array.isArray(rangeRecords) ? rangeRecords : [];
-                const totalWorkingDaysFromAttendance = new Set(
-                    allRecords.map((record) => getDateKey(record.date)).filter(Boolean)
-                ).size;
-
-                const employeeRecords = allRecords.filter((record) => {
-                    const recordEmployeeId = String(record.employee?._id || record.employee || '');
-                    return recordEmployeeId === formData.selectedEmployeeId;
+                const days = computePayablePayrollDays({
+                    employee,
+                    month: formData.month,
+                    year: formData.year,
+                    attendanceRecords: Array.isArray(rangeRecords) ? rangeRecords : [],
+                    leaveRequests,
                 });
-
-                const presentDays = employeeRecords.filter((record) => record.status === 'Onsite').length;
-                const fallbackWorkingDays = period.totalCalendarDays;
-                const totalWorkingDays = totalWorkingDaysFromAttendance || fallbackWorkingDays;
-                const payableDays = presentDays > 0 ? presentDays : totalWorkingDays;
 
                 setFormData((current) => {
                     if (current.selectedEmployeeId !== formData.selectedEmployeeId) return current;
 
                     const updated = {
                         ...current,
-                        totalWorkingDays: String(totalWorkingDays),
-                        presentDays: String(Math.min(presentDays, totalWorkingDays)),
-                        payableDays: String(Math.min(payableDays, totalWorkingDays)),
+                        totalWorkingDays: String(days.totalWorkingDays),
+                        presentDays: String(days.presentDays),
+                        payableDays: String(days.payableDays),
                     };
                     return recalculateSalaryFields(updated, baseAmounts);
                 });
@@ -236,7 +195,7 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
         return () => {
             isMounted = false;
         };
-    }, [isOpen, formData.selectedEmployeeId, formData.month, formData.year]);
+    }, [isOpen, formData.selectedEmployeeId, formData.month, formData.year, employees, leaveRequests]);
 
     const handleEmployeeSelect = (e) => {
         const employeeId = e.target.value;
@@ -251,8 +210,13 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
             other: toAmount(salary.other),
         };
         const deduction = toAmount(salary.deduction);
-        const payrollPeriod = getPayrollPeriod(formData.month, formData.year);
-        const fallbackWorkingDays = payrollPeriod?.totalCalendarDays || 0;
+        const days = computePayablePayrollDays({
+            employee,
+            month: formData.month,
+            year: formData.year,
+            attendanceRecords: [],
+            leaveRequests,
+        });
 
         setBaseAmounts(nextBaseAmounts);
         setErrors({});
@@ -266,9 +230,9 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                     department: employee.department || '',
                     designation: employee.designation || employee.role || '',
                     dateOfJoining: toIsoDate(employee.doj),
-                    totalWorkingDays: fallbackWorkingDays ? String(fallbackWorkingDays) : '',
-                    presentDays: '',
-                    payableDays: fallbackWorkingDays ? String(fallbackWorkingDays) : '',
+                    totalWorkingDays: String(days.totalWorkingDays),
+                    presentDays: String(days.presentDays),
+                    payableDays: String(days.payableDays),
                     deduction: formatAmount(deduction),
                 },
                 nextBaseAmounts

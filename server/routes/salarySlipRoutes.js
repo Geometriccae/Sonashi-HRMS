@@ -6,10 +6,17 @@ const xlsx = require('xlsx');
 const SalarySlip = require('../models/SalarySlip');
 const User = require('../models/User');
 const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
+const LeaveRequest = require('../models/LeaveRequest');
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
 const { workingStatusFilter } = require('../utils/employeeStatus');
 const { ensureUploadSubdir } = require('../utils/uploadsPath');
+const {
+    getPayrollPeriod,
+    computePayablePayrollDays,
+    scaleSalaryAmount,
+} = require('../utils/payrollPayableDays');
 
 // One-time cleanup to remove stale database indexes that cause import failures
 SalarySlip.on('index', (err) => {
@@ -167,9 +174,33 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
             return res.status(400).json({ message: 'Month and Year are required' });
         }
 
-        // Fetch all working employees with salaryDetails
-        const employees = await Employee.find(workingStatusFilter()).lean();
-        
+        const period = getPayrollPeriod(month, year);
+        if (!period) {
+            return res.status(400).json({ message: 'Invalid Month or Year' });
+        }
+
+        const monthEndInclusive = new Date(period.end);
+        monthEndInclusive.setHours(23, 59, 59, 999);
+
+        // Working staff plus anyone whose last working day falls in this month (mid-month exit).
+        const employees = await Employee.find({
+            $or: [
+                workingStatusFilter(),
+                { lastWorkingDay: { $gte: period.start, $lte: monthEndInclusive } },
+            ],
+        }).lean();
+
+        const [attendanceRecords, leaveRequests] = await Promise.all([
+            Attendance.find({
+                date: { $gte: period.start, $lte: monthEndInclusive },
+            }).lean(),
+            LeaveRequest.find({
+                status: { $in: ['Approved', 'HOD Approved'] },
+                startDate: { $lte: monthEndInclusive },
+                endDate: { $gte: period.start },
+            }).lean(),
+        ]);
+
         const results = [];
         const skipped = [];
         const errors = [];
@@ -178,6 +209,22 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
             try {
                 if (!emp.emailId) {
                     skipped.push({ name: emp.employeeName, reason: "No email ID" });
+                    continue;
+                }
+
+                const days = computePayablePayrollDays({
+                    employee: emp,
+                    month,
+                    year,
+                    attendanceRecords,
+                    leaveRequests,
+                });
+
+                if (days.skip || days.payableDays <= 0) {
+                    skipped.push({
+                        name: emp.employeeName,
+                        reason: days.skipReason || "No payable working days",
+                    });
                     continue;
                 }
 
@@ -190,10 +237,10 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
                     const n = parseFloat(v);
                     return Number.isFinite(n) ? n : 0;
                 };
-                const basic = toAmt(salary.basicSalary);
-                const houseRent = toAmt(salary.houseRent);
-                const travelExp = toAmt(salary.travelExp);
-                const other = toAmt(salary.other);
+                const basic = scaleSalaryAmount(toAmt(salary.basicSalary), days.payableDays, days.totalWorkingDays);
+                const houseRent = scaleSalaryAmount(toAmt(salary.houseRent), days.payableDays, days.totalWorkingDays);
+                const travelExp = scaleSalaryAmount(toAmt(salary.travelExp), days.payableDays, days.totalWorkingDays);
+                const other = scaleSalaryAmount(toAmt(salary.other), days.payableDays, days.totalWorkingDays);
                 const deduction = toAmt(salary.deduction);
 
                 const grossSalary = basic + houseRent + travelExp + other;
@@ -204,8 +251,12 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
                     emailId: email,
                     department: emp.department || '',
                     designation: emp.designation || emp.role || 'Employee',
+                    dateOfJoining: emp.doj ? new Date(emp.doj).toISOString().slice(0, 10) : '',
                     month: month,
                     year: year,
+                    totalWorkingDays: days.totalWorkingDays,
+                    presentDays: days.presentDays,
+                    payableDays: days.payableDays,
                     basicPay: basic,
                     hra: houseRent,
                     conveyanceAllowance: travelExp,
@@ -231,7 +282,7 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
         }
 
         res.json({
-            message: `Successfully generated/updated ${results.length} salary slips.`,
+            message: `Successfully generated/updated ${results.length} salary slips${skipped.length ? ` (${skipped.length} skipped)` : ''}.`,
             count: results.length,
             results,
             skipped,

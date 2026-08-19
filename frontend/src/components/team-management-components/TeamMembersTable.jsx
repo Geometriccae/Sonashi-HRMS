@@ -51,6 +51,10 @@ import {
   isNonWorkingEmployeeStatus,
   EMPLOYEE_STATUS_VALUES,
 } from "../../utils/employeeStatusDisplay";
+import {
+  matchesHrMetricsListFilters,
+  readHrMetricsListParams,
+} from "../../utils/hrMetricsFilters";
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -195,6 +199,7 @@ function TeamMembersTable() {
   const itemsPerPage = Number(searchParams.get("size")) || 20;
   const activeFilter = searchParams.get("filter") || "Active";
   const searchTerm = searchParams.get("q") || "";
+  const metricsListParams = useMemo(() => readHrMetricsListParams(searchParams), [searchParams]);
   const listReturnPath = useMemo(() => {
     const query = searchParams.toString();
     return query ? `/teammanagement?${query}` : "/teammanagement";
@@ -709,6 +714,10 @@ function TeamMembersTable() {
   };
 
   const filteredData = useMemo(() => {
+    const asOf = metricsListParams.year
+      ? new Date(Number(metricsListParams.year), 11, 31, 23, 59, 59, 999)
+      : new Date();
+
     return employees.filter((member) => {
       let matchesFilter = true;
       if (activeFilter === "Active") {
@@ -719,15 +728,18 @@ function TeamMembersTable() {
 
       const q = searchTerm.toLowerCase();
       const matchesSearch =
+        !q ||
         (member.employeeName || "").toLowerCase().includes(q) ||
         (member.employeeId || "").toLowerCase().includes(q) ||
         (member.emailId || "").toLowerCase().includes(q) ||
         (member.mobile || "").toLowerCase().includes(q) ||
         (member.role || "").toLowerCase().includes(q);
 
-      return matchesFilter && matchesSearch;
+      const matchesMetrics = matchesHrMetricsListFilters(member, metricsListParams, asOf);
+
+      return matchesFilter && matchesSearch && matchesMetrics;
     });
-  }, [employees, activeFilter, searchTerm]);
+  }, [employees, activeFilter, searchTerm, metricsListParams]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
 
@@ -1062,6 +1074,15 @@ function TeamMembersTable() {
           style={{ width: 320, borderRadius: 24 }}
         />
       </div>
+
+      {metricsListParams.year ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`Showing employees for ${metricsListParams.year}${metricsListParams.month ? ` / ${metricsListParams.month}` : ""}${metricsListParams.gender ? ` · ${metricsListParams.gender}` : ""}${metricsListParams.department ? ` · ${metricsListParams.department}` : ""}${metricsListParams.joined === "1" ? " · New joiners" : ""}${metricsListParams.exited === "1" ? " · Exits" : ""}.`}
+        />
+      ) : null}
 
       <div className={styles.tableScrollWrap}>
       <Table

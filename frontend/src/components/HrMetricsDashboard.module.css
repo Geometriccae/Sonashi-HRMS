@@ -61,6 +61,14 @@
   gap: 18px;
 }
 
+.metricCardClickable {
+  cursor: pointer;
+}
+
+.summaryRowClickable {
+  cursor: pointer;
+}
+
 .metricCard {
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid #dbe7f3;
