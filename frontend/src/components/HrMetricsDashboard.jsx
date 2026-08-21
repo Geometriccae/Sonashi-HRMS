@@ -458,12 +458,6 @@ export default function HrMetricsDashboard() {
     [employees, filters, selectedRange]
   );
 
-  // Same definition as Team Management: all employees (org filters only — not year/period).
-  const headcountEmployees = useMemo(
-    () => applyDashboardFilters(employees, filters, { start: null, end: null }),
-    [employees, filters]
-  );
-
   const employeeIdSet = useMemo(
     () => new Set(filteredEmployees.map((employee) => String(employee._id || employee.id || "")).filter(Boolean)),
     [filteredEmployees]
@@ -511,22 +505,13 @@ export default function HrMetricsDashboard() {
   const kpis = useMemo(() => {
     const computed = computeKpis(filteredEmployees, selectedRange, asOfDate);
     const payrollFromSlips = sumPayrollFromSlips(filteredSalarySlips);
-    // Total / Active match Team Management (all employees + working status — not year-scoped)
-    const headcountKpis = computeKpis(headcountEmployees, { start: null, end: null }, asOfDate);
     return {
       ...computed,
-      totalEmployees: headcountKpis.totalEmployees,
-      activeEmployees: headcountKpis.activeEmployees,
       // Total Payroll uses salary-slip net pay for the selected period (not headcount × average).
       totalPayroll: payrollFromSlips,
       payrollSlipCount: filteredSalarySlips.length,
-      lists: {
-        ...computed.lists,
-        workforce: headcountEmployees,
-        active: headcountKpis.lists.active,
-      },
     };
-  }, [filteredEmployees, selectedRange, asOfDate, filteredSalarySlips, headcountEmployees]);
+  }, [filteredEmployees, selectedRange, asOfDate, filteredSalarySlips]);
 
   const openEmployeeDrillDown = useCallback((title, employeeList, columns = EMPLOYEE_BASE_COLUMNS) => {
     const list = employeeList || [];
@@ -1098,14 +1083,14 @@ export default function HrMetricsDashboard() {
 
       <div className={styles.metricsGrid}>
         <MetricCard
-          label="Total Employees"
+          label={`Total Employees (${activeYear})`}
           value={formatCount(kpis.totalEmployees)}
-          onClick={() => openEmployeeDrillDown("Total Employees", kpis.lists.workforce)}
+          onClick={() => openEmployeeDrillDown(`Total Employees (${activeYear})`, kpis.lists.workforce)}
         />
         <MetricCard
           label="Active Employees"
           value={formatCount(kpis.activeEmployees)}
-          onClick={() => openEmployeeDrillDown("Active Employees", kpis.lists.active)}
+          onClick={() => openEmployeeDrillDown(`Active Employees (${activeYear})`, kpis.lists.active)}
         />
         <MetricCard
           label="New Joiners"
