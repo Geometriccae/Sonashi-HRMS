@@ -3,6 +3,12 @@ import config from "../config/config";
 const apiRoot = (config.API_BASE_URL || "").replace(/\/$/, "");
 const baseUrl = `${apiRoot}/employeedocuments`;
 
+/** Stable viewer URL — uses API file route from frontend/.env (REACT_APP_API_URL). */
+const getFileUrl = (docId) => {
+  if (!docId) return "";
+  return `${baseUrl}/file/${docId}`;
+};
+
 const listByEmployee = async (employeeId) => {
   const response = await fetch(`${baseUrl}/${employeeId}`);
   if (!response.ok) throw new Error("Failed to fetch documents");
@@ -60,7 +66,15 @@ const updateType = async (docId, type) => {
   return response.json();
 };
 
-const DocumentsService = { listByEmployee, uploadForEmployee, remove, removeAll, replace, updateType };
+const DocumentsService = {
+  listByEmployee,
+  uploadForEmployee,
+  remove,
+  removeAll,
+  replace,
+  updateType,
+  getFileUrl,
+};
 
 export default DocumentsService;
 

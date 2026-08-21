@@ -4,11 +4,12 @@ const CheckIn = require('../models/CheckIn');
 const authMiddleware = require('../middleware/authMiddleware');
 const multer = require('multer');
 const path = require('path');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
 
-// Setup multer for image uploads
+// Setup multer for image uploads (outer Hostinger uploads root)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../../uploads'));
+    cb(null, ensureUploadSubdir());
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname);

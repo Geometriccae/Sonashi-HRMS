@@ -3,6 +3,7 @@ import clientService from '../services/ClientService';
 import employeeService from '../services/EmployeeService';
 import checkInService from '../services/CheckInService';
 import Select from 'react-select';
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from '../utils/employeeStatusDisplay';
 import DatePickerModal from './DatePickerModal';
 
 function CheckInModal({ isOpen, onClose, onSubmit }) {
@@ -407,10 +408,8 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
               <label className="field-label">Add a Team Member</label>
               <Select
                 isMulti
-                options={employees.map((emp) => ({
-                  value: emp._id,
-                  label: `${emp.employeeName}` || emp.employeeName
-                }))}
+                options={employees.map((emp) => toSearchableEmployeeOption(emp, { label: emp.employeeName }))}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employees
                   .filter((emp) => formData.teamMembers.includes(emp._id))
                   .map((emp) => ({ 

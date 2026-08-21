@@ -7,6 +7,7 @@ import { createEvent } from "../../services/AssignEventService"; // We'll create
 import employeeService from "../../services/EmployeeService";
 import Select from "react-select";
 import { useToast } from "../../context/ToastContext";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 
 const DEFAULT_REMINDERS = Object.freeze([1, 15, 60, 180, 1440]); // minutes -> 1m,15m,1h,3h,1d
 
@@ -227,10 +228,8 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
               <label className="field-label">Assign Team Members</label>
               <Select
                 isMulti
-                options={employees.map((emp) => ({
-                  value: emp._id,
-                  label: emp.employeeName,
-                }))}
+                options={employees.map((emp) => toSearchableEmployeeOption(emp, { label: emp.employeeName }))}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employees
                   .filter((emp) =>
                     formData.assignedTeamMembers.includes(emp._id)

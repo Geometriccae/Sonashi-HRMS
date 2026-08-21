@@ -9,7 +9,9 @@ import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
-import { buildYearList, yearsFromLeaveRequests } from "../../utils/yearOptions";
+import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
@@ -38,13 +40,73 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
+    // Which leave record the form is editing (click a date in history to switch)
+    const [activeLeave, setActiveLeave] = useState(leaveRequest || null);
 
     const currentRole = String(userRole || "").toLowerCase();
     const isAdmin = currentRole === "admin";
     const isHR = currentRole === "hr";
-    const isManager = isAdmin || isHR;
-    const isEditable = isManager || leaveRequest?.status === "Pending";
-    const isPastLeaveRequest = leaveRequest?.isPastLeave || (leaveRequest?.status === 'Approved' && leaveRequest?.startDate && new Date(leaveRequest.startDate) < new Date());
+    const isHOD = currentRole === "hod";
+    const isManager = isAdmin || isHR || isHOD;
+    const targetLeave = activeLeave || leaveRequest;
+    const isEditable = isManager || targetLeave?.status === "Pending";
+    const isPastLeaveRequest = targetLeave?.isPastLeave || (targetLeave?.status === 'Approved' && targetLeave?.startDate && new Date(targetLeave.startDate) < new Date());
+
+    const resolveEmployeeRecord = (empId, empName, leaveEmp) => {
+        const linkedId =
+            leaveEmp?.employeeId?._id ||
+            leaveEmp?.employeeId ||
+            "";
+        return (
+            (empId && employees.find((e) => String(e._id) === String(empId))) ||
+            (linkedId && employees.find((e) => String(e._id) === String(linkedId))) ||
+            (empName &&
+                employees.find((e) => {
+                    const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+                    const fName = String(empName || "").toLowerCase().trim();
+                    return eName === fName && fName !== "";
+                })) ||
+            null
+        );
+    };
+
+    const formatVisaInputDate = (val) =>
+        val ? new Date(val).toISOString().split("T")[0] : "";
+
+    const populateFormFromLeave = (req) => {
+        if (!req) return;
+        const rawEmpId = req.employee?._id || req.employee || req.employeeId || "";
+        const empIdStr =
+            rawEmpId && typeof rawEmpId === "object"
+                ? String(rawEmpId._id || rawEmpId)
+                : String(rawEmpId || "");
+        const empId = /^[a-fA-F0-9]{24}$/.test(empIdStr) ? empIdStr : "";
+        const empName = req.employeeName || req.employee?.employeeName || req.employee?.username || req.employee?.name || "";
+        const matchedEmp = resolveEmployeeRecord(empId, empName, req.employee);
+        const visaSrc = req.employee?.visaExpiryDate || matchedEmp?.visaExpiryDate;
+        setFormData({
+            employeeId: matchedEmp?._id || empId,
+            employeeName: empName,
+            company: req.company || "Sonashi",
+            department: req.department || "",
+            reportingManager: req.reportingManager || "",
+            leaveType: req.leaveType || "Personal Leave",
+            startDate: req.startDate ? new Date(req.startDate).toISOString().split('T')[0] : "",
+            endDate: req.endDate ? new Date(req.endDate).toISOString().split('T')[0] : "",
+            reason: req.reason || "",
+            status: req.status || "Pending",
+            requestAirfare: req.requestAirfare || false,
+            visaExpiryDate: formatVisaInputDate(visaSrc)
+        });
+        setError("");
+    };
+
+    const handleSelectLeaveFromHistory = (req) => {
+        if (!req?._id) return;
+        setActiveLeave(req);
+        populateFormFromLeave(req);
+        showToast("Loaded leave for editing — update dates and save.", "success");
+    };
 
     const handleDateSelect = (date) => {
         if (error) setError("");
@@ -57,7 +119,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                        const fName = String(formData.employeeName || "").toLowerCase().trim();
                                        return eName === fName && fName !== "";
                                    })) || 
-                                   leaveRequest?.employee;
+                                   targetLeave?.employee;
 
         if (currentSelectedEmp && currentSelectedEmp.doj) {
             const joiningDate = new Date(currentSelectedEmp.doj);
@@ -80,7 +142,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const role = localStorage.getItem("role") || "";
         setUserRole(role);
         if (isOpen) {
-            if (role.toLowerCase() === "admin" || role.toLowerCase() === "hr") {
+            if (role.toLowerCase() === "admin" || role.toLowerCase() === "hr" || role.toLowerCase() === "hod") {
                 fetchEmployees();
             }
             fetchDepartmentOptions();
@@ -132,11 +194,20 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     useEffect(() => {
         if (leaveRequest) {
-            const empId = leaveRequest.employee?._id || leaveRequest.employee || leaveRequest.employeeId || leaveRequest.employeeName || "";
+            setActiveLeave(leaveRequest);
+            const rawEmpId =
+                leaveRequest.employee?._id ||
+                leaveRequest.employee ||
+                leaveRequest.employeeId ||
+                "";
+            const empIdStr = rawEmpId != null ? String(rawEmpId) : "";
+            const empId = /^[a-fA-F0-9]{24}$/.test(empIdStr) ? empIdStr : "";
             const empName = leaveRequest.employeeName || leaveRequest.employee?.employeeName || leaveRequest.employee?.username || leaveRequest.employee?.name || "";
-            
+            const matchedEmp = resolveEmployeeRecord(empId, empName, leaveRequest.employee);
+            const visaSrc = leaveRequest.employee?.visaExpiryDate || matchedEmp?.visaExpiryDate;
+
             setFormData({
-                employeeId: empId,
+                employeeId: matchedEmp?._id || empId,
                 employeeName: empName,
                 company: leaveRequest.company || "Sonashi",
                 department: leaveRequest.department || "",
@@ -147,12 +218,12 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 reason: leaveRequest.reason || "",
                 status: leaveRequest.status || "Pending",
                 requestAirfare: leaveRequest.requestAirfare || false,
-                visaExpiryDate: (leaveRequest.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate) ? new Date(leaveRequest.employee?.visaExpiryDate || employees.find(e => e._id === empId)?.visaExpiryDate).toISOString().split('T')[0] : ""
+                visaExpiryDate: formatVisaInputDate(visaSrc)
             });
             setError("");
             setSelectedYearDetails(null);
         }
-    }, [leaveRequest, isOpen]);
+    }, [leaveRequest, isOpen, employees]);
 
     const fetchEmployees = async () => {
         try {
@@ -201,12 +272,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         }
 
         const payload = { ...formData };
-        // Prevent sending invalid ObjectIds to the backend for historical records
-        if (!payload.employeeId || payload.employeeId === "unknown" || (typeof payload.employeeId === 'string' && payload.employeeId.length !== 24)) {
+        // Only send real Mongo ObjectIds (24-char names like "MAHESH CHAINANI RAMCHAND" must not be sent)
+        if (
+            !payload.employeeId ||
+            payload.employeeId === "unknown" ||
+            typeof payload.employeeId !== "string" ||
+            !/^[a-fA-F0-9]{24}$/.test(payload.employeeId)
+        ) {
             delete payload.employeeId;
         }
         // Field edits must not re-submit unchanged status (avoids approval/self-approve guards)
-        if (!leaveRequest?.status || payload.status === leaveRequest.status) {
+        if (!targetLeave?.status || payload.status === targetLeave.status) {
             delete payload.status;
         }
 
@@ -221,7 +297,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                        const fName = String(formData.employeeName || "").toLowerCase().trim();
                                        return eName === fName && fName !== "";
                                    })) || 
-                                   leaveRequest?.employee;
+                                   targetLeave?.employee;
 
         if (currentSelectedEmp && currentSelectedEmp.doj) {
             const joiningDate = new Date(currentSelectedEmp.doj);
@@ -235,7 +311,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         setError("");
         setIsSubmitting(true);
         try {
-            const result = await leaveRequestService.updateLeaveRequest(leaveRequest._id, payload);
+            const leaveId = targetLeave?._id || leaveRequest?._id;
+            const result = await leaveRequestService.updateLeaveRequest(leaveId, payload);
             showToast("Leave request updated successfully.", "success");
             onSubmit(result);
             onClose();
@@ -266,14 +343,14 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const baseDepartmentOptions = dynamicDepartmentOptions;
 
-    const employeeOptions = employees.map(emp => ({
-        value: emp._id,
-        label: `${emp.employeeName || emp.name || "Unknown"} (${emp.employeeId || "N/A"})`
-    }));
+    const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp));
 
     const reportingManagerOptions = employees.map(emp => ({
         value: emp.employeeName || emp.name || "Unknown",
-        label: emp.employeeName || emp.name || "Unknown"
+        label: emp.employeeName || emp.name || "Unknown",
+        employeeId: emp.employeeId || "",
+        name: emp.employeeName || emp.name || "",
+        hideUnlessSearch: isNonWorkingEmployeeStatus(emp.employeeStatus),
     }));
 
     const departmentOptions = [...baseDepartmentOptions];
@@ -285,16 +362,25 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         reportingManagerOptions.push({ value: formData.reportingManager, label: formData.reportingManager });
     }
 
-    // Calculate History Logic
-    const selectedEmp = employees.find(e => e._id === formData.employeeId) || 
+    // Resolve Employee master (doj / visa live on Employee, not User on leaveRequest.employee)
+    const linkedEmployeeId =
+        targetLeave?.employee?.employeeId?._id ||
+        targetLeave?.employee?.employeeId ||
+        leaveRequest?.employee?.employeeId?._id ||
+        leaveRequest?.employee?.employeeId ||
+        "";
+    const selectedEmp = employees.find(e => e._id === formData.employeeId) ||
+                        (linkedEmployeeId && employees.find(e => String(e._id) === String(linkedEmployeeId))) ||
                         (formData.employeeName && employees.find(e => {
                             const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
                             const fName = String(formData.employeeName || "").toLowerCase().trim();
                             return eName === fName && fName !== "";
-                        })) || 
-                        leaveRequest?.employee;
+                        })) ||
+                        (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
+                            ? targetLeave.employee
+                            : null);
                         
-    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
+    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
         let empNameSearch = "";
@@ -304,14 +390,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Imported");
     });
-    const years = buildYearList({
-      fromDataYears: yearsFromLeaveRequests(employeeLeaves),
-      pastYears: 25,
-      futureYears: 2,
-    });
+    const years = buildLeaveHistoryYears(selectedEmp?.doj);
 
     const getYearlyLeaves = (year) => {
-        return employeeLeaves.filter(req => new Date(req.startDate).getFullYear() === year);
+        return employeeLeaves.filter((req) => leaveBelongsToHistoryYear(req, year, selectedEmp?.doj));
     };
 
     const getYearlyTotal = (year) => {
@@ -395,8 +477,9 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                 (formData.employeeName ? { value: formData.employeeId || "unknown", label: formData.employeeName } : null)
                                             }
                                             onChange={handleEmployeeChange}
-                                            placeholder="Select employee..."
+                                            placeholder="Search employee..."
                                             isSearchable
+                                            filterOption={filterReactSelectEmployeeOption}
                                             isDisabled={!isEditable}
                                             styles={{
                                                 control: (base) => ({
@@ -550,7 +633,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={leaveRequest?.employee?.doj ? new Date(leaveRequest.employee.doj).toLocaleDateString('en-GB') : 'N/A'} 
+                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString('en-GB') : 'N/A'} 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -560,7 +643,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={leaveStats.workingYears ? `${leaveStats.workingYears} Years` : 'N/A'} 
+                                            value={
+                                                selectedEmp
+                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
+                                                    : "N/A"
+                                            } 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -569,7 +656,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         {(isPastLeaveRequest && isEditable) ? (
                                             <DateInput
                                                 className="input-field-input"
-                                                value={formData.visaExpiryDate || ""}
+                                                value={formData.visaExpiryDate || (selectedEmp?.visaExpiryDate ? new Date(selectedEmp.visaExpiryDate).toISOString().split("T")[0] : "")}
                                                 onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)}
                                             />
                                         ) : (
@@ -577,7 +664,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                 type="text" 
                                                 className="input-field-input" 
                                                 disabled 
-                                                value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
+                                                value={
+                                                    (formData.visaExpiryDate || selectedEmp?.visaExpiryDate)
+                                                        ? new Date(formData.visaExpiryDate || selectedEmp.visaExpiryDate).toLocaleDateString('en-GB')
+                                                        : 'Not Set'
+                                                } 
                                                 style={{ background: "#f8fafc" }} 
                                             />
                                         )}
@@ -691,14 +782,18 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 </div>
                                 <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
                                     <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
-                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>{leaveStats.workingYears || 0} Years</div>
+                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
+                                        {selectedEmp
+                                            ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
+                                            : "N/A"}
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                             <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
-                                <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History (Last 5 Years)</h3>
+                                <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History</h3>
                             </div>
                             <div style={{ overflowX: "auto" }}>
                                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "400px" }}>
@@ -749,20 +844,37 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                     </div>
                                                                     {selectedYearDetails.leaves.length > 0 ? (
                                                                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                                                            {selectedYearDetails.leaves.map((req, idx) => (
-                                                                                <div key={idx} style={{ 
-                                                                                    background: "#fff", 
+                                                                            {selectedYearDetails.leaves.map((req, idx) => {
+                                                                                const isActiveRow = targetLeave?._id && req._id && String(targetLeave._id) === String(req._id);
+                                                                                return (
+                                                                                <div key={req._id || idx} style={{ 
+                                                                                    background: isActiveRow ? "#eff6ff" : "#fff", 
                                                                                     padding: "12px", 
                                                                                     borderRadius: "8px", 
-                                                                                    border: "1px solid #e2e8f0",
+                                                                                    border: isActiveRow ? "1px solid #93c5fd" : "1px solid #e2e8f0",
                                                                                     display: "flex",
                                                                                     justifyContent: "space-between",
                                                                                     alignItems: "center"
                                                                                 }}>
                                                                                     <div>
-                                                                                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleSelectLeaveFromHistory(req)}
+                                                                                            title="Click to edit this leave"
+                                                                                            style={{
+                                                                                                fontSize: "13px",
+                                                                                                fontWeight: "600",
+                                                                                                color: "#2563eb",
+                                                                                                background: "none",
+                                                                                                border: "none",
+                                                                                                padding: 0,
+                                                                                                cursor: "pointer",
+                                                                                                textDecoration: "underline",
+                                                                                                textAlign: "left",
+                                                                                            }}
+                                                                                        >
                                                                                             {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
-                                                                                        </div>
+                                                                                        </button>
                                                                                         <div style={{ fontSize: "11px", color: "#64748b" }}>
                                                                                             {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
                                                                                         </div>
@@ -778,7 +890,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
-                                                                            ))}
+                                                                                );
+                                                                            })}
                                                                         </div>
                                                                     ) : (
                                                                         <div style={{ fontSize: "13px", color: "#94a3b8", fontStyle: "italic" }}>No approved leaves found for this year.</div>

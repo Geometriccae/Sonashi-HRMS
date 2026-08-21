@@ -5,7 +5,7 @@ import styles from "./EmployeeBulkImportModal.module.css";
 
 /** First-row headers aligned with Add Employee / server import mapper */
 export const EMPLOYEE_IMPORT_HEADERS = [
-  "Work Permit No.",
+  "Person Code",
   "Employee ID",
   "Office",
   "Employee Name",

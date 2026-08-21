@@ -5,13 +5,11 @@ const fs = require("fs");
 const CompanyDocument = require("../models/CompanyDocument");
 const authMiddleware = require("../middleware/authMiddleware");
 const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
+const { ensureUploadSubdir, resolveUploadDiskPath } = require("../utils/uploadsPath");
 
 const router = express.Router();
 
-const uploadDir = path.join(__dirname, "../../uploads/companydocuments");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const uploadDir = ensureUploadSubdir("companydocuments");
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
@@ -85,8 +83,8 @@ router.put("/:docId", authMiddleware, blockViewerWrites, upload.single("file"), 
 
     if (req.file) {
       if (doc.filePath) {
-        const oldDiskPath = path.join(__dirname, "..", "..", doc.filePath);
-        if (fs.existsSync(oldDiskPath)) {
+        const oldDiskPath = resolveUploadDiskPath(doc.filePath);
+        if (oldDiskPath) {
           try {
             fs.unlinkSync(oldDiskPath);
           } catch (unlinkErr) {
@@ -116,8 +114,8 @@ router.delete("/:docId", authMiddleware, blockViewerWrites, async (req, res) => 
     }
 
     if (doc.filePath) {
-      const diskPath = path.join(__dirname, "..", "..", doc.filePath);
-      if (fs.existsSync(diskPath)) {
+      const diskPath = resolveUploadDiskPath(doc.filePath);
+      if (diskPath) {
         try {
           fs.unlinkSync(diskPath);
         } catch (unlinkErr) {

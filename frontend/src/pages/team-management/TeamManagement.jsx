@@ -10,7 +10,6 @@ import Side from "../sidebar/Sidebar";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../../components/TopNavbar";
 import TeamMembersTable from "../../components/team-management-components/TeamMembersTable";
 import EmployeeService from "../../services/EmployeeService";
-import AttendanceService from "../../services/AttendanceService";
 
 const { Text } = Typography;
 
@@ -60,26 +59,10 @@ function TeamManagement() {
   const fetchStats = async () => {
     try {
       const employeeStats = await EmployeeService.getEmployeeStats();
-
-      const todayStr = new Date().toISOString().slice(0, 10);
-      let presentCount = 0;
-      try {
-        const todayRecords = await AttendanceService.getByRange(todayStr, todayStr);
-        if (Array.isArray(todayRecords)) {
-          presentCount = todayRecords.filter((r) => r.status === "Onsite").length;
-        }
-      } catch (err) {
-        console.warn("Failed to fetch today's attendance for stats:", err);
-      }
-
-      const totalEmployees = employeeStats.totalEmployees || 0;
-      const attendancePercentage =
-        totalEmployees > 0 ? Math.round((presentCount / totalEmployees) * 100) : 0;
-
       setStats({
-        attendancePercentage,
+        attendancePercentage: 0,
         totalAssignedProjects: employeeStats.totalAssignedProjects || 0,
-        totalEmployees,
+        totalEmployees: employeeStats.totalEmployees || 0,
         activeEmployees: employeeStats.activeEmployees || 0,
         inactiveEmployees: employeeStats.inactiveEmployees || 0,
       });

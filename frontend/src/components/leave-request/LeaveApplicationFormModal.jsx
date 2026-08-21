@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import EmployeeService from "../../services/EmployeeService";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
-import { buildYearList } from "../../utils/yearOptions";
+import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import "./LeaveForm.css"; // Reusing the shared clean modal styles
 
-function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequests }) {
+function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequests, onEditLeave, canEdit = false }) {
     const [employeeDetails, setEmployeeDetails] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const [expandedYear, setExpandedYear] = useState(null);
@@ -20,7 +20,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                 const emp = leaveRequest.employee;
                 const empIdToFetch = emp?._id || emp;
                 
-                if (empIdToFetch && String(empIdToFetch).length === 24) {
+                if (empIdToFetch && /^[a-fA-F0-9]{24}$/.test(String(empIdToFetch))) {
                     const data = await EmployeeService.getEmployee(empIdToFetch);
                     if (data) setEmployeeDetails(data);
                 } else if (leaveRequest.employeeName) {
@@ -42,7 +42,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
     if (!isOpen || !leaveRequest) return null;
 
     const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
-    const leaveStats = calculateLeaveBalance(employee, allLeaveRequests, leaveRequest.startDate);
+    const leaveStats = calculateLeaveBalance(employee, allLeaveRequests);
 
     const empNameSearch = String(employee.employeeName || employee.name || "").toLowerCase().trim();
 
@@ -51,18 +51,13 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
     });
 
-    // Leave history years: all years present in data + wide range (no hardcoded 2026)
-    const yearsFromLeaves = employeeLeaves
-      .map((req) => {
-        const d = new Date(req.startDate);
-        return Number.isNaN(d.getTime()) ? null : d.getFullYear();
-      })
-      .filter((y) => y != null);
-    const years = buildYearList({ fromDataYears: yearsFromLeaves, pastYears: 25, futureYears: 2 });
+    const years = buildLeaveHistoryYears(employee.doj);
+
+    const getYearlyLeaves = (year) =>
+        employeeLeaves.filter((req) => leaveBelongsToHistoryYear(req, year, employee.doj));
 
     const getYearlyTotal = (year) => {
-        return employeeLeaves
-            .filter(req => new Date(req.startDate).getFullYear() === year)
+        return getYearlyLeaves(year)
             .reduce((total, req) => {
                 const s = new Date(req.startDate);
                 const e = new Date(req.endDate);
@@ -161,7 +156,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                     {/* Yearly History Table */}
                     <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                         <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <h3 style={{ fontSize: "16px", fontWeight: "600", margin: 0 }}>Leave History (Last 5 Years)</h3>
+                            <h3 style={{ fontSize: "16px", fontWeight: "600", margin: 0 }}>Leave History</h3>
                             <button 
                                 onClick={handleDownloadExcel}
                                 style={{ fontSize: "12px", color: "#007aff", background: "none", border: "none", cursor: "pointer", fontWeight: "600" }}
@@ -180,7 +175,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                             <tbody>
                                 {years.map(year => {
                                     const total = getYearlyTotal(year);
-                                    const yearLeaves = employeeLeaves.filter(req => new Date(req.startDate).getFullYear() === year);
+                                    const yearLeaves = getYearlyLeaves(year);
                                     const isExpanded = expandedYear === year;
                                     return (
                                         <React.Fragment key={year}>
@@ -220,7 +215,33 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                                                                         <tr key={leave._id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>{leave.leaveType || 'Annual'}</td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155" }}>
-                                                                                {new Date(leave.startDate).toLocaleDateString('en-GB')} - {new Date(leave.endDate).toLocaleDateString('en-GB')}
+                                                                                {canEdit && onEditLeave ? (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            onEditLeave(leave);
+                                                                                        }}
+                                                                                        title="Click to edit this leave"
+                                                                                        style={{
+                                                                                            background: "none",
+                                                                                            border: "none",
+                                                                                            padding: 0,
+                                                                                            color: "#2563eb",
+                                                                                            fontWeight: 600,
+                                                                                            fontSize: "13px",
+                                                                                            cursor: "pointer",
+                                                                                            textDecoration: "underline",
+                                                                                            textAlign: "left",
+                                                                                        }}
+                                                                                    >
+                                                                                        {new Date(leave.startDate).toLocaleDateString('en-GB')} - {new Date(leave.endDate).toLocaleDateString('en-GB')}
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        {new Date(leave.startDate).toLocaleDateString('en-GB')} - {new Date(leave.endDate).toLocaleDateString('en-GB')}
+                                                                                    </>
+                                                                                )}
                                                                             </td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155", textAlign: "right" }}>
                                                                                 {Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days

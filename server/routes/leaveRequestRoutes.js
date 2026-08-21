@@ -7,9 +7,32 @@ const Employee = require('../models/Employee');
 const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
-const { invalidateListCache } = require('../utils/employeeListCache');
+const { patchListCacheEmployee, invalidateApprovedLeavesCache } = require('../utils/employeeListCache');
 
 const CHANGE_STATUSES = ['Created', 'Modified', 'Cancelled', 'Approved', 'Rejected', 'Error'];
+
+const LEAVE_LIST_TTL_MS = 30000;
+let _leaveListCache = { key: '', data: null, ts: 0 };
+
+function leaveListCacheKey(role, status, employeeId) {
+  return `${role || ''}|${status || ''}|${employeeId || ''}`;
+}
+
+function getLeaveListCache(key) {
+  if (_leaveListCache.data && _leaveListCache.key === key && Date.now() - _leaveListCache.ts < LEAVE_LIST_TTL_MS) {
+    return _leaveListCache.data;
+  }
+  return null;
+}
+
+function setLeaveListCache(key, data) {
+  _leaveListCache = { key, data, ts: Date.now() };
+}
+
+function invalidateLeaveListCache() {
+  _leaveListCache = { key: '', data: null, ts: 0 };
+  invalidateApprovedLeavesCache();
+}
 
 function actorName(user) {
     return user?.username || user?.emailId || user?.name || 'System';
@@ -34,6 +57,51 @@ function applyChangeAudit(updateData, changeStatus, user, remarks = '') {
     updateData.changedOn = entry.changedOn;
     updateData.changeRemarks = entry.remarks;
     return entry;
+}
+
+const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
+
+/**
+ * Map form employeeId (Employee._id or User._id) to the leave.employee owner ref.
+ * Prefer linked User; if the Employee has no login User, store Employee._id
+ * (resolveEmployeeForLeave already supports that). Never silently keep the
+ * acting admin as the leave employee when a valid Employee was selected.
+ */
+async function resolveLeaveEmployeeTarget(employeeId, employeeName, fallbackUserId) {
+    const result = {
+        targetId: fallbackUserId,
+        employeeName: employeeName || null,
+        linkedVia: 'fallback',
+    };
+    if (!employeeId || !isObjectIdStr(String(employeeId))) {
+        return result;
+    }
+
+    const id = String(employeeId);
+    const empDoc = await Employee.findById(id).lean();
+    if (empDoc) {
+        result.employeeName = empDoc.employeeName || employeeName || null;
+        const equivalentUser = await User.findOne({ employeeId: empDoc._id }).select('_id').lean();
+        if (equivalentUser) {
+            result.targetId = equivalentUser._id;
+            result.linkedVia = 'user-by-employee';
+            return result;
+        }
+        // No User account for this employee — persist Employee._id as leave.employee
+        result.targetId = empDoc._id;
+        result.linkedVia = 'employee-only';
+        return result;
+    }
+
+    const asUser = await User.findById(id).select('_id username').lean();
+    if (asUser) {
+        result.targetId = asUser._id;
+        result.linkedVia = 'user-id';
+        if (!result.employeeName) result.employeeName = asUser.username || null;
+        return result;
+    }
+
+    return result;
 }
 
 /** Resolve Employee document linked to a leave request (User → Employee). */
@@ -78,14 +146,11 @@ async function resolveEmployeeForLeave(leaveRequest) {
 
 /**
  * After final leave approval: mark employee as Vacation Pending (Yet to go)
- * when Vacation leave has not started yet. Does not override On Vacation.
+ * for any leave type that has not started yet. Does not override On Vacation.
  */
 async function syncYetToGoVacationStatus(leaveRequest) {
     try {
         if (!leaveRequest || leaveRequest.status !== 'Approved') return;
-
-        // Match frontend Yet-to-go leave filter (Vacation only)
-        if (leaveRequest.leaveType !== 'Vacation') return;
 
         const start = leaveRequest.startDate ? new Date(leaveRequest.startDate) : null;
         if (!start || Number.isNaN(start.getTime())) return;
@@ -106,11 +171,11 @@ async function syncYetToGoVacationStatus(leaveRequest) {
 
         if (emp.vacationStatus !== 'Vacation Pending') {
             await Employee.findByIdAndUpdate(emp._id, { vacationStatus: 'Vacation Pending' });
-            console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id}`);
+            console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id} (${leaveRequest.leaveType || 'leave'})`);
         }
 
-        // Ensure Dashboard / Team list show updated Vacation Status immediately
-        invalidateListCache();
+        // Patch cache in-place — full invalidate caused multi-second cold Mongo reloads
+        patchListCacheEmployee(emp._id, { vacationStatus: 'Vacation Pending' });
     } catch (err) {
         console.error('[Leave] Yet-to-go vacationStatus sync error:', err.message || err);
     }
@@ -274,6 +339,8 @@ function parseLocalDate(dateStr) {
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const { status, employeeId } = req.query;
+        const view = String(req.query.view || '').toLowerCase();
+        const isLite = view === 'lite' || view === 'vacation';
         const filter = {};
 
         if (req.user.role === 'hod') {
@@ -319,13 +386,35 @@ router.get('/', authMiddleware, async (req, res) => {
             }
         }
 
-        const leaveRequests = await LeaveRequest.find(filter)
-            .populate('employee', 'username emailId employeeId role')
-            .populate('hodApprovedBy', 'username')
-            .populate('adminApprovedBy', 'username')
-            .populate('changedByUser', 'username')
-            .sort({ appliedOn: -1 })
-            .lean();
+        // Vacation/dashboard lite: only approved leaves, minimal fields (no heavy populates)
+        if (isLite) {
+            filter.status = { $in: ['Approved', 'HOD Approved'] };
+        }
+
+        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeId || filter.employee) + (isLite ? '|lite' : '');
+        const cachedLeaves = getLeaveListCache(cacheKey);
+        if (cachedLeaves) {
+            return res.json(cachedLeaves);
+        }
+
+        let leaveRequests;
+        if (isLite) {
+            leaveRequests = await LeaveRequest.find(filter)
+                .select('employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn')
+                .populate('employee', 'username emailId employeeId')
+                .sort({ appliedOn: -1 })
+                .lean();
+        } else {
+            leaveRequests = await LeaveRequest.find(filter)
+                .populate('employee', 'username emailId employeeId role')
+                .populate('hodApprovedBy', 'username')
+                .populate('adminApprovedBy', 'username')
+                .populate('changedByUser', 'username')
+                .sort({ appliedOn: -1 })
+                .lean();
+        }
+
+        setLeaveListCache(cacheKey, leaveRequests);
 
         res.json(leaveRequests);
     } catch (error) {
@@ -343,17 +432,9 @@ router.post('/', authMiddleware, async (req, res) => {
 
         const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
 
-
-        let targetUserId = req.user.id; // Fallback to current acting user
-        if (employeeId) {
-            // employeeId from the frontend frontend dropdown is an Employee document _id. We need to find the equivalent User _id
-            const equivalentUser = await User.findOne({ employeeId: employeeId });
-            if (equivalentUser) {
-                targetUserId = equivalentUser._id;
-            } else {
-                targetUserId = employeeId; // In case the frontend actually sends a User ID or for non-user employees
-            }
-        }
+        const resolved = await resolveLeaveEmployeeTarget(employeeId, employeeName, req.user.id);
+        const targetUserId = resolved.targetId;
+        const resolvedEmployeeName = resolved.employeeName || employeeName || req.user.username;
 
         // Validate dates against Employee's Joining Date (DOJ)
         if (startDate && endDate) {
@@ -361,7 +442,7 @@ router.post('/', authMiddleware, async (req, res) => {
             const end = new Date(endDate);
             if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
                 let employeeObj = null;
-                if (employeeId) {
+                if (employeeId && isObjectIdStr(String(employeeId))) {
                     employeeObj = await Employee.findById(employeeId);
                 } else if (req.user && req.user.employeeId) {
                     employeeObj = await Employee.findById(req.user.employeeId);
@@ -407,7 +488,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
         const newLeaveRequest = new LeaveRequest({
             employee: targetUserId,
-            employeeName: employeeName || req.user.username,
+            employeeName: resolvedEmployeeName,
             company,
             department,
             reportingManager,
@@ -430,6 +511,7 @@ router.post('/', authMiddleware, async (req, res) => {
         });
 
         const savedRequest = await newLeaveRequest.save();
+        invalidateLeaveListCache();
 
         if (isPastLeave && req.body.visaExpiryDate && employeeId) {
             await Employee.findByIdAndUpdate(employeeId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
@@ -586,17 +668,17 @@ router.put('/:id', authMiddleware, async (req, res) => {
         }
 
         // Handle other field updates (for employee editing their own request).
-        // employeeId from the form is Employee._id — resolve to User._id like create does.
-        if (employeeId) {
-            const equivalentUser = await User.findOne({ employeeId: employeeId });
-            if (equivalentUser) {
-                updateData.employee = equivalentUser._id;
-            } else {
-                const asUser = await User.findById(employeeId);
-                updateData.employee = asUser ? asUser._id : employeeId;
+        // employeeId from the form is Employee._id — resolve to User._id (or Employee._id if no User).
+        if (employeeId && isObjectIdStr(String(employeeId))) {
+            const resolved = await resolveLeaveEmployeeTarget(employeeId, employeeName, null);
+            if (resolved.targetId) {
+                updateData.employee = resolved.targetId;
+            }
+            if (resolved.employeeName) {
+                updateData.employeeName = resolved.employeeName;
             }
         }
-        if (employeeName) updateData.employeeName = employeeName;
+        if (employeeName && updateData.employeeName === undefined) updateData.employeeName = employeeName;
         if (company) updateData.company = company;
         if (req.body.department !== undefined) updateData.department = req.body.department;
         if (req.body.reportingManager !== undefined) updateData.reportingManager = req.body.reportingManager;
@@ -749,6 +831,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
             .populate('adminApprovedBy', 'username')
             .populate('changedByUser', 'username');
 
+        invalidateLeaveListCache();
+
         if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
             sendLeaveStatusToEmployee(updatedRequest, updateData.status)
                 .then(() => console.log('[Leave] Employee status email sent'))
@@ -850,6 +934,8 @@ router.post('/:id/revert', authMiddleware, async (req, res) => {
             .populate('cancelledBy', 'username')
             .populate('changedByUser', 'username');
 
+        invalidateLeaveListCache();
+
         const io = req.app.get('io');
         notifyLeaveStatusChange(io, updatedRequest, 'Cancelled', req.user.role)
             .catch((e) => console.error('[Leave] Revert notification error:', e));
@@ -880,6 +966,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         if (!deletedRequest) {
             return res.status(404).json({ message: 'Leave request not found' });
         }
+        invalidateLeaveListCache();
         res.json({ message: 'Leave request deleted successfully' });
     } catch (error) {
         console.error('Error deleting leave request:', error);
@@ -900,6 +987,7 @@ router.post('/bulk-delete', authMiddleware, async (req, res) => {
         }
 
         const result = await LeaveRequest.deleteMany({ _id: { $in: ids } });
+        invalidateLeaveListCache();
         res.json({ message: `Successfully deleted ${result.deletedCount} leave requests`, deletedCount: result.deletedCount });
     } catch (error) {
         console.error('Error bulk deleting leave requests:', error);
@@ -1019,6 +1107,7 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
 
         if (newLeaves.length > 0) {
             await LeaveRequest.insertMany(newLeaves);
+            invalidateLeaveListCache();
         }
 
         res.json({

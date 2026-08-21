@@ -14,6 +14,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 
 console.log('=== ENVIRONMENT VARIABLES ===');
@@ -228,7 +229,6 @@ app.use(compression());
 
 app.use(cors({
   origin: (origin, cb) => {
-    console.log('[CORS DEBUG] Request from origin:', origin);
     if (!origin || allowedOrigins.indexOf(origin) !== -1 || ALLOW_ALL) return cb(null, true);
     console.warn('HTTP CORS blocked origin:', origin);
     return cb(new Error('Not allowed by CORS'), false);
@@ -239,10 +239,33 @@ app.use(cors({
 // ====== MIDDLEWARE ======
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads/employeeDocuments', express.static(path.join(__dirname, '../uploads/employeeDocuments')));
-app.use('/uploads/employeedocuments', express.static(path.join(__dirname, '../uploads/employeedocuments')));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use('/Uploades', express.static(path.join(__dirname, '../Uploades')));
+// Serve uploads from outer Hostinger folder (../uploads or ../@uploads), not inner app uploads
+const { getUploadsRoot, listUploadRoots } = require('./utils/uploadsPath');
+const uploadsRoot = getUploadsRoot();
+console.log('[Uploads] Serving files from:', uploadsRoot);
+
+// New + legacy employeeDocuments casings under primary root
+app.use('/uploads/employeeDocuments', express.static(path.join(uploadsRoot, 'employeeDocuments')));
+app.use('/uploads/employeeDocuments', express.static(path.join(uploadsRoot, 'employeedocuments')));
+app.use('/uploads/employeedocuments', express.static(path.join(uploadsRoot, 'employeeDocuments')));
+app.use('/uploads/employeedocuments', express.static(path.join(uploadsRoot, 'employeedocuments')));
+app.use('/uploads', express.static(uploadsRoot));
+
+// Also mount any other upload roots that still exist (legacy inner / alternate outer)
+for (const root of listUploadRoots()) {
+  if (path.resolve(root) === path.resolve(uploadsRoot)) continue;
+  if (!fs.existsSync(root)) continue;
+  app.use('/uploads/employeeDocuments', express.static(path.join(root, 'employeeDocuments')));
+  app.use('/uploads/employeeDocuments', express.static(path.join(root, 'employeedocuments')));
+  app.use('/uploads/employeedocuments', express.static(path.join(root, 'employeeDocuments')));
+  app.use('/uploads/employeedocuments', express.static(path.join(root, 'employeedocuments')));
+  app.use('/uploads', express.static(root));
+}
+
+const legacyUploadesRoot = path.join(__dirname, '../Uploades');
+if (fs.existsSync(legacyUploadesRoot)) {
+  app.use('/Uploades', express.static(legacyUploadesRoot));
+}
 
 /* health check moved to top */
 

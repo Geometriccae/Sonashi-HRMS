@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import UserService from "../services/UserService";
-import config, { buildImageUrl } from "../config/config";
+import { buildImageUrl, handleImageError } from "../config/config";
 
 function ProfileAvatar({ size = 32, className = "", userData = null }) {
   const [user, setUser] = useState(userData);
@@ -21,14 +21,7 @@ function ProfileAvatar({ size = 32, className = "", userData = null }) {
   const src = buildImageUrl(user?.profilePicture);
 
   const onImageError = (e) => {
-    const currentSrc = e.target.src;
-    const productionBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-    if (!currentSrc.startsWith(productionBase)) {
-      const path = new URL(currentSrc).pathname;
-      e.target.src = `${productionBase}${path}`;
-    } else {
-      e.target.style.display = 'none';
-    }
+    handleImageError(e);
   };
 
   if (src) {

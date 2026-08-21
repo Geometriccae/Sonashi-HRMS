@@ -18,6 +18,7 @@ const Client = require('../models/Client');
 const CompanyDocument = require('../models/CompanyDocument');
 const { buildEmployeePayload } = require('../utils/employeeExcelImport');
 const { notifyEmployeeOnboarding } = require('../services/hrNotificationService');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
 const {
   EMPLOYEE_STATUS_VALUES,
   workingStatusFilter,
@@ -28,14 +29,23 @@ const {
   getListCache,
   setListCache,
   invalidateListCache,
+  getApprovedLeavesCache,
+  setApprovedLeavesCache,
+  invalidateApprovedLeavesCache,
 } = require('../utils/employeeListCache');
 
 // ========== SERVER-SIDE LIST CACHE ==========
 // Cached via employeeListCache; invalidated on employee writes and leave yet-to-go sync.
 
 /** Map company document particulars → docNumber (Company Code). */
+const COMPANY_CODE_TTL_MS = 60000;
+let _companyCodeCache = { map: null, ts: 0 };
+
 async function getCompanyCodeMap() {
   try {
+    if (_companyCodeCache.map && Date.now() - _companyCodeCache.ts < COMPANY_CODE_TTL_MS) {
+      return _companyCodeCache.map;
+    }
     const docs = await CompanyDocument.find({}).select('particulars docNumber updatedAt createdAt').lean();
     const map = {};
     const sorted = [...docs].sort((a, b) => {
@@ -48,6 +58,7 @@ async function getCompanyCodeMap() {
       const code = String(d.docNumber || '').trim();
       if (key && code) map[key] = code;
     }
+    _companyCodeCache = { map, ts: Date.now() };
     return map;
   } catch (err) {
     console.error('Failed to load company codes from Company Documents:', err.message);
@@ -60,7 +71,7 @@ async function getCompanyCodeMap() {
  */
 function applyLiveCompanyCodes(employees, codeMap) {
   if (!Array.isArray(employees)) return employees;
-  const DEFAULT_COMPANY_CODE = '0000000246878';
+  const DEFAULT_COMPANY_CODE = '0000000172509';
   return employees.map((e) => {
     const stored = String(e.companyCode || '').trim();
     if (stored) return e;
@@ -159,7 +170,7 @@ const deriveEventDateTime = (dateValue, timeValue) => {
 
 const importStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../uploads'));
+    cb(null, ensureUploadSubdir());
   },
   filename: (req, file, cb) => {
     cb(null, `employee-import-${Date.now()}${path.extname(file.originalname)}`);
@@ -177,11 +188,7 @@ const uploadEmployeeImport = multer({
 
 const profilePhotoStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads/employees');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
+    cb(null, ensureUploadSubdir('employees'));
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -223,8 +230,7 @@ function persistBase64ProfilePhoto(value, idHint) {
     ? Buffer.from(payload, 'base64')
     : Buffer.from(decodeURIComponent(payload), 'utf8');
 
-  const uploadDir = path.join(__dirname, '../../uploads/employees');
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  const uploadDir = ensureUploadSubdir('employees');
 
   const safeId = String(idHint || 'emp').replace(/[^a-zA-Z0-9_-]/g, '-');
   const filename = `${safeId}-${Date.now()}.${ext}`;
@@ -311,41 +317,213 @@ async function sendTaskEmailsInBackground(employee, eventData, assignedBy, actio
 // ====== STATIC ROUTES (No parameters) ======
 
 const EMPLOYEE_LIST_FIELDS = [
-  'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId', 'mobile',
+  'employeeId', 'employeeName', 'employeeStatus', 'previousEmployeeStatus', 'vacationStatus', 'emailId', 'mobile',
   'role', 'department', 'attendance', 'doj', 'totalYearsExperience', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
-  'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay',
+  'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay', 'leaveEndDate',
   'noticePeriod', 'provisionPeriod', 'noticePeriodStartDate', 'noticePeriodEndDate',
   'provisionPeriodStartDate', 'provisionPeriodEndDate',
   'reportingManager', 'assignedProjects',
-  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt', 'profilePhoto',
+  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt',
 ].join(' ');
+
+const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
+const DYNAMIC_VACATION_STATUSES = new Set(['Vacation Pending', 'On Vacation', 'Vacation Approved']);
+const APPROVED_LEAVE_SELECT =
+  'employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department';
+
+async function getApprovedLeavesForVacation() {
+  const cached = getApprovedLeavesCache();
+  if (cached) return cached;
+  const rows = await LeaveRequest.find({
+    status: { $in: APPROVED_VACATION_LEAVE_STATUSES },
+  })
+    .select(APPROVED_LEAVE_SELECT)
+    .populate('employee', 'username emailId employeeId')
+    .lean();
+  setApprovedLeavesCache(rows);
+  return rows;
+}
+
+function toCalendarDate(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function normalizeVacationMatchValue(value) {
+  return String(value || '').toLowerCase().replace(/[\s_.-]+/g, '').trim();
+}
+
+function leaveBelongsToEmployee(leave, employee) {
+  if (!leave || !employee) return false;
+
+  const employeeMongoId = String(employee._id || '').trim();
+  const employeeCode = String(employee.employeeId || '').trim();
+  const employeeEmail = String(employee.emailId || '').trim().toLowerCase();
+  const employeeName = normalizeVacationMatchValue(employee.employeeName);
+
+  const leaveUserRef = String(leave.employee?._id || leave.employee || '').trim();
+  if (leaveUserRef && employeeMongoId && leaveUserRef === employeeMongoId) return true;
+
+  const linkedEmployeeRef = String(leave.employee?.employeeId || '').trim();
+  if (linkedEmployeeRef && employeeMongoId && linkedEmployeeRef === employeeMongoId) return true;
+  if (linkedEmployeeRef && employeeCode && linkedEmployeeRef === employeeCode) return true;
+
+  const leaveEmployeeCode = String(leave.employeeId || '').trim();
+  if (leaveEmployeeCode && employeeCode && leaveEmployeeCode === employeeCode) return true;
+
+  const leaveEmail = String(leave.employee?.emailId || '').trim().toLowerCase();
+  if (leaveEmail && employeeEmail && leaveEmail === employeeEmail) return true;
+
+  const leaveName = normalizeVacationMatchValue(leave.employeeName || leave.employee?.username);
+  return Boolean(leaveName && employeeName && leaveName === employeeName);
+}
+
+function getLeaveTravelStartDate(leave, employee) {
+  return toCalendarDate(employee?.travellingDate || leave?.travellingDate || leave?.startDate);
+}
+
+function getEffectiveVacationStatusFromLeave(leave, employee, today = new Date()) {
+  if (!leave || !APPROVED_VACATION_LEAVE_STATUSES.includes(leave.status)) return null;
+
+  const todayDate = toCalendarDate(today);
+  const travelDate = getLeaveTravelStartDate(leave, employee);
+  const leaveEndDate = toCalendarDate(leave.endDate);
+
+  if (!todayDate || !travelDate || !leaveEndDate) return null;
+  if (todayDate < travelDate) return 'Vacation Pending';
+  // End date is the return / last day: on that day the employee is treated as returned
+  if (todayDate >= travelDate && todayDate < leaveEndDate) return 'On Vacation';
+  if (todayDate >= leaveEndDate) return 'Vacation Approved';
+  return null;
+}
+
+function applyEffectiveVacationStatuses(employees, leaveRequests) {
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+  const safeLeaves = Array.isArray(leaveRequests) ? leaveRequests : [];
+
+  // Index leaves once — avoids O(employees × leaves) full scans
+  const leavesByEmpId = new Map();
+  const leavesByCode = new Map();
+  const leavesByName = new Map();
+  for (const leave of safeLeaves) {
+    const empRef = leave.employee;
+    const oid = empRef && (empRef._id || empRef);
+    if (oid) {
+      const k = String(oid);
+      if (!leavesByEmpId.has(k)) leavesByEmpId.set(k, []);
+      leavesByEmpId.get(k).push(leave);
+    }
+    if (leave.employeeId) {
+      const k = String(leave.employeeId);
+      if (!leavesByCode.has(k)) leavesByCode.set(k, []);
+      leavesByCode.get(k).push(leave);
+    }
+    const nameKey = normalizeVacationMatchValue(leave.employeeName || empRef?.username);
+    if (nameKey) {
+      if (!leavesByName.has(nameKey)) leavesByName.set(nameKey, []);
+      leavesByName.get(nameKey).push(leave);
+    }
+  }
+
+  const leavesForEmployee = (employee) => {
+    const seen = new Set();
+    const out = [];
+    const add = (arr) => {
+      if (!arr) return;
+      for (const leave of arr) {
+        const id = String(leave._id || '');
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        if (leaveBelongsToEmployee(leave, employee)) out.push(leave);
+      }
+    };
+    add(leavesByEmpId.get(String(employee._id)));
+    if (employee.employeeId) add(leavesByCode.get(String(employee.employeeId)));
+    add(leavesByName.get(normalizeVacationMatchValue(employee.employeeName)));
+    // Fallback if indexing missed a match
+    if (out.length === 0) {
+      return safeLeaves.filter((leave) => leaveBelongsToEmployee(leave, employee));
+    }
+    return out;
+  };
+
+  return safeEmployees.map((employee) => {
+    const employeeLeaves = leavesForEmployee(employee);
+    const todayDate = toCalendarDate(new Date());
+    const returnDay = toCalendarDate(employee.returnDate);
+
+    // Admin marked return: keep Vacation Approved when today is on/after return date,
+    // unless a newer leave is still upcoming / currently away after that return.
+    if (
+      employee.vacationStatus === 'Vacation Approved' &&
+      returnDay &&
+      todayDate &&
+      todayDate >= returnDay
+    ) {
+      const activeAfterReturn = employeeLeaves.find((leave) => {
+        const status = getEffectiveVacationStatusFromLeave(leave, employee);
+        if (status === 'On Vacation') {
+          const travel = getLeaveTravelStartDate(leave, employee);
+          return travel && travel >= returnDay;
+        }
+        if (status === 'Vacation Pending') {
+          const travel = getLeaveTravelStartDate(leave, employee);
+          return travel && travel > returnDay;
+        }
+        return false;
+      });
+      if (!activeAfterReturn) {
+        return { ...employee, vacationStatus: 'Vacation Approved' };
+      }
+    }
+
+    const activeLeave = employeeLeaves.find(
+      (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'On Vacation'
+    );
+    if (activeLeave) return { ...employee, vacationStatus: 'On Vacation' };
+
+    const upcomingLeave = employeeLeaves.find(
+      (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'Vacation Pending'
+    );
+    if (upcomingLeave) return { ...employee, vacationStatus: 'Vacation Pending' };
+
+    const completedLeave = [...employeeLeaves].reverse().find(
+      (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'Vacation Approved'
+    );
+    if (completedLeave) return { ...employee, vacationStatus: 'Vacation Approved' };
+
+    if (DYNAMIC_VACATION_STATUSES.has(employee.vacationStatus)) {
+      return { ...employee, vacationStatus: 'Onsite' };
+    }
+
+    return employee;
+  });
+}
 
 // Lightweight stats for dashboard / team management cards
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
-    const [totalEmployees, activeEmployees, inactiveEmployees, projectRows] = await Promise.all([
+    const [totalEmployees, activeEmployees, inactiveEmployees] = await Promise.all([
       Employee.countDocuments(),
       Employee.countDocuments(workingStatusFilter()),
       Employee.countDocuments(nonWorkingStatusFilter()),
-      Employee.find({}, { assignedProjects: 1 }).lean(),
     ]);
-
-    const uniqueProjects = new Set();
-    projectRows.forEach((emp) => {
-      if (Array.isArray(emp.assignedProjects)) {
-        emp.assignedProjects.forEach((proj) => {
-          const projectId = typeof proj === 'object' && proj !== null ? proj._id : proj;
-          if (projectId) uniqueProjects.add(String(projectId));
-        });
-      }
-    });
 
     res.json({
       totalEmployees,
       activeEmployees,
       inactiveEmployees,
-      totalAssignedProjects: uniqueProjects.size,
+      totalAssignedProjects: 0,
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee stats', error: error.message });
@@ -363,13 +541,36 @@ router.get('/', authMiddleware, async (req, res) => {
     const status = String(req.query.status || '').trim();
     const paginate = !isNaN(page) && page > 0 && !isNaN(limit) && limit > 0;
     const hasFilters = search || status;
+    const includeVacation =
+      String(req.query.includeVacation || '') === '1' ||
+      String(req.query.includeVacation || '').toLowerCase() === 'true';
+    const withLeaves =
+      String(req.query.withLeaves || '') === '1' ||
+      String(req.query.withLeaves || '').toLowerCase() === 'true';
+
+    // Only load approved leaves when vacation status merge is requested.
+    // Default list/dropdown loads skip this (was dominating response time).
+    const approvedLeavesPromise = includeVacation
+      ? getApprovedLeavesForVacation()
+      : Promise.resolve([]);
+
+    const respondEmployees = (employees, approvedLeaves) => {
+      if (withLeaves && includeVacation) {
+        return res.json({ employees, leaves: approvedLeaves || [] });
+      }
+      return res.json(employees);
+    };
 
     // Fast path: unfiltered list view served from in-memory cache
     if (view === 'list' && !paginate && !hasFilters) {
       const cached = getListCache();
       if (cached) {
-        const codeMap = await getCompanyCodeMap();
-        return res.json(applyLiveCompanyCodes(cached, codeMap));
+        const [codeMap, approvedLeaves] = await Promise.all([getCompanyCodeMap(), approvedLeavesPromise]);
+        const withCodes = applyLiveCompanyCodes(cached, codeMap);
+        const employees = includeVacation
+          ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+          : withCodes;
+        return respondEmployees(employees, approvedLeaves);
       }
     }
 
@@ -390,7 +591,7 @@ router.get('/', authMiddleware, async (req, res) => {
       ];
     }
 
-    const codeMap = await getCompanyCodeMap();
+    const [codeMap, approvedLeaves] = await Promise.all([getCompanyCodeMap(), approvedLeavesPromise]);
 
     if (paginate && view === 'list') {
       const [employees, total] = await Promise.all([
@@ -402,8 +603,22 @@ router.get('/', authMiddleware, async (req, res) => {
           .lean(),
         Employee.countDocuments(filter),
       ]);
+      const withCodes = applyLiveCompanyCodes(employees, codeMap);
+      const merged = includeVacation
+        ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+        : withCodes;
+      if (withLeaves && includeVacation) {
+        return res.json({
+          employees: merged,
+          leaves: approvedLeaves || [],
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        });
+      }
       return res.json({
-        employees: applyLiveCompanyCodes(employees, codeMap),
+        employees: merged,
         total,
         page,
         limit,
@@ -425,7 +640,11 @@ router.get('/', authMiddleware, async (req, res) => {
       setListCache(employees);
     }
 
-    res.json(applyLiveCompanyCodes(employees, codeMap));
+    const withCodes = applyLiveCompanyCodes(employees, codeMap);
+    const merged = includeVacation
+      ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+      : withCodes;
+    return respondEmployees(merged, approvedLeaves);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
   }
@@ -694,10 +913,10 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
     ensureEmployeeEmailForDb(employeeData, `c${Date.now().toString(36)}`);
 
     if (!String(employeeData.companyCode || '').trim()) {
-      employeeData.companyCode = '0000000246878';
+      employeeData.companyCode = '0000000172509';
     }
     if (!String(employeeData.office || '').trim()) {
-      employeeData.office = 'JOINT VEN TRADING CO (L.L.C) (BR)';
+      employeeData.office = 'JOINT VEN TRADING CO LLC';
     }
 
     const existingEmployee = await Employee.findOne({
@@ -843,7 +1062,7 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'companyCode')
       && !String(updateData.companyCode || '').trim()) {
-      updateData.companyCode = '0000000246878';
+      updateData.companyCode = '0000000172509';
     }
 
     // Use $set so nested salaryDetails / bank fields merge correctly on update
@@ -1799,6 +2018,7 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
     employee.attendance = 'Onsite';
     await employee.save();
     invalidateListCache();
+    invalidateApprovedLeavesCache();
 
     // Best-effort attendance Onsite for return day
     try {

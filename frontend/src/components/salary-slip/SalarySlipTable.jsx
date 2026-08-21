@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import styles from "./SalarySlipTable.module.css";
 import plus from "../../assets/dashboard/plus.svg";
 import { useToast } from "../../context/ToastContext";
@@ -361,6 +362,9 @@ function SalarySlipTable({ userRole }) {
     const isAdmin = isAdminRole || isHOD || isHR || isViewer;
     const canManageSlips = (isAdminRole || isHOD) && !isViewer;
     const { showToast } = useToast();
+    const [searchParams] = useSearchParams();
+    const yearFromUrl = searchParams.get("year");
+    const monthFromUrl = searchParams.get("month");
     const [salarySlips, setSalarySlips] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -377,8 +381,10 @@ function SalarySlipTable({ userRole }) {
     const [slipToDelete, setSlipToDelete] = useState(null);
 
     // Default to 'All' for admin to display all imported data immediately
-    const [selectedMonth, setSelectedMonth] = useState(isAdmin ? "All" : new Date().toLocaleString('default', { month: 'long' }));
-    const [selectedYear, setSelectedYear] = useState("All");
+    const [selectedMonth, setSelectedMonth] = useState(
+        monthFromUrl || (isAdmin ? "All" : new Date().toLocaleString("default", { month: "long" }))
+    );
+    const [selectedYear, setSelectedYear] = useState(yearFromUrl || "All");
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isManualAddModalOpen, setIsManualAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -685,7 +691,7 @@ function SalarySlipTable({ userRole }) {
             const photoY = currentY + 2;
             if (slip.emailId) {
                 try {
-                    let apiBase = config.API_BASE_URL || 'http://localhost:5000/api';
+                    let apiBase = config.API_BASE_URL || '';
                     if (!apiBase.endsWith('/api')) {
                         apiBase = apiBase.endsWith('/') ? apiBase + 'api' : apiBase + '/api';
                     }

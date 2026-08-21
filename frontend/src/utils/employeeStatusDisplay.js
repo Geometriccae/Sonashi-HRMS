@@ -39,6 +39,81 @@ export function isNonWorkingEmployeeStatus(status) {
   return !isWorkingEmployeeStatus(status);
 }
 
+export function employeeMatchesSearch(employee, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const fields = [
+    employee?.employeeName,
+    employee?.name,
+    employee?.employeeId,
+    employee?.employeeNumber,
+    employee?.empCode,
+    employee?.emailId,
+    employee?.mobile,
+    employee?.role,
+    employee?.department,
+  ];
+  return fields.some((value) => String(value || "").toLowerCase().includes(q));
+}
+
+/**
+ * Default HR lists/dropdowns: current (working) employees only.
+ * A non-empty search also returns matching ex-employees.
+ */
+export function filterEmployeesForDefaultList(employees, searchQuery = "") {
+  return (employees || []).filter((employee) => {
+    if (isWorkingEmployeeStatus(employee?.employeeStatus)) {
+      return employeeMatchesSearch(employee, searchQuery);
+    }
+    return String(searchQuery || "").trim() !== "" && employeeMatchesSearch(employee, searchQuery);
+  });
+}
+
+/** Native <select> lists: current staff, plus a currently selected ex-employee if any. */
+export function employeesForNativeSelect(employees, selectedId = "") {
+  const list = filterEmployeesForDefaultList(employees, "");
+  if (!selectedId) return list;
+  if (list.some((employee) => String(employee._id) === String(selectedId))) return list;
+  const selected = (employees || []).find((employee) => String(employee._id) === String(selectedId));
+  return selected ? [...list, selected] : list;
+}
+
+export function toSearchableEmployeeOption(employee, extra = {}) {
+  const name = employee?.employeeName || employee?.name || "Unknown";
+  const code = employee?.employeeId || "";
+  return {
+    value: extra.value ?? employee?._id,
+    label: extra.label ?? `${name}${code ? ` (${code})` : ""}`,
+    name,
+    employeeId: code,
+    employeeNumber: employee?.employeeNumber || extra.employeeNumber || "",
+    emailId: employee?.emailId || "",
+    mobile: employee?.mobile || "",
+    ...extra,
+    inactive: extra.inactive ?? isNonWorkingEmployeeStatus(employee?.employeeStatus),
+  };
+}
+
+/** react-select: hide inactive options until the user types a search. */
+export function filterReactSelectEmployeeOption(option, inputValue) {
+  const q = String(inputValue || "").trim().toLowerCase();
+  const data = option?.data || option || {};
+  const haystack = [
+    option?.label,
+    data.label,
+    data.name,
+    data.employeeId,
+    data.employeeNumber,
+    data.emailId,
+    data.mobile,
+  ]
+    .map((value) => String(value || "").toLowerCase())
+    .join(" ");
+  if (q && !haystack.includes(q)) return false;
+  if (!q && data.inactive) return false;
+  return true;
+}
+
 function startOfLocalDay(date) {
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return null;

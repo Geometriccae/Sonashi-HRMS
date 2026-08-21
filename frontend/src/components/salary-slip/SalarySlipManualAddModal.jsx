@@ -1,149 +1,318 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './SalarySlipManualAddModal.module.css';
 import { FaTimes, FaSave, FaSpinner } from 'react-icons/fa';
 import salarySlipService from '../../services/SalarySlipService';
 import employeeService from '../../services/EmployeeService';
+import attendanceService from '../../services/AttendanceService';
 import { useToast } from '../../context/ToastContext';
 import Dropdown from '../DropDown';
 import DateInput from '../DateInput';
 import { formatAed } from '../../utils/currency';
+import leaveRequestService from '../../services/LeaveRequestService';
+import { computePayablePayrollDays, getPayrollPeriod } from '../../utils/payrollPayableDays';
+import { isNonWorkingEmployeeStatus } from '../../utils/employeeStatusDisplay';
+
+const createInitialFormData = (month, year) => ({
+    selectedEmployeeId: '',
+    employeeName: '',
+    email: '',
+    department: '',
+    designation: '',
+    dateOfJoining: '',
+    totalWorkingDays: '',
+    presentDays: '',
+    payableDays: '',
+    basic: '',
+    houseRent: '',
+    travelExp: '',
+    other: '',
+    deduction: '',
+    grossSalary: '',
+    netSalary: '',
+    month,
+    year,
+});
+
+const createInitialBaseAmounts = () => ({
+    basic: 0,
+    houseRent: 0,
+    travelExp: 0,
+    other: 0,
+});
+
+const toAmount = (value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : 0;
+};
+
+const formatAmount = (value) => (Number.isFinite(value) ? value : 0).toFixed(2);
+
+const toIsoDate = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
+};
+
+const recalculateSalaryFields = (draft, baseAmounts) => {
+    const totalWorkingDays = Number(draft.totalWorkingDays);
+    const fallbackPayable = draft.payableDays === '' ? totalWorkingDays : Number(draft.payableDays);
+    const normalizedPayable = Number.isFinite(fallbackPayable) ? fallbackPayable : 0;
+    const ratio = totalWorkingDays > 0 ? Math.max(0, normalizedPayable) / totalWorkingDays : 0;
+
+    const basic = baseAmounts.basic * ratio;
+    const houseRent = baseAmounts.houseRent * ratio;
+    const travelExp = baseAmounts.travelExp * ratio;
+    const other = baseAmounts.other * ratio;
+    const grossSalary = basic + houseRent + travelExp + other;
+    const deduction = toAmount(draft.deduction);
+    const netSalary = grossSalary - deduction;
+
+    return {
+        ...draft,
+        basic: formatAmount(basic),
+        houseRent: formatAmount(houseRent),
+        travelExp: formatAmount(travelExp),
+        other: formatAmount(other),
+        grossSalary: formatAmount(grossSalary),
+        netSalary: formatAmount(netSalary),
+    };
+};
+
+const validateFormData = (data) => {
+    const errors = {};
+    const totalWorkingDays = Number(data.totalWorkingDays);
+    const presentDays = Number(data.presentDays);
+    const payableDays = Number(data.payableDays);
+
+    if (data.totalWorkingDays === '' || !Number.isFinite(totalWorkingDays) || totalWorkingDays < 0) {
+        errors.totalWorkingDays = 'Total Working Days must be 0 or more.';
+    }
+
+    if (data.presentDays === '' || !Number.isFinite(presentDays) || presentDays < 0) {
+        errors.presentDays = 'Present Days must be 0 or more.';
+    } else if (Number.isFinite(totalWorkingDays) && presentDays > totalWorkingDays) {
+        errors.presentDays = 'Present Days cannot be greater than Total Working Days.';
+    }
+
+    if (data.payableDays === '' || !Number.isFinite(payableDays) || payableDays < 0) {
+        errors.payableDays = 'Payable Days must be 0 or more.';
+    } else if (Number.isFinite(totalWorkingDays) && payableDays > totalWorkingDays) {
+        errors.payableDays = 'Payable Days cannot be greater than Total Working Days.';
+    }
+
+    return errors;
+};
 
 function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, existingSlips = [] }) {
     const { showToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [employees, setEmployees] = useState([]);
+    const [leaveRequests, setLeaveRequests] = useState([]);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
-    const [formData, setFormData] = useState({
-        selectedEmployeeId: '',
-        employeeName: '',
-        email: '',
-        department: '',
-        designation: '',
-        dateOfJoining: '',
-        // Earnings (custom fields)
-        basic: '',
-        houseRent: '',
-        travelExp: '',
-        other: '',
-        // Deductions (custom field)
-        deduction: '',
-        // Calculated fields
-        grossSalary: '',
-        netSalary: '',
-        month: month,
-        year: year
-    });
+    const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+    const [baseAmounts, setBaseAmounts] = useState(createInitialBaseAmounts());
+    const [formData, setFormData] = useState(createInitialFormData(month, year));
+    const [errors, setErrors] = useState({});
 
-    // Reset form when modal opens
     useEffect(() => {
-        if (isOpen) {
-            setFormData({
-                selectedEmployeeId: '',
-                employeeName: '',
-                email: '',
-                department: '',
-                designation: '',
-                dateOfJoining: '',
-                basic: '',
-                houseRent: '',
-                travelExp: '',
-                other: '',
-                deduction: '',
-                grossSalary: '',
-                netSalary: '',
-                month: month,
-                year: year
-            });
+        if (!isOpen) return;
 
-            // Fetch employees for the dropdown
-            const fetchEmployees = async () => {
-                setIsLoadingEmployees(true);
-                try {
-                    const data = await employeeService.getEmployees();
-                    // Filter active employees or as per business logic
-                    setEmployees(data || []);
-                } catch (error) {
-                    console.error("Error fetching employees:", error);
-                } finally {
-                    setIsLoadingEmployees(false);
-                }
-            };
-            fetchEmployees();
-        }
+        setFormData(createInitialFormData(month, year));
+        setBaseAmounts(createInitialBaseAmounts());
+        setErrors({});
+
+        const fetchEmployees = async () => {
+            setIsLoadingEmployees(true);
+            try {
+                const [data, leaves] = await Promise.all([
+                    employeeService.getEmployees(),
+                    leaveRequestService.getLeaveRequests().catch(() => []),
+                ]);
+                setEmployees(Array.isArray(data) ? data : []);
+                setLeaveRequests(Array.isArray(leaves) ? leaves : (leaves?.data || []));
+            } catch (error) {
+                console.error('Error fetching employees:', error);
+            } finally {
+                setIsLoadingEmployees(false);
+            }
+        };
+
+        fetchEmployees();
     }, [isOpen, month, year]);
+
+    useEffect(() => {
+        if (!isOpen || !formData.selectedEmployeeId) return;
+
+        const period = getPayrollPeriod(formData.month, formData.year);
+        if (!period) return;
+
+        let isMounted = true;
+
+        const loadAttendanceDefaults = async () => {
+            setIsLoadingAttendance(true);
+            try {
+                const employee = employees.find((item) => item._id === formData.selectedEmployeeId);
+                if (!employee) return;
+
+                const rangeRecords = await attendanceService.getByRange(
+                    period.start.toISOString().slice(0, 10),
+                    period.end.toISOString().slice(0, 10)
+                );
+
+                if (!isMounted) return;
+
+                const days = computePayablePayrollDays({
+                    employee,
+                    month: formData.month,
+                    year: formData.year,
+                    attendanceRecords: Array.isArray(rangeRecords) ? rangeRecords : [],
+                    leaveRequests,
+                });
+
+                setFormData((current) => {
+                    if (current.selectedEmployeeId !== formData.selectedEmployeeId) return current;
+
+                    const updated = {
+                        ...current,
+                        totalWorkingDays: String(days.totalWorkingDays),
+                        presentDays: String(days.presentDays),
+                        payableDays: String(days.payableDays),
+                    };
+                    return recalculateSalaryFields(updated, baseAmounts);
+                });
+                setErrors({});
+            } catch (attendanceError) {
+                console.error('Error fetching attendance defaults for salary slip:', attendanceError);
+            } finally {
+                if (isMounted) {
+                    setIsLoadingAttendance(false);
+                }
+            }
+        };
+
+        loadAttendanceDefaults();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [isOpen, formData.selectedEmployeeId, formData.month, formData.year, employees, leaveRequests]);
 
     const handleEmployeeSelect = (e) => {
         const employeeId = e.target.value;
-        const emp = employees.find(emp => emp._id === employeeId);
-        if (emp) {
-            // Priority: Use the detailed fields if they exist in salaryDetails
-            // Otherwise, fallback to the old calculation logic (AED label only)
-            const basic = emp.salaryDetails?.basicSalary || 0;
-            const houseRent = emp.salaryDetails?.houseRent !== undefined ? emp.salaryDetails.houseRent : (basic / 2);
-            const travelExp = emp.salaryDetails?.travelExp || 0;
-            const other = emp.salaryDetails?.other !== undefined ? emp.salaryDetails.other : Math.max(0, (emp.salaryDetails?.allowance || 0) - houseRent);
-            const deduction = emp.salaryDetails?.deduction || 0;
+        const employee = employees.find((item) => item._id === employeeId);
+        if (!employee) return;
 
-            const grossSalary = basic + houseRent + travelExp + other;
-            const netSalary = grossSalary - deduction;
+        const salary = employee.salaryDetails || {};
+        const nextBaseAmounts = {
+            basic: toAmount(salary.basicSalary),
+            houseRent: toAmount(salary.houseRent),
+            travelExp: toAmount(salary.travelExp),
+            other: toAmount(salary.other),
+        };
+        const deduction = toAmount(salary.deduction);
+        const days = computePayablePayrollDays({
+            employee,
+            month: formData.month,
+            year: formData.year,
+            attendanceRecords: [],
+            leaveRequests,
+        });
 
-            setFormData(prev => ({
-                ...prev,
-                selectedEmployeeId: employeeId,
-                employeeName: emp.employeeName,
-                email: emp.emailId || '',
-                department: emp.department || '',
-                designation: emp.designation || emp.role || '',
-                dateOfJoining: emp.doj ? new Date(emp.doj).toISOString().split('T')[0] : '',
-                basic: basic.toString(),
-                houseRent: houseRent.toString(),
-                travelExp: travelExp.toString(),
-                other: other.toString(),
-                deduction: deduction.toString(),
-                grossSalary: grossSalary.toFixed(2),
-                netSalary: netSalary.toFixed(2)
-            }));
-        }
+        setBaseAmounts(nextBaseAmounts);
+        setErrors({});
+        setFormData((current) =>
+            recalculateSalaryFields(
+                {
+                    ...current,
+                    selectedEmployeeId: employeeId,
+                    employeeName: employee.employeeName || '',
+                    email: employee.emailId || '',
+                    department: employee.department || '',
+                    designation: employee.designation || employee.role || '',
+                    dateOfJoining: toIsoDate(employee.doj),
+                    totalWorkingDays: String(days.totalWorkingDays),
+                    presentDays: String(days.presentDays),
+                    payableDays: String(days.payableDays),
+                    deduction: formatAmount(deduction),
+                },
+                nextBaseAmounts
+            )
+        );
     };
 
     if (!isOpen) return null;
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => {
-            const updated = { ...prev, [name]: value };
-            const basic = Number(updated.basic) || 0;
-            const houseRent = Number(updated.houseRent) || 0;
-            const travelExp = Number(updated.travelExp) || 0;
-            const other = Number(updated.other) || 0;
-            const deduction = Number(updated.deduction) || 0;
 
-            const grossSalary = basic + houseRent + travelExp + other;
-            const netSalary = grossSalary - deduction;
+        setFormData((current) => {
+            const updated = { ...current, [name]: value };
 
-            updated.grossSalary = grossSalary.toFixed(2);
-            updated.netSalary = netSalary.toFixed(2);
+            if (name === 'month' || name === 'year') {
+                const payrollPeriod = getPayrollPeriod(
+                    name === 'month' ? value : updated.month,
+                    name === 'year' ? value : updated.year
+                );
+                if (payrollPeriod && !updated.selectedEmployeeId && updated.totalWorkingDays === '') {
+                    updated.totalWorkingDays = String(payrollPeriod.totalCalendarDays);
+                    updated.payableDays = String(payrollPeriod.totalCalendarDays);
+                }
+            }
 
+            if (['totalWorkingDays', 'payableDays', 'deduction'].includes(name)) {
+                return recalculateSalaryFields(updated, baseAmounts);
+            }
+
+            if (['basic', 'houseRent', 'travelExp', 'other'].includes(name)) {
+                const totalWorkingDays = Number(updated.totalWorkingDays);
+                const payableDays = Number(updated.payableDays);
+                const ratio = totalWorkingDays > 0 && payableDays >= 0 ? payableDays / totalWorkingDays : 0;
+                const normalizedValue = toAmount(value);
+
+                const nextBaseAmounts = {
+                    ...baseAmounts,
+                    [name]: ratio > 0 ? normalizedValue / ratio : normalizedValue,
+                };
+                setBaseAmounts(nextBaseAmounts);
+                return recalculateSalaryFields(updated, nextBaseAmounts);
+            }
+
+            const grossSalary =
+                toAmount(updated.basic) +
+                toAmount(updated.houseRent) +
+                toAmount(updated.travelExp) +
+                toAmount(updated.other);
+            const netSalary = grossSalary - toAmount(updated.deduction);
+
+            updated.grossSalary = formatAmount(grossSalary);
+            updated.netSalary = formatAmount(netSalary);
             return updated;
         });
+
+        setErrors(validateFormData({
+            ...formData,
+            [name]: value,
+        }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        // Validation: Check if slip already exists for this employee/month/year
-        // This is a basic frontend check. The backend also handles this via findOneAndUpdate.
+
+        const validationErrors = validateFormData(formData);
+        setErrors(validationErrors);
+        if (Object.keys(validationErrors).length > 0) return;
+
         const monthStr = formData.month.trim().toLowerCase();
         const yearStr = formData.year.toString().trim();
         const emailStr = formData.email.trim().toLowerCase();
-        
+
         setIsLoading(true);
         try {
-            // Check if slip already exists in the provided list
-            const alreadyExists = existingSlips.find(s => 
-                s.emailId?.toLowerCase() === emailStr && 
-                s.month?.toLowerCase() === monthStr && 
-                String(s.year) === yearStr
+            const alreadyExists = existingSlips.find((slip) =>
+                slip.emailId?.toLowerCase() === emailStr &&
+                slip.month?.toLowerCase() === monthStr &&
+                String(slip.year) === yearStr
             );
 
             if (alreadyExists) {
@@ -159,7 +328,9 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                 department: formData.department,
                 designation: formData.designation,
                 dateOfJoining: formData.dateOfJoining,
-                // Map custom fields to existing backend fields (AED label only, same amounts)
+                totalWorkingDays: parseFloat(formData.totalWorkingDays) || 0,
+                presentDays: parseFloat(formData.presentDays) || 0,
+                payableDays: parseFloat(formData.payableDays) || 0,
                 basicPay: parseFloat(formData.basic) || 0,
                 hra: parseFloat(formData.houseRent) || 0,
                 conveyanceAllowance: parseFloat(formData.travelExp) || 0,
@@ -169,13 +340,13 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                 deductionsPFTax: parseFloat(formData.deduction) || 0,
                 netSalary: parseFloat(formData.netSalary) || 0,
                 month: formData.month,
-                year: formData.year
+                year: formData.year,
             });
-            showToast("Salary slip created successfully.", "success");
+            showToast('Salary slip created successfully.', 'success');
             onSuccess();
             onClose();
         } catch (error) {
-            showToast(error.message || "Failed to create salary slip.", "error");
+            showToast(error.message || 'Failed to create salary slip.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -190,18 +361,20 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                 </div>
 
                 <form onSubmit={handleSubmit} className={styles.form}>
-                    {/* Employee Info Section */}
                     <div className={styles.section}>
                         <h3 className={styles.sectionTitle}>Employee Information</h3>
                         <div className={styles.grid}>
                             <div className={styles.inputGroup}>
                                 <Dropdown
                                     label="Employee Name *"
-                                    placeholder={isLoadingEmployees ? "Loading employees..." : "Search Name or ID..."}
+                                    placeholder={isLoadingEmployees ? 'Loading employees...' : 'Search Name or ID...'}
                                     value={formData.selectedEmployeeId}
-                                    options={employees.map(emp => ({
-                                        label: `${emp.employeeName} (${emp.employeeId || 'No ID'})`,
-                                        value: emp._id
+                                    options={employees.map((employee) => ({
+                                        label: `${employee.employeeName} (${employee.employeeId || 'No ID'})`,
+                                        value: employee._id,
+                                        employeeId: employee.employeeId || '',
+                                        name: employee.employeeName || '',
+                                        hideUnlessSearch: isNonWorkingEmployeeStatus(employee.employeeStatus),
                                     }))}
                                     onChange={handleEmployeeSelect}
                                     required
@@ -211,6 +384,10 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                             <div className={styles.inputGroup}>
                                 <label>Employee Email *</label>
                                 <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="employee@example.com" />
+                            </div>
+                            <div className={styles.inputGroup}>
+                                <label>Department</label>
+                                <input type="text" name="department" value={formData.department} onChange={handleChange} placeholder="Department" />
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Designation *</label>
@@ -228,12 +405,26 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                                 <label>Year</label>
                                 <input type="text" name="year" value={formData.year} onChange={handleChange} placeholder="e.g. 2024" />
                             </div>
+                            <div className={styles.inputGroup}>
+                                <label>Total Working Days</label>
+                                <input type="number" name="totalWorkingDays" value={formData.totalWorkingDays} onChange={handleChange} min="0" placeholder="0" />
+                                {errors.totalWorkingDays ? <span className={styles.validationError}>{errors.totalWorkingDays}</span> : null}
+                            </div>
+                            <div className={styles.inputGroup}>
+                                <label>Present Days</label>
+                                <input type="number" name="presentDays" value={formData.presentDays} onChange={handleChange} min="0" placeholder="0" />
+                                {errors.presentDays ? <span className={styles.validationError}>{errors.presentDays}</span> : null}
+                            </div>
+                            <div className={styles.inputGroup}>
+                                <label>Payable Days</label>
+                                <input type="number" name="payableDays" value={formData.payableDays} onChange={handleChange} min="0" placeholder="0" />
+                                {errors.payableDays ? <span className={styles.validationError}>{errors.payableDays}</span> : null}
+                                {isLoadingAttendance ? <span className={styles.helperText}>Loading attendance defaults...</span> : null}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Earnings & Deductions Side by Side */}
                     <div className={styles.twoColumnSection}>
-                        {/* Earnings Section */}
                         <div className={styles.column}>
                             <h3 className={styles.sectionTitle}>Earnings</h3>
                             <table className={styles.slipTable}>
@@ -285,7 +476,6 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                             </table>
                         </div>
 
-                        {/* Deductions Section */}
                         <div className={styles.column}>
                             <h3 className={styles.sectionTitle}>Deductions</h3>
                             <table className={styles.slipTable}>
@@ -315,7 +505,6 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                         </div>
                     </div>
 
-                    {/* Net Payable Section */}
                     <div className={styles.netPayableSection}>
                         <div className={styles.netPayableRow}>
                             <span className={styles.netPayableLabel}>Net Payable</span>

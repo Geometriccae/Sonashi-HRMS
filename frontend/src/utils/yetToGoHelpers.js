@@ -1,31 +1,73 @@
 export const APPROVED_LEAVE_STATUSES = ["Approved", "HOD Approved"];
-export const YET_TO_GO_LEAVE_STATUSES = ["Pending", "HOD Approved", "Approved"];
+export const YET_TO_GO_LEAVE_STATUSES = APPROVED_LEAVE_STATUSES;
 
 export const toDayStart = (value) => {
   if (!value) return null;
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+  }
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return null;
-  dt.setHours(0, 0, 0, 0);
-  return dt;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
 };
 
 export const normalizeName = (name) =>
   String(name || "").toLowerCase().replace(/[\s_.-]+/g, "").trim();
 
-export const computeExperienceYears = (doj, totalYearsExperience) => {
-  if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
-    return Number(totalYearsExperience);
-  }
+/** Completed years + months from DOJ as of today (calendar tenure). */
+export const computeExperienceMonthsFromDoj = (doj, asOf = new Date()) => {
   if (!doj) return null;
   const joinDate = new Date(doj);
   if (Number.isNaN(joinDate.getTime())) return null;
-  const now = new Date();
+  const now = new Date(asOf);
+  joinDate.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  if (now < joinDate) return 0;
+
   let years = now.getFullYear() - joinDate.getFullYear();
-  const monthDiff = now.getMonth() - joinDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < joinDate.getDate())) {
-    years -= 1;
+  let months = now.getMonth() - joinDate.getMonth();
+  let totalMonths = years * 12 + months;
+  if (now.getDate() < joinDate.getDate()) totalMonths -= 1;
+  return Math.max(0, totalMonths);
+};
+
+/** Display: "2 Years and 6 months" (from DOJ; fallback to stored years only if no DOJ). */
+export const formatExperienceLabel = (doj, totalYearsExperience, asOf = new Date()) => {
+  let totalMonths = computeExperienceMonthsFromDoj(doj, asOf);
+  if (totalMonths == null) {
+    if (totalYearsExperience == null || Number.isNaN(Number(totalYearsExperience))) return null;
+    totalMonths = Math.round(Number(totalYearsExperience) * 12);
   }
-  return Math.max(0, years);
+  const y = Math.floor(totalMonths / 12);
+  const m = totalMonths % 12;
+  if (y === 0 && m === 0) return "0 months";
+  if (y === 0) return `${m} month${m !== 1 ? "s" : ""}`;
+  if (m === 0) return `${y} Year${y !== 1 ? "s" : ""}`;
+  return `${y} Year${y !== 1 ? "s" : ""} and ${m} month${m !== 1 ? "s" : ""}`;
+};
+
+/**
+ * Numeric years for filters — always prefer DOJ as of today (same day-fraction as leave tenure).
+ * Stored totalYearsExperience is only a fallback when DOJ is missing (it can be stale).
+ */
+export const computeExperienceYears = (doj, totalYearsExperience) => {
+  if (doj) {
+    const joinDate = new Date(doj);
+    if (!Number.isNaN(joinDate.getTime())) {
+      const now = new Date();
+      if (now < joinDate) return 0;
+      const years = (now - joinDate) / (1000 * 60 * 60 * 24 * 365.25);
+      return Math.round(years * 10) / 10;
+    }
+  }
+  if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
+    return Number(totalYearsExperience);
+  }
+  return null;
 };
 
 export const findLinkedEmployee = (req, empList) => {
@@ -54,6 +96,24 @@ export const findLinkedEmployee = (req, empList) => {
       return n && (n.includes(reqName) || reqName.includes(n));
     }) || null
   );
+};
+
+export const getLeaveTravelDate = (req, linkedEmployee) =>
+  toDayStart(linkedEmployee?.travellingDate || req.travellingDate || req.startDate);
+
+export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new Date()) => {
+  if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
+
+  const today = toDayStart(todayValue);
+  const travelDate = getLeaveTravelDate(req, linkedEmployee);
+  const leaveEndDate = toDayStart(req?.endDate);
+
+  if (!today || !travelDate || !leaveEndDate) return null;
+  if (today < travelDate) return "Vacation Pending";
+  // End date is return / last day — on that day treat as returned (matches vacation-return)
+  if (today >= travelDate && today < leaveEndDate) return "On Vacation";
+  if (today >= leaveEndDate) return "Vacation Approved";
+  return null;
 };
 
 export const mapLeaveRow = (req, empList, targetStatus) => {
@@ -97,53 +157,42 @@ export const leaveMatchesEmployee = (req, emp, empList) => {
 };
 
 export const findLeaveForEmployee = (emp, leaveList, empList, tabKey) => {
-  const statusFilter = tabKey === "yetToGo" ? YET_TO_GO_LEAVE_STATUSES : APPROVED_LEAVE_STATUSES;
   const candidates = leaveList.filter(
-    (req) => statusFilter.includes(req.status) && leaveMatchesEmployee(req, emp, empList)
+    (req) => APPROVED_LEAVE_STATUSES.includes(req.status) && leaveMatchesEmployee(req, emp, empList)
   );
   if (candidates.length === 0) return null;
 
+  // Yet to go: any leave type. Other tabs prefer Vacation when present.
   const vacationLeaves = candidates.filter((req) => req.leaveType === "Vacation");
-  const pool = vacationLeaves.length > 0 ? vacationLeaves : candidates;
+  const pool =
+    tabKey === "yetToGo"
+      ? candidates
+      : vacationLeaves.length > 0
+        ? vacationLeaves
+        : candidates;
 
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   if (tabKey === "onVacation") {
-    const active = pool.find((req) => {
-      const start = toDayStart(req.startDate);
-      const end = toDayStart(req.endDate);
-      return start && end && start <= today && end >= today;
-    });
+    const active = pool.find((req) => getEffectiveVacationStatus(req, emp, today) === "On Vacation");
     if (active) return active;
-
-    const open = pool
-      .filter((req) => {
-        const end = toDayStart(req.endDate);
-        return end && end >= today;
-      })
-      .sort((a, b) => toDayStart(a.endDate) - toDayStart(b.endDate));
-    if (open.length > 0) return open[0];
+    return null;
   }
 
   if (tabKey === "yetToGo") {
     const upcoming = pool
-      .filter((req) => {
-        const start = toDayStart(req.startDate);
-        return start && start >= today;
-      })
-      .sort((a, b) => toDayStart(a.startDate) - toDayStart(b.startDate));
+      .filter((req) => getEffectiveVacationStatus(req, emp, today) === "Vacation Pending")
+      .sort((a, b) => getLeaveTravelDate(a, emp) - getLeaveTravelDate(b, emp));
     if (upcoming.length > 0) return upcoming[0];
+    return null;
   }
 
   if (tabKey === "returned") {
     const past = pool
-      .filter((req) => {
-        const end = toDayStart(req.endDate);
-        return end && end < today;
-      })
+      .filter((req) => getEffectiveVacationStatus(req, emp, today) === "Vacation Approved")
       .sort((a, b) => toDayStart(b.endDate) - toDayStart(a.endDate));
     if (past.length > 0) return past[0];
+    return null;
   }
 
   return pool.sort(
@@ -161,28 +210,28 @@ const getEmployeeDedupeKey = (req, empList) => {
 };
 
 /**
- * All employees yet to go on vacation — no 60-day window.
- * Includes approved/pending vacation leave with future start dates,
+ * All employees yet to go — no 60-day window.
+ * Includes pending/approved leave of any type with future start dates,
  * plus employees marked Vacation Pending.
  */
 export const buildYetToGoFromLeaves = (empList, leaveList) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const safeEmpList = Array.isArray(empList) ? empList : [];
   const safeLeaveList = Array.isArray(leaveList) ? leaveList : [];
 
   const upcoming = safeLeaveList
-    .filter(
-      (req) =>
-        YET_TO_GO_LEAVE_STATUSES.includes(req.status) &&
-        req.leaveType === "Vacation"
-    )
+    .filter((req) => YET_TO_GO_LEAVE_STATUSES.includes(req.status))
     .filter((req) => {
-      const start = toDayStart(req.startDate);
-      return start && start >= today;
+      const linked = findLinkedEmployee(req, safeEmpList);
+      return getEffectiveVacationStatus(req, linked) === "Vacation Pending";
     })
-    .sort((a, b) => toDayStart(a.startDate) - toDayStart(b.startDate));
+    .sort((a, b) => {
+      const aTravel = getLeaveTravelDate(a, findLinkedEmployee(a, safeEmpList));
+      const bTravel = getLeaveTravelDate(b, findLinkedEmployee(b, safeEmpList));
+      if (!aTravel && !bTravel) return 0;
+      if (!aTravel) return 1;
+      if (!bTravel) return -1;
+      return aTravel - bTravel;
+    });
 
   const seen = new Set();
   const rows = [];
@@ -203,7 +252,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         endDate: req.endDate,
         leaveStatus: req.status,
         experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience),
-        vacationStatus: linked.vacationStatus || "Vacation Pending",
+        vacationStatus: "Vacation Pending",
       });
     } else {
       rows.push({ ...mapLeaveRow(req, safeEmpList, "Vacation Pending"), leaveStatus: req.status });
@@ -211,7 +260,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
   });
 
   safeEmpList
-    .filter((e) => e.vacationStatus === "Vacation Pending")
+    .filter((e) => Boolean(findLeaveForEmployee(e, safeLeaveList, safeEmpList, "yetToGo")))
     .forEach((e) => {
       const dedupeKey = String(e._id);
       if (seen.has(dedupeKey)) return;
@@ -227,7 +276,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         endDate: leave?.endDate || null,
         leaveStatus: leave?.status || null,
         experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
-        vacationStatus: e.vacationStatus || "Vacation Pending",
+        vacationStatus: "Vacation Pending",
       });
     });
 
@@ -241,4 +290,39 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
   });
 
   return rows;
+};
+
+/** Display labels aligned with Annual Vacation / Team Management. */
+export const formatVacationStatusLabel = (vacationStatus) => {
+  const vs = String(vacationStatus || "").trim();
+  if (!vs) return "";
+  if (vs === "Vacation Pending") return "Yet to go";
+  if (vs === "On Vacation") return "On Vacation";
+  if (vs === "Vacation Approved") return "Vacation Approved";
+  return vs;
+};
+
+/**
+ * Overlay live vacationStatus from the same includeVacation list Annual Vacations uses.
+ * Does not invent a new calculation — merges statuses already computed server-side.
+ */
+export const mergeEffectiveVacationStatuses = (employees, vacationList) => {
+  const list = Array.isArray(employees) ? employees : [];
+  const vacRows = Array.isArray(vacationList) ? vacationList : [];
+  if (!list.length || !vacRows.length) return list;
+
+  const byId = new Map();
+  const byCode = new Map();
+  for (const row of vacRows) {
+    if (row?._id != null) byId.set(String(row._id), row.vacationStatus);
+    if (row?.employeeId) byCode.set(String(row.employeeId), row.vacationStatus);
+  }
+
+  return list.map((emp) => {
+    const fromId = emp?._id != null ? byId.get(String(emp._id)) : undefined;
+    const fromCode = emp?.employeeId ? byCode.get(String(emp.employeeId)) : undefined;
+    const nextStatus = fromId !== undefined ? fromId : fromCode;
+    if (nextStatus === undefined) return emp;
+    return { ...emp, vacationStatus: nextStatus };
+  });
 };

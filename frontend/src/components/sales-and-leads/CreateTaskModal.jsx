@@ -6,6 +6,7 @@ import { createTask } from "../../services/TaskService";
 import employeeService from "../../services/EmployeeService";
 import clientService from "../../services/ClientService";
 import Select from "react-select";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 import { useToast } from "../../context/ToastContext";
 
 function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
@@ -264,10 +265,8 @@ function CreateTaskModal({ isOpen, onClose, clientId, onTaskCreated }) {
               <label className="field-label">Assign Team Members</label>
               <Select
                 isMulti
-                options={employees.map((emp) => ({
-                  value: emp._id,
-                  label: emp.employeeName,
-                }))}
+                options={employees.map((emp) => toSearchableEmployeeOption(emp, { label: emp.employeeName }))}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employees
                   .filter((emp) =>
                     formData.assignedTeamMembers.includes(emp._id)

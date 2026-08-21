@@ -14,14 +14,19 @@ export const ACTIVE_OPTIONS = [
 /** Alias for lifecycle status dropdowns */
 export const EMPLOYEE_STATUS_OPTIONS = ACTIVE_OPTIONS;
 
-/** Built-in default company (from Company Documents) */
-export const DEFAULT_COMPANY_NAME = "JOINT VEN TRADING CO (L.L.C) (BR)";
-export const DEFAULT_COMPANY_CODE = "0000000246878";
+/** Built-in default company (changeable in employee form / documents) */
+export const DEFAULT_COMPANY_NAME = "JOINT VEN TRADING CO LLC";
+export const DEFAULT_COMPANY_CODE = "0000000172509";
+
+/** Previous default kept as selectable option */
+export const LEGACY_COMPANY_NAME = "JOINT VEN TRADING CO (L.L.C) (BR)";
+export const LEGACY_COMPANY_CODE = "0000000246878";
 
 /** @deprecated Kept for compatibility; prefer Company Documents dropdown */
 export const COMPANY_CODE_OPTIONS = [
   { value: "", label: "-Select-" },
   { value: DEFAULT_COMPANY_CODE, label: `${DEFAULT_COMPANY_NAME} (${DEFAULT_COMPANY_CODE})` },
+  { value: LEGACY_COMPANY_CODE, label: `${LEGACY_COMPANY_NAME} (${LEGACY_COMPANY_CODE})` },
 ];
 
 export function resolveDefaultCompanyCode(value) {

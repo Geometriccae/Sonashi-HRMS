@@ -8,6 +8,7 @@ import { updateEvent as updateClientEvent } from "../../services/CreateEventServ
 import employeeService from "../../services/EmployeeService";
 import clientService from "../../services/ClientService";
 import Select from "react-select";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 
 /*
  Props:
@@ -153,7 +154,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
   };
 
   const clientOptions = clients.map(c => ({ value: c._id, label: c.companyName }));
-  const employeeOptions = employees.map(e => ({ value: e._id, label: e.employeeName }));
+  const employeeOptions = employees.map(e => toSearchableEmployeeOption(e, { label: e.employeeName }));
 
   const modal = (
     <div className="create-event-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose && onClose(); }}>
@@ -209,6 +210,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
             <div className="input-field">
               <label className="field-label">Assign Team Members</label>
               <Select isMulti options={employeeOptions}
+                filterOption={filterReactSelectEmployeeOption}
                 value={employeeOptions.filter(o => formData.assignedTeamMembers.map(String).includes(String(o.value)))}
                 onChange={(sel) => handleChange('assignedTeamMembers', sel ? sel.map(s => s.value) : [])}
               />

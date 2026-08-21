@@ -1,79 +1,92 @@
-// routes/documentRoutes.js
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const Document = require("../models/EmployeeDocuments");
+const { resolveUploadDiskPath, ensureUploadSubdir } = require("../utils/uploadsPath");
 
 const router = express.Router();
 
-// Configure multer for disk storage in the root uploads/employeeDocuments/<employeeId>/<docType> folder (outside server folder)
+const sanitizeDocType = (rawType) => {
+  const cleaned = String(rawType || "Other")
+    .trim()
+    .replace(/[^a-zA-Z0-9_\- ]/g, "")
+    .replace(/\s+/g, "_");
+  return cleaned || "Other";
+};
+
+/** Disk folder: uploads/employeeDocuments/<employeeId>/<docType> (outer Hostinger root) */
+const employeeDocsDir = (...parts) => ensureUploadSubdir("employeeDocuments", ...parts);
+
+// Configure multer for disk storage in uploads/employeeDocuments/<employeeId>/<docType>
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const employeeId = req.params.employeeId || "unknown";
-    const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : "Other";
-    const docType = rawType.replace(/[^a-zA-Z0-9_\- ]/g, "").replace(/\s+/g, "_") || "Other";
-    const uploadDir = path.join(__dirname, "../../uploads/employeedocuments", employeeId, docType);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
+    const docType = sanitizeDocType(req.body && req.body.type);
+    cb(null, employeeDocsDir(employeeId, docType));
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + "-" + file.originalname);
   },
 });
 const upload = multer({ storage });
-
-// Memory-storage multer for replace (PUT) — we resolve the path after looking up employeeId from DB
 const memUpload = multer({ storage: multer.memoryStorage() });
 
-// Get all documents for an employee
-router.get("/:employeeId", async (req, res) => {
-  try {
-    const documents = await Document.find({ employeeId: req.params.employeeId })
-      .lean();
-      
-    const normalized = documents.map((doc) => {
-      const raw = String(doc.filePath || "");
-      const fixed = raw.replace(
-        /\/uploads\/employeedocuments\/employeedocuments\//g,
-        "/uploads/employeedocuments/"
-      );
-      return { ...doc, filePath: fixed };
-    });
-    res.json(normalized);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+const normalizeDoc = (doc) => {
+  const raw = String(doc.filePath || "");
+  const fixed = raw
+    .replace(
+      /\/uploads\/employeedocuments\/employeedocuments\//gi,
+      "/uploads/employeeDocuments/"
+    )
+    .replace(
+      /\/uploads\/employeeDocuments\/employeeDocuments\//gi,
+      "/uploads/employeeDocuments/"
+    )
+    .replace(/\/uploads\/employeedocuments\//gi, "/uploads/employeeDocuments/");
+  return { ...doc, filePath: fixed };
+};
 
-// Serve the document file bytes from MongoDB (for legacy files) or disk
+// IMPORTANT: /file/:docId must be registered BEFORE /:employeeId
+// otherwise "file" is treated as an employeeId.
 router.get("/file/:docId", async (req, res) => {
   try {
     const doc = await Document.findById(req.params.docId);
     if (!doc) {
       return res.status(404).send("File not found");
     }
-    
-    // Serve filesystem file
+
     if (doc.filePath) {
-      let diskPath;
-      if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/") || doc.filePath.startsWith("/uploads/employeedocuments/")) {
-        diskPath = path.join(__dirname, "..", "..", doc.filePath);
-      } else {
-        diskPath = path.join(__dirname, "..", doc.filePath);
-      }
-      if (fs.existsSync(diskPath)) {
+      const diskPath = resolveUploadDiskPath(doc.filePath);
+      if (diskPath) {
         res.set("Content-Type", doc.fileType || "application/octet-stream");
-        res.set("Content-Disposition", `inline; filename="${doc.fileName}"`);
-        return res.sendFile(diskPath);
+        res.set(
+          "Content-Disposition",
+          `inline; filename="${String(doc.fileName || "document").replace(/"/g, "")}"`
+        );
+        return res.sendFile(path.resolve(diskPath));
       }
     }
-    
-    res.status(404).send("File data not available");
+
+    return res.status(404).send(
+      "File missing on server disk. The document record exists, but the file was not found under uploads/. Please re-upload this document (and keep the uploads folder when redeploying)."
+    );
   } catch (err) {
+    console.error("[EmployeeDocuments] file serve error:", err);
     res.status(500).send("Server error");
+  }
+});
+
+// Get all documents for an employee
+router.get("/:employeeId", async (req, res) => {
+  try {
+    if (req.params.employeeId === "file") {
+      return res.status(400).json({ error: "Invalid employee id" });
+    }
+    const documents = await Document.find({ employeeId: req.params.employeeId }).lean();
+    res.json(documents.map(normalizeDoc));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -84,16 +97,14 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    // Build sanitized doc type folder name (matches what multer used for destination)
-    const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : "Other";
-    const docType = rawType.replace(/[^a-zA-Z0-9_\- ]/g, "").replace(/\s+/g, "_") || "Other";
+    const docType = sanitizeDocType(req.body && req.body.type);
 
     const newDoc = new Document({
       employeeId: req.params.employeeId,
       fileName: req.file.originalname,
       fileType: req.file.mimetype,
       fileSize: req.file.size,
-      filePath: `/uploads/employeedocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
+      filePath: `/uploads/employeeDocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
       uploadedBy: req.body.uploadedBy,
       userRole: req.body.userRole,
       type: req.body.type || "Extra",
@@ -107,44 +118,34 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
   }
 });
 
-// Replace document file (re-upload) — deletes old file, saves new file to disk
+// Replace document file (re-upload)
 router.put("/:docId", memUpload.single("file"), async (req, res) => {
   try {
     const doc = await Document.findById(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // Delete old file from disk
     if (doc.filePath) {
-      let oldDiskPath;
-      if (
-        doc.filePath.startsWith("/Uploades/") ||
-        doc.filePath.startsWith("/uploads/employeeDocuments/") ||
-        doc.filePath.startsWith("/uploads/employeedocuments/")
-      ) {
-        oldDiskPath = path.join(__dirname, "..", "..", doc.filePath);
-      } else {
-        oldDiskPath = path.join(__dirname, "..", doc.filePath);
-      }
-      if (fs.existsSync(oldDiskPath)) {
-        try { fs.unlinkSync(oldDiskPath); } catch (e) { console.warn("Could not delete old file:", e.message); }
+      const oldDiskPath = resolveUploadDiskPath(doc.filePath);
+      if (oldDiskPath) {
+        try {
+          fs.unlinkSync(oldDiskPath);
+        } catch (e) {
+          console.warn("Could not delete old file:", e.message);
+        }
       }
     }
 
-    // Determine new type and folder
-    const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : (doc.type || "Other");
-    const docType = rawType.replace(/[^a-zA-Z0-9_\- ]/g, "").replace(/\s+/g, "_") || "Other";
+    const rawType = (req.body && req.body.type ? String(req.body.type).trim() : "") || doc.type || "Other";
+    const docType = sanitizeDocType(rawType);
     const employeeId = String(doc.employeeId);
 
-    // Write new file to disk
     const newFilename = Date.now() + "-" + req.file.originalname;
-    const uploadDir = path.join(__dirname, "../../uploads/employeedocuments", employeeId, docType);
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const uploadDir = employeeDocsDir(employeeId, docType);
     fs.writeFileSync(path.join(uploadDir, newFilename), req.file.buffer);
 
-    const newFilePath = `/uploads/employeedocuments/${employeeId}/${docType}/${newFilename}`;
+    const newFilePath = `/uploads/employeeDocuments/${employeeId}/${docType}/${newFilename}`;
 
-    // Update DB record
     const updated = await Document.findByIdAndUpdate(
       req.params.docId,
       {
@@ -155,7 +156,7 @@ router.put("/:docId", memUpload.single("file"), async (req, res) => {
           filePath: newFilePath,
           type: rawType,
           uploadedDate: new Date(),
-        }
+        },
       },
       { new: true }
     );
@@ -166,10 +167,10 @@ router.put("/:docId", memUpload.single("file"), async (req, res) => {
   }
 });
 
-// Update document type only (no file re-upload)
+// Update document type only
 router.patch("/:docId/type", async (req, res) => {
   try {
-    const rawType = (req.body && req.body.type) ? String(req.body.type).trim() : "";
+    const rawType = req.body && req.body.type ? String(req.body.type).trim() : "";
     if (!rawType) return res.status(400).json({ error: "Document type is required" });
 
     const doc = await Document.findById(req.params.docId);
@@ -191,13 +192,8 @@ router.delete("/:docId", async (req, res) => {
   try {
     const doc = await Document.findById(req.params.docId);
     if (doc && doc.filePath) {
-      let diskPath;
-      if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/") || doc.filePath.startsWith("/uploads/employeedocuments/")) {
-        diskPath = path.join(__dirname, "..", "..", doc.filePath);
-      } else {
-        diskPath = path.join(__dirname, "..", doc.filePath);
-      }
-      if (fs.existsSync(diskPath)) {
+      const diskPath = resolveUploadDiskPath(doc.filePath);
+      if (diskPath) {
         try {
           fs.unlinkSync(diskPath);
         } catch (unlinkErr) {
@@ -218,13 +214,8 @@ router.delete("/all/:employeeId", async (req, res) => {
     const docs = await Document.find({ employeeId: req.params.employeeId });
     for (const doc of docs) {
       if (doc.filePath) {
-        let diskPath;
-        if (doc.filePath.startsWith("/Uploades/") || doc.filePath.startsWith("/uploads/employeeDocuments/") || doc.filePath.startsWith("/uploads/employeedocuments/")) {
-          diskPath = path.join(__dirname, "..", "..", doc.filePath);
-        } else {
-          diskPath = path.join(__dirname, "..", doc.filePath);
-        }
-        if (fs.existsSync(diskPath)) {
+        const diskPath = resolveUploadDiskPath(doc.filePath);
+        if (diskPath) {
           try {
             fs.unlinkSync(diskPath);
           } catch (unlinkErr) {

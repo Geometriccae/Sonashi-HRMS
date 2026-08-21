@@ -16,6 +16,8 @@ const HEADER_ALIASES = {
   'work permit no': 'workPermitNo',
   'work permit': 'workPermitNo',
   permit: 'workPermitNo',
+  personcode: 'workPermitNo',
+  'person code': 'workPermitNo',
   employeeid: 'employeeId',
   'employee id': 'employeeId',
   'emp id': 'employeeId',

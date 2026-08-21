@@ -301,6 +301,49 @@
 
 .closeDetailBtn:hover { background: #e2e8f0; color: #0f172a; }
 
+.exportExcelBtn,
+.exportPdfBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.exportExcelBtn {
+  color: #15803d;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.exportExcelBtn:hover:not(:disabled) {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.exportPdfBtn {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.exportPdfBtn:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.exportExcelBtn:disabled,
+.exportPdfBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ─── Table ──────────────────────────────────────────────────── */
 .tableWrapper { overflow-x: auto; }
 
@@ -868,11 +911,13 @@
 .expBadge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 9px;
-  border-radius: 999px;
+  padding: 4px 10px;
+  border-radius: 8px;
   background: #f0fdf4;
   color: #15803d;
   font-size: 11px;
   font-weight: 700;
   border: 1px solid #bbf7d0;
+  white-space: nowrap;
+  max-width: 100%;
 }

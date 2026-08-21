@@ -120,6 +120,19 @@
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 
+.validationError {
+    color: #dc2626;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.helperText {
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 .readOnlyInput {
     background: #f8fafc;
     color: #64748b;

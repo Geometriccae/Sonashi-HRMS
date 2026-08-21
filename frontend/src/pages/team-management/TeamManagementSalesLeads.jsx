@@ -23,7 +23,7 @@ import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, ex
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance, calculateLeaveDays } from "../../utils/leaveCalculator";
-import { findLinkedEmployee } from "../../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
@@ -254,8 +254,17 @@ function TeamManagementSalesLeads() {
         setError("No employee data returned from API");
         setEmployee(null);
       } else {
-        setEmployee(employeeData);
-        fetchEmployeeLeaves(employeeData);
+        // Same live vacation status as Annual Vacations (includeVacation merge)
+        let withVacation = employeeData;
+        try {
+          const vacList = await employeeService.getEmployeesList({ includeVacation: true });
+          const merged = mergeEffectiveVacationStatuses([employeeData], vacList);
+          withVacation = merged[0] || employeeData;
+        } catch (vacErr) {
+          console.warn("Could not overlay live vacation status:", vacErr?.message || vacErr);
+        }
+        setEmployee(withVacation);
+        fetchEmployeeLeaves(withVacation);
       }
     } catch (err) {
       console.error("Error fetching employee:", err);
@@ -753,11 +762,11 @@ function TeamManagementSalesLeads() {
                           if (loading) return "...";
                           const vs = employee?.vacationStatus || "Onsite";
                           const labelMap = {
-                            "On Vacation": "On vacation",
+                            "On Vacation": "On Vacation",
                             "Vacation Approved": "Returned back from vacation",
                             "Vacation Pending": "Yet to go",
                           };
-                          return labelMap[vs] || vs;
+                          return labelMap[vs] || formatVacationStatusLabel(vs) || vs;
                         })()}
                       </span>
                     </button>
@@ -891,19 +900,15 @@ function TeamManagementSalesLeads() {
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Date of Join (DOJ)</span><span className={styles.text10}>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}>
-                          <span className={styles.text9}>Total Exp (Yrs)</span>
+                          <span className={styles.text9}>Total Experience</span>
                           <span className={styles.text10}>
-                            {(() => {
-                              if (!employee.doj) return "0";
-                              const start = new Date(employee.doj);
-                              const end = (isNonWorkingEmployeeStatus(employee.employeeStatus) && employee.lastWorkingDay)
-                                ? new Date(employee.lastWorkingDay)
-                                : new Date();
-
-                              const diffMs = Math.max(0, end - start);
-                              const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
-                              return years.toFixed(1);
-                            })()}
+                            {formatExperienceLabel(
+                              employee.doj,
+                              employee.totalYearsExperience,
+                              (isNonWorkingEmployeeStatus(employee.employeeStatus) && employee.lastWorkingDay)
+                                ? employee.lastWorkingDay
+                                : new Date()
+                            ) || "Not provided"}
                           </span>
                         </div>
                         <div className={styles.column4}><span className={styles.text9}>Notice Period</span><span className={styles.text10}>{employee.noticePeriod || "Not provided"}</span></div>
@@ -939,7 +944,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column5}><span className={styles.text9}>Office</span><span className={styles.text10}>{employee.office || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}><span className={styles.text9}>Work Permit No</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Person Code</span><span className={styles.text10}>{employee.workPermitNo || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Reporting Manager</span><span className={styles.text10}>{employee.reportingManager || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Employee Status</span><span className={styles.text10}>{formatEmployeeStatusDisplay(employee)}</span></div>
                         {isNonWorkingEmployeeStatus(employee.employeeStatus) ? (
@@ -968,11 +973,11 @@ function TeamManagementSalesLeads() {
                                 };
                                 const style = colorMap[vs] || colorMap["Onsite"];
                                 const labelMap = {
-                                  "On Vacation": "On vacation",
+                                  "On Vacation": "On Vacation",
                                   "Vacation Approved": "Returned back from vacation",
                                   "Vacation Pending": "Yet to go",
                                 };
-                                const displayLabel = labelMap[vs] || vs;
+                                const displayLabel = labelMap[vs] || formatVacationStatusLabel(vs) || vs;
                                 return (
                                   <span style={{
                                     display: "inline-flex",
@@ -1002,6 +1007,12 @@ function TeamManagementSalesLeads() {
                                 <span className={styles.text9}>Travelling Date</span>
                                 <span className={styles.text10}>
                                   {employee.travellingDate ? new Date(employee.travellingDate).toLocaleDateString('en-GB') : "Not provided"}
+                                </span>
+                              </div>
+                              <div className={styles.column4}>
+                                <span className={styles.text9}>Leave End Date</span>
+                                <span className={styles.text10}>
+                                  {(employee.leaveEndDate || employee.endDate) ? new Date(employee.leaveEndDate || employee.endDate).toLocaleDateString('en-GB') : "Not provided"}
                                 </span>
                               </div>
                             </>

@@ -2,7 +2,7 @@ import config from '../config/config';
 
 class CheckInService {
   constructor() {
-    let baseURL = config.API_BASE_URL || 'http://localhost:5000/api';
+    let baseURL = config.API_BASE_URL || '';
 
     // Ensure baseURL ends with /api
     if (!baseURL.endsWith('/api')) {

@@ -1,7 +1,0 @@
-{
-  "compilerOptions": {
-    "baseUrl": "frontend/src",
-    "ignoreDeprecations": "6.0"
-  },
-  "exclude": ["node_modules", "frontend/node_modules", "server/node_modules", "frontend/build"]
-}

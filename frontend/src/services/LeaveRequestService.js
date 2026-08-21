@@ -1,30 +1,62 @@
 import axios from "axios";
 import config from "../config/config";
 
-let baseURL = config.API_BASE_URL || 'http://localhost:5000/api';
+let baseURL = config.API_BASE_URL || '';
 if (!baseURL.endsWith('/api')) {
     baseURL = baseURL.endsWith('/') ? baseURL + 'api' : baseURL + '/api';
 }
 const API_URL = `${baseURL}/leave-requests`;
 
+const CACHE_TTL_MS = 180000; // 3 minutes — invalidate on writes
+let _cache = { data: null, key: "", ts: 0 };
+let _inflight = {};
 
 const getAuthHeader = () => {
     const token = localStorage.getItem("token");
     return { Authorization: `Bearer ${token}` };
 };
 
+const cacheKeyFor = (params = {}) => {
+    try {
+        return JSON.stringify(params || {});
+    } catch {
+        return "";
+    }
+};
+
+const invalidateLeaveCache = () => {
+    _cache = { data: null, key: "", ts: 0 };
+    _inflight = {};
+};
+
 const getLeaveRequests = async (params = {}) => {
-    const response = await axios.get(API_URL, {
-        headers: getAuthHeader(),
-        params
-    });
-    return response.data;
+    const key = cacheKeyFor(params);
+    if (_cache.data && _cache.key === key && Date.now() - _cache.ts < CACHE_TTL_MS) {
+        return _cache.data;
+    }
+    if (_inflight[key]) {
+        return _inflight[key];
+    }
+    _inflight[key] = (async () => {
+        try {
+            const response = await axios.get(API_URL, {
+                headers: getAuthHeader(),
+                params
+            });
+            _cache = { data: response.data, key, ts: Date.now() };
+            return response.data;
+        } finally {
+            delete _inflight[key];
+        }
+    })();
+    return _inflight[key];
 };
 
 const createLeaveRequest = async (data) => {
     const response = await axios.post(API_URL, data, {
         headers: getAuthHeader()
     });
+    invalidateLeaveCache();
     return response.data;
 };
 
@@ -32,6 +64,7 @@ const updateLeaveRequest = async (id, data) => {
     const response = await axios.put(`${API_URL}/${id}`, data, {
         headers: getAuthHeader()
     });
+    invalidateLeaveCache();
     return response.data;
 };
 
@@ -39,6 +72,7 @@ const deleteLeaveRequest = async (id) => {
     const response = await axios.delete(`${API_URL}/${id}`, {
         headers: getAuthHeader()
     });
+    invalidateLeaveCache();
     return response.data;
 };
 
@@ -47,28 +81,33 @@ const leaveRequestService = {
     createLeaveRequest,
     updateLeaveRequest,
     deleteLeaveRequest,
+    invalidateCache: invalidateLeaveCache,
     approveLeaveRequest: async (id, status) => {
         const response = await axios.put(`${API_URL}/${id}`, { status }, {
             headers: getAuthHeader()
         });
+        invalidateLeaveCache();
         return response.data;
     },
     revertLeaveRequest: async (id) => {
         const response = await axios.post(`${API_URL}/${id}/revert`, {}, {
             headers: getAuthHeader()
         });
+        invalidateLeaveCache();
         return response.data;
     },
     bulkImport: async (leaves) => {
         const response = await axios.post(`${API_URL}/bulk-import`, { leaves }, {
             headers: getAuthHeader()
         });
+        invalidateLeaveCache();
         return response.data;
     },
     bulkDelete: async (ids) => {
         const response = await axios.post(`${API_URL}/bulk-delete`, { ids }, {
             headers: getAuthHeader()
         });
+        invalidateLeaveCache();
         return response.data;
     }
 };

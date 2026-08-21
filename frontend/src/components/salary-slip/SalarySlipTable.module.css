@@ -2,7 +2,7 @@
     background: #fff;
     border-radius: 12px;
     border: 1px solid #e4e4e4;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 

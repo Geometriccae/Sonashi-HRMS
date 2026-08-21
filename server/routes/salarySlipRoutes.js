@@ -6,9 +6,17 @@ const xlsx = require('xlsx');
 const SalarySlip = require('../models/SalarySlip');
 const User = require('../models/User');
 const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
+const LeaveRequest = require('../models/LeaveRequest');
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
 const { workingStatusFilter } = require('../utils/employeeStatus');
+const { ensureUploadSubdir } = require('../utils/uploadsPath');
+const {
+    getPayrollPeriod,
+    computePayablePayrollDays,
+    scaleSalaryAmount,
+} = require('../utils/payrollPayableDays');
 
 // One-time cleanup to remove stale database indexes that cause import failures
 SalarySlip.on('index', (err) => {
@@ -107,9 +115,9 @@ const requireAdmin = async (req, res, next) => {
     }
 };
 
-// Multer setup
+// Multer setup — outer Hostinger uploads root
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
+  destination: (req, file, cb) => cb(null, ensureUploadSubdir()),
     filename: (req, file, cb) => cb(null, `salary-import-${Date.now()}${path.extname(file.originalname)}`)
 });
 const upload = multer({ storage });
@@ -166,9 +174,33 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
             return res.status(400).json({ message: 'Month and Year are required' });
         }
 
-        // Fetch all working employees with salaryDetails
-        const employees = await Employee.find(workingStatusFilter()).lean();
-        
+        const period = getPayrollPeriod(month, year);
+        if (!period) {
+            return res.status(400).json({ message: 'Invalid Month or Year' });
+        }
+
+        const monthEndInclusive = new Date(period.end);
+        monthEndInclusive.setHours(23, 59, 59, 999);
+
+        // Working staff plus anyone whose last working day falls in this month (mid-month exit).
+        const employees = await Employee.find({
+            $or: [
+                workingStatusFilter(),
+                { lastWorkingDay: { $gte: period.start, $lte: monthEndInclusive } },
+            ],
+        }).lean();
+
+        const [attendanceRecords, leaveRequests] = await Promise.all([
+            Attendance.find({
+                date: { $gte: period.start, $lte: monthEndInclusive },
+            }).lean(),
+            LeaveRequest.find({
+                status: { $in: ['Approved', 'HOD Approved'] },
+                startDate: { $lte: monthEndInclusive },
+                endDate: { $gte: period.start },
+            }).lean(),
+        ]);
+
         const results = [];
         const skipped = [];
         const errors = [];
@@ -180,19 +212,37 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
                     continue;
                 }
 
+                const days = computePayablePayrollDays({
+                    employee: emp,
+                    month,
+                    year,
+                    attendanceRecords,
+                    leaveRequests,
+                });
+
+                if (days.skip || days.payableDays <= 0) {
+                    skipped.push({
+                        name: emp.employeeName,
+                        reason: days.skipReason || "No payable working days",
+                    });
+                    continue;
+                }
+
                 const email = emp.emailId.trim().toLowerCase();
                 
-                // Prepare slip data from employee records
+                // Prepare slip data from this employee's salaryDetails only (no invented defaults).
+                // Keep 0 as 0 — do not treat empty rent as basic/2.
                 const salary = emp.salaryDetails || {};
-                const basic = parseFloat(salary.basicSalary) || 0;
-                
-                // Auto-calculate logic if fields are 0/empty
-                const houseRent = parseFloat(salary.houseRent) || (basic / 2);
-                const travelExp = parseFloat(salary.travelExp) || 0;
-                // If other is not set, use (Total Allowance - HouseRent - Travel) if positive
-                const other = parseFloat(salary.other) || Math.max(0, (parseFloat(salary.totalAllowance) || 0) - houseRent - travelExp);
-                const deduction = parseFloat(salary.deduction) || 0;
-                
+                const toAmt = (v) => {
+                    const n = parseFloat(v);
+                    return Number.isFinite(n) ? n : 0;
+                };
+                const basic = scaleSalaryAmount(toAmt(salary.basicSalary), days.payableDays, days.totalWorkingDays);
+                const houseRent = scaleSalaryAmount(toAmt(salary.houseRent), days.payableDays, days.totalWorkingDays);
+                const travelExp = scaleSalaryAmount(toAmt(salary.travelExp), days.payableDays, days.totalWorkingDays);
+                const other = scaleSalaryAmount(toAmt(salary.other), days.payableDays, days.totalWorkingDays);
+                const deduction = toAmt(salary.deduction);
+
                 const grossSalary = basic + houseRent + travelExp + other;
                 const netSalary = grossSalary - deduction;
 
@@ -201,8 +251,12 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
                     emailId: email,
                     department: emp.department || '',
                     designation: emp.designation || emp.role || 'Employee',
+                    dateOfJoining: emp.doj ? new Date(emp.doj).toISOString().slice(0, 10) : '',
                     month: month,
                     year: year,
+                    totalWorkingDays: days.totalWorkingDays,
+                    presentDays: days.presentDays,
+                    payableDays: days.payableDays,
                     basicPay: basic,
                     hra: houseRent,
                     conveyanceAllowance: travelExp,
@@ -228,7 +282,7 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
         }
 
         res.json({
-            message: `Successfully generated/updated ${results.length} salary slips.`,
+            message: `Successfully generated/updated ${results.length} salary slips${skipped.length ? ` (${skipped.length} skipped)` : ''}.`,
             count: results.length,
             results,
             skipped,

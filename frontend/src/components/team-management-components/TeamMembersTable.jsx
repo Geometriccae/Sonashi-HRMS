@@ -23,12 +23,15 @@ import {
   EyeOutlined,
   EditOutlined,
   DeleteOutlined,
+  CalendarOutlined,
+  UndoOutlined,
 } from "@ant-design/icons";
 import DeleteModal from "../delete-modal/DeleteModal";
 import AddEmployeeModal from "./AddEmployeeModal";
 import EditEmployeeModal from "./EditEmployeeModal";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 import employeeService from "../../services/EmployeeService";
+import leaveRequestService from "../../services/LeaveRequestService";
 import styles from "./TeamMembersTable.module.css";
 import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
@@ -46,7 +49,9 @@ import {
   employeeStatusTagColor,
   isWorkingEmployeeStatus,
   isNonWorkingEmployeeStatus,
+  EMPLOYEE_STATUS_VALUES,
 } from "../../utils/employeeStatusDisplay";
+import { HR_METRICS_LIST_PARAM_KEYS } from "../../utils/hrMetricsFilters";
 
 /** Legacy server-generated placeholder emails — show as empty in the table. */
 const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
@@ -101,6 +106,18 @@ const toDateInputValue = (value) => {
   }
 };
 
+const isNoticeOrProvisionStatus = (status) =>
+  status === "Notice Period" || status === "Provision Period";
+
+const getPeriodRestoreStatus = (employee) => {
+  const current = employee?.employeeStatus;
+  const prev = String(employee?.previousEmployeeStatus || "").trim();
+  if (prev && EMPLOYEE_STATUS_VALUES.includes(prev) && prev !== current) {
+    return prev;
+  }
+  return "Active";
+};
+
 const getDateConfigForStatus = (status) => {
   const configs = {
     "On Vacation": {
@@ -108,12 +125,16 @@ const getDateConfigForStatus = (status) => {
       fieldKey: "lastWorkingDay",
       secondaryLabel: "Travelling Date",
       secondaryFieldKey: "travellingDate",
+      tertiaryLabel: "Leave End Date",
+      tertiaryFieldKey: "leaveEndDate",
     },
     "Vacation Pending": {
       label: "Last Working Day",
       fieldKey: "lastWorkingDay",
       secondaryLabel: "Travelling Date",
       secondaryFieldKey: "travellingDate",
+      tertiaryLabel: "Leave End Date",
+      tertiaryFieldKey: "leaveEndDate",
     },
     "Vacation Approved": {
       label: "Return / Entry Date",
@@ -137,6 +158,11 @@ const buildVacationDatePrompt = (employeeItem, newStatus) => {
     secondaryLabel: cfg.secondaryLabel,
     secondaryFieldKey: cfg.secondaryFieldKey,
     secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(employeeItem[cfg.secondaryFieldKey]) : "",
+    tertiaryLabel: cfg.tertiaryLabel,
+    tertiaryFieldKey: cfg.tertiaryFieldKey,
+    tertiaryDateValue: cfg.tertiaryFieldKey
+      ? toDateInputValue(employeeItem.endDate || employeeItem.leaveEndDate)
+      : "",
   };
 };
 
@@ -146,8 +172,10 @@ const formatVacationDates = (record, vs) => {
     const lines = [];
     const lwd = fmt(record.lastWorkingDay);
     const travel = fmt(record.travellingDate);
+    const leaveEnd = fmt(record.endDate || record.leaveEndDate);
     if (lwd) lines.push(`LWD: ${lwd}`);
     if (travel) lines.push(`Travel: ${travel}`);
+    if (leaveEnd) lines.push(`Leave End: ${leaveEnd}`);
     return lines;
   }
   if (vs === "Vacation Approved") {
@@ -172,6 +200,17 @@ function TeamMembersTable() {
     const query = searchParams.toString();
     return query ? `/teammanagement?${query}` : "/teammanagement";
   }, [searchParams]);
+
+  // HR Metrics year/filters belong on the metrics dashboard, not this list.
+  useEffect(() => {
+    const hasMetricsParams = HR_METRICS_LIST_PARAM_KEYS.some((key) => searchParams.has(key));
+    if (!hasMetricsParams) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      HR_METRICS_LIST_PARAM_KEYS.forEach((key) => next.delete(key));
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Restore last page from session when URL has no page (e.g. sidebar click)
   useEffect(() => {
@@ -233,32 +272,52 @@ function TeamMembersTable() {
   const [datePromptSaving, setDatePromptSaving] = useState(false);
   const [statusPrompt, setStatusPrompt] = useState(null);
   const [statusPromptSaving, setStatusPromptSaving] = useState(false);
+  const [periodResetTarget, setPeriodResetTarget] = useState(null);
+  const [periodResetSaving, setPeriodResetSaving] = useState(false);
 
   useEffect(() => {
     fetchEmployees();
 
-    // Listen for real-time employee creations so UI updates without manual refresh
-    const socketUrl = getApiBaseUrl();
-    const socket = ioClient(socketUrl, {
-      path: '/socket.io',
-      transports: ['polling', 'websocket'],
-      reconnection: true
-    });
-
-    const onEmployeeCreated = (employee) => {
-      if (!employee) return;
-      setEmployees((prev) => {
-        if (!prev) return [employee];
-        const exists = prev.some((e) => String(e._id) === String(employee._id));
-        if (exists) return prev;
-        return [employee, ...prev];
+    let socket;
+    let cancelled = false;
+    let idleHandle = null;
+    const connectSocket = () => {
+      if (cancelled) return;
+      const socketUrl = getApiBaseUrl();
+      socket = ioClient(socketUrl, {
+        path: '/socket.io',
+        transports: ['polling', 'websocket'],
+        reconnection: true
       });
+
+      const onEmployeeCreated = (employee) => {
+        if (!employee) return;
+        setEmployees((prev) => {
+          if (!prev) return [employee];
+          const exists = prev.some((e) => String(e._id) === String(employee._id));
+          if (exists) return prev;
+          return [employee, ...prev];
+        });
+      };
+
+      socket.on('employee-created', onEmployeeCreated);
     };
 
-    socket.on('employee-created', onEmployeeCreated);
+    // Defer socket until after first paint so list fetch isn't competing for bandwidth
+    if (typeof requestIdleCallback === 'function') {
+      idleHandle = { kind: 'idle', id: requestIdleCallback(connectSocket, { timeout: 2500 }) };
+    } else {
+      idleHandle = { kind: 'timeout', id: setTimeout(connectSocket, 1200) };
+    }
 
     return () => {
-      try { socket.off('employee-created', onEmployeeCreated); socket.disconnect(); } catch (e) { }
+      cancelled = true;
+      if (idleHandle?.kind === 'idle' && typeof cancelIdleCallback === 'function') {
+        try { cancelIdleCallback(idleHandle.id); } catch (e) { /* ignore */ }
+      } else if (idleHandle?.kind === 'timeout') {
+        clearTimeout(idleHandle.id);
+      }
+      try { if (socket) { socket.disconnect(); } } catch (e) { }
     };
   }, []);
 
@@ -436,7 +495,7 @@ function TeamMembersTable() {
 
   const handleDatePromptConfirm = async () => {
     if (!datePrompt || datePromptSaving) return;
-    const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue } = datePrompt;
+    const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, tertiaryFieldKey, tertiaryDateValue } = datePrompt;
     if (newStatus === "Vacation Approved" && !dateValue) {
       showToast("Please select the Return / Entry Date.", "error");
       return;
@@ -448,9 +507,19 @@ function TeamMembersTable() {
     } else if (newStatus === "Vacation Approved" && dateValue) {
       extraFields.firstWorkingDay = new Date(dateValue).toISOString();
     }
+    if (tertiaryFieldKey && tertiaryDateValue) {
+      extraFields[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
+    }
     setDatePromptSaving(true);
     try {
       await handleVacationStatusChange(employeeItem, newStatus, extraFields);
+      if (employeeItem.linkedLeaveId && tertiaryDateValue) {
+        try {
+          await leaveRequestService.updateLeaveRequest(employeeItem.linkedLeaveId, {
+            endDate: new Date(tertiaryDateValue).toISOString(),
+          });
+        } catch (_) { /* employee dates already saved */ }
+      }
       setDatePrompt(null);
     } catch (err) {
       // handled
@@ -464,12 +533,14 @@ function TeamMembersTable() {
     setDatePrompt(null);
   };
 
-  const handleEmployeeStatusChange = (employeeItem, newStatus) => {
+  const handleEmployeeStatusChange = (employeeItem, newStatus, options = {}) => {
+    const isEdit = Boolean(options.isEdit);
     if (newStatus === "Notice Period") {
       setStatusPrompt({
         employeeItem,
         newStatus,
         mode: "notice",
+        isEdit,
         noticePeriodStartDate: toDateInputValue(employeeItem.noticePeriodStartDate),
         noticePeriodEndDate: toDateInputValue(
           employeeItem.noticePeriodEndDate || employeeItem.lastWorkingDay
@@ -485,6 +556,7 @@ function TeamMembersTable() {
         employeeItem,
         newStatus,
         mode: "provision",
+        isEdit,
         provisionPeriodStartDate: toDateInputValue(employeeItem.provisionPeriodStartDate),
         provisionPeriodEndDate: toDateInputValue(employeeItem.provisionPeriodEndDate),
         lastWorkingDay: "",
@@ -509,11 +581,20 @@ function TeamMembersTable() {
     confirmEmployeeStatusChange(employeeItem, newStatus, {});
   };
 
-  const confirmEmployeeStatusChange = async (employeeItem, newStatus, dates = {}) => {
+  const confirmEmployeeStatusChange = async (employeeItem, newStatus, dates = {}, options = {}) => {
     const empId = employeeItem._id || employeeItem.id;
+    const isEdit = Boolean(options.isEdit);
     setStatusPromptSaving(true);
     try {
       const payload = { employeeStatus: newStatus };
+      const currentStatus = employeeItem.employeeStatus || "Active";
+
+      if (
+        isNoticeOrProvisionStatus(newStatus) &&
+        currentStatus !== newStatus
+      ) {
+        payload.previousEmployeeStatus = currentStatus;
+      }
 
       if (newStatus === "Notice Period") {
         if (dates.noticePeriodStartDate) {
@@ -547,7 +628,13 @@ function TeamMembersTable() {
         )
       );
       employeeService.invalidateCache?.();
-      showToast("Employee status updated successfully.", "success");
+      if (isEdit && newStatus === "Notice Period") {
+        showToast("Notice Period updated successfully.", "success");
+      } else if (isEdit && newStatus === "Provision Period") {
+        showToast("Provision Period updated successfully.", "success");
+      } else {
+        showToast("Employee status updated successfully.", "success");
+      }
       setStatusPrompt(null);
     } catch (err) {
       console.error("Failed to update employee status:", err);
@@ -559,6 +646,23 @@ function TeamMembersTable() {
 
   const handleStatusPromptConfirm = async () => {
     if (!statusPrompt || statusPromptSaving) return;
+    const mode = statusPrompt.mode || "exit";
+    if (mode === "notice") {
+      const start = statusPrompt.noticePeriodStartDate;
+      const end = statusPrompt.noticePeriodEndDate;
+      if (start && end && start > end) {
+        showToast("Start date cannot be after the end date.", "error");
+        return;
+      }
+    }
+    if (mode === "provision") {
+      const start = statusPrompt.provisionPeriodStartDate;
+      const end = statusPrompt.provisionPeriodEndDate;
+      if (start && end && start > end) {
+        showToast("Start date cannot be after the end date.", "error");
+        return;
+      }
+    }
     await confirmEmployeeStatusChange(
       statusPrompt.employeeItem,
       statusPrompt.newStatus,
@@ -568,28 +672,90 @@ function TeamMembersTable() {
         noticePeriodEndDate: statusPrompt.noticePeriodEndDate,
         provisionPeriodStartDate: statusPrompt.provisionPeriodStartDate,
         provisionPeriodEndDate: statusPrompt.provisionPeriodEndDate,
-      }
+      },
+      { isEdit: Boolean(statusPrompt.isEdit) }
     );
   };
 
   const handleStatusPromptCancel = () => {
-    if (statusPromptSaving) return;
+    if (statusPromptSaving || periodResetSaving) return;
     setStatusPrompt(null);
+  };
+
+  const requestPeriodReset = (employeeItem) => {
+    if (!employeeItem || !isNoticeOrProvisionStatus(employeeItem.employeeStatus)) return;
+    setPeriodResetTarget(employeeItem);
+  };
+
+  const handlePeriodResetCancel = () => {
+    if (periodResetSaving) return;
+    setPeriodResetTarget(null);
+  };
+
+  const handlePeriodResetConfirm = async () => {
+    if (!periodResetTarget || periodResetSaving) return;
+    const employeeItem = periodResetTarget;
+    const empId = employeeItem._id || employeeItem.id;
+    const currentStatus = employeeItem.employeeStatus;
+    const restoredStatus = getPeriodRestoreStatus(employeeItem);
+    const payload = {
+      employeeStatus: restoredStatus,
+      previousEmployeeStatus: null,
+    };
+    if (currentStatus === "Notice Period") {
+      payload.noticePeriodStartDate = null;
+      payload.noticePeriodEndDate = null;
+      payload.lastWorkingDay = null;
+    } else if (currentStatus === "Provision Period") {
+      payload.provisionPeriodStartDate = null;
+      payload.provisionPeriodEndDate = null;
+    }
+
+    setPeriodResetSaving(true);
+    try {
+      const updated = await employeeService.updateEmployee(empId, payload);
+      setEmployees(prev =>
+        prev.map(e =>
+          (e._id === empId || e.id === empId)
+            ? { ...e, ...payload, ...(updated && typeof updated === "object" ? updated : {}) }
+            : e
+        )
+      );
+      employeeService.invalidateCache?.();
+      showToast(
+        currentStatus === "Provision Period"
+          ? "Provision Period reset successfully."
+          : "Notice Period reset successfully.",
+        "success"
+      );
+      setPeriodResetTarget(null);
+      setStatusPrompt(null);
+    } catch (err) {
+      console.error("Failed to reset employee status:", err);
+      showToast(err?.message || "Failed to reset status.", "error");
+    } finally {
+      setPeriodResetSaving(false);
+    }
   };
 
   const filteredData = useMemo(() => {
     return employees.filter((member) => {
+      const q = searchTerm.trim().toLowerCase();
       let matchesFilter = true;
       if (activeFilter === "Active") {
-        matchesFilter = isWorkingEmployeeStatus(member.employeeStatus);
+        // Empty search: current staff only. Typing a search also finds matching ex-employees.
+        matchesFilter = q
+          ? true
+          : isWorkingEmployeeStatus(member.employeeStatus);
       } else if (activeFilter === "Inactive") {
         matchesFilter = isNonWorkingEmployeeStatus(member.employeeStatus);
       }
 
-      const q = searchTerm.toLowerCase();
       const matchesSearch =
+        !q ||
         (member.employeeName || "").toLowerCase().includes(q) ||
         (member.employeeId || "").toLowerCase().includes(q) ||
+        (member.employeeNumber || "").toLowerCase().includes(q) ||
         (member.emailId || "").toLowerCase().includes(q) ||
         (member.mobile || "").toLowerCase().includes(q) ||
         (member.role || "").toLowerCase().includes(q);
@@ -599,6 +765,37 @@ function TeamMembersTable() {
   }, [employees, activeFilter, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
+
+  // Load avatars only for the visible page (list API no longer embeds profilePhoto)
+  useEffect(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    const pageRows = filteredData.slice(start, start + itemsPerPage);
+    const ids = pageRows
+      .map((r) => r._id || r.id)
+      .filter(Boolean)
+      .filter((id) => {
+        const row = pageRows.find((r) => String(r._id || r.id) === String(id));
+        return row && !row.profilePhoto;
+      });
+    if (!ids.length) return;
+    let cancelled = false;
+    employeeService
+      .getProfilePhotosByIds(ids)
+      .then((photos) => {
+        if (cancelled || !Array.isArray(photos) || !photos.length) return;
+        const byId = new Map(photos.map((p) => [String(p._id || p.id), p.profilePhoto]));
+        setEmployees((prev) =>
+          prev.map((e) => {
+            const photo = byId.get(String(e._id || e.id));
+            return photo ? { ...e, profilePhoto: photo } : e;
+          })
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, itemsPerPage, filteredData]);
 
   useEffect(() => {
     // Don't clamp while employees are still loading (empty list → totalPages=1 wipes restored page)
@@ -768,7 +965,7 @@ function TeamMembersTable() {
       {
         title: "Actions",
         key: "actions",
-        width: 130,
+        width: 170,
         align: "center",
         render: (_, record) => (
           <Space size={4}>
@@ -780,6 +977,32 @@ function TeamMembersTable() {
                 <Button type="text" icon={<EyeOutlined />} size="small" />
               </Link>
             </Tooltip>
+            {canEditEmployees && isNoticeOrProvisionStatus(record.employeeStatus) && (
+              <>
+                <Tooltip title="Edit Status Dates">
+                  <Button
+                    type="text"
+                    icon={<CalendarOutlined />}
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEmployeeStatusChange(record, record.employeeStatus, { isEdit: true });
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip title="Reset Status">
+                  <Button
+                    type="text"
+                    icon={<UndoOutlined />}
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      requestPeriodReset(record);
+                    }}
+                  />
+                </Tooltip>
+              </>
+            )}
             {canEditEmployees && (
               <Tooltip title="Edit">
                 <Button type="text" icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)} />
@@ -890,7 +1113,7 @@ function TeamMembersTable() {
           onChange={(value) => patchSearchParams({ filter: value }, { resetPage: true })}
           options={[
             { label: "Active", value: "Active" },
-            { label: "Inactive", value: "Inactive" },
+            { label: "Ex-Employees", value: "Inactive" },
             { label: "All", value: "All" },
           ]}
           style={{ background: "#f5f5f5", padding: 4, borderRadius: 24 }}
@@ -949,6 +1172,20 @@ function TeamMembersTable() {
         description={memberToDelete
           ? `Are you sure you want to delete ${memberToDelete.employeeName}? This action cannot be undone.`
           : `Are you sure you want to delete these ${selectedEmployeeIds.length} employees? This action cannot be undone.`}
+      />
+
+      <DeleteModal
+        isOpen={Boolean(periodResetTarget)}
+        onClose={handlePeriodResetCancel}
+        onConfirm={handlePeriodResetConfirm}
+        confirmText="Reset"
+        zIndex={100010}
+        title={periodResetTarget?.employeeStatus === "Provision Period" ? "Reset Provision Period?" : "Reset Notice Period?"}
+        description={
+          periodResetTarget?.employeeStatus === "Provision Period"
+            ? "Are you sure you want to reset the Provision Period for this employee? This will clear the current Provision Period dates and restore the employee's previous status. This action cannot be undone automatically."
+            : "Are you sure you want to reset the Notice Period for this employee? This will clear the current Notice Period dates, clear the Last Working Day, and restore the employee's previous status. This action cannot be undone automatically."
+        }
       />
 
       <AddEmployeeModal
@@ -1177,6 +1414,32 @@ function TeamMembersTable() {
                     />
                   </div>
                 )}
+                {datePrompt.tertiaryFieldKey && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Select {datePrompt.tertiaryLabel}
+                    </label>
+                    <DateInput
+                      value={datePrompt.tertiaryDateValue}
+                      className="premium-input-date"
+                      onChange={e => setDatePrompt(prev => ({ ...prev, tertiaryDateValue: e.target.value }))}
+                      style={{
+                        border: "2px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "12px 16px",
+                        fontSize: "15px",
+                        color: "#0f172a",
+                        fontWeight: "600",
+                        outline: "none",
+                        width: "100%",
+                        boxSizing: "border-box",
+                        transition: "all 0.2s ease",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
+                        cursor: "pointer"
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Footer Buttons */}
@@ -1251,20 +1514,21 @@ function TeamMembersTable() {
           ? statusPrompt.employeeItem.employeeName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
           : "EE";
         const mode = statusPrompt.mode || "exit";
+        const isEdit = Boolean(statusPrompt.isEdit);
         const statusLabel =
           ACTIVE_OPTIONS.find((o) => o.value === statusPrompt.newStatus)?.label ||
           statusPrompt.newStatus;
         const title =
           mode === "notice"
-            ? "Set Notice Period"
+            ? (isEdit ? "Edit Notice Period" : "Set Notice Period")
             : mode === "provision"
-              ? "Set Provision Period"
+              ? (isEdit ? "Edit Provision Period" : "Set Provision Period")
               : "Update Employee Status";
         const description =
           mode === "notice"
-            ? <>Please set notice period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
+            ? <>Please {isEdit ? "update" : "set"} notice period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
             : mode === "provision"
-              ? <>Please set provision period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
+              ? <>Please {isEdit ? "update" : "set"} provision period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
               : <>Please select the last working day for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>;
         const dateInputStyle = {
           border: "2px solid #e2e8f0",
@@ -1479,10 +1743,10 @@ function TeamMembersTable() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px" }}>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px", flexWrap: "wrap" }}>
                 <button
                   onClick={handleStatusPromptCancel}
-                  disabled={statusPromptSaving}
+                  disabled={statusPromptSaving || periodResetSaving}
                   style={{
                     padding: "12px 24px",
                     borderRadius: "12px",
@@ -1491,28 +1755,50 @@ function TeamMembersTable() {
                     color: "#64748b",
                     fontWeight: "700",
                     fontSize: "14px",
-                    cursor: statusPromptSaving ? "not-allowed" : "pointer",
-                    opacity: statusPromptSaving ? 0.6 : 1,
+                    cursor: (statusPromptSaving || periodResetSaving) ? "not-allowed" : "pointer",
+                    opacity: (statusPromptSaving || periodResetSaving) ? 0.6 : 1,
                     transition: "all 0.2s ease"
                   }}
-                  onMouseEnter={e => { if (!statusPromptSaving) { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; } }}
-                  onMouseLeave={e => { if (!statusPromptSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; } }}
+                  onMouseEnter={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; } }}
+                  onMouseLeave={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; } }}
                 >
                   Cancel
                 </button>
+                {isEdit && (mode === "notice" || mode === "provision") && (
+                  <button
+                    onClick={() => requestPeriodReset(statusPrompt.employeeItem)}
+                    disabled={statusPromptSaving || periodResetSaving}
+                    style={{
+                      padding: "12px 24px",
+                      borderRadius: "12px",
+                      border: "2px solid #fecaca",
+                      background: "#fff",
+                      color: "#dc2626",
+                      fontWeight: "700",
+                      fontSize: "14px",
+                      cursor: (statusPromptSaving || periodResetSaving) ? "not-allowed" : "pointer",
+                      opacity: (statusPromptSaving || periodResetSaving) ? 0.6 : 1,
+                      transition: "all 0.2s ease"
+                    }}
+                    onMouseEnter={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#fef2f2"; e.target.style.borderColor = "#fca5a5"; } }}
+                    onMouseLeave={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#fecaca"; } }}
+                  >
+                    Reset
+                  </button>
+                )}
                 <button
                   onClick={handleStatusPromptConfirm}
-                  disabled={statusPromptSaving}
+                  disabled={statusPromptSaving || periodResetSaving}
                   style={{
                     padding: "12px 28px",
                     borderRadius: "12px",
                     border: "none",
-                    background: statusPromptSaving ? "#94a3b8" : "linear-gradient(135deg, #dc2626, #ef4444)",
+                    background: (statusPromptSaving || periodResetSaving) ? "#94a3b8" : "linear-gradient(135deg, #dc2626, #ef4444)",
                     color: "#fff",
                     fontWeight: "700",
                     fontSize: "14px",
-                    cursor: statusPromptSaving ? "not-allowed" : "pointer",
-                    boxShadow: statusPromptSaving ? "none" : "0 4px 12px rgba(220, 38, 38, 0.25)",
+                    cursor: (statusPromptSaving || periodResetSaving) ? "not-allowed" : "pointer",
+                    boxShadow: (statusPromptSaving || periodResetSaving) ? "none" : "0 4px 12px rgba(220, 38, 38, 0.25)",
                     transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                     display: "inline-flex",
                     alignItems: "center",
@@ -1520,8 +1806,8 @@ function TeamMembersTable() {
                     gap: "8px",
                     minWidth: "120px"
                   }}
-                  onMouseEnter={e => { if (!statusPromptSaving) { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(220, 38, 38, 0.35)"; } }}
-                  onMouseLeave={e => { if (!statusPromptSaving) { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(220, 38, 38, 0.25)"; } }}
+                  onMouseEnter={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(220, 38, 38, 0.35)"; } }}
+                  onMouseLeave={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(220, 38, 38, 0.25)"; } }}
                 >
                   {statusPromptSaving && (
                     <span
@@ -1536,7 +1822,7 @@ function TeamMembersTable() {
                       }}
                     />
                   )}
-                  {statusPromptSaving ? "Saving..." : "Confirm"}
+                  {statusPromptSaving ? "Saving..." : (isEdit ? "Save Changes" : "Confirm")}
                 </button>
               </div>
             </div>

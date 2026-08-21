@@ -10,13 +10,14 @@ import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
-import { buildYearList, yearsFromLeaveRequests } from "../../utils/yearOptions";
+import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
-import { isWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
 import "./LeaveForm.css";
 
-function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null }) {
+function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null, onEditLeave }) {
     const { showToast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [employees, setEmployees] = useState([]);
@@ -300,20 +301,16 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     // Calculate History Logic (Same as View Template)
     const selectedEmp = employees.find(e => e._id === formData.employeeId);
-    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests, formData.startDate) : { entitlement: 0, totalTaken: 0, balance: 0 };
+    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0 };
     const employeeLeaves = (allLeaveRequests || []).filter(req => {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
         const empNameSearch = String(selectedEmp?.employeeName || selectedEmp?.name || "").toLowerCase().trim();
         return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
     });
-    const years = buildYearList({
-      fromDataYears: yearsFromLeaveRequests(employeeLeaves),
-      pastYears: 25,
-      futureYears: 2,
-    });
+    const years = buildLeaveHistoryYears(selectedEmp?.doj);
 
     const getYearlyLeaves = (year) => {
-        return employeeLeaves.filter(req => new Date(req.startDate).getFullYear() === year);
+        return employeeLeaves.filter((req) => leaveBelongsToHistoryYear(req, year, selectedEmp?.doj));
     };
 
     const getYearlyTotal = (year) => {
@@ -381,16 +378,14 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     const departmentOptions = dynamicDepartmentOptions;
 
-    const activeEmployees = employees.filter(emp => isWorkingEmployeeStatus(emp.employeeStatus));
-
-    const employeeOptions = activeEmployees.map(emp => ({
-        value: emp._id,
-        label: `${emp.employeeName || emp.name || "Unknown"} (${emp.employeeId || "N/A"})`
-    }));
+    const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp));
 
     const reportingManagerOptions = employees.map(emp => ({
         value: (emp.employeeName || emp.name || "").trim(),
-        label: (emp.employeeName || emp.name || "Unknown").trim()
+        label: (emp.employeeName || emp.name || "Unknown").trim(),
+        employeeId: emp.employeeId || "",
+        name: emp.employeeName || emp.name || "",
+        hideUnlessSearch: isNonWorkingEmployeeStatus(emp.employeeStatus),
     })).filter(opt => opt.value !== "");
 
     const currentManager = (formData.reportingManager || "").trim();
@@ -444,7 +439,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                         options={employeeOptions}
                                         value={employeeOptions.find(opt => opt.value === formData.employeeId) || null}
                                         onChange={handleEmployeeChange}
-                                        placeholder="Select employee..."
+                                        placeholder="Search employee..."
+                                        filterOption={filterReactSelectEmployeeOption}
                                         styles={{
                                             control: (base) => ({
                                                 ...base,
@@ -503,7 +499,11 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={selectedEmp ? `${leaveStats.workingYears} Years` : 'N/A'} 
+                                            value={
+                                                selectedEmp
+                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
+                                                    : "N/A"
+                                            } 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -700,7 +700,11 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                         </div>
                                         <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
                                             <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
-                                            <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>{leaveStats.workingYears || 0} Years</div>
+                                            <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
+                                                {selectedEmp
+                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
+                                                    : "N/A"}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -709,7 +713,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                             {leaveEntitlementType === 'New Leave' && (
                                 <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                                     <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
-                                        <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History (Last 5 Years)</h3>
+                                        <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History</h3>
                                     </div>
                                     <div style={{ overflowX: "auto" }}>
                                         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "400px" }}>
@@ -761,7 +765,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                             {selectedYearDetails.leaves.length > 0 ? (
                                                                                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                                                                     {selectedYearDetails.leaves.map((req, idx) => (
-                                                                                        <div key={idx} style={{ 
+                                                                                        <div key={req._id || idx} style={{ 
                                                                                             background: "#fff", 
                                                                                             padding: "12px", 
                                                                                             borderRadius: "8px", 
@@ -771,9 +775,30 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                                             alignItems: "center"
                                                                                         }}>
                                                                                             <div>
-                                                                                                <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
-                                                                                                    {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
-                                                                                                </div>
+                                                                                                {onEditLeave ? (
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => onEditLeave(req)}
+                                                                                                        title="Click to edit this leave"
+                                                                                                        style={{
+                                                                                                            fontSize: "13px",
+                                                                                                            fontWeight: "600",
+                                                                                                            color: "#2563eb",
+                                                                                                            background: "none",
+                                                                                                            border: "none",
+                                                                                                            padding: 0,
+                                                                                                            cursor: "pointer",
+                                                                                                            textDecoration: "underline",
+                                                                                                            textAlign: "left",
+                                                                                                        }}
+                                                                                                    >
+                                                                                                        {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
+                                                                                                    </button>
+                                                                                                ) : (
+                                                                                                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                                                                                                        {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
+                                                                                                    </div>
+                                                                                                )}
                                                                                                 <div style={{ fontSize: "11px", color: "#64748b" }}>
                                                                                                     {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
                                                                                                 </div>

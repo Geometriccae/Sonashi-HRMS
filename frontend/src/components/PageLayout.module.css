@@ -1,5 +1,10 @@
 .pageLayout {
+  display: flex;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
   overflow: hidden;
   min-height: 0;
 }
@@ -16,12 +21,14 @@
 }
 
 .pageBody {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
+  height: 100%;
   position: relative;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--brand-200) var(--brand-50);
   background:
