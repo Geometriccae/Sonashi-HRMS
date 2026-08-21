@@ -23,7 +23,7 @@ import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, ex
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance, calculateLeaveDays } from "../../utils/leaveCalculator";
-import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses } from "../../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
@@ -900,19 +900,15 @@ function TeamManagementSalesLeads() {
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Date of Join (DOJ)</span><span className={styles.text10}>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}>
-                          <span className={styles.text9}>Total Exp (Yrs)</span>
+                          <span className={styles.text9}>Total Experience</span>
                           <span className={styles.text10}>
-                            {(() => {
-                              if (!employee.doj) return "0";
-                              const start = new Date(employee.doj);
-                              const end = (isNonWorkingEmployeeStatus(employee.employeeStatus) && employee.lastWorkingDay)
-                                ? new Date(employee.lastWorkingDay)
-                                : new Date();
-
-                              const diffMs = Math.max(0, end - start);
-                              const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
-                              return years.toFixed(1);
-                            })()}
+                            {formatExperienceLabel(
+                              employee.doj,
+                              employee.totalYearsExperience,
+                              (isNonWorkingEmployeeStatus(employee.employeeStatus) && employee.lastWorkingDay)
+                                ? employee.lastWorkingDay
+                                : new Date()
+                            ) || "Not provided"}
                           </span>
                         </div>
                         <div className={styles.column4}><span className={styles.text9}>Notice Period</span><span className={styles.text10}>{employee.noticePeriod || "Not provided"}</span></div>

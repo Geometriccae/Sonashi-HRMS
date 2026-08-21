@@ -33,7 +33,7 @@ import {
   toSearchableEmployeeOption,
   filterReactSelectEmployeeOption,
 } from "../utils/employeeStatusDisplay";
-import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses } from "../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../utils/yetToGoHelpers";
 import { useUrlListView } from "../hooks/usePersistedListPage";
 
 const REPORT_TYPES = [
@@ -105,7 +105,11 @@ const mapEmployeeMasterRow = (e) => {
     "Visa Expiry": formatReportDate(e.visaExpiryDate),
     "Work Permit No": e.workPermitNo || "",
     "Contract Renewal Date": formatReportDate(e.contractRenewalDate),
-    "Total Years Experience": e.totalYearsExperience != null ? e.totalYearsExperience : "",
+    "Total Years Experience": formatExperienceLabel(
+      e.doj,
+      e.totalYearsExperience,
+      (isNonWorkingEmployeeStatus(e.employeeStatus) && e.lastWorkingDay) ? e.lastWorkingDay : new Date()
+    ) || "",
     "Life Insurance": formatYesNo(e.lifeInsurance),
     "Medical Insurance": formatYesNo(e.medicalInsurance),
     Airfare: formatYesNo(e.airFare),

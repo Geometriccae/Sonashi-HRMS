@@ -35,9 +35,9 @@ export const computeExperienceMonthsFromDoj = (doj, asOf = new Date()) => {
   return Math.max(0, totalMonths);
 };
 
-/** Display: "2 Years and 6 months" (from DOJ as of today; fallback to stored years only if no DOJ). */
-export const formatExperienceLabel = (doj, totalYearsExperience) => {
-  let totalMonths = computeExperienceMonthsFromDoj(doj);
+/** Display: "2 Years and 6 months" (from DOJ; fallback to stored years only if no DOJ). */
+export const formatExperienceLabel = (doj, totalYearsExperience, asOf = new Date()) => {
+  let totalMonths = computeExperienceMonthsFromDoj(doj, asOf);
   if (totalMonths == null) {
     if (totalYearsExperience == null || Number.isNaN(Number(totalYearsExperience))) return null;
     totalMonths = Math.round(Number(totalYearsExperience) * 12);

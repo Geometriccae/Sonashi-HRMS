@@ -37,6 +37,7 @@ import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
+import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 
 function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -1135,18 +1136,16 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             <div className="form-fields-grid">
               <InputField
                 label="Total Year of Experience"
-                placeholder="0.0"
-                value={(() => {
-                  if (!formData.doj) return "0.0";
-                  const start = new Date(formData.doj);
-                  const end = (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
-                    ? new Date(formData.lastWorkingDay)
-                    : new Date();
-
-                  const diffMs = Math.max(0, end - start);
-                  const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
-                  return years.toFixed(1);
-                })()}
+                placeholder="—"
+                value={
+                  formatExperienceLabel(
+                    formData.doj,
+                    formData.totalYearsExperience,
+                    (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
+                      ? formData.lastWorkingDay
+                      : new Date()
+                  ) || "—"
+                }
                 readOnly
               />
 

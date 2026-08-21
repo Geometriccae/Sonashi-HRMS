@@ -9,6 +9,7 @@ import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
@@ -642,7 +643,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={leaveStats.workingYears ? `${leaveStats.workingYears} Years` : 'N/A'} 
+                                            value={
+                                                selectedEmp
+                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
+                                                    : "N/A"
+                                            } 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -777,7 +782,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 </div>
                                 <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
                                     <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
-                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>{leaveStats.workingYears || 0} Years</div>
+                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
+                                        {selectedEmp
+                                            ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
+                                            : "N/A"}
+                                    </div>
                                 </div>
                             </div>
                         </div>
