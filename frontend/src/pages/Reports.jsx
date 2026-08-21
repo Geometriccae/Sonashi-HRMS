@@ -29,6 +29,7 @@ import {
 import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
+  formatEmployeeStatusDisplay,
   toSearchableEmployeeOption,
   filterReactSelectEmployeeOption,
 } from "../utils/employeeStatusDisplay";
@@ -40,6 +41,7 @@ const REPORT_TYPES = [
   "Document expiry",
   "Salary report",
   "Employee Experience",
+  "Employees Master Data",
 ];
 
 const REPORT_TYPE_TO_SLUG = {
@@ -47,6 +49,72 @@ const REPORT_TYPE_TO_SLUG = {
   "Document expiry": "document-expiry",
   "Salary report": "salary",
   "Employee Experience": "employee-experience",
+  "Employees Master Data": "employees-master-data",
+};
+
+const formatReportDate = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB");
+};
+
+const formatYesNo = (value) => {
+  if (value === true || value === "true" || value === "Yes") return "Yes";
+  if (value === false || value === "false" || value === "No") return "No";
+  return "";
+};
+
+/** Map one Employee Master record to report columns (existing schema fields only). */
+const mapEmployeeMasterRow = (e) => {
+  const emergency = e.emergencyContact || {};
+  const uae = emergency.uae || {};
+  const home = emergency.homeCountry || {};
+  return {
+    "Employee ID": e.employeeId || "",
+    "Employee Name": e.employeeName || "",
+    "Date of Birth": formatReportDate(e.dateOfBirth),
+    Gender: e.gender || "",
+    Nationality: e.nationality || "",
+    Department: e.department || "",
+    Designation: e.designation || "",
+    Role: e.role || "",
+    Company: e.office || "",
+    "Company Code": e.companyCode || "",
+    "Office Location": e.office || "",
+    "Joining Date": formatReportDate(e.doj),
+    "Employment Status": formatEmployeeStatusDisplay(e),
+    "Employee Status (Raw)": e.employeeStatus || "",
+    Email: e.emailId || "",
+    "Contact Number": e.mobile || "",
+    "Reporting Manager": e.reportingManager || "",
+    "Notice Period": e.noticePeriod || "",
+    "Notice Period Start": formatReportDate(e.noticePeriodStartDate),
+    "Notice Period End": formatReportDate(e.noticePeriodEndDate),
+    "Provision / Probation Period": e.provisionPeriod || "",
+    "Provision Period Start": formatReportDate(e.provisionPeriodStartDate),
+    "Provision Period End": formatReportDate(e.provisionPeriodEndDate),
+    "Last Working Day": formatReportDate(e.lastWorkingDay),
+    "Vacation Status": e.vacationStatus || "",
+    Attendance: e.attendance || "",
+    "Emirates ID": e.emiratesId || "",
+    "Emirates ID Expiry": formatReportDate(e.emiratesIdExpiryDate),
+    "Passport No": e.passportNo || "",
+    "Passport Expiry": formatReportDate(e.passportExpiryDate),
+    "Labour Card Number": e.labourCardNumber || "",
+    "Labour Card Expiry": formatReportDate(e.labourCardExpiryDate),
+    "Visa Expiry": formatReportDate(e.visaExpiryDate),
+    "Work Permit No": e.workPermitNo || "",
+    "Contract Renewal Date": formatReportDate(e.contractRenewalDate),
+    "Total Years Experience": e.totalYearsExperience != null ? e.totalYearsExperience : "",
+    "Life Insurance": formatYesNo(e.lifeInsurance),
+    "Medical Insurance": formatYesNo(e.medicalInsurance),
+    Airfare: formatYesNo(e.airFare),
+    "Emergency Contact (UAE) Name": uae.name || "",
+    "Emergency Contact (UAE) Phone": uae.contactNo || "",
+    "Emergency Contact (Home) Name": home.name || "",
+    "Emergency Contact (Home) Phone": home.contactNo || "",
+    Remarks: e.remarks || "",
+  };
 };
 
 const SIF_HEADERS = [
@@ -277,7 +345,7 @@ function Reports() {
           : data.employees || data.data || [];
 
         const depts = ["All", ...[...new Set(empList.map(e => e.department).filter(Boolean))].sort()];
-        const roles  = ["All", ...[...new Set(empList.map(e => e.role).filter(Boolean))].sort()];
+        const roles  = ["All", ...[...new Set(empList.flatMap(e => [e.role, e.designation]).filter(Boolean))].sort()];
         const offices = ["All", ...[...new Set(empList.map(e => e.office).filter(Boolean))].sort()];
         const countries = ["All", ...[...new Set(empList.map(e => e.nationality).filter(Boolean))].sort()];
 
@@ -301,6 +369,61 @@ function Reports() {
       })
       .catch(() => {});
   }, []);
+
+  // Employees Master Data: default Status=Active, then auto-load / refresh preview
+  const masterDataReadyRef = useRef(false);
+  useEffect(() => {
+    if (reportType !== "Employees Master Data") {
+      masterDataReadyRef.current = false;
+      return undefined;
+    }
+
+    if (!masterDataReadyRef.current) {
+      masterDataReadyRef.current = true;
+      if (employeeStatus !== "Active") {
+        setEmployeeStatus("Active");
+        return undefined;
+      }
+    }
+
+    let cancelled = false;
+    const loadMasterPreview = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await fetchReportData("Employees Master Data");
+        if (cancelled) return;
+        if (!data.length) {
+          setPreviewData([]);
+          setPreviewHeaders([]);
+          setShowPreview(false);
+          return;
+        }
+        setPreviewData(data);
+        setPreviewHeaders(Object.keys(data[0]));
+        setShowPreview(true);
+      } catch (err) {
+        console.error("Employees Master Data preview failed:", err);
+        if (!cancelled) setError("Failed to load Employees Master Data. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadMasterPreview();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    reportType,
+    employeeStatus,
+    filterEmployee,
+    filterDepartment,
+    filterRole,
+    filterOffice,
+    filterCountry,
+  ]);
 
   const saveSifSettings = useCallback(async (employerId, agentCode, { silent = true } = {}) => {
     try {
@@ -422,7 +545,18 @@ function Reports() {
     "All", "Completed", "Contacted", "Demo Scheduled", "Lost",
     "Needs Analysis", "Pending", "Progress", "Proposal Sent", "Won"
   ];
-  const employeeStatusOptions = ["All", "Active", "InActive"];
+  const employeeStatusOptions =
+    reportType === "Employees Master Data"
+      ? [
+          { value: "Active", label: "Active" },
+          { value: "InActive", label: "Ex-Employee / Inactive" },
+          { value: "All", label: "All" },
+        ]
+      : [
+          { value: "All", label: "All" },
+          { value: "Active", label: "Active" },
+          { value: "InActive", label: "InActive" },
+        ];
   const minExperienceOptions = ["All", ...Array.from({ length: 21 }, (_, i) => String(i))];
   const minExpMonthsOptions = ["All", ...Array.from({ length: 12 }, (_, i) => String(i))];
 
@@ -802,6 +936,57 @@ function Reports() {
       });
     }
 
+    if (type === "Employees Master Data") {
+      // Default Active; InActive = ex-employees; All = both (server status when possible)
+      const statusForApi =
+        employeeStatus === "Active"
+          ? "Active"
+          : employeeStatus === "InActive"
+            ? "InActive"
+            : undefined;
+      let empList = await fetchFullEmployees(statusForApi);
+      if (!Array.isArray(empList)) empList = [];
+
+      // Deduplicate by employeeId / _id
+      const seen = new Set();
+      empList = empList.filter((e) => {
+        const key = String(e.employeeId || e._id || "");
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      if (employeeStatus === "Active") {
+        empList = empList.filter(isActiveEmployee);
+      } else if (employeeStatus === "InActive") {
+        empList = empList.filter(isInactiveEmployee);
+      }
+
+      if (filterEmployee !== "All") {
+        empList = empList.filter((e) => (e.employeeId || e._id) === filterEmployee);
+      }
+      if (filterDepartment !== "All") {
+        empList = empList.filter((e) => e.department === filterDepartment);
+      }
+      if (filterRole !== "All") {
+        empList = empList.filter(
+          (e) => e.role === filterRole || e.designation === filterRole
+        );
+      }
+      if (filterOffice !== "All") {
+        empList = empList.filter((e) => e.office === filterOffice);
+      }
+      if (filterCountry !== "All") {
+        empList = empList.filter((e) => e.nationality === filterCountry);
+      }
+
+      empList = [...empList].sort((a, b) =>
+        String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
+      );
+
+      return empList.map(mapEmployeeMasterRow);
+    }
+
     return [];
   };
 
@@ -846,6 +1031,8 @@ function Reports() {
         await generateSalaryReport();
       } else if (reportType === "Employee Experience") {
         await generateEmployeeExperienceReport();
+      } else if (reportType === "Employees Master Data") {
+        await generateEmployeesMasterDataReport();
       }
     } catch (err) {
       console.error("Report generation failed:", err);
@@ -948,6 +1135,19 @@ function Reports() {
       exportToExcel(exportData, "Employee_Experience_Report");
     } else if (format === "PDF") {
       exportToPDF(exportData, "Employee_Experience_Report");
+    }
+  };
+
+  const generateEmployeesMasterDataReport = async () => {
+    const exportData = await fetchReportData("Employees Master Data");
+    if (exportData.length === 0) {
+      alert("No data found for the selected filters.");
+      return;
+    }
+    if (format === "Excel") {
+      exportToExcel(exportData, "Employees_Master_Data_Report");
+    } else if (format === "PDF") {
+      exportToPDF(exportData, "Employees_Master_Data_Report");
     }
   };
 
@@ -1238,7 +1438,8 @@ function Reports() {
                       setFormat("");
                       setLeadType("All");
                       setFollowupStatus("All");
-                      setEmployeeStatus("All");
+                      // Employees Master Data defaults to Active employees only
+                      setEmployeeStatus(nextType === "Employees Master Data" ? "Active" : "All");
                       setFilterDepartment("All");
                       setFilterRole("All");
                       setFilterOffice("All");
@@ -1248,6 +1449,9 @@ function Reports() {
                       setExperienceMode("minimum");
                       setFilterEmployee("All");
                       setFilterMonth("All");
+                      setShowPreview(false);
+                      setPreviewData([]);
+                      setPreviewHeaders([]);
                       // Leave: default Year = current (existing Year filter)
                       if (nextType === "Leave Report") {
                         setFilterYear(String(new Date().getFullYear()));
@@ -1311,14 +1515,17 @@ function Reports() {
               {(reportType === "Document expiry" ||
                 reportType === "Salary report" ||
                 reportType === "Employee Experience" ||
-                reportType === "Leave Report") && (
+                reportType === "Leave Report" ||
+                reportType === "Employees Master Data") && (
                 <div className={styles.filtersPanel}>
                   {/* Status — same as other employee reports (filters Active / InActive) */}
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Status</div>
                     <div className={styles["form-field"]}>
                       <select className={styles["select-field"]} value={employeeStatus} onChange={e => setEmployeeStatus(e.target.value)}>
-                        {employeeStatusOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                        {employeeStatusOptions.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -1338,7 +1545,9 @@ function Reports() {
                   {(reportType !== "Leave Report") && (
                     <>
                       <div className={styles["form-row"]}>
-                        <div className={styles["form-label"]}>Role</div>
+                        <div className={styles["form-label"]}>
+                          {reportType === "Employees Master Data" ? "Role / Designation" : "Role"}
+                        </div>
                         <div className={styles["form-field"]}>
                           <select className={styles["select-field"]} value={filterRole} onChange={e => setFilterRole(e.target.value)}>
                             {uniqueRoles.map(o => <option key={o} value={o}>{o}</option>)}
@@ -1348,7 +1557,9 @@ function Reports() {
         
 
                       <div className={styles["form-row"]}>
-                        <div className={styles["form-label"]}>Office Location</div>
+                        <div className={styles["form-label"]}>
+                          {reportType === "Employees Master Data" ? "Company / Office Location" : "Office Location"}
+                        </div>
                         <div className={styles["form-field"]}>
                           <select className={styles["select-field"]} value={filterOffice} onChange={e => setFilterOffice(e.target.value)}>
                             {uniqueOffices.map(o => <option key={o} value={o}>{o}</option>)}
@@ -1366,7 +1577,7 @@ function Reports() {
                         </div>
                       </div>
 
-                      {reportType !== "Document expiry" && (
+                      {reportType !== "Document expiry" && reportType !== "Employees Master Data" && (
                         <>
                           <div className={`${styles["form-row"]} ${styles.experienceModeRow}`}>
                             <div className={styles["form-label"]}>Experience Filter</div>
@@ -1485,6 +1696,7 @@ function Reports() {
                 </>
               )}
 
+              {reportType !== "Employees Master Data" && (
               <div className={styles.datePeriodPanel}>
               {/* Date Range */}
               <div className={`${styles["form-row"]} ${styles.dateRangeRow}`}>
@@ -1518,6 +1730,7 @@ function Reports() {
               </div>
               </div>
               </div>
+              )}
 
 
 

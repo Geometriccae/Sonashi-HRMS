@@ -278,28 +278,46 @@ function TeamMembersTable() {
   useEffect(() => {
     fetchEmployees();
 
-    // Listen for real-time employee creations so UI updates without manual refresh
-    const socketUrl = getApiBaseUrl();
-    const socket = ioClient(socketUrl, {
-      path: '/socket.io',
-      transports: ['polling', 'websocket'],
-      reconnection: true
-    });
-
-    const onEmployeeCreated = (employee) => {
-      if (!employee) return;
-      setEmployees((prev) => {
-        if (!prev) return [employee];
-        const exists = prev.some((e) => String(e._id) === String(employee._id));
-        if (exists) return prev;
-        return [employee, ...prev];
+    let socket;
+    let cancelled = false;
+    let idleHandle = null;
+    const connectSocket = () => {
+      if (cancelled) return;
+      const socketUrl = getApiBaseUrl();
+      socket = ioClient(socketUrl, {
+        path: '/socket.io',
+        transports: ['polling', 'websocket'],
+        reconnection: true
       });
+
+      const onEmployeeCreated = (employee) => {
+        if (!employee) return;
+        setEmployees((prev) => {
+          if (!prev) return [employee];
+          const exists = prev.some((e) => String(e._id) === String(employee._id));
+          if (exists) return prev;
+          return [employee, ...prev];
+        });
+      };
+
+      socket.on('employee-created', onEmployeeCreated);
     };
 
-    socket.on('employee-created', onEmployeeCreated);
+    // Defer socket until after first paint so list fetch isn't competing for bandwidth
+    if (typeof requestIdleCallback === 'function') {
+      idleHandle = { kind: 'idle', id: requestIdleCallback(connectSocket, { timeout: 2500 }) };
+    } else {
+      idleHandle = { kind: 'timeout', id: setTimeout(connectSocket, 1200) };
+    }
 
     return () => {
-      try { socket.off('employee-created', onEmployeeCreated); socket.disconnect(); } catch (e) { }
+      cancelled = true;
+      if (idleHandle?.kind === 'idle' && typeof cancelIdleCallback === 'function') {
+        try { cancelIdleCallback(idleHandle.id); } catch (e) { /* ignore */ }
+      } else if (idleHandle?.kind === 'timeout') {
+        clearTimeout(idleHandle.id);
+      }
+      try { if (socket) { socket.disconnect(); } } catch (e) { }
     };
   }, []);
 
@@ -747,6 +765,37 @@ function TeamMembersTable() {
   }, [employees, activeFilter, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
+
+  // Load avatars only for the visible page (list API no longer embeds profilePhoto)
+  useEffect(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    const pageRows = filteredData.slice(start, start + itemsPerPage);
+    const ids = pageRows
+      .map((r) => r._id || r.id)
+      .filter(Boolean)
+      .filter((id) => {
+        const row = pageRows.find((r) => String(r._id || r.id) === String(id));
+        return row && !row.profilePhoto;
+      });
+    if (!ids.length) return;
+    let cancelled = false;
+    employeeService
+      .getProfilePhotosByIds(ids)
+      .then((photos) => {
+        if (cancelled || !Array.isArray(photos) || !photos.length) return;
+        const byId = new Map(photos.map((p) => [String(p._id || p.id), p.profilePhoto]));
+        setEmployees((prev) =>
+          prev.map((e) => {
+            const photo = byId.get(String(e._id || e.id));
+            return photo ? { ...e, profilePhoto: photo } : e;
+          })
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, itemsPerPage, filteredData]);
 
   useEffect(() => {
     // Don't clamp while employees are still loading (empty list → totalPages=1 wipes restored page)

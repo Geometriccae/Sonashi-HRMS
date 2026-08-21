@@ -7,9 +7,32 @@ const Employee = require('../models/Employee');
 const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
-const { invalidateListCache } = require('../utils/employeeListCache');
+const { patchListCacheEmployee, invalidateApprovedLeavesCache } = require('../utils/employeeListCache');
 
 const CHANGE_STATUSES = ['Created', 'Modified', 'Cancelled', 'Approved', 'Rejected', 'Error'];
+
+const LEAVE_LIST_TTL_MS = 30000;
+let _leaveListCache = { key: '', data: null, ts: 0 };
+
+function leaveListCacheKey(role, status, employeeId) {
+  return `${role || ''}|${status || ''}|${employeeId || ''}`;
+}
+
+function getLeaveListCache(key) {
+  if (_leaveListCache.data && _leaveListCache.key === key && Date.now() - _leaveListCache.ts < LEAVE_LIST_TTL_MS) {
+    return _leaveListCache.data;
+  }
+  return null;
+}
+
+function setLeaveListCache(key, data) {
+  _leaveListCache = { key, data, ts: Date.now() };
+}
+
+function invalidateLeaveListCache() {
+  _leaveListCache = { key: '', data: null, ts: 0 };
+  invalidateApprovedLeavesCache();
+}
 
 function actorName(user) {
     return user?.username || user?.emailId || user?.name || 'System';
@@ -106,8 +129,8 @@ async function syncYetToGoVacationStatus(leaveRequest) {
             console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id} (${leaveRequest.leaveType || 'leave'})`);
         }
 
-        // Ensure Dashboard / Team list show updated Vacation Status immediately
-        invalidateListCache();
+        // Patch cache in-place — full invalidate caused multi-second cold Mongo reloads
+        patchListCacheEmployee(emp._id, { vacationStatus: 'Vacation Pending' });
     } catch (err) {
         console.error('[Leave] Yet-to-go vacationStatus sync error:', err.message || err);
     }
@@ -271,6 +294,8 @@ function parseLocalDate(dateStr) {
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const { status, employeeId } = req.query;
+        const view = String(req.query.view || '').toLowerCase();
+        const isLite = view === 'lite' || view === 'vacation';
         const filter = {};
 
         if (req.user.role === 'hod') {
@@ -316,13 +341,35 @@ router.get('/', authMiddleware, async (req, res) => {
             }
         }
 
-        const leaveRequests = await LeaveRequest.find(filter)
-            .populate('employee', 'username emailId employeeId role')
-            .populate('hodApprovedBy', 'username')
-            .populate('adminApprovedBy', 'username')
-            .populate('changedByUser', 'username')
-            .sort({ appliedOn: -1 })
-            .lean();
+        // Vacation/dashboard lite: only approved leaves, minimal fields (no heavy populates)
+        if (isLite) {
+            filter.status = { $in: ['Approved', 'HOD Approved'] };
+        }
+
+        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeId || filter.employee) + (isLite ? '|lite' : '');
+        const cachedLeaves = getLeaveListCache(cacheKey);
+        if (cachedLeaves) {
+            return res.json(cachedLeaves);
+        }
+
+        let leaveRequests;
+        if (isLite) {
+            leaveRequests = await LeaveRequest.find(filter)
+                .select('employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn')
+                .populate('employee', 'username emailId employeeId')
+                .sort({ appliedOn: -1 })
+                .lean();
+        } else {
+            leaveRequests = await LeaveRequest.find(filter)
+                .populate('employee', 'username emailId employeeId role')
+                .populate('hodApprovedBy', 'username')
+                .populate('adminApprovedBy', 'username')
+                .populate('changedByUser', 'username')
+                .sort({ appliedOn: -1 })
+                .lean();
+        }
+
+        setLeaveListCache(cacheKey, leaveRequests);
 
         res.json(leaveRequests);
     } catch (error) {
@@ -429,6 +476,7 @@ router.post('/', authMiddleware, async (req, res) => {
         });
 
         const savedRequest = await newLeaveRequest.save();
+        invalidateLeaveListCache();
 
         if (isPastLeave && req.body.visaExpiryDate && employeeId) {
             await Employee.findByIdAndUpdate(employeeId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
@@ -750,6 +798,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
             .populate('adminApprovedBy', 'username')
             .populate('changedByUser', 'username');
 
+        invalidateLeaveListCache();
+
         if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
             sendLeaveStatusToEmployee(updatedRequest, updateData.status)
                 .then(() => console.log('[Leave] Employee status email sent'))
@@ -851,6 +901,8 @@ router.post('/:id/revert', authMiddleware, async (req, res) => {
             .populate('cancelledBy', 'username')
             .populate('changedByUser', 'username');
 
+        invalidateLeaveListCache();
+
         const io = req.app.get('io');
         notifyLeaveStatusChange(io, updatedRequest, 'Cancelled', req.user.role)
             .catch((e) => console.error('[Leave] Revert notification error:', e));
@@ -881,6 +933,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         if (!deletedRequest) {
             return res.status(404).json({ message: 'Leave request not found' });
         }
+        invalidateLeaveListCache();
         res.json({ message: 'Leave request deleted successfully' });
     } catch (error) {
         console.error('Error deleting leave request:', error);
@@ -901,6 +954,7 @@ router.post('/bulk-delete', authMiddleware, async (req, res) => {
         }
 
         const result = await LeaveRequest.deleteMany({ _id: { $in: ids } });
+        invalidateLeaveListCache();
         res.json({ message: `Successfully deleted ${result.deletedCount} leave requests`, deletedCount: result.deletedCount });
     } catch (error) {
         console.error('Error bulk deleting leave requests:', error);
@@ -1020,6 +1074,7 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
 
         if (newLeaves.length > 0) {
             await LeaveRequest.insertMany(newLeaves);
+            invalidateLeaveListCache();
         }
 
         res.json({

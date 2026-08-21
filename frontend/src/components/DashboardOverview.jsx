@@ -108,13 +108,9 @@ function DashboardOverview() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [employees, leaveRequests] = await Promise.all([
-          employeeService.getEmployeesList({ force: true }),
-          leaveRequestService.getLeaveRequests()
-        ]);
-
-        const empList = Array.isArray(employees) ? employees : (employees?.data || []);
-        const leaveList = Array.isArray(leaveRequests) ? leaveRequests : (leaveRequests?.data || []);
+        const { employees, leaves } = await employeeService.getVacationBundle();
+        const empList = Array.isArray(employees) ? employees : [];
+        const leaveList = Array.isArray(leaves) ? leaves : [];
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -316,8 +312,9 @@ function DashboardOverview() {
       }
       // Refresh leave list so Leave Status / end dates stay in sync
       try {
-        const leaveRequests = await leaveRequestService.getLeaveRequests();
-        const leaveList = Array.isArray(leaveRequests) ? leaveRequests : (leaveRequests?.data || []);
+        employeeService.invalidateCache();
+        const { leaves } = await employeeService.getVacationBundle({ force: true });
+        const leaveList = Array.isArray(leaves) ? leaves : [];
         setData(prev => ({ ...prev, leaveRequests: leaveList }));
       } catch (_) { /* non-blocking */ }
       setDatePrompt(null);

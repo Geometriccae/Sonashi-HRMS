@@ -29,14 +29,22 @@ const {
   getListCache,
   setListCache,
   invalidateListCache,
+  getApprovedLeavesCache,
+  setApprovedLeavesCache,
 } = require('../utils/employeeListCache');
 
 // ========== SERVER-SIDE LIST CACHE ==========
 // Cached via employeeListCache; invalidated on employee writes and leave yet-to-go sync.
 
 /** Map company document particulars → docNumber (Company Code). */
+const COMPANY_CODE_TTL_MS = 60000;
+let _companyCodeCache = { map: null, ts: 0 };
+
 async function getCompanyCodeMap() {
   try {
+    if (_companyCodeCache.map && Date.now() - _companyCodeCache.ts < COMPANY_CODE_TTL_MS) {
+      return _companyCodeCache.map;
+    }
     const docs = await CompanyDocument.find({}).select('particulars docNumber updatedAt createdAt').lean();
     const map = {};
     const sorted = [...docs].sort((a, b) => {
@@ -49,6 +57,7 @@ async function getCompanyCodeMap() {
       const code = String(d.docNumber || '').trim();
       if (key && code) map[key] = code;
     }
+    _companyCodeCache = { map, ts: Date.now() };
     return map;
   } catch (err) {
     console.error('Failed to load company codes from Company Documents:', err.message);
@@ -314,11 +323,26 @@ const EMPLOYEE_LIST_FIELDS = [
   'noticePeriod', 'provisionPeriod', 'noticePeriodStartDate', 'noticePeriodEndDate',
   'provisionPeriodStartDate', 'provisionPeriodEndDate',
   'reportingManager', 'assignedProjects',
-  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt', 'profilePhoto',
+  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt',
 ].join(' ');
 
 const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const DYNAMIC_VACATION_STATUSES = new Set(['Vacation Pending', 'On Vacation', 'Vacation Approved']);
+const APPROVED_LEAVE_SELECT =
+  'employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department';
+
+async function getApprovedLeavesForVacation() {
+  const cached = getApprovedLeavesCache();
+  if (cached) return cached;
+  const rows = await LeaveRequest.find({
+    status: { $in: APPROVED_VACATION_LEAVE_STATUSES },
+  })
+    .select(APPROVED_LEAVE_SELECT)
+    .populate('employee', 'username emailId employeeId')
+    .lean();
+  setApprovedLeavesCache(rows);
+  return rows;
+}
 
 function toCalendarDate(value) {
   if (!value) return null;
@@ -385,8 +409,54 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
   const safeEmployees = Array.isArray(employees) ? employees : [];
   const safeLeaves = Array.isArray(leaveRequests) ? leaveRequests : [];
 
+  // Index leaves once — avoids O(employees × leaves) full scans
+  const leavesByEmpId = new Map();
+  const leavesByCode = new Map();
+  const leavesByName = new Map();
+  for (const leave of safeLeaves) {
+    const empRef = leave.employee;
+    const oid = empRef && (empRef._id || empRef);
+    if (oid) {
+      const k = String(oid);
+      if (!leavesByEmpId.has(k)) leavesByEmpId.set(k, []);
+      leavesByEmpId.get(k).push(leave);
+    }
+    if (leave.employeeId) {
+      const k = String(leave.employeeId);
+      if (!leavesByCode.has(k)) leavesByCode.set(k, []);
+      leavesByCode.get(k).push(leave);
+    }
+    const nameKey = normalizeVacationMatchValue(leave.employeeName || empRef?.username);
+    if (nameKey) {
+      if (!leavesByName.has(nameKey)) leavesByName.set(nameKey, []);
+      leavesByName.get(nameKey).push(leave);
+    }
+  }
+
+  const leavesForEmployee = (employee) => {
+    const seen = new Set();
+    const out = [];
+    const add = (arr) => {
+      if (!arr) return;
+      for (const leave of arr) {
+        const id = String(leave._id || '');
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        if (leaveBelongsToEmployee(leave, employee)) out.push(leave);
+      }
+    };
+    add(leavesByEmpId.get(String(employee._id)));
+    if (employee.employeeId) add(leavesByCode.get(String(employee.employeeId)));
+    add(leavesByName.get(normalizeVacationMatchValue(employee.employeeName)));
+    // Fallback if indexing missed a match
+    if (out.length === 0) {
+      return safeLeaves.filter((leave) => leaveBelongsToEmployee(leave, employee));
+    }
+    return out;
+  };
+
   return safeEmployees.map((employee) => {
-    const employeeLeaves = safeLeaves.filter((leave) => leaveBelongsToEmployee(leave, employee));
+    const employeeLeaves = leavesForEmployee(employee);
 
     const activeLeave = employeeLeaves.find(
       (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'On Vacation'
@@ -414,28 +484,17 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
 // Lightweight stats for dashboard / team management cards
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
-    const [totalEmployees, activeEmployees, inactiveEmployees, projectRows] = await Promise.all([
+    const [totalEmployees, activeEmployees, inactiveEmployees] = await Promise.all([
       Employee.countDocuments(),
       Employee.countDocuments(workingStatusFilter()),
       Employee.countDocuments(nonWorkingStatusFilter()),
-      Employee.find({}, { assignedProjects: 1 }).lean(),
     ]);
-
-    const uniqueProjects = new Set();
-    projectRows.forEach((emp) => {
-      if (Array.isArray(emp.assignedProjects)) {
-        emp.assignedProjects.forEach((proj) => {
-          const projectId = typeof proj === 'object' && proj !== null ? proj._id : proj;
-          if (projectId) uniqueProjects.add(String(projectId));
-        });
-      }
-    });
 
     res.json({
       totalEmployees,
       activeEmployees,
       inactiveEmployees,
-      totalAssignedProjects: uniqueProjects.size,
+      totalAssignedProjects: 0,
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee stats', error: error.message });
@@ -453,21 +512,36 @@ router.get('/', authMiddleware, async (req, res) => {
     const status = String(req.query.status || '').trim();
     const paginate = !isNaN(page) && page > 0 && !isNaN(limit) && limit > 0;
     const hasFilters = search || status;
-    const approvedLeavesPromise = LeaveRequest.find({
-      status: { $in: APPROVED_VACATION_LEAVE_STATUSES },
-    })
-      .select('employee employeeId employeeName startDate endDate status')
-      .populate('employee', 'username emailId employeeId')
-      .lean();
+    const includeVacation =
+      String(req.query.includeVacation || '') === '1' ||
+      String(req.query.includeVacation || '').toLowerCase() === 'true';
+    const withLeaves =
+      String(req.query.withLeaves || '') === '1' ||
+      String(req.query.withLeaves || '').toLowerCase() === 'true';
+
+    // Only load approved leaves when vacation status merge is requested.
+    // Default list/dropdown loads skip this (was dominating response time).
+    const approvedLeavesPromise = includeVacation
+      ? getApprovedLeavesForVacation()
+      : Promise.resolve([]);
+
+    const respondEmployees = (employees, approvedLeaves) => {
+      if (withLeaves && includeVacation) {
+        return res.json({ employees, leaves: approvedLeaves || [] });
+      }
+      return res.json(employees);
+    };
 
     // Fast path: unfiltered list view served from in-memory cache
     if (view === 'list' && !paginate && !hasFilters) {
       const cached = getListCache();
       if (cached) {
         const [codeMap, approvedLeaves] = await Promise.all([getCompanyCodeMap(), approvedLeavesPromise]);
-        return res.json(
-          applyEffectiveVacationStatuses(applyLiveCompanyCodes(cached, codeMap), approvedLeaves)
-        );
+        const withCodes = applyLiveCompanyCodes(cached, codeMap);
+        const employees = includeVacation
+          ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+          : withCodes;
+        return respondEmployees(employees, approvedLeaves);
       }
     }
 
@@ -500,8 +574,22 @@ router.get('/', authMiddleware, async (req, res) => {
           .lean(),
         Employee.countDocuments(filter),
       ]);
+      const withCodes = applyLiveCompanyCodes(employees, codeMap);
+      const merged = includeVacation
+        ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+        : withCodes;
+      if (withLeaves && includeVacation) {
+        return res.json({
+          employees: merged,
+          leaves: approvedLeaves || [],
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        });
+      }
       return res.json({
-        employees: applyEffectiveVacationStatuses(applyLiveCompanyCodes(employees, codeMap), approvedLeaves),
+        employees: merged,
         total,
         page,
         limit,
@@ -523,7 +611,11 @@ router.get('/', authMiddleware, async (req, res) => {
       setListCache(employees);
     }
 
-    res.json(applyEffectiveVacationStatuses(applyLiveCompanyCodes(employees, codeMap), approvedLeaves));
+    const withCodes = applyLiveCompanyCodes(employees, codeMap);
+    const merged = includeVacation
+      ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+      : withCodes;
+    return respondEmployees(merged, approvedLeaves);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
   }

@@ -1,6 +1,6 @@
 import config, { getApiBaseUrl } from '../config/config';
 
-const CACHE_TTL_MS = 30000;
+const CACHE_TTL_MS = 180000; // 3 minutes — invalidate on writes
 
 class EmployeeService {
   constructor() {
@@ -18,7 +18,8 @@ class EmployeeService {
 
     this.baseURL = `${apiRoot}/employees`;
     this.attendanceURL = `${apiRoot}/attendance`;
-    this._cache = { list: null, full: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, stats: null, ts: 0 };
+    this._inflight = {};
   }
 
   _isCacheValid() {
@@ -26,7 +27,8 @@ class EmployeeService {
   }
 
   invalidateCache() {
-    this._cache = { list: null, full: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, stats: null, ts: 0 };
+    this._inflight = {};
   }
 
   // Get auth token from localStorage
@@ -44,26 +46,84 @@ class EmployeeService {
   }
 
   // Lightweight list for tables, dashboards, dropdowns
-  async getEmployeesList({ force = false } = {}) {
-    if (!force && this._isCacheValid() && this._cache.list) {
-      return this._cache.list;
+  // includeVacation: merge live vacation status (slower; only for vacation UIs)
+  async getEmployeesList({ force = false, includeVacation = false } = {}) {
+    const cacheKey = includeVacation ? 'listWithVacation' : 'list';
+    if (!force && this._isCacheValid() && this._cache[cacheKey]) {
+      return this._cache[cacheKey];
     }
-    try {
-      const response = await fetch(`${this.baseURL}?view=list`, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    const inflightKey = `list:${includeVacation ? '1' : '0'}`;
+    if (this._inflight[inflightKey]) {
+      return this._inflight[inflightKey];
+    }
+    this._inflight[inflightKey] = (async () => {
+      try {
+        const params = new URLSearchParams({ view: 'list' });
+        if (includeVacation) params.set('includeVacation', '1');
+        const response = await fetch(`${this.baseURL}?${params}`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        this._cache[cacheKey] = data;
+        this._cache.ts = Date.now();
+        return data;
+      } catch (error) {
+        console.error('Error fetching employee list:', error);
+        throw error;
+      } finally {
+        delete this._inflight[inflightKey];
       }
-      const data = await response.json();
-      this._cache.list = data;
-      this._cache.ts = Date.now();
-      return data;
-    } catch (error) {
-      console.error('Error fetching employee list:', error);
-      throw error;
+    })();
+    return this._inflight[inflightKey];
+  }
+
+  /**
+   * Single round-trip for Dashboard / Annual Vacations:
+   * employees with live vacation status + approved leave rows for yet-to-go.
+   */
+  async getVacationBundle({ force = false } = {}) {
+    if (!force && this._isCacheValid() && this._cache.vacationBundle) {
+      return this._cache.vacationBundle;
     }
+    const inflightKey = 'vacationBundle';
+    if (this._inflight[inflightKey]) {
+      return this._inflight[inflightKey];
+    }
+    this._inflight[inflightKey] = (async () => {
+      try {
+        const params = new URLSearchParams({
+          view: 'list',
+          includeVacation: '1',
+          withLeaves: '1',
+        });
+        const response = await fetch(`${this.baseURL}?${params}`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        const bundle = {
+          employees: Array.isArray(data?.employees) ? data.employees : (Array.isArray(data) ? data : []),
+          leaves: Array.isArray(data?.leaves) ? data.leaves : [],
+        };
+        this._cache.vacationBundle = bundle;
+        this._cache.listWithVacation = bundle.employees;
+        this._cache.ts = Date.now();
+        return bundle;
+      } catch (error) {
+        console.error('Error fetching vacation bundle:', error);
+        throw error;
+      } finally {
+        delete this._inflight[inflightKey];
+      }
+    })();
+    return this._inflight[inflightKey];
   }
 
   // Server-side paginated list for the team members table

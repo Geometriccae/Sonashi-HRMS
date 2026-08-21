@@ -316,10 +316,7 @@ function AnnualVacations() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [empRes, leaveRes] = await Promise.all([
-        employeeService.getEmployeesList({ force: true }),
-        leaveRequestService.getLeaveRequests(),
-      ]);
+      const { employees: empRes, leaves: leaveRes } = await employeeService.getVacationBundle();
       const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
       const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
       setEmployees(empList);
@@ -623,12 +620,11 @@ function AnnualVacations() {
         leaveId: item.linkedLeaveId || null,
       });
       showToast(`${item.employeeName || item.name} return date updated.`);
-      const [empRes, leaveRes] = await Promise.all([
-        employeeService.getEmployeesList({ force: true }),
-        leaveRequestService.getLeaveRequests(),
-      ]);
-      const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
-      const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
+      employeeService.invalidateCache();
+      leaveRequestService.invalidateCache();
+      const { employees: empRes, leaves: leaveRes } = await employeeService.getVacationBundle({ force: true });
+      const empList   = Array.isArray(empRes)   ? empRes   : [];
+      const leaveList = Array.isArray(leaveRes)  ? leaveRes : [];
       setEmployees(empList); setLeaveRequests(leaveList);
       computeCounts(empList, leaveList);
       setTabList(buildTabList(activeTab, empList, leaveList));
@@ -682,12 +678,11 @@ function AnnualVacations() {
           } catch (_) { /* employee dates already saved */ }
         }
         showToast("Status updated successfully.");
-        const [empRes, leaveRes] = await Promise.all([
-          employeeService.getEmployeesList({ force: true }),
-          leaveRequestService.getLeaveRequests(),
-        ]);
-        const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
-        const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
+        employeeService.invalidateCache();
+        leaveRequestService.invalidateCache();
+        const { employees: empRes, leaves: leaveRes } = await employeeService.getVacationBundle({ force: true });
+        const empList   = Array.isArray(empRes)   ? empRes   : [];
+        const leaveList = Array.isArray(leaveRes)  ? leaveRes : [];
         setEmployees(empList); setLeaveRequests(leaveList);
         computeCounts(empList, leaveList);
         setTabList(buildTabList(activeTab, empList, leaveList));
