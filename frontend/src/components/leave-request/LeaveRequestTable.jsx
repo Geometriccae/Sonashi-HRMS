@@ -28,6 +28,7 @@ import {
     writePersistedPath,
     useResetPageOnFilterChange,
 } from "../../hooks/usePersistedListPage";
+import { calculateLeaveDays } from "../../utils/leaveCalculator";
 
 const EditIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -350,7 +351,7 @@ function LeaveRequestTable({ onUpdate }) {
         // Search Query (Name or ID)
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
-            const name = (req.employee?.username || req.employeeName || "").toLowerCase();
+            const name = (req.employeeName || req.employee?.username || "").toLowerCase();
             const id = (req.employeeId || "").toLowerCase();
             if (!name.includes(query) && !id.includes(query)) return false;
         }
@@ -474,34 +475,11 @@ function LeaveRequestTable({ onUpdate }) {
         return pages;
     };
 
-    // Official Holidays for 2026
-    const OFFICIAL_HOLIDAYS_2026 = new Set([
-        '2026-01-01', '2026-01-26', '2026-02-19', '2026-03-03', '2026-03-19',
-        '2026-03-21', '2026-04-26', '2026-04-03', '2026-04-14', '2026-05-01',
-        '2026-06-26', '2026-08-15', '2026-08-26', '2026-08-28', '2026-09-14',
-        '2026-10-02', '2026-10-20', '2026-11-06', '2026-11-10', '2026-11-11',
-        '2026-11-24', '2026-12-25'
-    ]);
-
-    // Calculate working days only (excluding weekends and public holidays)
-    const calculateDays = (start, end) => {
-        let workingDays = 0;
-        const startDate = new Date(start);
-        const endDate = new Date(end);
-        startDate.setHours(0, 0, 0, 0);
-        endDate.setHours(0, 0, 0, 0);
-
-        const currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-            const day = currentDate.getDay();
-            const dateStr = currentDate.toISOString().split('T')[0];
-            // Count only if not weekend (Sat=6, Sun=0) and not a holiday
-            if (day !== 0 && day !== 6 && !OFFICIAL_HOLIDAYS_2026.has(dateStr)) {
-                workingDays++;
-            }
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        return workingDays;
+    // Same inclusive calendar-day count as leave application (Calendar Days / balance)
+    const formatLeaveDaysLabel = (start, end) => {
+        const days = calculateLeaveDays(start, end);
+        if (days == null || days <= 0) return "—";
+        return `${days} ${days === 1 ? "Day" : "Days"}`;
     };
 
     if (isLoading) return <div className={styles.loading}>Loading...</div>;
@@ -783,7 +761,7 @@ function LeaveRequestTable({ onUpdate }) {
                                 <td>
                                     <div className={styles.employeeInfo}>
                                         <div className={styles.employeeName}>
-                                            {req.employee?.username || req.employeeName || 'Unknown'}
+                                            {req.employeeName || req.employee?.username || 'Unknown'}
                                         </div>
                                     </div>
                                 </td>
@@ -796,7 +774,7 @@ function LeaveRequestTable({ onUpdate }) {
                                 {activeFilter === "History" ? (
                                     <>
                                         <td>{req.reason}</td>
-                                        <td>{calculateDays(req.startDate, req.endDate)} Days</td>
+                                        <td>{formatLeaveDaysLabel(req.startDate, req.endDate)}</td>
                                         <td>
                                             {formatDisplayDate(req.startDate)} - {formatDisplayDate(req.endDate)}
                                         </td>
@@ -820,7 +798,7 @@ function LeaveRequestTable({ onUpdate }) {
                                     </>
                                 ) : (
                                     <>
-                                        <td>{calculateDays(req.startDate, req.endDate)} Days</td>
+                                        <td>{formatLeaveDaysLabel(req.startDate, req.endDate)}</td>
                                         <td>
                                             {formatDisplayDate(req.startDate)} - {formatDisplayDate(req.endDate)}
                                         </td>

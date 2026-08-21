@@ -312,13 +312,23 @@ function AnnualVacations() {
     [filters]
   );
 
+  // Annual Vacations uses stored employee.vacationStatus as source of truth
+  // (Team/Dashboard status edits). Leave rows only enrich dates / Yet-to-go.
+  const loadVacationData = useCallback(async ({ force = false } = {}) => {
+    const [empRes, leaveRes] = await Promise.all([
+      employeeService.getEmployeesList({ force }),
+      leaveRequestService.getLeaveRequests({ view: "lite" }),
+    ]);
+    const empList = Array.isArray(empRes) ? empRes : empRes?.data || [];
+    const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
+    return { empList, leaveList };
+  }, []);
+
   // ─── Fetch Data ──────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { employees: empRes, leaves: leaveRes } = await employeeService.getVacationBundle();
-      const empList   = Array.isArray(empRes)   ? empRes   : empRes?.data   || [];
-      const leaveList = Array.isArray(leaveRes)  ? leaveRes : leaveRes?.data || [];
+      const { empList, leaveList } = await loadVacationData();
       setEmployees(empList);
       setLeaveRequests(leaveList);
       computeCounts(empList, leaveList);
@@ -327,7 +337,7 @@ function AnnualVacations() {
     } finally {
       setIsLoading(false);
     }
-  }, []); // eslint-disable-line
+  }, [loadVacationData]); // eslint-disable-line
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -622,9 +632,7 @@ function AnnualVacations() {
       showToast(`${item.employeeName || item.name} return date updated.`);
       employeeService.invalidateCache();
       leaveRequestService.invalidateCache();
-      const { employees: empRes, leaves: leaveRes } = await employeeService.getVacationBundle({ force: true });
-      const empList   = Array.isArray(empRes)   ? empRes   : [];
-      const leaveList = Array.isArray(leaveRes)  ? leaveRes : [];
+      const { empList, leaveList } = await loadVacationData({ force: true });
       setEmployees(empList); setLeaveRequests(leaveList);
       computeCounts(empList, leaveList);
       setTabList(buildTabList(activeTab, empList, leaveList));
@@ -667,9 +675,11 @@ function AnnualVacations() {
           }
         }
         const empId = getEmployeeIdFromItem(item);
-        if (empId) {
-          await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
+        if (!empId) {
+          showToast("Employee record not found for this leave.", "error");
+          return;
         }
+        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
         if (item.linkedLeaveId && tertiaryDateValue) {
           try {
             await leaveRequestService.updateLeaveRequest(item.linkedLeaveId, {
@@ -680,16 +690,16 @@ function AnnualVacations() {
         showToast("Status updated successfully.");
         employeeService.invalidateCache();
         leaveRequestService.invalidateCache();
-        const { employees: empRes, leaves: leaveRes } = await employeeService.getVacationBundle({ force: true });
-        const empList   = Array.isArray(empRes)   ? empRes   : [];
-        const leaveList = Array.isArray(leaveRes)  ? leaveRes : [];
+        const { empList, leaveList } = await loadVacationData({ force: true });
         setEmployees(empList); setLeaveRequests(leaveList);
         computeCounts(empList, leaveList);
         setTabList(buildTabList(activeTab, empList, leaveList));
       }
       setEditModal(null);
-    } catch {
-      // toast already shown for return; generic for other
+    } catch (err) {
+      if (newStatus !== "Vacation Approved" && mode !== "markReturn") {
+        showToast(err?.message || "Failed to update status.", "error");
+      }
     } finally {
       setEditModalSaving(false);
     }

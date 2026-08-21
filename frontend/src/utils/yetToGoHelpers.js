@@ -110,8 +110,9 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
 
   if (!today || !travelDate || !leaveEndDate) return null;
   if (today < travelDate) return "Vacation Pending";
-  if (today >= travelDate && today <= leaveEndDate) return "On Vacation";
-  if (today > leaveEndDate) return "Vacation Approved";
+  // End date is return / last day — on that day treat as returned (matches vacation-return)
+  if (today >= travelDate && today < leaveEndDate) return "On Vacation";
+  if (today >= leaveEndDate) return "Vacation Approved";
   return null;
 };
 
@@ -289,4 +290,39 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
   });
 
   return rows;
+};
+
+/** Display labels aligned with Annual Vacation / Team Management. */
+export const formatVacationStatusLabel = (vacationStatus) => {
+  const vs = String(vacationStatus || "").trim();
+  if (!vs) return "";
+  if (vs === "Vacation Pending") return "Yet to go";
+  if (vs === "On Vacation") return "On Vacation";
+  if (vs === "Vacation Approved") return "Vacation Approved";
+  return vs;
+};
+
+/**
+ * Overlay live vacationStatus from the same includeVacation list Annual Vacations uses.
+ * Does not invent a new calculation — merges statuses already computed server-side.
+ */
+export const mergeEffectiveVacationStatuses = (employees, vacationList) => {
+  const list = Array.isArray(employees) ? employees : [];
+  const vacRows = Array.isArray(vacationList) ? vacationList : [];
+  if (!list.length || !vacRows.length) return list;
+
+  const byId = new Map();
+  const byCode = new Map();
+  for (const row of vacRows) {
+    if (row?._id != null) byId.set(String(row._id), row.vacationStatus);
+    if (row?.employeeId) byCode.set(String(row.employeeId), row.vacationStatus);
+  }
+
+  return list.map((emp) => {
+    const fromId = emp?._id != null ? byId.get(String(emp._id)) : undefined;
+    const fromCode = emp?.employeeId ? byCode.get(String(emp.employeeId)) : undefined;
+    const nextStatus = fromId !== undefined ? fromId : fromCode;
+    if (nextStatus === undefined) return emp;
+    return { ...emp, vacationStatus: nextStatus };
+  });
 };

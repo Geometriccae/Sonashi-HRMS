@@ -33,7 +33,7 @@ import {
   toSearchableEmployeeOption,
   filterReactSelectEmployeeOption,
 } from "../utils/employeeStatusDisplay";
-import { findLinkedEmployee } from "../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses } from "../utils/yetToGoHelpers";
 import { useUrlListView } from "../hooks/usePersistedListPage";
 
 const REPORT_TYPES = [
@@ -94,7 +94,7 @@ const mapEmployeeMasterRow = (e) => {
     "Provision Period Start": formatReportDate(e.provisionPeriodStartDate),
     "Provision Period End": formatReportDate(e.provisionPeriodEndDate),
     "Last Working Day": formatReportDate(e.lastWorkingDay),
-    "Vacation Status": e.vacationStatus || "",
+    "Vacation Status": formatVacationStatusLabel(e.vacationStatus) || e.vacationStatus || "",
     Attendance: e.attendance || "",
     "Emirates ID": e.emiratesId || "",
     "Emirates ID Expiry": formatReportDate(e.emiratesIdExpiryDate),
@@ -946,6 +946,14 @@ function Reports() {
             : undefined;
       let empList = await fetchFullEmployees(statusForApi);
       if (!Array.isArray(empList)) empList = [];
+
+      // Same live vacation status as Annual Vacations (includeVacation merge)
+      try {
+        const vacList = await employeeService.getEmployeesList({ includeVacation: true });
+        empList = mergeEffectiveVacationStatuses(empList, vacList);
+      } catch (vacErr) {
+        console.warn("Employees Master Data: vacation status overlay failed:", vacErr?.message || vacErr);
+      }
 
       // Deduplicate by employeeId / _id
       const seen = new Set();

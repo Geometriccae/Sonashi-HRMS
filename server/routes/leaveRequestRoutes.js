@@ -59,6 +59,51 @@ function applyChangeAudit(updateData, changeStatus, user, remarks = '') {
     return entry;
 }
 
+const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
+
+/**
+ * Map form employeeId (Employee._id or User._id) to the leave.employee owner ref.
+ * Prefer linked User; if the Employee has no login User, store Employee._id
+ * (resolveEmployeeForLeave already supports that). Never silently keep the
+ * acting admin as the leave employee when a valid Employee was selected.
+ */
+async function resolveLeaveEmployeeTarget(employeeId, employeeName, fallbackUserId) {
+    const result = {
+        targetId: fallbackUserId,
+        employeeName: employeeName || null,
+        linkedVia: 'fallback',
+    };
+    if (!employeeId || !isObjectIdStr(String(employeeId))) {
+        return result;
+    }
+
+    const id = String(employeeId);
+    const empDoc = await Employee.findById(id).lean();
+    if (empDoc) {
+        result.employeeName = empDoc.employeeName || employeeName || null;
+        const equivalentUser = await User.findOne({ employeeId: empDoc._id }).select('_id').lean();
+        if (equivalentUser) {
+            result.targetId = equivalentUser._id;
+            result.linkedVia = 'user-by-employee';
+            return result;
+        }
+        // No User account for this employee — persist Employee._id as leave.employee
+        result.targetId = empDoc._id;
+        result.linkedVia = 'employee-only';
+        return result;
+    }
+
+    const asUser = await User.findById(id).select('_id username').lean();
+    if (asUser) {
+        result.targetId = asUser._id;
+        result.linkedVia = 'user-id';
+        if (!result.employeeName) result.employeeName = asUser.username || null;
+        return result;
+    }
+
+    return result;
+}
+
 /** Resolve Employee document linked to a leave request (User → Employee). */
 async function resolveEmployeeForLeave(leaveRequest) {
     if (!leaveRequest) return null;
@@ -387,19 +432,9 @@ router.post('/', authMiddleware, async (req, res) => {
 
         const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
 
-
-        let targetUserId = req.user.id; // Fallback to current acting user
-        const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
-        if (employeeId && isObjectIdStr(employeeId)) {
-            // employeeId from the frontend dropdown is an Employee document _id. We need to find the equivalent User _id
-            const equivalentUser = await User.findOne({ employeeId: employeeId });
-            if (equivalentUser) {
-                targetUserId = equivalentUser._id;
-            } else {
-                const asUser = await User.findById(employeeId);
-                if (asUser) targetUserId = asUser._id;
-            }
-        }
+        const resolved = await resolveLeaveEmployeeTarget(employeeId, employeeName, req.user.id);
+        const targetUserId = resolved.targetId;
+        const resolvedEmployeeName = resolved.employeeName || employeeName || req.user.username;
 
         // Validate dates against Employee's Joining Date (DOJ)
         if (startDate && endDate) {
@@ -407,7 +442,7 @@ router.post('/', authMiddleware, async (req, res) => {
             const end = new Date(endDate);
             if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
                 let employeeObj = null;
-                if (employeeId) {
+                if (employeeId && isObjectIdStr(String(employeeId))) {
                     employeeObj = await Employee.findById(employeeId);
                 } else if (req.user && req.user.employeeId) {
                     employeeObj = await Employee.findById(req.user.employeeId);
@@ -453,7 +488,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
         const newLeaveRequest = new LeaveRequest({
             employee: targetUserId,
-            employeeName: employeeName || req.user.username,
+            employeeName: resolvedEmployeeName,
             company,
             department,
             reportingManager,
@@ -633,19 +668,17 @@ router.put('/:id', authMiddleware, async (req, res) => {
         }
 
         // Handle other field updates (for employee editing their own request).
-        // employeeId from the form is Employee._id — resolve to User._id like create does.
-        // Ignore non-ObjectId values (e.g. employee display names that are exactly 24 chars).
-        const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
-        if (employeeId && isObjectIdStr(employeeId)) {
-            const equivalentUser = await User.findOne({ employeeId: employeeId });
-            if (equivalentUser) {
-                updateData.employee = equivalentUser._id;
-            } else {
-                const asUser = await User.findById(employeeId);
-                if (asUser) updateData.employee = asUser._id;
+        // employeeId from the form is Employee._id — resolve to User._id (or Employee._id if no User).
+        if (employeeId && isObjectIdStr(String(employeeId))) {
+            const resolved = await resolveLeaveEmployeeTarget(employeeId, employeeName, null);
+            if (resolved.targetId) {
+                updateData.employee = resolved.targetId;
+            }
+            if (resolved.employeeName) {
+                updateData.employeeName = resolved.employeeName;
             }
         }
-        if (employeeName) updateData.employeeName = employeeName;
+        if (employeeName && updateData.employeeName === undefined) updateData.employeeName = employeeName;
         if (company) updateData.company = company;
         if (req.body.department !== undefined) updateData.department = req.body.department;
         if (req.body.reportingManager !== undefined) updateData.reportingManager = req.body.reportingManager;

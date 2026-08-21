@@ -31,6 +31,7 @@ const {
   invalidateListCache,
   getApprovedLeavesCache,
   setApprovedLeavesCache,
+  invalidateApprovedLeavesCache,
 } = require('../utils/employeeListCache');
 
 // ========== SERVER-SIDE LIST CACHE ==========
@@ -400,8 +401,9 @@ function getEffectiveVacationStatusFromLeave(leave, employee, today = new Date()
 
   if (!todayDate || !travelDate || !leaveEndDate) return null;
   if (todayDate < travelDate) return 'Vacation Pending';
-  if (todayDate >= travelDate && todayDate <= leaveEndDate) return 'On Vacation';
-  if (todayDate > leaveEndDate) return 'Vacation Approved';
+  // End date is the return / last day: on that day the employee is treated as returned
+  if (todayDate >= travelDate && todayDate < leaveEndDate) return 'On Vacation';
+  if (todayDate >= leaveEndDate) return 'Vacation Approved';
   return null;
 }
 
@@ -457,6 +459,33 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
 
   return safeEmployees.map((employee) => {
     const employeeLeaves = leavesForEmployee(employee);
+    const todayDate = toCalendarDate(new Date());
+    const returnDay = toCalendarDate(employee.returnDate);
+
+    // Admin marked return: keep Vacation Approved when today is on/after return date,
+    // unless a newer leave is still upcoming / currently away after that return.
+    if (
+      employee.vacationStatus === 'Vacation Approved' &&
+      returnDay &&
+      todayDate &&
+      todayDate >= returnDay
+    ) {
+      const activeAfterReturn = employeeLeaves.find((leave) => {
+        const status = getEffectiveVacationStatusFromLeave(leave, employee);
+        if (status === 'On Vacation') {
+          const travel = getLeaveTravelStartDate(leave, employee);
+          return travel && travel >= returnDay;
+        }
+        if (status === 'Vacation Pending') {
+          const travel = getLeaveTravelStartDate(leave, employee);
+          return travel && travel > returnDay;
+        }
+        return false;
+      });
+      if (!activeAfterReturn) {
+        return { ...employee, vacationStatus: 'Vacation Approved' };
+      }
+    }
 
     const activeLeave = employeeLeaves.find(
       (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'On Vacation'
@@ -1989,6 +2018,7 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
     employee.attendance = 'Onsite';
     await employee.save();
     invalidateListCache();
+    invalidateApprovedLeavesCache();
 
     // Best-effort attendance Onsite for return day
     try {

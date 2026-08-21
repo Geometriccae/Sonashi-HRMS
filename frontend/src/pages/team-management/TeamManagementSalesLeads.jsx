@@ -23,7 +23,7 @@ import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, ex
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance, calculateLeaveDays } from "../../utils/leaveCalculator";
-import { findLinkedEmployee } from "../../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
@@ -254,8 +254,17 @@ function TeamManagementSalesLeads() {
         setError("No employee data returned from API");
         setEmployee(null);
       } else {
-        setEmployee(employeeData);
-        fetchEmployeeLeaves(employeeData);
+        // Same live vacation status as Annual Vacations (includeVacation merge)
+        let withVacation = employeeData;
+        try {
+          const vacList = await employeeService.getEmployeesList({ includeVacation: true });
+          const merged = mergeEffectiveVacationStatuses([employeeData], vacList);
+          withVacation = merged[0] || employeeData;
+        } catch (vacErr) {
+          console.warn("Could not overlay live vacation status:", vacErr?.message || vacErr);
+        }
+        setEmployee(withVacation);
+        fetchEmployeeLeaves(withVacation);
       }
     } catch (err) {
       console.error("Error fetching employee:", err);
@@ -753,11 +762,11 @@ function TeamManagementSalesLeads() {
                           if (loading) return "...";
                           const vs = employee?.vacationStatus || "Onsite";
                           const labelMap = {
-                            "On Vacation": "On vacation",
+                            "On Vacation": "On Vacation",
                             "Vacation Approved": "Returned back from vacation",
                             "Vacation Pending": "Yet to go",
                           };
-                          return labelMap[vs] || vs;
+                          return labelMap[vs] || formatVacationStatusLabel(vs) || vs;
                         })()}
                       </span>
                     </button>
@@ -968,11 +977,11 @@ function TeamManagementSalesLeads() {
                                 };
                                 const style = colorMap[vs] || colorMap["Onsite"];
                                 const labelMap = {
-                                  "On Vacation": "On vacation",
+                                  "On Vacation": "On Vacation",
                                   "Vacation Approved": "Returned back from vacation",
                                   "Vacation Pending": "Yet to go",
                                 };
-                                const displayLabel = labelMap[vs] || vs;
+                                const displayLabel = labelMap[vs] || formatVacationStatusLabel(vs) || vs;
                                 return (
                                   <span style={{
                                     display: "inline-flex",
