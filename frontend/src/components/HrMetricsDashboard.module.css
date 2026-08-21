@@ -69,6 +69,21 @@
   cursor: pointer;
 }
 
+.drillDownToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.drillDownCount {
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .metricCard {
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid #dbe7f3;

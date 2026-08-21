@@ -167,7 +167,7 @@ function DashboardOverview() {
         if (isMounted) {
           setData({ employees: empList, leaveRequests: leaveList });
           setCounts({
-            total: active,
+            total: empList.length,
             active,
             inactive,
             onVacation,
@@ -353,7 +353,7 @@ function DashboardOverview() {
     try {
       switch (category) {
         case "Total Employees":
-          list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
+          list = empSource;
           break;
         case "Active Employees":
           list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
