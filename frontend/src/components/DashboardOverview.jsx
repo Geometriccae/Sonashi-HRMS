@@ -108,9 +108,13 @@ function DashboardOverview() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const { employees, leaves } = await employeeService.getVacationBundle();
-        const empList = Array.isArray(employees) ? employees : [];
-        const leaveList = Array.isArray(leaves) ? leaves : [];
+        // Same source as Annual Vacations: stored vacationStatus + leave list for Yet-to-go
+        const [empRes, leaveRes] = await Promise.all([
+          employeeService.getEmployeesList(),
+          leaveRequestService.getLeaveRequests({ view: "lite" }),
+        ]);
+        const empList = Array.isArray(empRes) ? empRes : empRes?.data || [];
+        const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -242,18 +246,18 @@ function DashboardOverview() {
         )
       );
 
-      // Recompute counts from updated list
+      // Recompute vacation counts the same way as Annual Vacations (working staff only)
       let attOnVacation = 0, attVacReturn = 0;
       updatedEmployees.forEach(e => {
+        if (!isWorkingEmployeeStatus(e.employeeStatus)) return;
         const vs = e.vacationStatus || "Onsite";
-
         if (vs === "On Vacation") attOnVacation++;
         else if (vs === "Vacation Approved") attVacReturn++;
       });
       const upcomingVacation = buildYetToGoFromLeaves(
         updatedEmployees,
         data.leaveRequests || []
-      ).length;
+      ).filter((row) => isWorkingEmployeeStatus(row.employeeStatus)).length;
       setCounts(prev => ({
         ...prev,
         onVacation: attOnVacation,
@@ -310,11 +314,12 @@ function DashboardOverview() {
           });
         } catch (_) { /* employee dates already saved */ }
       }
-      // Refresh leave list so Leave Status / end dates stay in sync
+      // Refresh leave list so Leave Status / end dates stay in sync (same source as Annual Vacations)
       try {
         employeeService.invalidateCache();
-        const { leaves } = await employeeService.getVacationBundle({ force: true });
-        const leaveList = Array.isArray(leaves) ? leaves : [];
+        leaveRequestService.invalidateCache();
+        const leaveRes = await leaveRequestService.getLeaveRequests({ view: "lite" });
+        const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
         setData(prev => ({ ...prev, leaveRequests: leaveList }));
       } catch (_) { /* non-blocking */ }
       setDatePrompt(null);
