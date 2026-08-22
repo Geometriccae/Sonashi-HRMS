@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import './DateInput.css';
+import { useSingleDateBaseline } from '../utils/dateFieldReset';
 import clientService from '../services/ClientService';
 import employeeService from '../services/EmployeeService';
 import checkInService from '../services/CheckInService';
@@ -26,6 +28,7 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const { setBaseline, getResetValue } = useSingleDateBaseline(new Date().toISOString().split("T")[0]);
 
   const eventTypes = [
     { value: 'client_meeting', label: 'Client Meeting' },
@@ -192,10 +195,11 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
   };
 
   const resetForm = () => {
+    const today = new Date().toISOString().split('T')[0];
     setFormData({
       clientId: '',
       eventType: '',
-      date: new Date().toISOString().split('T')[0],
+      date: today,
       time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
       location: '',
       latitude: null,
@@ -204,7 +208,15 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
       notes: '',
       imageProof: null
     });
+    setBaseline(today);
     setError('');
+  };
+
+  const handleDateReset = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleInputChange('date', getResetValue());
+    setDatePickerOpen(false);
   };
 
   const handleBackdropClick = (e) => {
@@ -293,20 +305,25 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
             {/* Date Field */}
             <div className="input-field">
               <label className="field-label">Select a Date *</label>
-              <div className="date-wrapper" onClick={() => setDatePickerOpen(true)} style={{ cursor: 'pointer' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  color: 'rgba(183, 183, 183, 1)',
-                  fontSize: '16px'
-                }}>
-                  <span>{formatDateForDisplay(formData.date) || '10/07/2025'}</span>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M12.67 2H11.33V1.33C11.33 1.15 11.18 1 11 1S10.67 1.15 10.67 1.33V2H5.33V1.33C5.33 1.15 5.18 1 5 1S4.67 1.15 4.67 1.33V2H3.33C2.6 2 2 2.6 2 3.33V12.67C2 13.4 2.6 14 3.33 14H12.67C13.4 14 14 13.4 14 12.67V3.33C14 2.6 13.4 2 12.67 2Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+              <div className="date-input-group">
+                <div className="date-wrapper" onClick={() => setDatePickerOpen(true)} style={{ cursor: 'pointer', flex: 1 }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    color: 'rgba(183, 183, 183, 1)',
+                    fontSize: '16px'
+                  }}>
+                    <span>{formatDateForDisplay(formData.date) || '10/07/2025'}</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M12.67 2H11.33V1.33C11.33 1.15 11.18 1 11 1S10.67 1.15 10.67 1.33V2H5.33V1.33C5.33 1.15 5.18 1 5 1S4.67 1.15 4.67 1.33V2H3.33C2.6 2 2 2.6 2 3.33V12.67C2 13.4 2.6 14 3.33 14H12.67C13.4 14 14 13.4 14 12.67V3.33C14 2.6 13.4 2 12.67 2Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
                 </div>
+                <button type="button" className="date-reset-btn" title="Reset date" onClick={handleDateReset}>
+                  Reset
+                </button>
               </div>
               <DatePickerModal
                 isOpen={datePickerOpen}
@@ -317,6 +334,7 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
                   const d = String(date.getDate()).padStart(2, '0');
                   handleInputChange('date', `${y}-${m}-${d}`);
                 }}
+                onReset={handleDateReset}
                 selectedDate={formData.date}
               />
             </div>

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import "./CreateEventModal.css"; // Reusing the same styles
+import "../DateInput.css";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { updateEvent } from "../../services/CreateEventService";
 import employeeService from "../../services/EmployeeService";
 import Select from "react-select";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
+import { useSingleDateBaseline } from "../../utils/dateFieldReset";
 
 function EditEventModal({
   isOpen,
@@ -29,6 +31,7 @@ function EditEventModal({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
+  const { setBaseline, getResetValue } = useSingleDateBaseline("");
 
   // Load employees when component mounts
   useEffect(() => {
@@ -88,8 +91,9 @@ function EditEventModal({
         color: eventData.color || "#FF9500",
         reminders: eventData.reminders || [1, 15, 60, 180, 1440], // Load existing reminders or default
       });
+      setBaseline(dateString);
     }
-  }, [eventData, isOpen]);
+  }, [eventData, isOpen, setBaseline]);
 
   // Debug log to see when employees and formData are both loaded
   useEffect(() => {
@@ -188,6 +192,13 @@ function EditEventModal({
     setIsDatePickerOpen(false);
   };
 
+  const handleDateReset = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleInputChange("date", getResetValue());
+    setIsDatePickerOpen(false);
+  };
+
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return "";
     // Expect yyyy-mm-dd, render dd/mm/yyyy
@@ -266,23 +277,28 @@ function EditEventModal({
 
             <div className="input-field">
               <label className="field-label">Select a date *</label>
-              <div className="date-wrapper">
-                <input
-                  type="text"
-                  className="form-input has-icon"
-                  value={formatDateForDisplay(formData.date)}
-                  placeholder="DD/MM/YYYY"
-                  readOnly
-                />
-                <div className="input-icon" onClick={handleDateIconClick}>
-                  <img
-                    src={calendarIcon}
-                    alt="Calendar"
-                    width="16"
-                    height="16"
-                    style={{ cursor: "pointer" }}
+              <div className="date-input-group">
+                <div className="date-wrapper">
+                  <input
+                    type="text"
+                    className="form-input has-icon"
+                    value={formatDateForDisplay(formData.date)}
+                    placeholder="DD/MM/YYYY"
+                    readOnly
                   />
+                  <div className="input-icon" onClick={handleDateIconClick}>
+                    <img
+                      src={calendarIcon}
+                      alt="Calendar"
+                      width="16"
+                      height="16"
+                      style={{ cursor: "pointer" }}
+                    />
+                  </div>
                 </div>
+                <button type="button" className="date-reset-btn" title="Reset date" onClick={handleDateReset}>
+                  Reset
+                </button>
               </div>
             </div>
 
@@ -452,6 +468,7 @@ function EditEventModal({
         isOpen={isDatePickerOpen}
         onClose={handleDatePickerClose}
         onSelectDate={handleDateSelect}
+        onReset={handleDateReset}
         selectedDate={formData.date}
       />
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import EmployeeService from "../../services/EmployeeService";
-import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import { calculateLeaveBalance, filterLeavesForEmployee } from "../../utils/leaveCalculator";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -12,21 +12,26 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
     const [expandedYear, setExpandedYear] = useState(null);
 
     useEffect(() => {
-        if (!isOpen || !leaveRequest) return;
-        
+        if (!isOpen || !leaveRequest) {
+            setEmployeeDetails({});
+            return;
+        }
+
         const fetchEmployee = async () => {
             setIsLoading(true);
+            setEmployeeDetails({});
             try {
                 const emp = leaveRequest.employee;
                 const empIdToFetch = emp?._id || emp;
-                
+
                 if (empIdToFetch && /^[a-fA-F0-9]{24}$/.test(String(empIdToFetch))) {
                     const data = await EmployeeService.getEmployee(empIdToFetch);
                     if (data) setEmployeeDetails(data);
-                } else if (leaveRequest.employeeName) {
-                    // Fallback to name search if ID is not a Mongo ID
+                } else if (leaveRequest.employeeId) {
                     const allEmps = await EmployeeService.getEmployees();
-                    const match = allEmps.find(e => e.employeeName === leaveRequest.employeeName);
+                    const match = allEmps.find(
+                        (e) => String(e.employeeId) === String(leaveRequest.employeeId)
+                    );
                     if (match) setEmployeeDetails(match);
                 }
             } catch (error) {
@@ -37,19 +42,17 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         };
 
         fetchEmployee();
-    }, [isOpen, leaveRequest]);
+    }, [isOpen, leaveRequest?._id, leaveRequest?.employee, leaveRequest?.employeeId]);
 
     if (!isOpen || !leaveRequest) return null;
 
     const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
-    const leaveStats = calculateLeaveBalance(employee, allLeaveRequests);
+    const employeeLeaveRecords = filterLeavesForEmployee(employee, allLeaveRequests);
+    const leaveStats = calculateLeaveBalance(employee, employeeLeaveRecords);
 
-    const empNameSearch = String(employee.employeeName || employee.name || "").toLowerCase().trim();
-
-    const employeeLeaves = (allLeaveRequests || []).filter(req => {
-        const reqName = String(req.employeeName || "").toLowerCase().trim();
-        return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
-    });
+    const employeeLeaves = employeeLeaveRecords.filter(
+        (req) => req.status === "Approved" || req.status === "HOD Approved"
+    );
 
     const years = buildLeaveHistoryYears(employee.doj);
 
@@ -88,7 +91,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         worksheet.addRow({ year: 'BALANCE', days: leaveStats.balance });
 
         const buffer = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buffer]), `Leave_Report_${empNameSearch.replace(/\s+/g, '_')}.xlsx`);
+        saveAs(new Blob([buffer]), `Leave_Report_${String(employee.employeeName || leaveRequest.employeeName || "employee").replace(/\s+/g, "_")}.xlsx`);
     };
 
     return (

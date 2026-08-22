@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import "../../components/sales-and-leads/CreateEventModal.css";
+import "../../components/DateInput.css";
 import DatePickerModal from "../../components/DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import MeetingService from "../../services/MeetingService";
@@ -9,6 +10,7 @@ import clientService from "../../services/ClientService";
 import Select from "react-select";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
 import { useToast } from "../../context/ToastContext";
+import { useSingleDateBaseline } from "../../utils/dateFieldReset";
 
 /*
  Props:
@@ -38,6 +40,7 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
   const [employees, setEmployees] = useState([]);
   const [clients, setClients] = useState([]);
   const [error, setError] = useState("");
+  const { setBaseline, getResetValue } = useSingleDateBaseline(todayYMD);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -87,13 +90,15 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
         clientId: src?.clientId || initial.clientId || f.clientId,
         reminders: src?.reminders || initial.reminders || [1, 15]
       }));
+      setBaseline(ymd);
       setError("");
     } else if (isOpen) {
       // reset for new create
       setFormData(f => ({ ...f, eventName: "", type: "", date: todayYMD, time: "09:00", assignedTeamMembers: [], notes: "", link: "", color: "#FF9500", clientId: "", reminders: [1, 15] }));
+      setBaseline(todayYMD);
       setError("");
     }
-  }, [initial, isOpen]);
+  }, [initial, isOpen, setBaseline, todayYMD]);
 
   if (!isOpen) return null;
 
@@ -110,6 +115,13 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
     const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
     const d = String(selectedDate.getDate()).padStart(2, '0');
     handleInputChange("date", `${y}-${m}-${d}`);
+    setIsDatePickerOpen(false);
+  };
+
+  const handleDateReset = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleInputChange("date", getResetValue());
     setIsDatePickerOpen(false);
   };
 
@@ -207,11 +219,16 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
 
             <div className="input-field">
               <label className="field-label">Select a date *</label>
-              <div className="date-wrapper">
-                <input type="text" className="form-input has-icon" value={formatDateForDisplay(formData.date)} placeholder="DD/MM/YYYY" readOnly />
-                <div className="input-icon" onClick={handleDateIconClick}>
-                  <img src={calendarIcon} alt="Calendar" width="16" height="16" style={{ cursor: "pointer" }} />
+              <div className="date-input-group">
+                <div className="date-wrapper">
+                  <input type="text" className="form-input has-icon" value={formatDateForDisplay(formData.date)} placeholder="DD/MM/YYYY" readOnly />
+                  <div className="input-icon" onClick={handleDateIconClick}>
+                    <img src={calendarIcon} alt="Calendar" width="16" height="16" style={{ cursor: "pointer" }} />
+                  </div>
                 </div>
+                <button type="button" className="date-reset-btn" title="Reset date" onClick={handleDateReset}>
+                  Reset
+                </button>
               </div>
             </div>
 
@@ -334,7 +351,7 @@ function CreateMeetingModal({ isOpen, onClose, onEventCreated, initial = null })
           </div>
         </div>
 
-        <DatePickerModal isOpen={isDatePickerOpen} onClose={handleDatePickerClose} onSelectDate={handleDateSelect} selectedDate={formData.date ? new Date(formData.date) : null} />
+        <DatePickerModal isOpen={isDatePickerOpen} onClose={handleDatePickerClose} onSelectDate={handleDateSelect} onReset={handleDateReset} selectedDate={formData.date ? new Date(formData.date) : null} />
       </div>
     </div>
   );

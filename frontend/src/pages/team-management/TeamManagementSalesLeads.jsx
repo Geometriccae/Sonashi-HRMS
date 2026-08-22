@@ -22,8 +22,8 @@ import EditLeaveRequestModal from "../../components/leave-request/EditLeaveReque
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
-import { calculateLeaveBalance, calculateLeaveDays } from "../../utils/leaveCalculator";
-import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { calculateLeaveBalance, calculateLeaveDays, filterLeavesForEmployee } from "../../utils/leaveCalculator";
+import { formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
@@ -129,6 +129,7 @@ function TeamManagementSalesLeads() {
   const [employee, setEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const leaveFetchGenRef = useRef(0);
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
@@ -139,21 +140,27 @@ function TeamManagementSalesLeads() {
 
   // Fetch employee data when component mounts or employeeId changes
   useEffect(() => {
-    if (employeeId) {
-      fetchEmployeeData();
-    }
-  }, [employeeId]);
+    if (!employeeId) return;
+    // Clear stale entitlement data from the previous employee immediately
+    setEmployee(null);
+    setEmployeeLeaves([]);
+    setAllLeaveRequests([]);
+    setLoading(true);
+    setError(null);
+    fetchEmployeeData();
+  }, [employeeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchEmployeeLeaves = async (currentEmployee) => {
+    const gen = ++leaveFetchGenRef.current;
+    const emp = currentEmployee || employee;
+    if (!emp?._id && !employeeId) return;
+
     try {
       const leaves = await leaveRequestService.getLeaveRequests();
       const allLeaves = Array.isArray(leaves) ? leaves : leaves.data || [];
-      setAllLeaveRequests(allLeaves);
+      if (gen !== leaveFetchGenRef.current) return;
 
-      const emp =
-        currentEmployee ||
-        employee ||
-        (employeeId ? { _id: employeeId } : null);
+      setAllLeaveRequests(allLeaves);
 
       const visibleStatuses = new Set([
         "Approved",
@@ -162,44 +169,9 @@ function TeamManagementSalesLeads() {
         "Imported",
       ]);
 
-      const empLeaves = allLeaves.filter((req) => {
-        if (!req || !visibleStatuses.has(req.status)) return false;
+      const empLeaves = filterLeavesForEmployee(emp, allLeaves, { statuses: visibleStatuses });
 
-        // Primary: shared linker (User.employeeId ↔ Employee._id, name, codes)
-        if (emp && findLinkedEmployee(req, [emp])) return true;
-
-        // Fallback: leave.employee stored as Employee._id when no User exists
-        const empMongoId = String(emp?._id || employeeId || "");
-        const empCode = String(emp?.employeeId || "");
-        const reqRef = String(req.employee?._id || req.employee || "");
-        if (empMongoId && reqRef && reqRef === empMongoId) return true;
-
-        const linkedEmpId = String(
-          req.employee?.employeeId?._id || req.employee?.employeeId || ""
-        );
-        if (
-          linkedEmpId &&
-          (linkedEmpId === empMongoId || (empCode && linkedEmpId === empCode))
-        ) {
-          return true;
-        }
-
-        if (req.employeeId) {
-          const rid = String(req.employeeId);
-          if (rid === empMongoId || (empCode && rid === empCode)) return true;
-        }
-
-        const reqName = String(req.employeeName || "")
-          .toLowerCase()
-          .trim();
-        const empName = String(emp?.employeeName || "")
-          .toLowerCase()
-          .trim();
-        if (reqName && empName && reqName === empName) return true;
-
-        return false;
-      });
-
+      if (gen !== leaveFetchGenRef.current) return;
       setEmployeeLeaves(
         empLeaves.sort(
           (a, b) => new Date(b.startDate) - new Date(a.startDate)
@@ -210,9 +182,9 @@ function TeamManagementSalesLeads() {
     }
   };
 
-  // Keep Leave Entitlement in sync whenever the tab is opened
+  // Keep Leave Entitlement in sync whenever the tab is opened or employee record loads
   useEffect(() => {
-    if (activeTab === "leave" && (employee || employeeId)) {
+    if (activeTab === "leave" && employee?._id && String(employee._id) === String(employeeId)) {
       fetchEmployeeLeaves(employee);
     }
   }, [activeTab, employeeId, employee?._id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1170,8 +1142,13 @@ function TeamManagementSalesLeads() {
               {activeTab === "leave" && (
                 <div style={{ padding: "0 36px", width: "100%" }}>
                   {(() => {
-                    const leaveStats = employee
-                      ? calculateLeaveBalance(employee, allLeaveRequests)
+                    const isCurrentEmployee =
+                      employee?._id && String(employee._id) === String(employeeId);
+                    const employeeLeaveRecords = isCurrentEmployee
+                      ? filterLeavesForEmployee(employee, allLeaveRequests)
+                      : [];
+                    const leaveStats = isCurrentEmployee
+                      ? calculateLeaveBalance(employee, employeeLeaveRecords)
                       : null;
                     const latest = employeeLeaves[0];
                     return (

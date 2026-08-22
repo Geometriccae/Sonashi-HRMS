@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import "../../components/sales-and-leads/CreateEventModal.css";
+import "../../components/DateInput.css";
 import DatePickerModal from "../../components/DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import MeetingService from "../../services/MeetingService";
@@ -9,6 +10,7 @@ import employeeService from "../../services/EmployeeService";
 import clientService from "../../services/ClientService";
 import Select from "react-select";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
+import { useSingleDateBaseline } from "../../utils/dateFieldReset";
 
 /*
  Props:
@@ -35,6 +37,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { setBaseline, getResetValue } = useSingleDateBaseline("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -65,6 +68,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
         color: "#FF9500",
         reminders: [1, 15]
       });
+      setBaseline("");
       setError("");
       return;
     }
@@ -101,8 +105,9 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
       color: src?.color || meeting.color || "#FF9500",
       reminders: src?.reminders || meeting.reminders || [1, 15]
     });
+    setBaseline(ymd);
     setError("");
-  }, [meeting, isOpen]);
+  }, [meeting, isOpen, setBaseline]);
 
   if (!isOpen) return null;
 
@@ -111,6 +116,13 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
     if (!d) return;
     const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0');
     handleChange('date', `${y}-${m}-${day}`);
+    setIsDatePickerOpen(false);
+  };
+
+  const handleDateReset = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleChange("date", getResetValue());
     setIsDatePickerOpen(false);
   };
 
@@ -192,11 +204,16 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
 
             <div className="input-field">
               <label className="field-label">Select a date *</label>
-              <div className="date-wrapper">
-                <input type="text" className="form-input has-icon" value={formData.date ? formData.date.split('-').reverse().join('/') : ''} readOnly />
-                <div className="input-icon" onClick={() => setIsDatePickerOpen(true)}>
-                  <img src={calendarIcon} alt="Calendar" width="16" height="16" />
+              <div className="date-input-group">
+                <div className="date-wrapper">
+                  <input type="text" className="form-input has-icon" value={formData.date ? formData.date.split('-').reverse().join('/') : ''} readOnly />
+                  <div className="input-icon" onClick={() => setIsDatePickerOpen(true)}>
+                    <img src={calendarIcon} alt="Calendar" width="16" height="16" />
+                  </div>
                 </div>
+                <button type="button" className="date-reset-btn" title="Reset date" onClick={handleDateReset}>
+                  Reset
+                </button>
               </div>
             </div>
 
@@ -308,7 +325,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
           </div>
         </div>
 
-        <DatePickerModal isOpen={isDatePickerOpen} onClose={() => setIsDatePickerOpen(false)} onSelectDate={handleDateSelect} selectedDate={formData.date ? new Date(formData.date) : null} />
+        <DatePickerModal isOpen={isDatePickerOpen} onClose={() => setIsDatePickerOpen(false)} onSelectDate={handleDateSelect} onReset={handleDateReset} selectedDate={formData.date ? new Date(formData.date) : null} />
       </div>
     </div>
   );

@@ -38,8 +38,10 @@ import {
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { savedRecordDateDefault } from "../../utils/dateFieldReset";
 
 function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
+  const savedDateDefault = (field) => savedRecordDateDefault(employee, field);
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
   const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState(null);
@@ -917,6 +919,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.doj}
+                defaultValue={savedDateDefault("doj")}
                 onChange={(e) => handleInputChange("doj", e.target.value)}
               />
 
@@ -939,6 +942,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.noticePeriodStartDate}
+                defaultValue={savedDateDefault("noticePeriodStartDate")}
                 onChange={(e) => handleInputChange("noticePeriodStartDate", e.target.value)}
               />
 
@@ -947,6 +951,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.noticePeriodEndDate}
+                defaultValue={savedDateDefault("noticePeriodEndDate")}
                 onChange={(e) => handleInputChange("noticePeriodEndDate", e.target.value)}
               />
 
@@ -955,6 +960,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.provisionPeriodStartDate}
+                defaultValue={savedDateDefault("provisionPeriodStartDate")}
                 onChange={(e) => handleInputChange("provisionPeriodStartDate", e.target.value)}
               />
 
@@ -963,6 +969,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.provisionPeriodEndDate}
+                defaultValue={savedDateDefault("provisionPeriodEndDate")}
                 onChange={(e) => handleInputChange("provisionPeriodEndDate", e.target.value)}
               />
 
@@ -1154,6 +1161,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.dateOfBirth}
+                defaultValue={savedDateDefault("dateOfBirth")}
                 onChange={(e) =>
                   handleInputChange("dateOfBirth", e.target.value)
                 }
@@ -1173,6 +1181,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.passportExpiryDate}
+                defaultValue={savedDateDefault("passportExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("passportExpiryDate", e.target.value)
                 }
@@ -1192,6 +1201,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.labourCardExpiryDate}
+                defaultValue={savedDateDefault("labourCardExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("labourCardExpiryDate", e.target.value)
                 }
@@ -1202,6 +1212,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.visaExpiryDate}
+                defaultValue={savedDateDefault("visaExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("visaExpiryDate", e.target.value)
                 }
@@ -1212,6 +1223,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.emiratesIdExpiryDate}
+                defaultValue={savedDateDefault("emiratesIdExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("emiratesIdExpiryDate", e.target.value)
                 }
@@ -1254,6 +1266,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   placeholder="YYYY-MM-DD"
                   type="date"
                   value={formData.lastWorkingDay}
+                  defaultValue={savedDateDefault("lastWorkingDay")}
                   onChange={(e) => handleInputChange("lastWorkingDay", e.target.value)}
                 />
               )}

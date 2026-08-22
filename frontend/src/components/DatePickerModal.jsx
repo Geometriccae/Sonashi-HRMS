@@ -14,6 +14,7 @@ function DatePickerModal({
   isOpen,
   onClose,
   onSelectDate,
+  onReset,
   selectedDate,
   disabledDates = [],
   minYear = DEFAULT_MIN_YEAR,
@@ -94,6 +95,11 @@ function DatePickerModal({
         onSelectDate(selectedDate);
       }
     }
+    onClose();
+  };
+
+  const handleReset = () => {
+    if (onReset) onReset();
     onClose();
   };
 
@@ -206,6 +212,13 @@ function DatePickerModal({
           <div className="divider" />
           <div className="bottom-panel">
             <div className="actions">
+              {onReset ? (
+                <div className="reset-btn">
+                  <div className="reset-btn-base" onClick={handleReset}>
+                    <div className="reset-text">Reset</div>
+                  </div>
+                </div>
+              ) : null}
               <div className="cancel-btn">
                 <div className="cancel-btn-base" onClick={onClose}>
                   <div className="cancel-text">Cancel</div>

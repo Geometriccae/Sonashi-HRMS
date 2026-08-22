@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import { Button, Input, Modal, Table } from "antd";
 import styles from "./HrMetricsDashboard.module.css";
+import DateInput from "./DateInput";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import attendanceService from "../services/AttendanceService";
@@ -344,6 +345,10 @@ export default function HrMetricsDashboard() {
     employeeType: searchParams.get("employeeType") || "All",
     gender: searchParams.get("gender") || "All",
   });
+  const [filterDateDefaults] = useState(() => ({
+    startDate: searchParams.get("startDate") || "",
+    endDate: searchParams.get("endDate") || "",
+  }));
 
   const selectedRange = useMemo(
     () => resolvePeriodRange({ ...filters, activeYear: Number(filters.year) || Number(currentYear) }),
@@ -1000,17 +1005,17 @@ export default function HrMetricsDashboard() {
         </label>
         <label>
           <span>Date Range Start</span>
-          <input
-            type="date"
+          <DateInput
             value={filters.startDate}
+            defaultValue={filterDateDefaults.startDate}
             onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))}
           />
         </label>
         <label>
           <span>Date Range End</span>
-          <input
-            type="date"
+          <DateInput
             value={filters.endDate}
+            defaultValue={filterDateDefaults.endDate}
             onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))}
           />
         </label>

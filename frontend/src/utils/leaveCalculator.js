@@ -70,23 +70,50 @@ export function lastFiveLeaveYears(tillDate) {
 }
 
 export function matchesLeaveEmployee(req, emp) {
-    const reqName = String(req?.employeeName || "").toLowerCase().trim();
-    const empName = String(emp?.employeeName || emp?.name || "").toLowerCase().trim();
-    if (reqName && empName && reqName === empName) return true;
+    if (!req || !emp) return false;
 
-    const empMongoId = String(emp?._id || "").toLowerCase();
-    const empCode = String(emp?.employeeId || "").toLowerCase();
-    const linked = req?.employee;
-    if (linked) {
-        const linkedId = String(
-            linked.employeeId?._id || linked._id || linked.employeeId || linked || ""
-        ).toLowerCase();
-        if (linkedId && (linkedId === empMongoId || linkedId === empCode)) return true;
+    const empMongoId = String(emp._id || "").toLowerCase();
+    const empCode = String(emp.employeeId || "").toLowerCase();
+    const empEmail = String(emp.emailId || "").trim().toLowerCase();
+
+    // Leave.employee stored as Employee._id (ObjectId) or populated doc
+    const reqRef = String(req.employee?._id || req.employee || "").toLowerCase();
+    if (empMongoId && reqRef && reqRef === empMongoId) return true;
+
+    // User.employeeId → Employee._id
+    const userEmpId = req.employee?.employeeId;
+    if (userEmpId && empMongoId && String(userEmpId).toLowerCase() === empMongoId) return true;
+
+    // Leave.employeeId = employee code or Mongo _id
+    if (req.employeeId) {
+        const rid = String(req.employeeId).toLowerCase();
+        if (empMongoId && rid === empMongoId) return true;
+        if (empCode && rid === empCode) return true;
     }
-    if (req?.employeeId && empCode && String(req.employeeId).toLowerCase() === empCode) {
-        return true;
+
+    if (empEmail) {
+        const reqEmail = String(req.employee?.emailId || "").trim().toLowerCase();
+        if (reqEmail && reqEmail === empEmail) return true;
     }
+
+    // Name fallback only when the leave has no resolvable employee reference
+    const hasEmployeeRef = Boolean(reqRef || req.employeeId || req.employee?.employeeId);
+    if (!hasEmployeeRef) {
+        const reqName = String(req.employeeName || "").toLowerCase().trim();
+        const empName = String(emp.employeeName || emp.name || "").toLowerCase().trim();
+        if (reqName && empName && reqName === empName) return true;
+    }
+
     return false;
+}
+
+/** Leaves belonging to one employee (strict ID mapping). */
+export function filterLeavesForEmployee(employee, allLeaveRequests, options = {}) {
+    const { statuses = null } = options;
+    return (allLeaveRequests || []).filter((req) => {
+        if (statuses && !statuses.has(req.status)) return false;
+        return matchesLeaveEmployee(req, employee);
+    });
 }
 
 export function getApprovedLeavesForEmployee(employee, allLeaveRequests) {

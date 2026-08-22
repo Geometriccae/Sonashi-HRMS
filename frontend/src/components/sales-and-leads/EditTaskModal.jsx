@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./CreateEventModal.css";
+import "../DateInput.css";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { updateTask } from "../../services/TaskService";
@@ -7,6 +8,7 @@ import employeeService from "../../services/EmployeeService";
 import clientService from "../../services/ClientService";
 import Select from "react-select";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
+import { useSingleDateBaseline } from "../../utils/dateFieldReset";
 
 function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
   const [formData, setFormData] = useState({
@@ -21,6 +23,7 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
   const [isLoading, setIsLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [clients, setClients] = useState([]);
+  const { setBaseline, getResetValue } = useSingleDateBaseline("");
 
   // Load employees
   useEffect(() => {
@@ -84,8 +87,9 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
         date: formattedDate,
         assignedTeamMembers: assignedMembers,
       });
+      setBaseline(formattedDate);
     }
-  }, [task]);
+  }, [task, setBaseline]);
 
   if (!isOpen || !task) return null;
 
@@ -157,6 +161,13 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
     const d = String(selectedDate.getDate()).padStart(2, "0");
     const formattedLocal = `${y}-${m}-${d}`;
     handleInputChange("date", formattedLocal);
+    setIsDatePickerOpen(false);
+  };
+
+  const handleDateReset = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleInputChange("date", getResetValue());
     setIsDatePickerOpen(false);
   };
 
@@ -266,23 +277,28 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
 
             <div className="input-field">
               <label className="field-label">Select a date *</label>
-              <div className="date-wrapper">
-                <input
-                  type="text"
-                  className="form-input has-icon"
-                  value={formatDateForDisplay(formData.date)}
-                  placeholder="DD/MM/YYYY"
-                  readOnly
-                />
-                <div className="input-icon" onClick={handleDateIconClick}>
-                  <img
-                    src={calendarIcon}
-                    alt="Calendar"
-                    width="16"
-                    height="16"
-                    style={{ cursor: "pointer" }}
+              <div className="date-input-group">
+                <div className="date-wrapper">
+                  <input
+                    type="text"
+                    className="form-input has-icon"
+                    value={formatDateForDisplay(formData.date)}
+                    placeholder="DD/MM/YYYY"
+                    readOnly
                   />
+                  <div className="input-icon" onClick={handleDateIconClick}>
+                    <img
+                      src={calendarIcon}
+                      alt="Calendar"
+                      width="16"
+                      height="16"
+                      style={{ cursor: "pointer" }}
+                    />
+                  </div>
                 </div>
+                <button type="button" className="date-reset-btn" title="Reset date" onClick={handleDateReset}>
+                  Reset
+                </button>
               </div>
             </div>
 
@@ -334,6 +350,7 @@ function EditTaskModal({ isOpen, onClose, clientId, task, onTaskUpdated }) {
         isOpen={isDatePickerOpen}
         onClose={handleDatePickerClose}
         onSelectDate={handleDateSelect}
+        onReset={handleDateReset}
         selectedDate={formData.date}
       />
     </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styles from "./AssignTaskModal.module.css";
 import InputField from "../InputField";
+import "../DateInput.css";
 import DatePickerModal from "../DatePickerModal";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
 import { createEvent } from "../../services/AssignEventService"; // We'll create this
@@ -8,6 +9,7 @@ import employeeService from "../../services/EmployeeService";
 import Select from "react-select";
 import { useToast } from "../../context/ToastContext";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption } from "../../utils/employeeStatusDisplay";
+import { useSingleDateBaseline } from "../../utils/dateFieldReset";
 
 const DEFAULT_REMINDERS = Object.freeze([1, 15, 60, 180, 1440]); // minutes -> 1m,15m,1h,3h,1d
 
@@ -28,6 +30,13 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
+  const { setBaseline, getResetValue } = useSingleDateBaseline("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setBaseline("");
+    }
+  }, [isOpen, setBaseline]);
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -114,6 +123,13 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
     setIsDatePickerOpen(false);
   };
 
+  const handleDateReset = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleInputChange("date", getResetValue());
+    setIsDatePickerOpen(false);
+  };
+
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return "";
     // Expect yyyy-mm-dd, render dd/mm/yyyy
@@ -192,23 +208,28 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
 
             <div className="input-field">
               <label className="field-label">Select a date *</label>
-              <div className="date-wrapper">
-                <input
-                  type="text"
-                  className="form-input has-icon"
-                  value={formatDateForDisplay(formData.date)}
-                  placeholder="DD/MM/YYYY"
-                  readOnly
-                />
-                <div className="input-icon" onClick={handleDateIconClick}>
-                  <img
-                    src={calendarIcon}
-                    alt="Calendar"
-                    width="16"
-                    height="16"
-                    style={{ cursor: "pointer" }}
+              <div className="date-input-group">
+                <div className="date-wrapper">
+                  <input
+                    type="text"
+                    className="form-input has-icon"
+                    value={formatDateForDisplay(formData.date)}
+                    placeholder="DD/MM/YYYY"
+                    readOnly
                   />
+                  <div className="input-icon" onClick={handleDateIconClick}>
+                    <img
+                      src={calendarIcon}
+                      alt="Calendar"
+                      width="16"
+                      height="16"
+                      style={{ cursor: "pointer" }}
+                    />
+                  </div>
                 </div>
+                <button type="button" className="date-reset-btn" title="Reset date" onClick={handleDateReset}>
+                  Reset
+                </button>
               </div>
             </div>
 
@@ -360,6 +381,7 @@ function AssignTaskModal({ isOpen, onClose, employeeId, onEventCreated }) {
         isOpen={isDatePickerOpen}
         onClose={handleDatePickerClose}
         onSelectDate={handleDateSelect}
+        onReset={handleDateReset}
         selectedDate={formData.date}
       />
     </div>

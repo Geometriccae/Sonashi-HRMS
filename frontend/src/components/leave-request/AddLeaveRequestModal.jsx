@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import "../DateInput.css";
+import { useDateBaselines } from "../../utils/dateFieldReset";
 import { useToast } from "../../context/ToastContext";
 import leaveRequestService from "../../services/LeaveRequestService";
 import EmployeeService from "../../services/EmployeeService";
@@ -38,6 +40,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     });
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
+    const { setBaselines, getResetValue } = useDateBaselines({ start: "", end: "" });
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
     const [leaveEntitlementType, setLeaveEntitlementType] = useState('New Leave'); // 'New Leave' | 'Past Leave'
@@ -82,6 +85,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             });
             setError("");
             setSelectedYearDetails(null);
+            setBaselines({ start: "", end: "" });
         }
     }, [isOpen]);
 
@@ -202,6 +206,19 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             console.log("UPDATED FORM STATE:", updated);
             return updated;
         });
+    };
+
+    const resetLeaveDateField = (fieldKey, event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const formField = fieldKey === "start" ? "startDate" : "endDate";
+        setFormData((prev) => ({ ...prev, [formField]: getResetValue(fieldKey) }));
+        setDatePickerOpen(false);
+    };
+
+    const handleDateReset = () => {
+        if (!datePickerField) return;
+        resetLeaveDateField(datePickerField);
     };
 
     const handleDateSelect = (date) => {
@@ -543,16 +560,18 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                 <div className="form-row">
                                     <div className="input-field">
                                         <label className="input-label">Start Date *</label>
-                                        <div className="input-container" onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.startDate} placeholder="Start date" />
                                             <img src={calendarIcon} alt="" width="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("start", event)}>Reset</button>
                                         </div>
                                     </div>
                                     <div className="input-field">
                                         <label className="input-label">End Date *</label>
-                                        <div className="input-container" onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.endDate} placeholder="End date" />
                                             <img src={calendarIcon} alt="" width="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("end", event)}>Reset</button>
                                         </div>
                                     </div>
                                 </div>
@@ -844,6 +863,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                 isOpen={datePickerOpen}
                 onClose={() => setDatePickerOpen(false)}
                 onSelectDate={handleDateSelect}
+                onReset={handleDateReset}
                 selectedDate={datePickerField === "start" ? formData.startDate : formData.endDate}
             />
         </div>

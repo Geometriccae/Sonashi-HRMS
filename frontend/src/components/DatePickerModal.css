@@ -258,6 +258,42 @@
 }
 
 /* Buttons */
+.reset-btn {
+  border-radius: 8px;
+  align-self: flex-start;
+  display: flex;
+  align-items: flex-start;
+  color: var(--Gray-700, #414651);
+  font-weight: 600;
+  justify-content: flex-start;
+  width: 72px;
+}
+
+.reset-btn-base {
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--Gray-300, #D5D7DA);
+  box-shadow: 0 1px 2px 0 rgba(10, 13, 18, 0.05);
+  display: flex;
+  width: 72px;
+  gap: 8px;
+  overflow: hidden;
+  background-color: var(--White, #FFF);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.reset-btn-base:hover {
+  background-color: #f8f9fa;
+}
+
+.reset-text {
+  color: var(--Gray-700, #414651);
+  font: 600 14px/20px Inter, -apple-system, Roboto, Helvetica, sans-serif;
+}
+
 .cancel-btn {
   border-radius: 8px;
   align-self: flex-start;

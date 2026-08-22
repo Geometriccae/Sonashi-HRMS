@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import "../DateInput.css";
+import { useDateBaselines } from "../../utils/dateFieldReset";
 import { useToast } from "../../context/ToastContext";
 import leaveRequestService from "../../services/LeaveRequestService";
 import EmployeeService from "../../services/EmployeeService";
@@ -38,6 +40,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     });
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
+    const { setBaselines, getResetValue } = useDateBaselines({ start: "", end: "" });
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
     // Which leave record the form is editing (click a date in history to switch)
@@ -98,6 +101,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             requestAirfare: req.requestAirfare || false,
             visaExpiryDate: formatVisaInputDate(visaSrc)
         });
+        setBaselines({
+            start: req.startDate ? new Date(req.startDate).toISOString().split("T")[0] : "",
+            end: req.endDate ? new Date(req.endDate).toISOString().split("T")[0] : "",
+        });
         setError("");
     };
 
@@ -106,6 +113,19 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         setActiveLeave(req);
         populateFormFromLeave(req);
         showToast("Loaded leave for editing — update dates and save.", "success");
+    };
+
+    const resetLeaveDateField = (fieldKey, event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const formField = fieldKey === "start" ? "startDate" : "endDate";
+        setFormData((prev) => ({ ...prev, [formField]: getResetValue(fieldKey) }));
+        setDatePickerOpen(false);
+    };
+
+    const handleDateReset = () => {
+        if (!datePickerField) return;
+        resetLeaveDateField(datePickerField);
     };
 
     const handleDateSelect = (date) => {
@@ -219,6 +239,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 status: leaveRequest.status || "Pending",
                 requestAirfare: leaveRequest.requestAirfare || false,
                 visaExpiryDate: formatVisaInputDate(visaSrc)
+            });
+            setBaselines({
+                start: leaveRequest.startDate ? new Date(leaveRequest.startDate).toISOString().split("T")[0] : "",
+                end: leaveRequest.endDate ? new Date(leaveRequest.endDate).toISOString().split("T")[0] : "",
             });
             setError("");
             setSelectedYearDetails(null);
@@ -548,18 +572,20 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         <div className="input-label-container">
                                             <label className="input-label">Start Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
                                         </div>
-                                        <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.startDate || ""} placeholder="Select date" />
                                             <img src={calendarIcon} alt="" width="16" height="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("start", event)}>Reset</button>
                                         </div>
                                     </div>
                                     <div className="input-field">
                                         <div className="input-label-container">
                                             <label className="input-label">End Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
                                         </div>
-                                        <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.endDate || ""} placeholder="Select date" />
                                             <img src={calendarIcon} alt="" width="16" height="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("end", event)}>Reset</button>
                                         </div>
                                     </div>
                                 </>
@@ -920,6 +946,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                     isOpen={datePickerOpen}
                     onClose={() => setDatePickerOpen(false)}
                     onSelectDate={handleDateSelect}
+                    onReset={handleDateReset}
                     selectedDate={datePickerField === "start" ? formData.startDate : formData.endDate}
                 />
             )}
