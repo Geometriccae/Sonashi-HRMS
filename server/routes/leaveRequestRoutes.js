@@ -392,7 +392,10 @@ router.get('/', authMiddleware, async (req, res) => {
         }
 
         const cacheKey = leaveListCacheKey(req.user?.role, status, employeeId || filter.employee) + (isLite ? '|lite' : '');
-        const cachedLeaves = getLeaveListCache(cacheKey);
+        const skipCache =
+          String(req.query.fresh || '') === '1' ||
+          String(req.query.fresh || '').toLowerCase() === 'true';
+        const cachedLeaves = skipCache ? null : getLeaveListCache(cacheKey);
         if (cachedLeaves) {
             return res.json(cachedLeaves);
         }

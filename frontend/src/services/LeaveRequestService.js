@@ -30,8 +30,11 @@ const invalidateLeaveCache = () => {
 };
 
 const getLeaveRequests = async (params = {}) => {
-    const key = cacheKeyFor(params);
-    if (_cache.data && _cache.key === key && Date.now() - _cache.ts < CACHE_TTL_MS) {
+    const { force = false, ...query } = params || {};
+    const key = cacheKeyFor(query);
+    if (force) {
+        invalidateLeaveCache();
+    } else if (_cache.data && _cache.key === key && Date.now() - _cache.ts < CACHE_TTL_MS) {
         return _cache.data;
     }
     if (_inflight[key]) {
@@ -39,9 +42,11 @@ const getLeaveRequests = async (params = {}) => {
     }
     _inflight[key] = (async () => {
         try {
+            const requestParams = { ...query };
+            if (force) requestParams.fresh = "1";
             const response = await axios.get(API_URL, {
                 headers: getAuthHeader(),
-                params
+                params: requestParams,
             });
             _cache = { data: response.data, key, ts: Date.now() };
             return response.data;

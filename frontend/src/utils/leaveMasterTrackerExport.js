@@ -9,8 +9,8 @@ import {
 } from "./leaveCalculator";
 
 const MIN_LEAVE_SLOTS = 3;
-/** Master tracker year columns/sheets start from 2015 (per requirement). */
-const MASTER_TRACKER_START_YEAR = 2015;
+/** Client master tracker includes yearly sheets from 2010 onward. */
+const MASTER_TRACKER_START_YEAR = 2010;
 
 /** Same yellow as Staff Leave Report_Master tracker (ticket booked by company). */
 const YELLOW_FILL = {
@@ -25,6 +25,13 @@ const HEADER_FILL = {
   fgColor: { argb: "FFBDD7EE" },
 };
 
+const THIN_BORDER = {
+  top: { style: "thin", color: { argb: "FFB0B0B0" } },
+  left: { style: "thin", color: { argb: "FFB0B0B0" } },
+  bottom: { style: "thin", color: { argb: "FFB0B0B0" } },
+  right: { style: "thin", color: { argb: "FFB0B0B0" } },
+};
+
 const applyYellow = (cell) => {
   if (cell) cell.fill = YELLOW_FILL;
 };
@@ -36,17 +43,21 @@ const formatJoinMonthYear = (d) => {
   return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 };
 
-const formatSheetDate = (d) => {
-  if (!d) return "";
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const y = String(d.getFullYear()).slice(-2);
-  return `${m}/${day}/${y}`;
+const colLetter = (c1based) => {
+  let n = c1based;
+  let s = "";
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
 };
 
 /**
  * Group approved leaves by calendar year of startDate.
  * Each leave: { start, end, days, remarks, requestAirfare }
+ * Only current DB-approved leaves — deleted/cancelled never appear.
  */
 const groupLeavesByYear = (leaves) => {
   const byYear = {};
@@ -55,6 +66,7 @@ const groupLeavesByYear = (leaves) => {
     const end = parseDate(req.endDate) || start;
     if (!start) return;
     const year = start.getFullYear();
+    // Inclusive days — same rule as Leave Management / leaveCalculator
     const days = calculateLeaveDays(start, end) || 0;
     if (!byYear[year]) byYear[year] = [];
     byYear[year].push({
@@ -77,13 +89,13 @@ const groupLeavesByYear = (leaves) => {
 };
 
 /**
- * Years from 2015 through TILL year, plus one future year so staff can add ahead.
+ * Years from 2010 through TILL year, plus one future year so staff can add ahead.
  * Also includes any later leave years present in data.
  */
 const buildYearRange = (employees, leaveRequests, tillDate) => {
   const tillYear = tillDate.getFullYear();
   const currentYear = new Date().getFullYear();
-  let maxYear = Math.max(tillYear, currentYear) + 1;
+  let maxYear = Math.max(tillYear, currentYear);
 
   (leaveRequests || []).forEach((req) => {
     const s = parseDate(req.startDate);
@@ -107,6 +119,7 @@ const ordinal = (n) => {
 
 /**
  * Build summary + per-year sheet data for Staff Leave Report Master tracker format.
+ * Input must be the latest employees + leave requests from the database.
  */
 export function buildLeaveMasterTrackerData({
   employees = [],
@@ -128,7 +141,9 @@ export function buildLeaveMasterTrackerData({
     const yearHasCompanyTicket = {};
     years.forEach((y) => {
       const list = leavesByYear[y] || [];
-      yearTotals[y] = calc.yearTotals[y] || 0;
+      // Prefer live leave slots for year totals (keeps sheet TOTAL in sync with leave rows)
+      const slotTotal = list.reduce((sum, l) => sum + (l.days || 0), 0);
+      yearTotals[y] = slotTotal > 0 ? slotTotal : (calc.yearTotals[y] || 0);
       yearHasCompanyTicket[y] = list.some((l) => l.requestAirfare);
     });
 
@@ -190,7 +205,7 @@ export function buildLeaveMasterTrackerSummaryRows(trackerData) {
 
 /**
  * Build an ExcelJS workbook matching Staff Leave Report_Master tracker.xlsx
- * Yellow cells = ticket booked by the company (requestAirfare), same as master file.
+ * Yellow cells = ticket booked by the company (requestAirfare), data-driven.
  */
 export function buildLeaveMasterTrackerWorkbook(trackerData) {
   const { years, last5Years, maxSlots, employeeRows } = trackerData;
@@ -229,6 +244,7 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
     cell.value = h;
     cell.font = { bold: true };
     cell.fill = HEADER_FILL;
+    cell.border = THIN_BORDER;
   });
 
   const firstYearCol = 8; // 1-based Excel column of first year
@@ -242,32 +258,32 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
   const colWorkingYrs = colYrs + 1;
   const colTill = colWorkingYrs + 1;
 
-  const colLetter = (c1based) => {
-    let n = c1based;
-    let s = "";
-    while (n > 0) {
-      const m = (n - 1) % 26;
-      s = String.fromCharCode(65 + m) + s;
-      n = Math.floor((n - 1) / 26);
-    }
-    return s;
-  };
+  // Year-sheet TOTAL column index (1-based): after SI/NAME/JOIN + 2*slots dates + slots day cols
+  const yearTotalColIndex = 3 + maxSlots * 2 + maxSlots + 1;
+  const yearTotalColLetter = colLetter(yearTotalColIndex);
 
   employeeRows.forEach((row, i) => {
     const excelRow = i + 3;
+    const yearSheetRow = i + 2; // year sheets start data at row 2
     const r = wsSummary.getRow(excelRow);
     r.getCell(1).value = row.sno;
     r.getCell(2).value = row.employeeId;
     r.getCell(3).value = row.staffName;
     r.getCell(4).value = row.salesman;
-    r.getCell(6).value = row.joiningDate ? formatJoinMonthYear(row.joiningDate) : "";
-    r.getCell(7).value = row.calculateLeave ? formatJoinMonthYear(row.calculateLeave) : "";
+    r.getCell(6).value = row.joiningDate || null;
+    if (row.joiningDate) r.getCell(6).numFmt = "mmm-yy";
+    r.getCell(7).value = row.calculateLeave || null;
+    if (row.calculateLeave) r.getCell(7).numFmt = "mmm-yy";
 
     years.forEach((y, yi) => {
       const cell = r.getCell(firstYearCol + yi);
-      cell.value = row.yearTotals[y] || 0;
-      // Master tracker: year total yellow when company booked ticket that year
+      // Cross-sheet TOTAL like the client master: ='2026'!M2
+      cell.value = {
+        formula: `='${y}'!${yearTotalColLetter}${yearSheetRow}`,
+        result: row.yearTotals[y] || 0,
+      };
       if (row.yearHasCompanyTicket?.[y]) applyYellow(cell);
+      cell.border = THIN_BORDER;
     });
 
     const last5Cell = r.getCell(colLast5Taken);
@@ -285,7 +301,7 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
       last5Cell.value = row.last5Taken;
     }
 
-    // Avrg = Working Years capped at 5
+    // Avrg = Working Years capped at 5 (matches leaveCalculator averageLeave)
     avrgCell.value = {
       formula: `ROUND(MIN(${colLetter(colLast5Days)}${excelRow}/365,5),2)`,
       result: row.avrg,
@@ -294,7 +310,6 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
 
     r.getCell(colLast5Days).value = row.last5WindowDays;
 
-    // yrs = Working Days / 365 (Till − Calculate Leave Date)
     const yrsCell = r.getCell(colYrs);
     yrsCell.value = {
       formula: `ROUND(${colLetter(colLast5Days)}${excelRow}/365,2)`,
@@ -311,7 +326,8 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
 
     r.getCell(colWorkingYrs).value = row.workingYrs;
     r.getCell(colWorkingYrs).numFmt = "0.00";
-    r.getCell(colTill).value = row.till.toLocaleDateString("en-US");
+    r.getCell(colTill).value = row.till;
+    r.getCell(colTill).numFmt = "m/d/yyyy";
     last5Cell.numFmt = "0.00";
   });
 
@@ -324,70 +340,110 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
   // ── Per-year sheets (newest first, like master file) ──
   [...years].reverse().forEach((year) => {
     const ws = wb.addWorksheet(String(year));
-    const leaveHeader = ["SI NO", "STAFF NAME", "JOINING DATE"];
-    for (let s = 1; s <= maxSlots; s += 1) {
-      leaveHeader.push(ordinal(s), "");
-    }
-    for (let s = 1; s <= maxSlots; s += 1) leaveHeader.push(String(s));
-    leaveHeader.push("TOTAL", "Remarks");
 
+    // Header row — merge each leave label across start/end columns (client format)
     const headerYr = ws.getRow(1);
-    leaveHeader.forEach((h, i) => {
-      const cell = headerYr.getCell(i + 1);
-      cell.value = h;
+    headerYr.getCell(1).value = "SI NO";
+    headerYr.getCell(2).value = "STAFF NAME";
+    headerYr.getCell(3).value = "JOINING DATE";
+
+    const dateStartCol = 4;
+    for (let s = 1; s <= maxSlots; s += 1) {
+      const startCol = dateStartCol + (s - 1) * 2;
+      const endCol = startCol + 1;
+      headerYr.getCell(startCol).value = ordinal(s);
+      try {
+        ws.mergeCells(1, startCol, 1, endCol);
+      } catch (_) {
+        /* already merged */
+      }
+    }
+
+    const daysStartCol = dateStartCol + maxSlots * 2;
+    for (let s = 1; s <= maxSlots; s += 1) {
+      headerYr.getCell(daysStartCol + s - 1).value = String(s);
+    }
+    const totalCol = daysStartCol + maxSlots;
+    headerYr.getCell(totalCol).value = "TOTAL";
+    headerYr.getCell(totalCol + 1).value = "Remarks";
+
+    for (let c = 1; c <= totalCol + 1; c += 1) {
+      const cell = headerYr.getCell(c);
       cell.font = { bold: true };
       cell.fill = HEADER_FILL;
-    });
+      cell.border = THIN_BORDER;
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+    }
 
     employeeRows.forEach((row, idx) => {
       const leaves = row.leavesByYear[year] || [];
-      const r = ws.getRow(idx + 2);
-      r.getCell(1).value = row.employeeId || row.sno;
+      const excelRow = idx + 2;
+      const r = ws.getRow(excelRow);
+      // Client format: SI NO is serial number (not employee ID)
+      r.getCell(1).value = row.sno;
       r.getCell(2).value = row.staffName;
-      r.getCell(3).value = formatJoinMonthYear(row.joiningDate);
+      r.getCell(3).value = row.joiningDate || null;
+      if (row.joiningDate) r.getCell(3).numFmt = "mmm-yy";
 
-      const dateStartCol = 4;
       for (let s = 0; s < maxSlots; s += 1) {
         const leave = leaves[s];
         const startCell = r.getCell(dateStartCol + s * 2);
         const endCell = r.getCell(dateStartCol + s * 2 + 1);
         if (leave) {
-          startCell.value = formatSheetDate(leave.start);
-          endCell.value = formatSheetDate(leave.end);
+          startCell.value = leave.start;
+          endCell.value = leave.end;
+          startCell.numFmt = "m/d/yy";
+          endCell.numFmt = "m/d/yy";
+          // Yellow = company ticket (requestAirfare) — data-driven, never hardcoded
           if (leave.requestAirfare) {
             applyYellow(startCell);
             applyYellow(endCell);
           }
         }
+        startCell.border = THIN_BORDER;
+        endCell.border = THIN_BORDER;
       }
 
-      const daysStartCol = dateStartCol + maxSlots * 2;
       for (let s = 0; s < maxSlots; s += 1) {
         const leave = leaves[s];
         const dayCell = r.getCell(daysStartCol + s);
-        dayCell.value = leave ? leave.days : 0;
+        const startRef = `${colLetter(dateStartCol + s * 2)}${excelRow}`;
+        const endRef = `${colLetter(dateStartCol + s * 2 + 1)}${excelRow}`;
+        // Inclusive days (same as Leave Management): end − start + 1
+        dayCell.value = {
+          formula: `IF(OR(${startRef}="",${endRef}=""),0,${endRef}-${startRef}+1)`,
+          result: leave ? leave.days : 0,
+        };
         if (leave?.requestAirfare) applyYellow(dayCell);
+        dayCell.border = THIN_BORDER;
       }
 
+      const firstDayRef = `${colLetter(daysStartCol)}${excelRow}`;
+      const lastDayRef = `${colLetter(daysStartCol + maxSlots - 1)}${excelRow}`;
       const total = leaves.reduce((sum, l) => sum + (l.days || 0), 0);
       const remarks = leaves
         .filter((l) => l.remarks)
         .map((l) => l.remarks)
         .join("; ");
-      const totalCol = daysStartCol + maxSlots;
-      r.getCell(totalCol).value = total;
-      r.getCell(totalCol + 1).value = remarks;
 
-      // If any leave in the year had company ticket, mark TOTAL yellow (matches summary cue)
+      const totalCell = r.getCell(totalCol);
+      totalCell.value = {
+        formula: `SUM(${firstDayRef}:${lastDayRef})`,
+        result: total,
+      };
+      totalCell.border = THIN_BORDER;
+      r.getCell(totalCol + 1).value = remarks;
+      r.getCell(totalCol + 1).border = THIN_BORDER;
+
       if (leaves.some((l) => l.requestAirfare)) {
-        applyYellow(r.getCell(totalCol));
+        applyYellow(totalCell);
       }
     });
 
     ws.views = [{ state: "frozen", ySplit: 1 }];
     ws.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: 1 + employeeRows.length, column: leaveHeader.length },
+      to: { row: 1 + employeeRows.length, column: totalCol + 1 },
     };
   });
 

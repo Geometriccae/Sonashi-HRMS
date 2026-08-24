@@ -471,15 +471,27 @@ function Reports() {
     return Array.isArray(data) ? data : (data.employees || data.data || []);
   };
 
-  /** Build Staff Leave Report Master tracker data (summary + yearly sheets). */
+  /** Build Staff Leave Report Master tracker data (summary + yearly sheets).
+   * Always fetches latest DB data — never export stale frontend/service cache.
+   */
   const loadLeaveMasterTracker = async () => {
-    let leaves = await leaveRequestService.getLeaveRequests();
+    // Bust frontend + backend caches so add/edit/delete/ticket changes are included
+    leaveRequestService.invalidateCache();
+    employeeService.invalidateCache();
+
+    let leaves = await leaveRequestService.getLeaveRequests({ force: true });
     leaves = Array.isArray(leaves) ? leaves : (leaves.data || []);
 
-    let empList = await fetchFullEmployees(
-      employeeStatus === "Active" ? "Active" : employeeStatus === "InActive" ? "InActive" : undefined
-    );
-    if (!Array.isArray(empList)) empList = [];
+    let empList = await employeeService.getEmployees({
+      force: true,
+      status:
+        employeeStatus === "Active"
+          ? "Active"
+          : employeeStatus === "InActive"
+            ? "InActive"
+            : undefined,
+    });
+    empList = Array.isArray(empList) ? empList : (empList.employees || empList.data || []);
 
     // Same status matching as other employee reports (Active / InActive)
     if (employeeStatus !== "All") {
@@ -496,15 +508,21 @@ function Reports() {
       const selectedEmp = employeeList.find(e => (e.employeeId || e._id) === filterEmployee)
         || empList.find(e => (e.employeeId || e._id) === filterEmployee);
       if (selectedEmp) {
+        const selectedId = String(selectedEmp._id || "");
+        const selectedCode = String(selectedEmp.employeeId || "");
         empList = empList.filter(e =>
-          (e.employeeId && e.employeeId === selectedEmp.employeeId) ||
-          (e._id && String(e._id) === String(selectedEmp._id))
+          (selectedCode && e.employeeId === selectedCode) ||
+          (selectedId && String(e._id) === selectedId)
         );
-        leaves = leaves.filter(l =>
-          l.employeeName === selectedEmp.employeeName ||
-          l.employeeId === selectedEmp.employeeId ||
-          l.employeeId === filterEmployee
-        );
+        leaves = leaves.filter(l => {
+          const leaveEmpId = String(l.employee?._id || l.employee || "");
+          const leaveCode = String(l.employeeId || l.employee?.employeeId || "");
+          return (
+            (selectedId && leaveEmpId === selectedId) ||
+            (selectedCode && leaveCode === selectedCode) ||
+            (selectedEmp.employeeName && l.employeeName === selectedEmp.employeeName)
+          );
+        });
       }
     }
 
@@ -516,8 +534,10 @@ function Reports() {
     // Do not strip leave history by month/year — master tracker needs full yearly totals for LEAVE DUE.
     // Year filter only affects the TILL (as-of) date used in calculations.
 
+    // Stable order by Employee ID (matches client master tracker convention)
     empList = [...empList].sort((a, b) =>
-      String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
+      String(a.employeeId || "").localeCompare(String(b.employeeId || ""), undefined, { numeric: true })
+      || String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
     );
 
     let tillDate = new Date(new Date().getFullYear(), 11, 31);
