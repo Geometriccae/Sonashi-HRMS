@@ -97,7 +97,8 @@ export function leaveBelongsToHistoryYear(leave, year, doj) {
   if (!start || start.getFullYear() !== year) return false;
 
   const joinDate = toCalendarDate(doj);
-  if (joinDate && start < joinDate) return false;
+  // Allow leave anywhere in the joining year (imported Excel days before exact DOJ).
+  if (joinDate && start.getFullYear() < joinDate.getFullYear()) return false;
 
   return true;
 }

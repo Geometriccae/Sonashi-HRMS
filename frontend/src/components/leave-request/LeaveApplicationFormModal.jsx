@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
 import EmployeeService from "../../services/EmployeeService";
-import { calculateLeaveBalance, filterLeavesForEmployee } from "../../utils/leaveCalculator";
+import {
+    calculateLeaveBalance,
+    calculateLeaveDays,
+    filterLeavesForEmployee,
+    getApprovedLeavesForEmployee,
+} from "../../utils/leaveCalculator";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -49,10 +54,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
     const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
     const employeeLeaveRecords = filterLeavesForEmployee(employee, allLeaveRequests);
     const leaveStats = calculateLeaveBalance(employee, allLeaveRequests);
-
-    const employeeLeaves = employeeLeaveRecords.filter(
-        (req) => req.status === "Approved" || req.status === "HOD Approved"
-    );
+    const employeeLeaves = getApprovedLeavesForEmployee(employee, allLeaveRequests);
 
     const years = buildLeaveHistoryYears(employee.doj);
 
@@ -60,12 +62,17 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         employeeLeaves.filter((req) => leaveBelongsToHistoryYear(req, year, employee.doj));
 
     const getYearlyTotal = (year) => {
-        return getYearlyLeaves(year)
-            .reduce((total, req) => {
-                const s = new Date(req.startDate);
-                const e = new Date(req.endDate);
-                return total + (Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1);
-            }, 0);
+        if (!leaveStats) return 0;
+        const yearEnd = new Date(year, 11, 31);
+        const takenStart = leaveStats.takenRangeStart
+            ? new Date(leaveStats.takenRangeStart)
+            : leaveStats.calculationStartDate
+              ? new Date(leaveStats.calculationStartDate)
+              : null;
+        if (takenStart && yearEnd < takenStart) {
+            return leaveStats.historicalYearTotals?.[year] ?? 0;
+        }
+        return leaveStats.yearTotals?.[year] ?? 0;
     };
 
     const handleBackdropClick = (e) => {
@@ -247,7 +254,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                                                                                 )}
                                                                             </td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155", textAlign: "right" }}>
-                                                                                {Math.round((new Date(leave.endDate) - new Date(leave.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
+                                                                                {calculateLeaveDays(leave.startDate, leave.endDate) || 0} Days
                                                                             </td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "12px", textAlign: "center" }}>
                                                                                 <span style={{

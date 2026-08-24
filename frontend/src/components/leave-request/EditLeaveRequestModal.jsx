@@ -10,7 +10,11 @@ import DatePickerModal from "../DatePickerModal";
 import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
-import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import {
+    calculateLeaveBalance,
+    calculateLeaveDays,
+    getApprovedLeavesForEmployee,
+} from "../../utils/leaveCalculator";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
@@ -405,15 +409,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                             : null);
                         
     const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
-    const employeeLeaves = (allLeaveRequests || []).filter(req => {
-        const reqName = String(req.employeeName || "").toLowerCase().trim();
-        let empNameSearch = "";
-        if (selectedEmp && selectedEmp.employeeName) empNameSearch = String(selectedEmp.employeeName).toLowerCase().trim();
-        else if (selectedEmp && selectedEmp.name) empNameSearch = String(selectedEmp.name).toLowerCase().trim();
-        else empNameSearch = String(formData.employeeName || "").toLowerCase().trim();
-        
-        return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Imported");
-    });
+    // Same employee-ID + approved filter as leaveCalculator (not name / Imported).
+    const employeeLeaves = selectedEmp && typeof selectedEmp === "object"
+        ? getApprovedLeavesForEmployee(selectedEmp, allLeaveRequests)
+        : [];
     const years = buildLeaveHistoryYears(selectedEmp?.doj);
 
     const getYearlyLeaves = (year) => {
@@ -421,12 +420,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     };
 
     const getYearlyTotal = (year) => {
-        return getYearlyLeaves(year)
-            .reduce((total, req) => {
-                const s = new Date(req.startDate);
-                const e = new Date(req.endDate);
-                return total + (Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1);
-            }, 0);
+        if (!leaveStats) return 0;
+        const yearEnd = new Date(year, 11, 31);
+        const takenStart = leaveStats.takenRangeStart
+            ? new Date(leaveStats.takenRangeStart)
+            : leaveStats.calculationStartDate
+              ? new Date(leaveStats.calculationStartDate)
+              : null;
+        if (takenStart && yearEnd < takenStart) {
+            return leaveStats.historicalYearTotals?.[year] ?? 0;
+        }
+        return leaveStats.yearTotals?.[year] ?? 0;
     };
 
     const handleYearClick = (year) => {
@@ -902,7 +906,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                                             {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
                                                                                         </button>
                                                                                         <div style={{ fontSize: "11px", color: "#64748b" }}>
-                                                                                            {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
+                                                                                            {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate) || 0} Days
                                                                                         </div>
                                                                                     </div>
                                                                                     <div style={{ textAlign: "right" }}>

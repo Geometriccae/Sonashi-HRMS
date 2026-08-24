@@ -106,7 +106,7 @@ export function getLeaveTillDate(asOf = new Date()) {
 
 /**
  * Rolling 5-year active window.
- * Effective start = MAX(DOJ, calculationDate − 5 years).
+ * Effective start = MAX(DOJ, calculationDate − 5 years) — used for entitlement months.
  */
 export function getActiveLeaveWindow(calculationDateInput = null, joiningDate = null) {
     const end = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
@@ -131,6 +131,22 @@ export function getActiveLeaveWindow(calculationDateInput = null, joiningDate = 
         calculationEndDate: end,
         joiningDate: join,
     };
+}
+
+/**
+ * Taken / Leave History day range start.
+ * Uses 1 Jan of the joining year (not the exact DOJ day) so imported leave in the
+ * joining year still counts, while years before joining stay excluded.
+ * Still capped by the 5-year window start.
+ */
+export function getTakenLeaveRangeStart(calculationDateInput = null, joiningDate = null) {
+    const { windowStart, joiningDate: join } = getActiveLeaveWindow(
+        calculationDateInput,
+        joiningDate
+    );
+    if (!join) return windowStart;
+    const joiningYearStart = new Date(join.getFullYear(), 0, 1);
+    return joiningYearStart > windowStart ? joiningYearStart : windowStart;
 }
 
 /** @deprecated Prefer getActiveLeaveWindow().effectiveStart */
@@ -272,18 +288,39 @@ export function getApprovedLeavesForEmployee(employee, allLeaveRequests) {
     );
 }
 
-/** Full historical calendar-year totals (display only — not used for active balance). */
-export function yearWiseLeaveTaken(employee, allLeaveRequests) {
+/** Assign merged leave days to calendar years within [rangeStart, rangeEnd]. */
+export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStart, rangeEnd) {
     const byYear = {};
-    getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
-        const start = toLeaveCalendarDate(req.startDate);
-        const end = toLeaveCalendarDate(req.endDate) || start;
-        if (!start) return;
-        const year = start.getFullYear();
-        const days = calculateLeaveDays(start, end) || 0;
-        byYear[year] = (byYear[year] || 0) + days;
+    const rangeFrom = toLeaveCalendarDate(rangeStart);
+    const rangeTo = toLeaveCalendarDate(rangeEnd);
+    if (!rangeFrom || !rangeTo) return byYear;
+
+    const merged = mergeLeaveIntervals(getApprovedLeavesForEmployee(employee, allLeaveRequests));
+
+    merged.forEach((interval) => {
+        const overlapStart = interval.start > rangeFrom ? interval.start : rangeFrom;
+        const overlapEnd = interval.end < rangeTo ? interval.end : rangeTo;
+        if (overlapStart > overlapEnd) return;
+
+        let cursor = new Date(overlapStart);
+        while (cursor <= overlapEnd) {
+            const year = cursor.getFullYear();
+            byYear[year] = (byYear[year] || 0) + 1;
+            cursor.setDate(cursor.getDate() + 1);
+        }
     });
+
     return byYear;
+}
+
+/** Full historical calendar-year totals from DOJ onward (display). */
+export function yearWiseLeaveTaken(employee, allLeaveRequests, rangeStart = null) {
+    const join = toLeaveCalendarDate(rangeStart ?? employee?.doj);
+    const end = new Date(new Date().getFullYear(), 11, 31);
+    if (!join) {
+        return yearWiseLeaveTakenInWindow(employee, allLeaveRequests, new Date(1900, 0, 1), end);
+    }
+    return yearWiseLeaveTakenInWindow(employee, allLeaveRequests, join, end);
 }
 
 /**
@@ -298,6 +335,7 @@ export function computeExcelLeaveCalculation(employee, allLeaveRequests, calcula
     const calcDate = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
     const joiningDate = toLeaveCalendarDate(employee?.doj);
     const { windowStart, effectiveStart } = getActiveLeaveWindow(calcDate, joiningDate);
+    const takenRangeStart = getTakenLeaveRangeStart(calcDate, joiningDate);
 
     const totalEligibleMonths = joiningDate ? countCompletedMonths(joiningDate, calcDate) : 0;
     const activeEligibleMonthsRaw = countCompletedMonths(effectiveStart, calcDate);
@@ -314,26 +352,38 @@ export function computeExcelLeaveCalculation(employee, allLeaveRequests, calcula
     const totalWorkingDays = joiningDate ? excelDateDiffDays(calcDate, joiningDate) : workingDays;
     const workingYearsExact = activeEligibleMonths / 12;
     const workingYears = roundLeaveNumber(workingYearsExact);
-    // Excel "Avrg" column: eligible years capped at 5 (months × 2.5 ≡ years × 30)
     const averageLeave = Math.min(workingYears, MAX_ACTIVE_YEARS);
 
-    const yearTotals = yearWiseLeaveTaken(employee, allLeaveRequests);
-    const last5Years = lastFiveLeaveYears(calcDate);
+    const takenWindowEnd = new Date(calcDate.getFullYear(), 11, 31);
+    const historyStart = joiningDate
+        ? new Date(joiningDate.getFullYear(), 0, 1)
+        : takenRangeStart;
 
-    const totalTaken = sumApprovedLeaveInWindow(
+    // History: joining year → current year. Active taken: same day merge within taken window.
+    const yearTotals = yearWiseLeaveTakenInWindow(
         employee,
         allLeaveRequests,
-        effectiveStart,
-        calcDate
+        historyStart,
+        takenWindowEnd
+    );
+    const activeYearTotals = yearWiseLeaveTakenInWindow(
+        employee,
+        allLeaveRequests,
+        takenRangeStart,
+        takenWindowEnd
+    );
+    const totalTaken = roundLeaveNumber(
+        Object.values(activeYearTotals).reduce((sum, days) => sum + (days || 0), 0)
     );
     const historicalTakenOutsideWindow = sumApprovedLeaveBeforeDate(
         employee,
         allLeaveRequests,
-        effectiveStart
+        takenRangeStart
     );
     const historicalTakenDays = roundLeaveNumber(
         Object.values(yearTotals).reduce((sum, days) => sum + (days || 0), 0)
     );
+    const last5Years = lastFiveLeaveYears(calcDate);
 
     const leaveDue = roundLeaveNumber(entitlement - totalTaken);
 
@@ -342,6 +392,7 @@ export function computeExcelLeaveCalculation(employee, allLeaveRequests, calcula
         calculationDate: calcDate,
         calculateLeaveDate: effectiveStart,
         calculationStartDate: effectiveStart,
+        takenRangeStart,
         calculationEndDate: calcDate,
         windowStart,
         joiningDate,
@@ -353,7 +404,8 @@ export function computeExcelLeaveCalculation(employee, allLeaveRequests, calcula
         workingYearsExact,
         workingYears,
         averageLeave,
-        yearTotals,
+        yearTotals: activeYearTotals,
+        historicalYearTotals: yearTotals,
         last5Years,
         totalTaken,
         activeTakenDays: totalTaken,
@@ -450,6 +502,8 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
         windowStart: calc.windowStart,
         tillDate: calc.tillDate,
         yearTotals: calc.yearTotals,
+        historicalYearTotals: calc.historicalYearTotals,
+        takenRangeStart: calc.takenRangeStart,
         last5Years: calc.last5Years,
         airfareStatus,
         airfareEligible,

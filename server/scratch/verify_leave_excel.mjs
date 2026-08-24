@@ -83,6 +83,34 @@ const checks = [
   ["old leave historical before window", empHist.historicalTakenOutsideWindow === 20],
   ["hist start is window not DOJ", histStart.getTime() === empHist.calculationStartDate.getTime()],
   ["taken 32 → available 118", empTaken.totalTaken === 32 && empTaken.leaveDue === 118],
+  ["taken equals sum of active year totals", (() => {
+    const leaves = [
+      { status: "Approved", employeeName: "X", startDate: "2024-04-30", endDate: "2024-04-30" },
+      { status: "Approved", employeeName: "X", startDate: "2025-06-01", endDate: "2025-06-28" },
+      { status: "Approved", employeeName: "X", startDate: "2026-01-01", endDate: "2026-03-24" },
+    ];
+    const emp = { employeeName: "X", doj: "2024-05-01" };
+    const calc = computeExcelLeaveCalculation(emp, leaves, asOf);
+    const activeSum = Object.values(calc.yearTotals).reduce((s, d) => s + d, 0);
+    // Joining-year leave before exact DOJ still counts (imported Excel day)
+    return calc.totalTaken === activeSum && calc.totalTaken === 1 + 28 + 83;
+  })()],
+  ["screenshot case 54+28+1 = 83", (() => {
+    const leaves = [
+      { status: "Approved", employeeName: "Y", startDate: "2026-06-20", endDate: "2026-08-12" },
+      { status: "Approved", employeeName: "Y", startDate: "2025-04-08", endDate: "2025-05-05" },
+      { status: "Approved", employeeName: "Y", startDate: "2024-03-11", endDate: "2024-03-11" },
+    ];
+    // ~2y 3m experience as of Aug 2026 → DOJ around May 2024
+    const emp = { employeeName: "Y", doj: "2024-05-01" };
+    const calc = computeExcelLeaveCalculation(emp, leaves, asOf);
+    return (
+      calc.yearTotals[2026] === 54 &&
+      calc.yearTotals[2025] === 28 &&
+      calc.yearTotals[2024] === 1 &&
+      calc.totalTaken === 83
+    );
+  })()],
   ["never double-deduct expired", empA.leaveDue === empA.entitlement - empA.totalTaken],
 ];
 

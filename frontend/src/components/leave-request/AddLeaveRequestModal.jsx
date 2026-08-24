@@ -11,7 +11,11 @@ import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
-import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import {
+    calculateLeaveBalance,
+    calculateLeaveDays,
+    getApprovedLeavesForEmployee,
+} from "../../utils/leaveCalculator";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
@@ -319,11 +323,9 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     // Calculate History Logic (Same as View Template)
     const selectedEmp = employees.find(e => e._id === formData.employeeId);
     const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0 };
-    const employeeLeaves = (allLeaveRequests || []).filter(req => {
-        const reqName = String(req.employeeName || "").toLowerCase().trim();
-        const empNameSearch = String(selectedEmp?.employeeName || selectedEmp?.name || "").toLowerCase().trim();
-        return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
-    });
+    const employeeLeaves = selectedEmp
+        ? getApprovedLeavesForEmployee(selectedEmp, allLeaveRequests)
+        : [];
     const years = buildLeaveHistoryYears(selectedEmp?.doj);
 
     const getYearlyLeaves = (year) => {
@@ -331,12 +333,17 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     };
 
     const getYearlyTotal = (year) => {
-        return getYearlyLeaves(year)
-            .reduce((total, req) => {
-                const s = new Date(req.startDate);
-                const e = new Date(req.endDate);
-                return total + (Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1);
-            }, 0);
+        if (!leaveStats) return 0;
+        const yearEnd = new Date(year, 11, 31);
+        const takenStart = leaveStats.takenRangeStart
+            ? new Date(leaveStats.takenRangeStart)
+            : leaveStats.calculationStartDate
+              ? new Date(leaveStats.calculationStartDate)
+              : null;
+        if (takenStart && yearEnd < takenStart) {
+            return leaveStats.historicalYearTotals?.[year] ?? 0;
+        }
+        return leaveStats.yearTotals?.[year] ?? 0;
     };
 
     const handleYearClick = (year) => {
@@ -819,7 +826,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                                                     </div>
                                                                                                 )}
                                                                                                 <div style={{ fontSize: "11px", color: "#64748b" }}>
-                                                                                                    {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
+                                                                                                    {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate) || 0} Days
                                                                                                 </div>
                                                                                             </div>
                                                                                             <div style={{ textAlign: "right" }}>
