@@ -1,71 +1,107 @@
 import {
+  accrueLeaveDays,
   computeExcelLeaveCalculation,
-  excelDateDiffDays,
-  getLeaveTillDate,
+  countCompletedMonths,
+  getActiveLeaveWindow,
 } from "../../frontend/src/utils/leaveCalculator.js";
 
-const till = getLeaveTillDate(new Date("2026-08-19"));
-const tillExpected = new Date(2026, 11, 31);
+const asOf = new Date(2026, 7, 24); // 24/08/2026
 
-const emp1 = computeExcelLeaveCalculation(
-  { employeeName: "Emp 1", doj: "2024-01-01" },
+const empA = computeExcelLeaveCalculation({ employeeName: "A", doj: "2017-01-01" }, [], asOf);
+const empB = computeExcelLeaveCalculation({ employeeName: "B", doj: "2021-01-01" }, [], asOf);
+const empC = computeExcelLeaveCalculation({ employeeName: "C", doj: "2024-01-01" }, [], asOf);
+const empD = computeExcelLeaveCalculation({ employeeName: "D", doj: "2025-01-01" }, [], asOf);
+const empE = computeExcelLeaveCalculation({ employeeName: "E", doj: "2026-03-01" }, [], asOf);
+
+const empExact5 = computeExcelLeaveCalculation(
+  { employeeName: "Exact5", doj: "2021-08-24" },
   [],
-  tillExpected
+  asOf
 );
 
-const emp2Leaves = [
+const emp66 = computeExcelLeaveCalculation(
+  { employeeName: "66m", doj: "2021-02-01" },
+  [],
+  asOf
+);
+
+const oldWindowLeave = [
   {
     status: "Approved",
-    employeeName: "Emp 2",
-    startDate: "2024-06-01",
-    endDate: "2024-06-25",
+    employeeName: "Hist",
+    startDate: "2018-01-01",
+    endDate: "2018-01-20",
+  },
+  {
+    status: "Approved",
+    employeeName: "Hist",
+    startDate: "2023-06-01",
+    endDate: "2023-07-02",
   },
 ];
-const emp2 = computeExcelLeaveCalculation(
-  { employeeName: "Emp 2", doj: "2024-03-01" },
-  emp2Leaves,
-  tillExpected
+const empHist = computeExcelLeaveCalculation(
+  { employeeName: "Hist", doj: "2014-01-01" },
+  oldWindowLeave,
+  asOf
 );
 
-const emp3 = computeExcelLeaveCalculation(
-  { employeeName: "Emp 3", doj: "2019-12-01" },
-  [],
-  tillExpected
+const empTaken = computeExcelLeaveCalculation(
+  { employeeName: "Taken", doj: "2017-01-01" },
+  [
+    {
+      status: "Approved",
+      employeeName: "Taken",
+      startDate: "2024-01-01",
+      endDate: "2024-02-01",
+    },
+  ],
+  asOf
 );
+
+const { effectiveStart: histStart } = getActiveLeaveWindow(asOf, "2014-01-01");
 
 const checks = [
-  ["till is 31 Dec 2026", till.getTime() === tillExpected.getTime()],
-  ["emp1 working days 1095", emp1.workingDays === 1095],
-  ["emp1 working years 3", emp1.workingYears === 3],
-  ["emp1 taken 0", emp1.totalTaken === 0],
-  ["emp1 average 3", emp1.averageLeave === 3],
-  ["emp1 due 90", emp1.leaveDue === 90],
-  ["emp2 working days 1035", emp2.workingDays === 1035],
-  ["emp2 taken 25", emp2.totalTaken === 25],
-  ["emp2 average = years capped 5", emp2.averageLeave === emp2.workingYears && emp2.workingYears < 5],
-  [
-    "emp2 due (avg*30)-25",
-    emp2.leaveDue === Number((emp2.averageLeave * 30 - 25).toFixed(2)),
-  ],
-  ["emp3 calc date is joining", emp3.calculateLeaveDate.getTime() === new Date(2019, 11, 1).getTime()],
-  [
-    "emp3 working days till-join",
-    emp3.workingDays === excelDateDiffDays(tillExpected, new Date(2019, 11, 1)),
-  ],
-  ["emp3 average capped at 5", emp3.averageLeave === 5],
-  ["emp3 due 150 when no leave", emp3.leaveDue === 150],
-  ["do not use Jan 1 for Mar joiner", emp2.workingDays !== emp1.workingDays],
+  ["2.5 accrual helper", accrueLeaveDays(6) === 15 && accrueLeaveDays(60) === 150],
+  ["completed months 24/02→24/08 = 6", countCompletedMonths("2026-02-24", asOf) === 6],
+  ["completed months exact 5y = 60", countCompletedMonths("2021-08-24", asOf) === 60],
+  ["A >5y entitlement capped 150", empA.entitlement === 150],
+  ["A expired > 0", empA.expiredDays > 0],
+  ["A available 150 with no taken", empA.leaveDue === 150],
+  ["B ~5y+ entitlement 150", empB.entitlement === 150],
+  ["C ~31m entitlement 77.5", empC.activeEligibleMonths === 31 && empC.entitlement === 77.5 && empC.expiredDays === 0],
+  ["C less than 5y not capped at 150", empC.entitlement < 150],
+  ["exact 24 months from DOJ = 60", (() => {
+    const e = computeExcelLeaveCalculation({ employeeName: "24m", doj: "2024-08-24" }, [], asOf);
+    return e.activeEligibleMonths === 24 && e.entitlement === 60;
+  })()],
+  ["D ~1y entitlement ~45 (19m to Aug)", empD.activeEligibleMonths === 19 && empD.entitlement === 47.5],
+  ["E ~5m from Mar 1", empE.activeEligibleMonths === 5 && empE.entitlement === 12.5],
+  ["exact 5y = 150 / expired 0", empExact5.entitlement === 150 && empExact5.expiredDays === 0],
+  ["66 months total accrued 165", emp66.totalAccruedDays === 165],
+  ["66 months active 150 expired 15", emp66.entitlement === 150 && emp66.expiredDays === 15],
+  ["old leave not in active taken", empHist.totalTaken === 32],
+  ["old leave historical before window", empHist.historicalTakenOutsideWindow === 20],
+  ["hist start is window not DOJ", histStart.getTime() === empHist.calculationStartDate.getTime()],
+  ["taken 32 → available 118", empTaken.totalTaken === 32 && empTaken.leaveDue === 118],
+  ["never double-deduct expired", empA.leaveDue === empA.entitlement - empA.totalTaken],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);
 if (failed.length) {
   console.error("FAIL", failed.map(([n]) => n));
-  console.log({ emp1, emp2, emp3 });
+  console.log({ empA, empB, empC, empD, empE, empExact5, emp66, empHist, empTaken });
   process.exit(1);
 }
+
 console.log("PASS", checks.map(([n]) => n).join("; "));
 console.log({
-  emp1: { days: emp1.workingDays, years: emp1.workingYears, due: emp1.leaveDue },
-  emp2: { days: emp2.workingDays, years: emp2.workingYears, avg: emp2.averageLeave, taken: emp2.totalTaken, due: emp2.leaveDue },
-  emp3: { days: emp3.workingDays, years: emp3.workingYears, avg: emp3.averageLeave, due: emp3.leaveDue },
+  A: { ent: empA.entitlement, exp: empA.expiredDays, months: empA.totalEligibleMonths },
+  B: { ent: empB.entitlement, months: empB.activeEligibleMonths },
+  C: { ent: empC.entitlement, months: empC.activeEligibleMonths },
+  D: { ent: empD.entitlement, months: empD.activeEligibleMonths },
+  E: { ent: empE.entitlement, months: empE.activeEligibleMonths },
+  Exact5: { ent: empExact5.entitlement, exp: empExact5.expiredDays },
+  M66: { accrued: emp66.totalAccruedDays, ent: emp66.entitlement, exp: emp66.expiredDays },
+  Hist: { taken: empHist.totalTaken, histOld: empHist.historicalTakenOutsideWindow },
+  Taken: { taken: empTaken.totalTaken, due: empTaken.leaveDue },
 });

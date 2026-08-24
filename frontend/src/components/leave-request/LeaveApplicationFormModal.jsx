@@ -48,7 +48,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
 
     const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
     const employeeLeaveRecords = filterLeavesForEmployee(employee, allLeaveRequests);
-    const leaveStats = calculateLeaveBalance(employee, employeeLeaveRecords);
+    const leaveStats = calculateLeaveBalance(employee, allLeaveRequests);
 
     const employeeLeaves = employeeLeaveRecords.filter(
         (req) => req.status === "Approved" || req.status === "HOD Approved"
@@ -277,8 +277,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                     </div>
 
                     <div style={{ marginTop: "20px", padding: "16px", background: "#fffbeb", borderRadius: "12px", border: "1px solid #fef3c7", fontSize: "13px", color: "#92400e" }}>
-                        <strong>Note:</strong> Records are calculated from the joined date (<strong>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : 'N/A'}</strong>). 
-                        The standard entitlement is 30 days per calendar year.
+                        <strong>Note:</strong> Accrual is 2.5 days per completed month from DOJ (<strong>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : 'N/A'}</strong>), capped at 150 days for the latest 5-year active window.
                     </div>
                 </div>
 

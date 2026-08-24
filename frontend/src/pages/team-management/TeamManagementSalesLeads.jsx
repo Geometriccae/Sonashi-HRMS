@@ -1148,7 +1148,7 @@ function TeamManagementSalesLeads() {
                       ? filterLeavesForEmployee(employee, allLeaveRequests)
                       : [];
                     const leaveStats = isCurrentEmployee
-                      ? calculateLeaveBalance(employee, employeeLeaveRecords)
+                      ? calculateLeaveBalance(employee, allLeaveRequests)
                       : null;
                     const latest = employeeLeaves[0];
                     return (
