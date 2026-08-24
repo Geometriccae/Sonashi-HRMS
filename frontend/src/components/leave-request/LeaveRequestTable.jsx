@@ -21,7 +21,7 @@ import {
     canApproveLeaveRequest,
     getUserRole,
 } from "../../utils/permissions";
-import { buildYearList, yearsFromLeaveRequests } from "../../utils/yearOptions";
+import { buildYearList } from "../../utils/yearOptions";
 import {
     readPersistedPage,
     writePersistedPage,
@@ -57,6 +57,7 @@ const RevertIcon = () => (
 function LeaveRequestTable({ onUpdate }) {
     const { showToast } = useToast();
     const [leaveRequests, setLeaveRequests] = useState([]);
+    const [totalLeaveCount, setTotalLeaveCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [activeFilter, setActiveFilter] = useState("All");
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -106,6 +107,7 @@ function LeaveRequestTable({ onUpdate }) {
     }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [selectedDept, setSelectedDept] = useState("All");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
@@ -133,20 +135,46 @@ function LeaveRequestTable({ onUpdate }) {
     const canCreateLeaveRequests = canCreateLeaves(userRole);
     const canEditLeaveRequests = canEditLeaves(userRole);
 
-    const fetchLeaveRequests = async () => {
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+        return () => clearTimeout(t);
+    }, [searchQuery]);
+
+    const fetchLeaveRequests = useCallback(async () => {
         setIsLoading(true);
         try {
-            const data = await leaveRequestService.getLeaveRequests();
-            setLeaveRequests(data);
-            
-            // Extract unique managers from data in the table
-            const uniqueManagers = [...new Set(data.map(req => req.reportingManager).filter(Boolean))];
-            setManagers(uniqueManagers.sort());
+            const params = {
+                page: currentPage,
+                limit: itemsPerPage,
+                status: activeFilter,
+                search: debouncedSearch,
+                department: selectedDept,
+                reportingManager: selectedManager,
+                year: selectedYear,
+                month: selectedMonth,
+                startDate,
+                endDate,
+                leaveType: selectedLeaveType,
+            };
+            const data = await leaveRequestService.getLeaveRequests(params);
+            const rows = Array.isArray(data) ? data : (data?.data || []);
+            setLeaveRequests(rows);
+            setTotalLeaveCount(Array.isArray(data) ? rows.length : (Number(data?.total) || rows.length));
 
-            // Extract unique departments from data in the table
-            const uniqueDepts = [...new Set(data.map(req => req.department).filter(Boolean))];
-            setDepartments(uniqueDepts.sort());
-            
+            if (data?.filterOptions) {
+                if (Array.isArray(data.filterOptions.departments)) {
+                    setDepartments(data.filterOptions.departments);
+                }
+                if (Array.isArray(data.filterOptions.managers)) {
+                    setManagers(data.filterOptions.managers);
+                }
+            } else {
+                const uniqueManagers = [...new Set(rows.map(req => req.reportingManager).filter(Boolean))];
+                setManagers(uniqueManagers.sort());
+                const uniqueDepts = [...new Set(rows.map(req => req.department).filter(Boolean))];
+                setDepartments(uniqueDepts.sort());
+            }
+
             if (onUpdate) onUpdate(data);
         } catch (error) {
             console.error("Error fetching leave requests:", error);
@@ -154,12 +182,18 @@ function LeaveRequestTable({ onUpdate }) {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [
+        currentPage, itemsPerPage, activeFilter, debouncedSearch, selectedDept, selectedManager,
+        selectedYear, selectedMonth, startDate, endDate, selectedLeaveType,
+    ]); // eslint-disable-line react-hooks/exhaustive-deps -- onUpdate/showToast stable enough for this page
 
     useEffect(() => {
         setUserRole(getUserRole());
-        fetchLeaveRequests();
     }, []);
+
+    useEffect(() => {
+        fetchLeaveRequests();
+    }, [fetchLeaveRequests]);
 
     const handleEdit = (request) => {
         setSelectedRequest(request);
@@ -301,7 +335,7 @@ function LeaveRequestTable({ onUpdate }) {
     };
 
     const uniqueYears = buildYearList({
-        fromDataYears: yearsFromLeaveRequests(leaveRequests),
+        fromDataYears: [],
         pastYears: 25,
         futureYears: 5,
     });
@@ -310,17 +344,6 @@ function LeaveRequestTable({ onUpdate }) {
         { value: "All", label: "All Years" },
         ...uniqueYears.map(year => ({ value: String(year), label: String(year) }))
     ];
-
-    /** Calendar year of leave start — matches Duration year display (UTC / ISO date). */
-    const getLeaveStartYear = (dateVal) => {
-        if (!dateVal) return null;
-        if (typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
-            return Number(dateVal.slice(0, 4));
-        }
-        const d = new Date(dateVal);
-        if (Number.isNaN(d.getTime())) return null;
-        return d.getUTCFullYear();
-    };
 
     const monthOptions = [
         { value: "All", label: "Month" },
@@ -338,66 +361,13 @@ function LeaveRequestTable({ onUpdate }) {
         { value: "11", label: "December" }
     ];
 
-    const filteredRequests = leaveRequests.filter(req => {
-        // Status Filter (Segmented Control)
-        if (activeFilter !== "All") {
-            if (activeFilter === "History") {
-                if (req.status !== "Approved" && req.status !== "Rejected" && req.status !== "Cancelled") return false;
-            } else if (req.status !== activeFilter) {
-                return false;
-            }
-        }
-
-        // Search Query (Name or ID)
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            const name = (req.employeeName || req.employee?.username || "").toLowerCase();
-            const id = (req.employeeId || "").toLowerCase();
-            if (!name.includes(query) && !id.includes(query)) return false;
-        }
-
-        // Department Filter
-        if (selectedDept !== "All" && req.department !== selectedDept) return false;
-
-        // Manager Filter
-        if (selectedManager !== "All" && req.reportingManager !== selectedManager) return false;
-
-        // Date Range Filter
-        if (startDate) {
-            const reqStart = new Date(req.startDate);
-            const filterStart = new Date(startDate);
-            if (reqStart < filterStart) return false;
-        }
-        if (endDate) {
-            const reqEnd = new Date(req.endDate);
-            const filterEnd = new Date(endDate);
-            if (reqEnd > filterEnd) return false;
-        }
-
-        // Month Filter
-        if (selectedMonth !== "All") {
-            const d = new Date(req.startDate);
-            if (Number.isNaN(d.getTime())) return false;
-            const reqMonth = d.getUTCMonth(); // 0 to 11
-            if (reqMonth !== parseInt(selectedMonth, 10)) return false;
-        }
-
-        // Year Filter — leave start year must match selected Year
-        if (selectedYear !== "All") {
-            const reqYear = getLeaveStartYear(req.startDate);
-            if (reqYear == null || reqYear !== parseInt(selectedYear, 10)) return false;
-        }
-
-        if (selectedLeaveType && selectedLeaveType !== "All") {
-            if (selectedLeaveType === "Annual Leave") {
-                if (req.leaveType !== "Annual Leave" && req.leaveType !== "Vacation") return false;
-            } else if (req.leaveType !== selectedLeaveType) {
-                return false;
-            }
-        }
-
-        return true;
-    }).sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+    // Server already filtered + paginated
+    const filteredRequests = leaveRequests;
+    const totalPages = Math.max(1, Math.ceil(totalLeaveCount / itemsPerPage) || 1);
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * itemsPerPage;
+    const endIndex = startIndex + filteredRequests.length;
+    const paginatedRequests = filteredRequests;
 
     // Determine which requests can be approved based on role + Admin/self rules
     const canApprove = (request) => canApproveLeaveRequest(request, userRole);
@@ -413,23 +383,15 @@ function LeaveRequestTable({ onUpdate }) {
         return `${day}/${month}/${year}`;
     };
 
-    // Pagination calculations
-    const totalPages = Math.max(1, Math.ceil(filteredRequests.length / itemsPerPage) || 1);
-    const safePage = Math.min(currentPage, totalPages);
-    const startIndex = (safePage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedRequests = filteredRequests.slice(startIndex, endIndex);
-
-    // Clamp only after data is loaded — empty list briefly has totalPages=1 and was wiping restored page
     useEffect(() => {
-        if (leaveRequests.length === 0) return;
+        if (totalLeaveCount === 0 || isLoading) return;
         if (currentPage > totalPages) setCurrentPage(totalPages);
-    }, [leaveRequests.length, currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [totalLeaveCount, currentPage, totalPages, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Reset page only when filters actually change (Strict Mode safe)
     useResetPageOnFilterChange(resetToFirstPage, {
         activeFilter,
-        searchQuery,
+        searchQuery: debouncedSearch,
         selectedDept,
         startDate,
         endDate,
@@ -917,7 +879,7 @@ function LeaveRequestTable({ onUpdate }) {
             {totalPages > 1 && (
                 <div className={styles.pagination}>
                     <div className={styles.paginationInfo}>
-                        Showing {startIndex + 1} to {Math.min(endIndex, filteredRequests.length)} of {filteredRequests.length} entries
+                        Showing {totalLeaveCount === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + filteredRequests.length, totalLeaveCount)} of {totalLeaveCount} entries
                     </div>
                     <div className={styles.paginationControls}>
                         <button

@@ -11,20 +11,17 @@ import styles from "./AnnualVacations.module.css";
 import {
   FaSearch, FaTimes, FaEdit, FaUndoAlt,
   FaFilter, FaSyncAlt, FaChevronDown, FaChevronUp,
-  FaFileExcel, FaFilePdf,
+  FaFileExcel, FaFilePdf, FaChevronLeft, FaChevronRight,
 } from "react-icons/fa";
 import { MdFlightTakeoff, MdBeachAccess, MdFlightLand } from "react-icons/md";
 import { saveAs } from "file-saver";
 import {
-  computeExperienceYears,
   formatExperienceLabel,
-  findLeaveForEmployee,
-  buildYetToGoFromLeaves,
-  filterReturnedBackEmployees,
 } from "../utils/yetToGoHelpers";
 import { canUpdateVacationReturn } from "../utils/permissions";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
-import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
+
+const PAGE_SIZE = 20;
 
 const loadXlsx = async () => {
   const mod = await import("xlsx");
@@ -96,26 +93,6 @@ const DEFAULT_FILTERS = {
   department: "", role: "", dojFrom: "", dojTo: "",
   expMin: "", expMax: "", office: "", country: "",
   vacationMonth: "", vacationYear: "",
-};
-
-const itemMatchesVacationMonth = (item, monthStr, yearStr) => {
-  if (!monthStr && !yearStr) return true;
-
-  const dates = [item.travellingDate, item.startDate, item.lastWorkingDay].filter(Boolean);
-  if (dates.length === 0) return false;
-
-  const monthIdx = monthStr !== "" ? Number(monthStr) : null;
-  const yearNum = yearStr !== ""
-    ? Number(yearStr)
-    : (monthStr !== "" ? new Date().getFullYear() : null);
-
-  return dates.some((d) => {
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return false;
-    if (monthIdx !== null && dt.getMonth() !== monthIdx) return false;
-    if (yearNum !== null && dt.getFullYear() !== yearNum) return false;
-    return true;
-  });
 };
 
 const getNavEmployeeId = (item) => {
@@ -253,9 +230,11 @@ function AnnualVacations() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [isLoading, setIsLoading]       = useState(true);
-  const [employees, setEmployees]       = useState([]);
-  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [tableLoading, setTableLoading] = useState(false);
   const [counts, setCounts]             = useState({ onVacation: 0, yetToGo: 0, returned: 0 });
+  const [filterOptions, setFilterOptions] = useState({
+    departments: [], roles: [], offices: [], countries: [],
+  });
 
   // Resume last vacation tab via URL (?tab=) + session (same pattern as Leave/Team)
   const activeTab = (() => {
@@ -284,11 +263,14 @@ function AnnualVacations() {
     writePersistedPath("annual-vacations", path);
   }, [setSearchParams]);
 
-  // tabList = full unfiltered category list (rebuilt only when tab or raw data changes)
+  // Server-paginated tab rows (page 1 first — never load full history upfront)
   const [tabList, setTabList]           = useState([]);
+  const [tabTotal, setTabTotal]         = useState(0);
+  const [page, setPage]                 = useState(1);
   const [searchQuery, setSearchQuery]   = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Filters — applied only inside filteredList useMemo
+  // Filters — sent to vacation-tab API
   const [filters, setFilters]           = useState(DEFAULT_FILTERS);
   const [pendingFilters, setPendingFilters] = useState(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen]     = useState(false);
@@ -302,19 +284,23 @@ function AnnualVacations() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
   // ─── Unique dropdown options ─────────────────────────────────────────────
   const options = useMemo(() => {
-    const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
     const currentYear = new Date().getFullYear();
     const years = ["", ...Array.from({ length: currentYear - 2011 }, (_, i) => String(currentYear - i))];
     return {
-      departments: uniq(employees.map(e => e.department)),
-      roles:       uniq(employees.map(e => e.role)),
-      offices:     uniq(employees.map(e => e.office)),
-      countries:   uniq(employees.map(e => e.nationality)),
+      departments: filterOptions.departments || [],
+      roles: filterOptions.roles || [],
+      offices: filterOptions.offices || [],
+      countries: filterOptions.countries || [],
       years,
     };
-  }, [employees]);
+  }, [filterOptions]);
 
   // ─── Active filter count ─────────────────────────────────────────────────
   const activeFilterCount = useMemo(
@@ -322,34 +308,71 @@ function AnnualVacations() {
     [filters]
   );
 
-  // Annual Vacations uses stored employee.vacationStatus as source of truth
-  // (Team/Dashboard status edits). Leave rows only enrich dates / Yet-to-go.
-  const loadVacationData = useCallback(async ({ force = false } = {}) => {
-    const [empRes, leaveRes] = await Promise.all([
-      employeeService.getEmployeesList({ force }),
-      leaveRequestService.getLeaveRequests({ view: "lite" }),
-    ]);
-    const empList = Array.isArray(empRes) ? empRes : empRes?.data || [];
-    const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
-    return { empList, leaveList };
-  }, []);
+  const applySummaryCounts = (summary) => {
+    setCounts({
+      onVacation: summary.onVacation ?? 0,
+      yetToGo: summary.yetToGo ?? summary.upcomingVacation ?? 0,
+      returned: summary.returnedBack ?? summary.vacationReturn ?? 0,
+    });
+    if (summary.filterOptions) {
+      setFilterOptions({
+        departments: summary.filterOptions.departments || [],
+        roles: summary.filterOptions.roles || [],
+        offices: summary.filterOptions.offices || [],
+        countries: summary.filterOptions.countries || [],
+      });
+    }
+  };
 
-  // ─── Fetch Data ──────────────────────────────────────────────────────────
-  const fetchData = useCallback(async () => {
+  // ─── Fetch counts only (cards) ───────────────────────────────────────────
+  const fetchCounts = useCallback(async ({ force = false } = {}) => {
     setIsLoading(true);
     try {
-      const { empList, leaveList } = await loadVacationData();
-      setEmployees(empList);
-      setLeaveRequests(leaveList);
-      computeCounts(empList, leaveList);
+      const summary = await employeeService.getEmployeeStats({ force });
+      applySummaryCounts(summary);
     } catch (err) {
-      console.error("Failed to fetch vacation data:", err);
+      console.error("Failed to fetch vacation counts:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [loadVacationData]); // eslint-disable-line
+  }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const fetchTabPage = useCallback(async () => {
+    if (!activeTab) {
+      setTabList([]);
+      setTabTotal(0);
+      return;
+    }
+    setTableLoading(true);
+    try {
+      const result = await employeeService.getVacationTab({
+        tab: activeTab,
+        page,
+        limit: PAGE_SIZE,
+        search: debouncedSearch,
+        filters,
+      });
+      setTabList(Array.isArray(result?.employees) ? result.employees : []);
+      setTabTotal(Number(result?.total) || 0);
+    } catch (err) {
+      console.error("Failed to fetch vacation tab page:", err);
+      setTabList([]);
+      setTabTotal(0);
+    } finally {
+      setTableLoading(false);
+    }
+  }, [activeTab, page, debouncedSearch, filters]);
+
+  // ─── Fetch Data ──────────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    employeeService.invalidateCache();
+    await fetchCounts({ force: true });
+    if (activeTab) {
+      await fetchTabPage();
+    }
+  }, [fetchCounts, fetchTabPage, activeTab]);
+
+  useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
   // Keep URL + sidebar path in sync when restoring tab from session
   useEffect(() => {
@@ -370,143 +393,39 @@ function AnnualVacations() {
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Rebuild tab list when returning with a saved tab and data loaded
+  // Load page when tab / page / search / filters change
   useEffect(() => {
-    if (!activeTab || !employees.length) return;
-    setTabList(buildTabList(activeTab, employees, leaveRequests));
-  }, [employees, leaveRequests]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchTabPage();
+  }, [fetchTabPage]);
 
-  // ─── Compute Counts (no filters applied to counts) ──────────────────────
-  // Only the employee's vacationStatus field is authoritative.
-  // Leave-request date ranges are NOT used to inflate counts — the status
-  // dropdown on Team Management / Dashboard is the single source of truth.
-  const computeCounts = (empList, leaveList) => {
-    const working = empList.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
-    const onVacation = working.filter(e => e.vacationStatus === "On Vacation").length;
-    const yetToGo    = buildYetToGoFromLeaves(empList, leaveList)
-      .filter(row => isWorkingEmployeeStatus(row.employeeStatus)).length;
-    const returned   = filterReturnedBackEmployees(empList, leaveList).length;
-    setCounts({ onVacation, yetToGo, returned });
-  };
+  // Reset to page 1 when tab, search, or filters change
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, debouncedSearch, filters]);
 
-  // ─── Build Tab List (category-only, NO user filters here) ───────────────
-  // Only employees whose vacationStatus matches the tab are shown.
-  // We enrich each row with leave-request dates when available.
-  const buildTabList = useCallback((tabKey, empList, leaveList) => {
-    if (tabKey === "yetToGo") {
-      return buildYetToGoFromLeaves(empList, leaveList);
-    }
-
-    const sourceList =
-      tabKey === "returned"
-        ? filterReturnedBackEmployees(empList, leaveList)
-        : empList.filter(e => e.vacationStatus === "On Vacation");
-
-    return sourceList.map(e => {
-        const leave = findLeaveForEmployee(e, leaveList, empList, tabKey);
-        return {
-          ...e,
-          _source: "employee",
-          linkedEmployeeId: e._id,
-          linkedLeaveId: leave?._id || null,
-          startDate: leave?.startDate || null,
-          endDate: leave?.endDate || e.leaveEndDate || null,
-          experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
-        };
-      });
-  }, []);
+  // Server already filtered — display as-is
+  const filteredList = tabList;
+  const totalPages = Math.max(1, Math.ceil(tabTotal / PAGE_SIZE));
 
   // ─── Card Click ──────────────────────────────────────────────────────────
   const handleCardClick = (tabKey) => {
-    setActiveTab(tabKey);
     setSearchQuery("");
-    setTabList(buildTabList(tabKey, employees, leaveRequests));
+    setDebouncedSearch("");
+    setPage(1);
+    setActiveTab(tabKey);
   };
-
-  // ─── filteredList — apply search + ALL 6 user filters reactively ─────────
-  // This is a pure useMemo: whenever tabList, searchQuery, or filters change,
-  // it recomputes automatically — no stale closure issues.
-  const filteredList = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-
-    return tabList.filter(item => {
-      // ── Search ──
-      if (q) {
-        const haystack = [
-          item.employeeName || item.name || "",
-          item.employeeId   || "",
-          item.employeeNumber || "",
-          item.department   || "",
-          item.role         || "",
-          item.office       || "",
-          item.nationality  || "",
-        ].join(" ").toLowerCase();
-        if (!haystack.includes(q)) return false;
-      } else if (isNonWorkingEmployeeStatus(item.employeeStatus)) {
-        return false;
-      }
-
-      // ── Department ──
-      if (filters.department) {
-        const dept = item.department || "";
-        if (dept !== filters.department) return false;
-      }
-
-      // ── Role ──
-      if (filters.role) {
-        const role = item.role || "";
-        if (role !== filters.role) return false;
-      }
-
-      // ── Office Location ──
-      if (filters.office) {
-        const office = item.office || "";
-        if (office !== filters.office) return false;
-      }
-
-      // ── Country (Nationality) ──
-      if (filters.country) {
-        const nat = item.nationality || "";
-        if (nat !== filters.country) return false;
-      }
-
-      // ── DOJ Range ──
-      if (filters.dojFrom || filters.dojTo) {
-        const doj = item.doj ? new Date(item.doj) : null;
-        if (!doj) return false;
-        if (filters.dojFrom && doj < new Date(filters.dojFrom)) return false;
-        if (filters.dojTo   && doj > new Date(filters.dojTo))   return false;
-      }
-
-      // ── Years of Experience Range (from DOJ as of today) ──
-      const exp = computeExperienceYears(item.doj, item.totalYearsExperience);
-      if (filters.expMin !== "" && filters.expMin !== null) {
-        if (exp == null || exp < Number(filters.expMin)) return false;
-      }
-      if (filters.expMax !== "" && filters.expMax !== null) {
-        if (exp == null || exp > Number(filters.expMax)) return false;
-      }
-
-      // ── Vacation month / year (travelling date or leave start) ──
-      if (filters.vacationMonth || filters.vacationYear) {
-        if (!itemMatchesVacationMonth(item, filters.vacationMonth, filters.vacationYear)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [tabList, searchQuery, filters]);
 
   // ─── Filter UI Helpers ───────────────────────────────────────────────────
   const handleApplyFilters = () => {
     setFilters({ ...pendingFilters });
+    setPage(1);
     setFilterOpen(false);
   };
 
   const handleResetFilters = () => {
     setFilters(DEFAULT_FILTERS);
     setPendingFilters(DEFAULT_FILTERS);
+    setPage(1);
     setFilterOpen(false);
   };
 
@@ -518,71 +437,104 @@ function AnnualVacations() {
     else updated[key] = "";
     setFilters(updated);
     setPendingFilters(updated);
+    setPage(1);
   };
 
   const handleExportExcel = async () => {
-    if (!activeTab || filteredList.length === 0) {
+    if (!activeTab) {
       alert("No records to export for this category.");
       return;
     }
-    const tab = getTabConfig(activeTab);
-    const rows = buildVacationExportRows(filteredList, activeTab);
-    const XLSX = await loadXlsx();
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
-    XLSX.utils.book_append_sheet(wb, ws, (tab?.label || "Report").slice(0, 31));
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
-    });
-    const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
-    saveAs(blob, `Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
+    try {
+      const result = await employeeService.getVacationTab({
+        tab: activeTab,
+        page: 1,
+        search: debouncedSearch,
+        filters,
+        all: true,
+      });
+      const exportList = Array.isArray(result?.employees) ? result.employees : [];
+      if (exportList.length === 0) {
+        alert("No records to export for this category.");
+        return;
+      }
+      const tab = getTabConfig(activeTab);
+      const rows = buildVacationExportRows(exportList, activeTab);
+      const XLSX = await loadXlsx();
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
+      XLSX.utils.book_append_sheet(wb, ws, (tab?.label || "Report").slice(0, 31));
+      const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+      });
+      const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
+      saveAs(blob, `Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
+    } catch (err) {
+      alert(err?.message || "Export failed.");
+    }
   };
 
   const handleExportPdf = async () => {
-    if (!activeTab || filteredList.length === 0) {
+    if (!activeTab) {
       alert("No records to export for this category.");
       return;
     }
-    const tab = getTabConfig(activeTab);
-    const rows = buildVacationExportRows(filteredList, activeTab);
-    const headers = Object.keys(rows[0]);
-    const body = rows.map((row) => headers.map((h) => (row[h] != null ? String(row[h]) : "")));
+    try {
+      const result = await employeeService.getVacationTab({
+        tab: activeTab,
+        page: 1,
+        search: debouncedSearch,
+        filters,
+        all: true,
+      });
+      const exportList = Array.isArray(result?.employees) ? result.employees : [];
+      if (exportList.length === 0) {
+        alert("No records to export for this category.");
+        return;
+      }
+      const tab = getTabConfig(activeTab);
+      const rows = buildVacationExportRows(exportList, activeTab);
+      const headers = Object.keys(rows[0]);
+      const body = rows.map((row) => headers.map((h) => (row[h] != null ? String(row[h]) : "")));
 
-    const { jsPDF, autoTable } = await loadJsPdf();
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`Annual Vacations — ${tab?.label || activeTab}`, 14, 15);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.text(
-      `Generated on: ${new Date().toLocaleDateString("en-GB")} | Total Records: ${rows.length}`,
-      14,
-      21
-    );
+      const { jsPDF, autoTable } = await loadJsPdf();
+      const doc = new jsPDF({ orientation: "landscape" });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Annual Vacations — ${tab?.label || activeTab}`, 14, 15);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Generated on: ${new Date().toLocaleDateString("en-GB")} | Total Records: ${rows.length}`,
+        14,
+        21
+      );
 
-    autoTable(doc, {
-      startY: 26,
-      head: [headers],
-      body,
-      theme: "grid",
-      styles: { fontSize: 7.5, cellPadding: 2.5, overflow: "linebreak", valign: "middle" },
-      headStyles: {
-        fillColor: [22, 163, 74],
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 8,
-      },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { top: 25, bottom: 15, left: 10, right: 10 },
-    });
+      autoTable(doc, {
+        startY: 26,
+        head: [headers],
+        body,
+        theme: "grid",
+        styles: { fontSize: 7.5, cellPadding: 2.5, overflow: "linebreak", valign: "middle" },
+        headStyles: {
+          fillColor: [22, 163, 74],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { top: 25, bottom: 15, left: 10, right: 10 },
+      });
 
-    const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
-    doc.save(`Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.pdf`);
+      const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
+      doc.save(`Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (err) {
+      alert(err?.message || "Export failed.");
+    }
   };
 
   const activePills = useMemo(() => {
@@ -644,10 +596,8 @@ function AnnualVacations() {
       showToast(`${item.employeeName || item.name} return date updated.`);
       employeeService.invalidateCache();
       leaveRequestService.invalidateCache();
-      const { empList, leaveList } = await loadVacationData({ force: true });
-      setEmployees(empList); setLeaveRequests(leaveList);
-      computeCounts(empList, leaveList);
-      setTabList(buildTabList(activeTab, empList, leaveList));
+      await fetchCounts({ force: true });
+      await fetchTabPage();
     } catch (err) {
       showToast(err?.message || "Failed to update return date.", "error");
       throw err;
@@ -702,10 +652,8 @@ function AnnualVacations() {
         showToast("Status updated successfully.");
         employeeService.invalidateCache();
         leaveRequestService.invalidateCache();
-        const { empList, leaveList } = await loadVacationData({ force: true });
-        setEmployees(empList); setLeaveRequests(leaveList);
-        computeCounts(empList, leaveList);
-        setTabList(buildTabList(activeTab, empList, leaveList));
+        await fetchCounts({ force: true });
+        await fetchTabPage();
       }
       setEditModal(null);
     } catch (err) {
@@ -939,7 +887,11 @@ function AnnualVacations() {
                       </div>
                     </div>
 
-                    {filteredList.length === 0 ? (
+                    {tableLoading ? (
+                      <div className={styles.emptyState}>
+                        <p>Loading {getTabConfig(activeTab)?.label}…</p>
+                      </div>
+                    ) : filteredList.length === 0 ? (
                       <div className={styles.emptyState}>
                         <span style={{fontSize:40}}>{getTabConfig(activeTab)?.icon}</span>
                         <p>No employees found{activeFilterCount > 0 ? " matching the active filters" : " for this category"}.</p>
@@ -1041,7 +993,32 @@ function AnnualVacations() {
                     )}
 
                     <div className={styles.detailFooter}>
-                      <span className={styles.footerCount}>{filteredList.length} records shown</span>
+                      <span className={styles.footerCount}>
+                        {tabTotal === 0
+                          ? "0 records"
+                          : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, tabTotal)} of ${tabTotal}`}
+                      </span>
+                      {tabTotal > PAGE_SIZE && (
+                        <div className={styles.pagination}>
+                          <button
+                            type="button"
+                            className={styles.pageBtn}
+                            disabled={page <= 1 || tableLoading}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          >
+                            <FaChevronLeft /> Prev
+                          </button>
+                          <span className={styles.pageInfo}>Page {page} of {totalPages}</span>
+                          <button
+                            type="button"
+                            className={styles.pageBtn}
+                            disabled={page >= totalPages || tableLoading}
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          >
+                            Next <FaChevronRight />
+                          </button>
+                        </div>
+                      )}
                       <button className={styles.viewAllBtn} onClick={() => navigate("/leave-requests")}>
                         View All in Leave Management →
                       </button>

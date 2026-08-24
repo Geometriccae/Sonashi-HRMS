@@ -12,7 +12,9 @@ const { patchListCacheEmployee, invalidateApprovedLeavesCache } = require('../ut
 const CHANGE_STATUSES = ['Created', 'Modified', 'Cancelled', 'Approved', 'Rejected', 'Error'];
 
 const LEAVE_LIST_TTL_MS = 30000;
+const LEAVE_METRICS_TTL_MS = 60000;
 let _leaveListCache = { key: '', data: null, ts: 0 };
+let _leaveMetricsCache = { key: '', data: null, ts: 0 };
 
 function leaveListCacheKey(role, status, employeeId) {
   return `${role || ''}|${status || ''}|${employeeId || ''}`;
@@ -29,8 +31,20 @@ function setLeaveListCache(key, data) {
   _leaveListCache = { key, data, ts: Date.now() };
 }
 
+function getLeaveMetricsCache(key) {
+  if (_leaveMetricsCache.data && _leaveMetricsCache.key === key && Date.now() - _leaveMetricsCache.ts < LEAVE_METRICS_TTL_MS) {
+    return _leaveMetricsCache.data;
+  }
+  return null;
+}
+
+function setLeaveMetricsCache(key, data) {
+  _leaveMetricsCache = { key, data, ts: Date.now() };
+}
+
 function invalidateLeaveListCache() {
   _leaveListCache = { key: '', data: null, ts: 0 };
+  _leaveMetricsCache = { key: '', data: null, ts: 0 };
   invalidateApprovedLeavesCache();
 }
 
@@ -341,13 +355,28 @@ router.get('/', authMiddleware, async (req, res) => {
         const { status, employeeId } = req.query;
         const view = String(req.query.view || '').toLowerCase();
         const isLite = view === 'lite' || view === 'vacation';
+        const page = parseInt(req.query.page, 10);
+        const limit = parseInt(req.query.limit, 10);
+        const paginate = !isLite && !isNaN(page) && page > 0 && !isNaN(limit) && limit > 0;
+        const search = String(req.query.search || '').trim();
+        const department = String(req.query.department || '').trim();
+        const reportingManager = String(req.query.reportingManager || req.query.manager || '').trim();
+        const year = String(req.query.year || '').trim();
+        const month = String(req.query.month || '').trim();
+        const startDate = String(req.query.startDate || '').trim();
+        const endDate = String(req.query.endDate || '').trim();
+        const leaveType = String(req.query.leaveType || '').trim();
         const filter = {};
 
         if (req.user.role === 'hod') {
             // HOD sees only Pending requests (waiting for HOD approval)
             // and also sees requests they have already processed (HOD Approved, Approved, Rejected)
             if (status && status !== 'All') {
-                filter.status = status;
+                if (status === 'History') {
+                    filter.status = { $in: ['Approved', 'Rejected', 'Cancelled'] };
+                } else {
+                    filter.status = status;
+                }
             } else {
                 // Default: show Pending (for approval) and completed ones
                 filter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
@@ -365,7 +394,9 @@ router.get('/', authMiddleware, async (req, res) => {
             const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'];
 
             if (status && status !== 'All') {
-                if (visibleStatuses.includes(status)) {
+                if (status === 'History') {
+                    filter.status = { $in: ['Approved', 'Rejected', 'Cancelled'] };
+                } else if (visibleStatuses.includes(status)) {
                     filter.status = status;
                 } else {
                     // If requesting a status admin/HR shouldn't see, return nothing
@@ -382,7 +413,11 @@ router.get('/', authMiddleware, async (req, res) => {
             // Regular Employees can only see their own requests
             filter.employee = req.user.id;
             if (status && status !== 'All') {
-                filter.status = status;
+                if (status === 'History') {
+                    filter.status = { $in: ['Approved', 'Rejected', 'Cancelled'] };
+                } else {
+                    filter.status = status;
+                }
             }
         }
 
@@ -391,7 +426,71 @@ router.get('/', authMiddleware, async (req, res) => {
             filter.status = { $in: ['Approved', 'HOD Approved'] };
         }
 
-        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeId || filter.employee) + (isLite ? '|lite' : '');
+        // Table filters (applied before pagination)
+        if (search) {
+            const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            filter.$or = [
+                { employeeName: regex },
+                { employeeId: regex },
+            ];
+        }
+        if (department && department !== 'All') {
+            filter.department = department;
+        }
+        if (reportingManager && reportingManager !== 'All') {
+            filter.reportingManager = reportingManager;
+        }
+        if (leaveType && leaveType !== 'All') {
+            if (leaveType === 'Annual Leave') {
+                filter.leaveType = { $in: ['Annual Leave', 'Vacation'] };
+            } else {
+                filter.leaveType = leaveType;
+            }
+        }
+        // Date filters — match Leave Management UI (UTC year/month on startDate)
+        if (year && year !== 'All') {
+            const y = parseInt(year, 10);
+            if (!Number.isNaN(y)) {
+                if (month && month !== 'All') {
+                    const m = parseInt(month, 10);
+                    if (!Number.isNaN(m) && m >= 0 && m <= 11) {
+                        filter.startDate = {
+                            $gte: new Date(Date.UTC(y, m, 1)),
+                            $lte: new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)),
+                        };
+                    }
+                } else {
+                    filter.startDate = {
+                        $gte: new Date(Date.UTC(y, 0, 1)),
+                        $lte: new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999)),
+                    };
+                }
+            }
+        } else if (month && month !== 'All') {
+            const m = parseInt(month, 10);
+            if (!Number.isNaN(m) && m >= 0 && m <= 11) {
+                filter.$expr = { $eq: [{ $month: '$startDate' }, m + 1] };
+            }
+        }
+        if (startDate) {
+            const d = new Date(startDate);
+            if (!Number.isNaN(d.getTime())) {
+                filter.startDate = { ...(filter.startDate || {}), $gte: d };
+            }
+        }
+        if (endDate) {
+            const d = new Date(endDate);
+            if (!Number.isNaN(d.getTime())) {
+                d.setHours(23, 59, 59, 999);
+                filter.endDate = { $lte: d };
+            }
+        }
+
+        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeId || filter.employee)
+          + (isLite ? '|lite' : '')
+          + (paginate
+            ? `|p${page}|l${limit}|s${search}|d${department}|m${reportingManager}|y${year}|mo${month}|sd${startDate}|ed${endDate}|lt${leaveType}`
+            : '|all');
         const skipCache =
           String(req.query.fresh || '') === '1' ||
           String(req.query.fresh || '').toLowerCase() === 'true';
@@ -400,22 +499,86 @@ router.get('/', authMiddleware, async (req, res) => {
             return res.json(cachedLeaves);
         }
 
+        const LEAVE_TABLE_SELECT =
+          'employee employeeId employeeName company department reportingManager leaveType startDate endDate reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
+
         let leaveRequests;
         if (isLite) {
             leaveRequests = await LeaveRequest.find(filter)
-                .select('employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn')
-                .populate('employee', 'username emailId employeeId')
+                .select('employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn requestAirfare')
                 .sort({ appliedOn: -1 })
                 .lean();
-        } else {
-            leaveRequests = await LeaveRequest.find(filter)
-                .populate('employee', 'username emailId employeeId role')
-                .populate('hodApprovedBy', 'username')
-                .populate('adminApprovedBy', 'username')
-                .populate('changedByUser', 'username')
-                .sort({ appliedOn: -1 })
-                .lean();
+            setLeaveListCache(cacheKey, leaveRequests);
+            return res.json(leaveRequests);
         }
+
+        if (paginate) {
+            const safeLimit = Math.min(100, Math.max(1, limit));
+            const skip = (page - 1) * safeLimit;
+
+            // Metrics are role-visible totals (not table year/search filters) — same as previous UI cards
+            const baseStatusFilter = {};
+            if (req.user.role === 'hod' || req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer' || req.user.role === 'authorize_user') {
+                baseStatusFilter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
+            } else {
+                baseStatusFilter.employee = req.user.id;
+            }
+            if (employeeId && (req.user.role === 'hod' || req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer' || req.user.role === 'authorize_user')) {
+                baseStatusFilter.employee = employeeId;
+            }
+
+            const metricsKey = `metrics|${req.user?.role || ''}|${employeeId || ''}`;
+            let metricsBundle = getLeaveMetricsCache(metricsKey);
+            if (!metricsBundle) {
+                const [pending, approved, rejected, allVisible, departments, managers] = await Promise.all([
+                    LeaveRequest.countDocuments({ ...baseStatusFilter, status: 'Pending' }),
+                    LeaveRequest.countDocuments({ ...baseStatusFilter, status: 'Approved' }),
+                    LeaveRequest.countDocuments({ ...baseStatusFilter, status: 'Rejected' }),
+                    LeaveRequest.countDocuments(baseStatusFilter),
+                    LeaveRequest.distinct('department', baseStatusFilter),
+                    LeaveRequest.distinct('reportingManager', baseStatusFilter),
+                ]);
+                metricsBundle = {
+                    metrics: { total: allVisible, pending, approved, rejected },
+                    filterOptions: {
+                        departments: (departments || []).filter(Boolean).sort(),
+                        managers: (managers || []).filter(Boolean).sort(),
+                    },
+                };
+                setLeaveMetricsCache(metricsKey, metricsBundle);
+            }
+
+            const [rows, total] = await Promise.all([
+                LeaveRequest.find(filter)
+                    .select(LEAVE_TABLE_SELECT)
+                    .populate('employee', 'username emailId employeeId role')
+                    .sort({ appliedOn: -1 })
+                    .skip(skip)
+                    .limit(safeLimit)
+                    .lean(),
+                LeaveRequest.countDocuments(filter),
+            ]);
+
+            const payload = {
+                data: rows,
+                total,
+                page,
+                limit: safeLimit,
+                totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+                metrics: metricsBundle.metrics,
+                filterOptions: metricsBundle.filterOptions,
+            };
+            setLeaveListCache(cacheKey, payload);
+            return res.json(payload);
+        }
+
+        leaveRequests = await LeaveRequest.find(filter)
+            .populate('employee', 'username emailId employeeId role')
+            .populate('hodApprovedBy', 'username')
+            .populate('adminApprovedBy', 'username')
+            .populate('changedByUser', 'username')
+            .sort({ appliedOn: -1 })
+            .lean();
 
         setLeaveListCache(cacheKey, leaveRequests);
 

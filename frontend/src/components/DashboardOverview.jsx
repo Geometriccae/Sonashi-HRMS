@@ -14,8 +14,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
-import { buildYetToGoFromLeaves, findLeaveForEmployee, filterReturnedBackEmployees } from "../utils/yetToGoHelpers";
-import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
 import { canUpdateVacationReturn } from "../utils/permissions";
 
 const toDateInputValue = (value) => {
@@ -77,10 +75,6 @@ const buildVacationDatePrompt = (employeeItem, newStatus) => {
 
 function DashboardOverview() {
   const navigate = useNavigate();
-  const [data, setData] = useState({
-    employees: [],
-    leaveRequests: []
-  });
   const [counts, setCounts] = useState({
     total: 0,
     active: 0,
@@ -92,6 +86,7 @@ function DashboardOverview() {
     passportExpiry: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [modalLoading, setModalLoading] = useState(false);
 
   // Modal State
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -102,82 +97,43 @@ function DashboardOverview() {
   const [datePromptSaving, setDatePromptSaving] = useState(false);
   // datePrompt = { employeeItem, newStatus, label, fieldKey, dateValue }
 
+  const CATEGORY_API_KEY = {
+    "Total Employees": "total",
+    "Active Employees": "active",
+    "Inactive Employees": "inactive",
+    "On vacation": "onVacation",
+    "Yet to go": "yetToGo",
+    "Returned back from vacation": "returned",
+    "Visa Expiry": "visaExpiry",
+    "Passport Expiry": "passportExpiry",
+  };
+
+  const applySummaryToCounts = (summary) => ({
+    total: summary.totalEmployees ?? 0,
+    active: summary.activeEmployees ?? 0,
+    inactive: summary.inactiveEmployees ?? 0,
+    onVacation: summary.onVacation ?? 0,
+    upcomingVacation: summary.yetToGo ?? summary.upcomingVacation ?? 0,
+    vacationReturn: summary.returnedBack ?? summary.vacationReturn ?? 0,
+    visaExpiry: summary.visaExpiry ?? 0,
+    passportExpiry: summary.passportExpiry ?? 0,
+  });
+
+  const refreshSummary = async ({ force = false } = {}) => {
+    const summary = await employeeService.getEmployeeStats({ force });
+    setCounts(applySummaryToCounts(summary));
+    return summary;
+  };
+
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Same source as Annual Vacations: stored vacationStatus + leave list for Yet-to-go
-        employeeService.invalidateCache();
-        leaveRequestService.invalidateCache();
-        const [empRes, leaveRes] = await Promise.all([
-          employeeService.getEmployeesList({ force: true }),
-          leaveRequestService.getLeaveRequests({ view: "lite" }),
-        ]);
-        const empList = Array.isArray(empRes) ? empRes : empRes?.data || [];
-        const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const next90Days = new Date(today);
-        next90Days.setDate(today.getDate() + 90);
-
-        const next6Months = new Date(today);
-        next6Months.setMonth(today.getMonth() + 6);
-
-        // 1. Employee Stats
-        let active = 0;
-        let inactive = 0;
-        let visaExpiry = 0;
-        let passportExpiry = 0;
-        let attOnVacation = 0;
-
-        empList.forEach(emp => {
-          const vs = emp.vacationStatus || "Onsite";
-
-          if (isWorkingEmployeeStatus(emp.employeeStatus)) active++;
-          else if (isNonWorkingEmployeeStatus(emp.employeeStatus)) inactive++;
-
-          if (isWorkingEmployeeStatus(emp.employeeStatus) && vs === "On Vacation") {
-            attOnVacation++;
-          }
-
-          if (emp.visaExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
-            const expiry = new Date(emp.visaExpiryDate);
-            if (expiry > today && expiry <= next90Days) {
-              visaExpiry++;
-            }
-          }
-
-          if (emp.passportExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
-            const expiry = new Date(emp.passportExpiryDate);
-            if (expiry > today && expiry <= next6Months) {
-              passportExpiry++;
-            }
-          }
-        });
-
-        // Yet to go = all upcoming leave (any type) + Vacation Pending (no 60-day limit)
-        const yetToGoList = buildYetToGoFromLeaves(empList, leaveList).filter(
-          (row) => isWorkingEmployeeStatus(row.employeeStatus)
-        );
-        let onVacation = attOnVacation;
-        let upcomingVacation = yetToGoList.length;
-        let vacationReturn = filterReturnedBackEmployees(empList, leaveList).length;
-
+        // Counts only — do not fetch all employees / leaves on dashboard open
+        const summary = await employeeService.getEmployeeStats({ force: false });
         if (isMounted) {
-          setData({ employees: empList, leaveRequests: leaveList });
-          setCounts({
-            total: empList.length,
-            active,
-            inactive,
-            onVacation,
-            upcomingVacation,
-            vacationReturn,
-            visaExpiry,
-            passportExpiry
-          });
+          setCounts(applySummaryToCounts(summary));
         }
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err);
@@ -228,13 +184,6 @@ function DashboardOverview() {
         await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
       }
 
-      // Patch data.employees with both status and extra fields (dates)
-      const updatedEmployees = data.employees.map(e =>
-        (e._id === empId || e.id === empId || String(e._id) === String(empId))
-          ? { ...e, vacationStatus: newStatus, ...extraFields, attendance: newStatus === "Vacation Approved" ? "Onsite" : e.attendance }
-          : e
-      );
-
       // Patch filteredList with both status and extra fields (dates)
       setFilteredList(prev =>
         prev.map(e =>
@@ -244,26 +193,9 @@ function DashboardOverview() {
         )
       );
 
-      // Recompute vacation counts the same way as Annual Vacations (working staff only)
-      let attOnVacation = 0;
-      updatedEmployees.forEach(e => {
-        if (!isWorkingEmployeeStatus(e.employeeStatus)) return;
-        if ((e.vacationStatus || "Onsite") === "On Vacation") attOnVacation++;
-      });
-      const leaveSource = data.leaveRequests || [];
-      const upcomingVacation = buildYetToGoFromLeaves(
-        updatedEmployees,
-        leaveSource
-      ).filter((row) => isWorkingEmployeeStatus(row.employeeStatus)).length;
-      setCounts(prev => ({
-        ...prev,
-        onVacation: attOnVacation,
-        upcomingVacation,
-        vacationReturn: filterReturnedBackEmployees(updatedEmployees, leaveSource).length
-      }));
-
-      setData(prev => ({ ...prev, employees: updatedEmployees }));
-      return updatedEmployees;
+      employeeService.invalidateCache();
+      await refreshSummary({ force: true });
+      return true;
     } catch (err) {
       console.error("Failed to update vacation status:", err);
       alert(err?.message || "Failed to update status.");
@@ -303,7 +235,7 @@ function DashboardOverview() {
     }
     setDatePromptSaving(true);
     try {
-      const updatedEmployees = await handleVacationStatusChange(employeeItem, newStatus, extraFields);
+      await handleVacationStatusChange(employeeItem, newStatus, extraFields);
       if (employeeItem.linkedLeaveId && tertiaryDateValue) {
         try {
           await leaveRequestService.updateLeaveRequest(employeeItem.linkedLeaveId, {
@@ -311,17 +243,9 @@ function DashboardOverview() {
           });
         } catch (_) { /* employee dates already saved */ }
       }
-      // Refresh leave list so Leave Status / end dates stay in sync (same source as Annual Vacations)
-      try {
-        employeeService.invalidateCache();
-        leaveRequestService.invalidateCache();
-        const leaveRes = await leaveRequestService.getLeaveRequests({ view: "lite" });
-        const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
-        setData(prev => ({ ...prev, leaveRequests: leaveList }));
-      } catch (_) { /* non-blocking */ }
       setDatePrompt(null);
       if (categoryToReopen) {
-        handleCardClick(categoryToReopen, updatedEmployees);
+        handleCardClick(categoryToReopen);
       }
     } catch (err) {
       // handled in handleVacationStatusChange
@@ -340,91 +264,30 @@ function DashboardOverview() {
     }
   };
 
-  const handleCardClick = (category, customEmpList = null) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const next90Days = new Date(today);
-    next90Days.setDate(today.getDate() + 90);
-    const next6Months = new Date(today);
-    next6Months.setMonth(today.getMonth() + 6);
+  const handleCardClick = async (category) => {
+    const apiKey = CATEGORY_API_KEY[category];
+    if (!apiKey) return;
 
-    const empSource = customEmpList || data.employees;
-    const leaveSource = data.leaveRequests || [];
-
-    let list = [];
-    try {
-      switch (category) {
-        case "Total Employees":
-          list = empSource;
-          break;
-        case "Active Employees":
-          list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
-          break;
-        case "Inactive Employees":
-          list = empSource.filter(e => isNonWorkingEmployeeStatus(e.employeeStatus));
-          break;
-        case "On vacation": {
-          list = empSource
-            .filter(e => isWorkingEmployeeStatus(e.employeeStatus) && e.vacationStatus === "On Vacation")
-            .map(e => {
-              const leave = findLeaveForEmployee(e, leaveSource, empSource, "onVacation");
-              return {
-                ...e,
-                linkedEmployeeId: e._id,
-                linkedLeaveId: leave?._id || null,
-                startDate: leave?.startDate || e.lastWorkingDay || null,
-                endDate: leave?.endDate || e.leaveEndDate || e.returnDate || null,
-              };
-            });
-          break;
-        }
-        case "Yet to go": {
-          list = buildYetToGoFromLeaves(empSource, leaveSource)
-            .filter(e => isWorkingEmployeeStatus(e.employeeStatus));
-          break;
-        }
-        case "Returned back from vacation": {
-          list = filterReturnedBackEmployees(empSource, leaveSource)
-            .map(e => {
-              const leave = findLeaveForEmployee(e, leaveSource, empSource, "returned");
-              return {
-                ...e,
-                linkedEmployeeId: e._id,
-                linkedLeaveId: leave?._id || null,
-                startDate: leave?.startDate || e.lastWorkingDay || null,
-                endDate: leave?.endDate || e.firstWorkingDay || e.returnDate || null,
-              };
-            });
-          break;
-        }
-        case "Visa Expiry":
-          list = empSource.filter(e => {
-            if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
-            if (!e.visaExpiryDate) return false;
-            const expiry = new Date(e.visaExpiryDate);
-            return expiry > today && expiry <= next90Days;
-          });
-          break;
-        case "Passport Expiry":
-          list = empSource.filter(e => {
-            if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
-            if (!e.passportExpiryDate) return false;
-            const expiry = new Date(e.passportExpiryDate);
-            return expiry > today && expiry <= next6Months;
-          });
-          break;
-        case "ONBOARDING":
-          list = [];
-          break;
-        default:
-          list = [];
-      }
-    } catch (error) {
-      console.error(`Failed to open dashboard card "${category}":`, error);
-      list = [];
-    }
-    setFilteredList(list);
     setSelectedCategory(category);
+    setFilteredList([]);
+    setModalLoading(true);
+    try {
+      // Vacation categories often need the full matching set for status edits;
+      // employee totals/expiry use a larger page size for the modal table.
+      const needsFullVacationList = apiKey === "onVacation" || apiKey === "yetToGo" || apiKey === "returned";
+      const result = await employeeService.getDashboardCategory({
+        category: apiKey,
+        page: 1,
+        limit: needsFullVacationList ? 500 : 100,
+        all: needsFullVacationList,
+      });
+      setFilteredList(Array.isArray(result?.employees) ? result.employees : []);
+    } catch (err) {
+      console.error("Failed to load dashboard category:", err);
+      setFilteredList([]);
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const cards = [
@@ -490,7 +353,12 @@ function DashboardOverview() {
                 <button className={styles.closeBtn} onClick={() => setSelectedCategory(null)}>&times;</button>
               </div>
               <div className={styles.modalBody}>
-                {filteredList.length > 0 ? (
+                {modalLoading ? (
+                  <div className={styles.emptyState} style={{ padding: "40px 0" }}>
+                    <div className={styles.spinner}></div>
+                    <p>Loading {selectedCategory}…</p>
+                  </div>
+                ) : filteredList.length > 0 ? (
                   <div className={styles.modalTableWrap}>
                   <table className={styles.detailsTable}>
                     <thead>

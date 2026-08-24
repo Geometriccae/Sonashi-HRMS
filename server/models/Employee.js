@@ -138,5 +138,14 @@ const employeeSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 employeeSchema.index({ emailId: 1 }, { unique: true, sparse: true });
+employeeSchema.index({ employeeStatus: 1, vacationStatus: 1 });
+employeeSchema.index({ vacationStatus: 1, returnDate: 1 });
+employeeSchema.index({ vacationStatus: 1, firstWorkingDay: 1 });
+employeeSchema.index({ visaExpiryDate: 1 });
+employeeSchema.index({ passportExpiryDate: 1 });
+employeeSchema.index({ employeeStatus: 1, createdAt: -1 });
+employeeSchema.index({ department: 1 });
+employeeSchema.index({ employeeName: 1 });
+employeeSchema.index({ doj: 1 });
 
 module.exports = mongoose.model("Employee", employeeSchema);

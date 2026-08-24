@@ -260,8 +260,10 @@ function TeamMembersTable() {
   const [employeeToEdit, setEmployeeToEdit] = useState(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [totalEmployees, setTotalEmployees] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
   const canEditEmployees =
@@ -276,8 +278,15 @@ function TeamMembersTable() {
   const [periodResetSaving, setPeriodResetSaving] = useState(false);
 
   useEffect(() => {
-    fetchEmployees();
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
+  useEffect(() => {
+    fetchEmployees();
+  }, [currentPage, itemsPerPage, activeFilter, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     let socket;
     let cancelled = false;
     let idleHandle = null;
@@ -292,12 +301,8 @@ function TeamMembersTable() {
 
       const onEmployeeCreated = (employee) => {
         if (!employee) return;
-        setEmployees((prev) => {
-          if (!prev) return [employee];
-          const exists = prev.some((e) => String(e._id) === String(employee._id));
-          if (exists) return prev;
-          return [employee, ...prev];
-        });
+        // Refresh current page so counts/order stay correct with server pagination
+        fetchEmployees({ soft: true });
       };
 
       socket.on('employee-created', onEmployeeCreated);
@@ -319,19 +324,46 @@ function TeamMembersTable() {
       }
       try { if (socket) { socket.disconnect(); } } catch (e) { }
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async ({ soft = false } = {}) => {
     try {
-      setLoading(true);
+      if (!soft) setLoading(true);
       setError(null);
-      const employeesData = await employeeService.getEmployeesList();
-      setEmployees(employeesData || []);
+      // Active + empty search → working staff only. Active + search also matches ex-employees (same UX as before).
+      let status = '';
+      if (activeFilter === 'Active' && !String(debouncedSearch || '').trim()) {
+        status = 'Active';
+      } else if (activeFilter === 'Inactive') {
+        status = 'InActive';
+      }
+      const result = await employeeService.getEmployeesListPaginated({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: debouncedSearch,
+        status,
+      });
+      const rows = Array.isArray(result?.employees) ? result.employees : [];
+      setEmployees(rows);
+      setTotalEmployees(Number(result?.total) || rows.length);
+
+      // Prefetch next page after first paint (never blocks UI)
+      const totalPages = Math.max(1, Math.ceil((Number(result?.total) || 0) / itemsPerPage));
+      if (currentPage < totalPages) {
+        employeeService
+          .getEmployeesListPaginated({
+            page: currentPage + 1,
+            limit: itemsPerPage,
+            search: debouncedSearch,
+            status,
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error("Error fetching employees:", err);
       setError("Failed to load employees. Please try again.");
     } finally {
-      setLoading(false);
+      if (!soft) setLoading(false);
     }
   };
 
@@ -738,43 +770,18 @@ function TeamMembersTable() {
     }
   };
 
-  const filteredData = useMemo(() => {
-    return employees.filter((member) => {
-      const q = searchTerm.trim().toLowerCase();
-      let matchesFilter = true;
-      if (activeFilter === "Active") {
-        // Empty search: current staff only. Typing a search also finds matching ex-employees.
-        matchesFilter = q
-          ? true
-          : isWorkingEmployeeStatus(member.employeeStatus);
-      } else if (activeFilter === "Inactive") {
-        matchesFilter = isNonWorkingEmployeeStatus(member.employeeStatus);
-      }
+  // Server already applied status + search; this page holds only the current page rows.
+  const filteredData = employees;
 
-      const matchesSearch =
-        !q ||
-        (member.employeeName || "").toLowerCase().includes(q) ||
-        (member.employeeId || "").toLowerCase().includes(q) ||
-        (member.employeeNumber || "").toLowerCase().includes(q) ||
-        (member.emailId || "").toLowerCase().includes(q) ||
-        (member.mobile || "").toLowerCase().includes(q) ||
-        (member.role || "").toLowerCase().includes(q);
-
-      return matchesFilter && matchesSearch;
-    });
-  }, [employees, activeFilter, searchTerm]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage) || 1);
+  const totalPages = Math.max(1, Math.ceil(totalEmployees / itemsPerPage) || 1);
 
   // Load avatars only for the visible page (list API no longer embeds profilePhoto)
   useEffect(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    const pageRows = filteredData.slice(start, start + itemsPerPage);
-    const ids = pageRows
+    const ids = filteredData
       .map((r) => r._id || r.id)
       .filter(Boolean)
       .filter((id) => {
-        const row = pageRows.find((r) => String(r._id || r.id) === String(id));
+        const row = filteredData.find((r) => String(r._id || r.id) === String(id));
         return row && !row.profilePhoto;
       });
     if (!ids.length) return;
@@ -798,12 +805,12 @@ function TeamMembersTable() {
   }, [currentPage, itemsPerPage, filteredData]);
 
   useEffect(() => {
-    // Don't clamp while employees are still loading (empty list → totalPages=1 wipes restored page)
-    if (employees.length === 0) return;
+    if (loading) return;
+    if (totalEmployees === 0) return;
     if (currentPage > totalPages) {
       patchSearchParams({ page: totalPages === 1 ? undefined : totalPages });
     }
-  }, [employees.length, currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [totalEmployees, currentPage, totalPages, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allFilteredSelected =
     filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
@@ -1148,7 +1155,7 @@ function TeamMembersTable() {
         pagination={{
           current: currentPage,
           pageSize: itemsPerPage,
-          total: filteredData.length,
+          total: totalEmployees,
           showSizeChanger: true,
           pageSizeOptions: ["10", "20", "50", "100"],
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`,

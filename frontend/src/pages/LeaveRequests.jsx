@@ -33,6 +33,16 @@ function LeaveRequests() {
 
     /** Derive KPI cards from the same leave list the table already fetched (no second API call). */
     const applyMetricsFromData = (data) => {
+        if (data?.metrics) {
+            setMetrics({
+                total: data.metrics.total ?? 0,
+                pending: data.metrics.pending ?? 0,
+                approved: data.metrics.approved ?? 0,
+                rejected: data.metrics.rejected ?? 0,
+            });
+            setIsLoadingMetrics(false);
+            return;
+        }
         const list = Array.isArray(data) ? data : (data?.data || []);
         const total = list.length;
         const pending = list.filter((r) => r.status === "Pending").length;

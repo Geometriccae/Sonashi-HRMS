@@ -151,5 +151,12 @@ const leaveRequestSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+leaveRequestSchema.index({ status: 1, startDate: 1 });
+leaveRequestSchema.index({ employee: 1, status: 1 });
+leaveRequestSchema.index({ employeeId: 1, status: 1 });
+leaveRequestSchema.index({ status: 1, appliedOn: -1 });
+leaveRequestSchema.index({ department: 1, status: 1 });
+leaveRequestSchema.index({ employeeName: 1 });
+
 module.exports = mongoose.model('LeaveRequest', leaveRequestSchema);
 module.exports.CHANGE_STATUSES = CHANGE_STATUSES;

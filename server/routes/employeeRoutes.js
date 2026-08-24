@@ -33,6 +33,11 @@ const {
   setApprovedLeavesCache,
   invalidateApprovedLeavesCache,
 } = require('../utils/employeeListCache');
+const {
+  getDashboardSummary,
+  getVacationTabPage,
+  getDashboardCategoryPage,
+} = require('../utils/vacationDashboardStats');
 
 // ========== SERVER-SIDE LIST CACHE ==========
 // Cached via employeeListCache; invalidated on employee writes and leave yet-to-go sync.
@@ -345,7 +350,6 @@ async function getApprovedLeavesForVacation() {
     status: { $in: APPROVED_VACATION_LEAVE_STATUSES },
   })
     .select(APPROVED_LEAVE_SELECT)
-    .populate('employee', 'username emailId employeeId')
     .lean();
   setApprovedLeavesCache(rows);
   return rows;
@@ -516,23 +520,80 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
   });
 }
 
-// Lightweight stats for dashboard / team management cards
+// Lightweight stats for dashboard / team management / annual vacation cards
+// Returns counts only — does not ship full employee or leave payloads.
+// ?basic=1 → only headcount totals (fast path for Team Management cards).
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
-    const [totalEmployees, activeEmployees, inactiveEmployees] = await Promise.all([
-      Employee.countDocuments(),
-      Employee.countDocuments(workingStatusFilter()),
-      Employee.countDocuments(nonWorkingStatusFilter()),
-    ]);
+    const force =
+      String(req.query.force || '') === '1' ||
+      String(req.query.force || '').toLowerCase() === 'true';
+    const basic =
+      String(req.query.basic || '') === '1' ||
+      String(req.query.basic || '').toLowerCase() === 'true';
 
-    res.json({
-      totalEmployees,
-      activeEmployees,
-      inactiveEmployees,
-      totalAssignedProjects: 0,
-    });
+    if (basic) {
+      const [totalEmployees, activeEmployees, inactiveEmployees] = await Promise.all([
+        Employee.countDocuments(),
+        Employee.countDocuments(workingStatusFilter()),
+        Employee.countDocuments(nonWorkingStatusFilter()),
+      ]);
+      return res.json({
+        totalEmployees,
+        activeEmployees,
+        inactiveEmployees,
+        totalAssignedProjects: 0,
+      });
+    }
+
+    const summary = await getDashboardSummary({ force });
+    res.json(summary);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee stats', error: error.message });
+  }
+});
+
+// Paginated Annual Vacations tab rows (onVacation | yetToGo | returned)
+router.get('/vacation-tab', authMiddleware, async (req, res) => {
+  try {
+    const result = await getVacationTabPage({
+      tab: req.query.tab,
+      page: req.query.page,
+      limit: req.query.limit,
+      all: req.query.all,
+      search: req.query.search,
+      department: req.query.department,
+      role: req.query.role,
+      office: req.query.office,
+      country: req.query.country,
+      dojFrom: req.query.dojFrom,
+      dojTo: req.query.dojTo,
+      expMin: req.query.expMin,
+      expMax: req.query.expMax,
+      vacationMonth: req.query.vacationMonth,
+      vacationYear: req.query.vacationYear,
+    });
+    res.json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ message: error.message || 'Error fetching vacation tab' });
+  }
+});
+
+// Paginated Dashboard drill-down lists (lazy — only when a card is opened)
+router.get('/dashboard-category', authMiddleware, async (req, res) => {
+  try {
+    const result = await getDashboardCategoryPage({
+      category: req.query.category,
+      page: req.query.page,
+      limit: req.query.limit,
+      search: req.query.search,
+      all: req.query.all,
+    });
+    res.json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ message: error.message || 'Error fetching dashboard category' });
   }
 });
 

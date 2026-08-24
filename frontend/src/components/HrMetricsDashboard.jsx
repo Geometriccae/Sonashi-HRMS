@@ -392,41 +392,49 @@ export default function HrMetricsDashboard() {
       setError("");
 
       try {
-        const [employeeResponse, leaveResponse, attendanceTrendResponse, salarySlipResponse] =
-          await Promise.all([
-            employeeService.getEmployeesForMetrics(),
-            leaveRequestService.getLeaveRequests(),
-            attendanceService.getMonthlySummary(activeYear),
-            salarySlipService.getAllSalarySlips("", filters.year || currentYear),
-          ]);
-
-        const employeeList = toArray(employeeResponse);
-        const leaveList = toArray(leaveResponse);
-        const slipList = Array.isArray(salarySlipResponse) ? salarySlipResponse : [];
-
-        let attendanceRangeList = [];
-        if (selectedRange.start && selectedRange.end) {
-          try {
-            attendanceRangeList = await attendanceService.getByRange(
-              selectedRange.start.toISOString().slice(0, 10),
-              selectedRange.end.toISOString().slice(0, 10)
-            );
-          } catch (attendanceError) {
-            console.error("Failed to load attendance range data:", attendanceError);
-          }
-        }
+        // Critical path: metrics employees + lite leaves (no heavy leave populates)
+        const [employeeResponse, leaveResponse] = await Promise.all([
+          employeeService.getEmployeesForMetrics(),
+          leaveRequestService.getLeaveRequests({ view: "lite" }),
+        ]);
 
         if (!isMounted) return;
-        setEmployees(employeeList);
-        setLeaves(leaveList);
-        setSalarySlips(slipList);
-        setAttendanceMonthlySummary(Array.isArray(attendanceTrendResponse) ? attendanceTrendResponse : []);
-        setAttendanceRecords(Array.isArray(attendanceRangeList) ? attendanceRangeList : []);
+        setEmployees(toArray(employeeResponse));
+        setLeaves(toArray(leaveResponse));
+        setLoading(false);
+
+        // Secondary: salary slips + attendance — do not block first paint
+        Promise.all([
+          attendanceService.getMonthlySummary(activeYear).catch(() => []),
+          salarySlipService.getAllSalarySlips("", filters.year || currentYear).catch(() => []),
+        ]).then(([attendanceTrendResponse, salarySlipResponse]) => {
+          if (!isMounted) return;
+          setAttendanceMonthlySummary(Array.isArray(attendanceTrendResponse) ? attendanceTrendResponse : []);
+          setSalarySlips(Array.isArray(salarySlipResponse) ? salarySlipResponse : []);
+        });
+
+        if (selectedRange.start && selectedRange.end) {
+          attendanceService
+            .getByRange(
+              selectedRange.start.toISOString().slice(0, 10),
+              selectedRange.end.toISOString().slice(0, 10)
+            )
+            .then((attendanceRangeList) => {
+              if (!isMounted) return;
+              setAttendanceRecords(Array.isArray(attendanceRangeList) ? attendanceRangeList : []);
+            })
+            .catch((attendanceError) => {
+              console.error("Failed to load attendance range data:", attendanceError);
+            });
+        } else {
+          setAttendanceRecords([]);
+        }
       } catch (loadError) {
         console.error("Failed to load HR metrics dashboard:", loadError);
-        if (isMounted) setError(loadError.message || "Failed to load dashboard data.");
-      } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setError(loadError.message || "Failed to load dashboard data.");
+          setLoading(false);
+        }
       }
     };
 
@@ -630,9 +638,42 @@ export default function HrMetricsDashboard() {
       return out;
     };
 
+    // Index leaves once — avoid O(employees × leaves) full scans in calculateLeaveBalance
+    const leavesByEmpId = new Map();
+    const leavesByEmpCode = new Map();
+    const leavesByEmpName = new Map();
+    const pushLeave = (map, key, leave) => {
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(leave);
+    };
+    (leaves || []).forEach((leave) => {
+      if (!["Approved", "HOD Approved"].includes(leave.status)) return;
+      pushLeave(leavesByEmpId, String(leave.employee?._id || leave.employee || ""), leave);
+      pushLeave(leavesByEmpCode, String(leave.employeeId || "").trim().toLowerCase(), leave);
+      pushLeave(leavesByEmpName, String(leave.employeeName || "").trim().toLowerCase(), leave);
+    });
+
     const aggregateBalance = filteredEmployees.reduce(
       (acc, employee) => {
-        const balance = calculateLeaveBalance(employee, leaves);
+        // Pass only this employee's leaves so each balance calc does not scan the full leave list.
+        const empId = String(employee._id || employee.id || "");
+        const empCode = String(employee.employeeId || "").trim().toLowerCase();
+        const empName = String(employee.employeeName || "").trim().toLowerCase();
+        const empLeaves = [
+          ...(empId && leavesByEmpId.has(empId) ? leavesByEmpId.get(empId) : []),
+          ...(empCode && leavesByEmpCode.has(empCode) ? leavesByEmpCode.get(empCode) : []),
+          ...(empName && leavesByEmpName.has(empName) ? leavesByEmpName.get(empName) : []),
+        ];
+        // Dedupe by leave _id
+        const seenLeave = new Set();
+        const uniqueLeaves = empLeaves.filter((l) => {
+          const id = String(l._id || "");
+          if (id && seenLeave.has(id)) return false;
+          if (id) seenLeave.add(id);
+          return true;
+        });
+        const balance = calculateLeaveBalance(employee, uniqueLeaves.length ? uniqueLeaves : []);
         acc.entitlement += balance.entitlement || 0;
         acc.taken += balance.totalTaken || 0;
         acc.balance += balance.balance || 0;

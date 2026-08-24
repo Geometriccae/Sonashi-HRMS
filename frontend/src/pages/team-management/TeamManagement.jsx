@@ -58,7 +58,7 @@ function TeamManagement() {
 
   const fetchStats = async () => {
     try {
-      const employeeStats = await EmployeeService.getEmployeeStats();
+      const employeeStats = await EmployeeService.getEmployeeStats({ basic: true });
       setStats({
         attendancePercentage: 0,
         totalAssignedProjects: employeeStats.totalAssignedProjects || 0,

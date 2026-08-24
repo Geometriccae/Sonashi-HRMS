@@ -18,7 +18,7 @@ class EmployeeService {
 
     this.baseURL = `${apiRoot}/employees`;
     this.attendanceURL = `${apiRoot}/attendance`;
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, ts: 0 };
     this._inflight = {};
   }
 
@@ -27,7 +27,7 @@ class EmployeeService {
   }
 
   invalidateCache() {
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, ts: 0 };
     this._inflight = {};
   }
 
@@ -151,17 +151,23 @@ class EmployeeService {
     }
   }
 
-  // Stats only — counts for dashboard cards
-  async getEmployeeStats({ force = false } = {}) {
-    if (!force && this._isCacheValid() && this._cache.stats) {
-      return this._cache.stats;
+  // Stats only — counts for dashboard / annual vacation cards
+  // basic: true → headcount only (Team Management) — skips vacation/leave aggregates
+  async getEmployeeStats({ force = false, basic = false } = {}) {
+    const cacheSlot = basic ? 'statsBasic' : 'stats';
+    if (!force && this._isCacheValid() && this._cache[cacheSlot]) {
+      return this._cache[cacheSlot];
     }
-    if (!force && this._inflight.stats) {
-      return this._inflight.stats;
+    if (!force && this._inflight[cacheSlot]) {
+      return this._inflight[cacheSlot];
     }
-    this._inflight.stats = (async () => {
+    this._inflight[cacheSlot] = (async () => {
       try {
-        const response = await fetch(`${this.baseURL}/stats`, {
+        const params = new URLSearchParams();
+        if (force) params.set('force', '1');
+        if (basic) params.set('basic', '1');
+        const qs = params.toString();
+        const response = await fetch(`${this.baseURL}/stats${qs ? `?${qs}` : ''}`, {
           method: 'GET',
           headers: this.getAuthHeaders(),
         });
@@ -169,17 +175,85 @@ class EmployeeService {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        this._cache.stats = data;
+        this._cache[cacheSlot] = data;
         this._cache.ts = Date.now();
         return data;
       } catch (error) {
         console.error('Error fetching employee stats:', error);
         throw error;
       } finally {
-        delete this._inflight.stats;
+        delete this._inflight[cacheSlot];
       }
     })();
-    return this._inflight.stats;
+    return this._inflight[cacheSlot];
+  }
+
+  /**
+   * Annual Vacations: one tab page only (server-side pagination + filters).
+   * tab: onVacation | yetToGo | returned
+   */
+  async getVacationTab({
+    tab,
+    page = 1,
+    limit = 20,
+    search = '',
+    filters = {},
+    all = false,
+  } = {}) {
+    try {
+      const params = new URLSearchParams({
+        tab: String(tab || ''),
+        page: String(page),
+        limit: String(all ? 100000 : limit),
+      });
+      if (all) params.set('all', '1');
+      if (search) params.set('search', search);
+      const f = filters || {};
+      ['department', 'role', 'office', 'country', 'dojFrom', 'dojTo', 'expMin', 'expMax', 'vacationMonth', 'vacationYear']
+        .forEach((key) => {
+          if (f[key] !== undefined && f[key] !== null && f[key] !== '') {
+            params.set(key, String(f[key]));
+          }
+        });
+      const response = await fetch(`${this.baseURL}/vacation-tab?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching vacation tab:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Dashboard drill-down: fetch only the opened category (paginated).
+   * category: total | active | inactive | onVacation | yetToGo | returned | visaExpiry | passportExpiry
+   */
+  async getDashboardCategory({ category, page = 1, limit = 50, search = '', all = false } = {}) {
+    try {
+      const params = new URLSearchParams({
+        category: String(category || ''),
+        page: String(page),
+        limit: String(all ? 100000 : limit),
+      });
+      if (all) params.set('all', '1');
+      if (search) params.set('search', search);
+      const response = await fetch(`${this.baseURL}/dashboard-category?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching dashboard category:', error);
+      throw error;
+    }
   }
 
   /**
