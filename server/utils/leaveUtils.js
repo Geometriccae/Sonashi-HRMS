@@ -119,7 +119,7 @@ function calculateProRataLeave(monthsOfService) {
 /**
  * Default annual leave balance for confirmed employees
  */
-const DEFAULT_ANNUAL_LEAVE = 21;
+const DEFAULT_ANNUAL_LEAVE = 30;
 
 /**
  * Leave accrual rate per month
