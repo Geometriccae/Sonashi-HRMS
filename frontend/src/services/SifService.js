@@ -1,5 +1,4 @@
 import config, { getApiBaseUrl } from "../config/config";
-import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 class SifService {
@@ -116,6 +115,7 @@ class SifService {
     const { headers, redHeaders, rows } = await res.json();
     const redSet = new Set(redHeaders || []);
 
+    const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("SIF");
     sheet.addRow(headers);

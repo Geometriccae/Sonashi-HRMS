@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import styles from './SalarySlipBulkImportModal.module.css';
 import { FaTimes, FaDownload, FaFileExcel, FaFileCsv, FaUpload, FaCheck, FaExclamationCircle, FaArrowRight, FaArrowLeft, FaTable, FaInfoCircle, FaSpinner } from 'react-icons/fa';
-import * as XLSX from 'xlsx';
 import salarySlipService from '../../services/SalarySlipService';
+
+const loadXlsx = async () => {
+    const mod = await import('xlsx');
+    return mod.default || mod;
+};
 
 const STEPS = [
     { id: 1, name: 'Upload', icon: FaUpload },
@@ -77,8 +81,9 @@ function SalarySlipBulkImportModal({ isOpen, onClose, onSuccess, month, year }) 
     const parseFile = (file) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
+                    const XLSX = await loadXlsx();
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
                     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -93,7 +98,8 @@ function SalarySlipBulkImportModal({ isOpen, onClose, onSuccess, month, year }) 
         });
     };
 
-    const downloadTemplate = (format) => {
+    const downloadTemplate = async (format) => {
+        const XLSX = await loadXlsx();
         const headers = SALARY_FIELDS.map(f => f.label);
         const sampleData = [
             ['John Doe', 'john.doe@example.com', 'Software Engineer', '50000', '15000', '5000', '60000'],

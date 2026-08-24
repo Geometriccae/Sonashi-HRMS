@@ -57,7 +57,7 @@ function CheckInModal({ isOpen, onClose, onSubmit }) {
 
   const loadEmployees = async () => {
     try {
-      const response = await employeeService.getEmployees();
+      const response = await employeeService.getEmployeesList();
       setEmployees(response.employees || response || []);
     } catch (error) {
       console.error('Error loading employees:', error);

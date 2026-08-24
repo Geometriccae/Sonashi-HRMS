@@ -14,10 +14,7 @@ import {
   FaFileExcel, FaFilePdf,
 } from "react-icons/fa";
 import { MdFlightTakeoff, MdBeachAccess, MdFlightLand } from "react-icons/md";
-import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   computeExperienceYears,
   formatExperienceLabel,
@@ -27,6 +24,18 @@ import {
 import { canUpdateVacationReturn } from "../utils/permissions";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
 import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
+
+const loadXlsx = async () => {
+  const mod = await import("xlsx");
+  return mod.default || mod;
+};
+const loadJsPdf = async () => {
+  const [{ default: jsPDF }, autoTableMod] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  return { jsPDF, autoTable: autoTableMod.default || autoTableMod };
+};
 
 const TAB_STORAGE_KEY = "hrms:listPage:annual-vacations-tab";
 const VALID_TABS = new Set(["onVacation", "yetToGo", "returned"]);
@@ -510,13 +519,14 @@ function AnnualVacations() {
     setPendingFilters(updated);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!activeTab || filteredList.length === 0) {
       alert("No records to export for this category.");
       return;
     }
     const tab = getTabConfig(activeTab);
     const rows = buildVacationExportRows(filteredList, activeTab);
+    const XLSX = await loadXlsx();
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
@@ -529,7 +539,7 @@ function AnnualVacations() {
     saveAs(blob, `Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     if (!activeTab || filteredList.length === 0) {
       alert("No records to export for this category.");
       return;
@@ -539,6 +549,7 @@ function AnnualVacations() {
     const headers = Object.keys(rows[0]);
     const body = rows.map((row) => headers.map((h) => (row[h] != null ? String(row[h]) : "")));
 
+    const { jsPDF, autoTable } = await loadJsPdf();
     const doc = new jsPDF({ orientation: "landscape" });
     doc.setFont("helvetica", "bold");
     doc.setFontSize(15);

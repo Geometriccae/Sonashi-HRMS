@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import styles from "./DashboardOverview.module.css";
-import "bootstrap/dist/css/bootstrap.min.css";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import {

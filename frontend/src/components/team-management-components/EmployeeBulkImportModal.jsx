@@ -1,7 +1,11 @@
 import React, { useState, useRef, useLayoutEffect } from "react";
-import * as XLSX from "xlsx";
 import employeeService from "../../services/EmployeeService";
 import styles from "./EmployeeBulkImportModal.module.css";
+
+const loadXlsx = async () => {
+  const mod = await import("xlsx");
+  return mod.default || mod;
+};
 
 /** First-row headers aligned with Add Employee / server import mapper */
 export const EMPLOYEE_IMPORT_HEADERS = [
@@ -85,7 +89,8 @@ function EmployeeBulkImportModal({ isOpen, onClose, onSuccess }) {
 
   if (!isOpen) return null;
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await loadXlsx();
     const sheet = XLSX.utils.aoa_to_sheet([EMPLOYEE_IMPORT_HEADERS, SAMPLE_ROW]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, sheet, "Employees");

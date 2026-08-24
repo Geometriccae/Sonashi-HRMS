@@ -2,10 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import Select from "react-select";
 import styles from "./Reports.module.css";
 import Side from "./sidebar/Sidebar";
-import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import DateInput from "../components/DateInput";
@@ -16,17 +13,6 @@ import sifService from "../services/SifService";
 import { buildYearList } from "../utils/yearOptions";
 import { calculateLeaveDays } from "../utils/leaveCalculator";
 import {
-  buildLeaveMasterTrackerData,
-  buildLeaveMasterTrackerSummaryRows,
-  buildLeaveMasterTrackerWorkbook,
-  downloadLeaveMasterTrackerWorkbook,
-} from "../utils/leaveMasterTrackerExport";
-import {
-  buildStaffSalaryWorkbook,
-  downloadStaffSalaryWorkbook,
-  getSalaryReportDays,
-} from "../utils/staffSalaryExport";
-import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
   formatEmployeeStatusDisplay,
@@ -35,6 +21,20 @@ import {
 } from "../utils/employeeStatusDisplay";
 import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../utils/yetToGoHelpers";
 import { useUrlListView } from "../hooks/usePersistedListPage";
+
+const loadXlsx = async () => {
+  const mod = await import("xlsx");
+  return mod.default || mod;
+};
+const loadJsPdf = async () => {
+  const [{ default: jsPDF }, autoTableMod] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  return { jsPDF, autoTable: autoTableMod.default || autoTableMod };
+};
+const loadLeaveMasterTrackerExport = () => import("../utils/leaveMasterTrackerExport");
+const loadStaffSalaryExport = () => import("../utils/staffSalaryExport");
 
 const REPORT_TYPES = [
   "Leave Report",
@@ -466,7 +466,6 @@ function Reports() {
   // Optional statusFilter: 'Active' | 'InActive' — applied server-side.
   const fetchFullEmployees = async (statusFilter) => {
     const data = await employeeService.getEmployees({
-      force: true,
       status: statusFilter || undefined,
     });
     return Array.isArray(data) ? data : (data.employees || data.data || []);
@@ -529,6 +528,7 @@ function Reports() {
       if (!Number.isNaN(ed.getTime())) tillDate = ed;
     }
 
+    const { buildLeaveMasterTrackerData } = await loadLeaveMasterTrackerExport();
     return buildLeaveMasterTrackerData({
       employees: empList,
       leaveRequests: leaves,
@@ -1058,6 +1058,11 @@ function Reports() {
     if (format === "Excel") {
       // Excel keeps existing master-tracker workbook + calculations unchanged
       const tracker = await loadLeaveMasterTracker();
+      const {
+        buildLeaveMasterTrackerSummaryRows,
+        buildLeaveMasterTrackerWorkbook,
+        downloadLeaveMasterTrackerWorkbook,
+      } = await loadLeaveMasterTrackerExport();
       const exportData = buildLeaveMasterTrackerSummaryRows(tracker);
       if (exportData.length === 0) {
         alert("No data found for the selected filters.");
@@ -1075,7 +1080,7 @@ function Reports() {
       return;
     }
     if (format === "PDF") {
-      exportToPDF(exportData, "Leave_Report");
+      await exportToPDF(exportData, "Leave_Report");
     }
   };
 
@@ -1083,9 +1088,9 @@ function Reports() {
     const exportData = await fetchReportData("Document expiry");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "Excel") {
-      exportToExcel(exportData, "Document_Expiry_Report");
+      await exportToExcel(exportData, "Document_Expiry_Report");
     } else if (format === "PDF") {
-      exportToPDF(exportData, "Document_Expiry_Report");
+      await exportToPDF(exportData, "Document_Expiry_Report");
     }
   };
 
@@ -1127,6 +1132,11 @@ function Reports() {
         return;
       }
 
+      const {
+        getSalaryReportDays,
+        buildStaffSalaryWorkbook,
+        downloadStaffSalaryWorkbook,
+      } = await loadStaffSalaryExport();
       const days = getSalaryReportDays(filterMonth, filterYear);
       const wb = buildStaffSalaryWorkbook(empList, { days, tillYear: y });
       await downloadStaffSalaryWorkbook(wb, "Staff_Salary_Report", saveAs);
@@ -1136,7 +1146,7 @@ function Reports() {
     const exportData = await fetchReportData("Salary report");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "PDF") {
-      exportToPDF(exportData, "Salary_Report");
+      await exportToPDF(exportData, "Salary_Report");
     }
   };
 
@@ -1144,9 +1154,9 @@ function Reports() {
     const exportData = await fetchReportData("Employee Experience");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "Excel") {
-      exportToExcel(exportData, "Employee_Experience_Report");
+      await exportToExcel(exportData, "Employee_Experience_Report");
     } else if (format === "PDF") {
-      exportToPDF(exportData, "Employee_Experience_Report");
+      await exportToPDF(exportData, "Employee_Experience_Report");
     }
   };
 
@@ -1157,9 +1167,9 @@ function Reports() {
       return;
     }
     if (format === "Excel") {
-      exportToExcel(exportData, "Employees_Master_Data_Report");
+      await exportToExcel(exportData, "Employees_Master_Data_Report");
     } else if (format === "PDF") {
-      exportToPDF(exportData, "Employees_Master_Data_Report");
+      await exportToPDF(exportData, "Employees_Master_Data_Report");
     }
   };
 
@@ -1197,6 +1207,7 @@ function Reports() {
 
     if (isExcel) {
       const buffer = await file.arrayBuffer();
+      const XLSX = await loadXlsx();
       const wb = XLSX.read(buffer, { type: "array" });
       const sheetName = wb.SheetNames[0];
       if (!sheetName) return [];
@@ -1310,7 +1321,8 @@ function Reports() {
     await handleFileForPreview(file);
   };
 
-  const exportToExcel = (data, fileName, dropdownOptions) => {
+  const exportToExcel = async (data, fileName, dropdownOptions) => {
+    const XLSX = await loadXlsx();
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
 
@@ -1333,7 +1345,8 @@ function Reports() {
     saveAs(dataBlob, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const exportToPDF = (data, fileName) => {
+  const exportToPDF = async (data, fileName) => {
+    const { jsPDF, autoTable } = await loadJsPdf();
     const doc = new jsPDF({ orientation: "landscape" });
     
     // Add title

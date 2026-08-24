@@ -43,7 +43,7 @@ function EditMeetingModal({ isOpen, onClose, meeting = null, onEventUpdated }) {
     if (!isOpen) return;
     (async () => {
       try {
-        const emps = await employeeService.getEmployees();
+        const emps = await employeeService.getEmployeesList();
         setEmployees(Array.isArray(emps) ? emps : (emps.employees || []));
       } catch (e) { setEmployees([]); }
       try {

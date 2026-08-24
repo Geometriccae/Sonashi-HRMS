@@ -60,7 +60,7 @@ function AttendanceManagement() {
       setLoadingEmployees(true);
       setEmployeeError("");
       try {
-        const data = await EmployeeService.getEmployees();
+        const data = await EmployeeService.getEmployeesList();
         setEmployees(Array.isArray(data) ? data : []);
       } catch (err) {
         setEmployeeError(err?.message || "Failed to load employees");
@@ -125,7 +125,7 @@ function AttendanceManagement() {
         }
       }
       try {
-        const data = await EmployeeService.getEmployees();
+        const data = await EmployeeService.getEmployeesList();
         setEmployees(Array.isArray(data) ? data : []);
         setSuccessMessage(`All employees set to ${status}`);
         setTimeout(() => setSuccessMessage(""), 3000);

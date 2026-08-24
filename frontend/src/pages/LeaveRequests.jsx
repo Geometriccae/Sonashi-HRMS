@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import styles from "./SalesAndLeads.module.css";
 import Side from "./sidebar/Sidebar";
 import LeaveRequestTable from "../components/leave-request/LeaveRequestTable";
-import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import leaveRequestService from "../services/LeaveRequestService";
 import UserService from "../services/UserService";
@@ -20,7 +19,6 @@ function LeaveRequests() {
 
     useEffect(() => {
         setUserRole(localStorage.getItem("role") || "");
-        fetchMetrics();
         fetchLeaveBalance();
     }, []);
 
@@ -33,20 +31,28 @@ function LeaveRequests() {
         }
     };
 
-    const fetchMetrics = async () => {
+    /** Derive KPI cards from the same leave list the table already fetched (no second API call). */
+    const applyMetricsFromData = (data) => {
+        const list = Array.isArray(data) ? data : (data?.data || []);
+        const total = list.length;
+        const pending = list.filter((r) => r.status === "Pending").length;
+        const approved = list.filter((r) => r.status === "Approved").length;
+        const rejected = list.filter((r) => r.status === "Rejected").length;
+        setMetrics({ total, pending, approved, rejected });
+        setIsLoadingMetrics(false);
+    };
+
+    const fetchMetrics = async (maybeData) => {
+        if (Array.isArray(maybeData) || (maybeData && Array.isArray(maybeData.data))) {
+            applyMetricsFromData(maybeData);
+            return;
+        }
         setIsLoadingMetrics(true);
         try {
             const data = await leaveRequestService.getLeaveRequests();
-            const total = data.length;
-            const pending = data.filter(r => r.status === "Pending").length;
-            const approvedRequests = data.filter(r => r.status === "Approved");
-            const approved = approvedRequests.length;
-            const rejected = data.filter(r => r.status === "Rejected").length;
-
-            setMetrics({ total, pending, approved, rejected });
+            applyMetricsFromData(data);
         } catch (error) {
             console.error("Error fetching leave metrics:", error);
-        } finally {
             setIsLoadingMetrics(false);
         }
     };

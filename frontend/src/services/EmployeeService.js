@@ -18,7 +18,7 @@ class EmployeeService {
 
     this.baseURL = `${apiRoot}/employees`;
     this.attendanceURL = `${apiRoot}/attendance`;
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, ts: 0 };
     this._inflight = {};
   }
 
@@ -27,7 +27,7 @@ class EmployeeService {
   }
 
   invalidateCache() {
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, ts: 0 };
     this._inflight = {};
   }
 
@@ -156,22 +156,64 @@ class EmployeeService {
     if (!force && this._isCacheValid() && this._cache.stats) {
       return this._cache.stats;
     }
-    try {
-      const response = await fetch(`${this.baseURL}/stats`, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      this._cache.stats = data;
-      this._cache.ts = Date.now();
-      return data;
-    } catch (error) {
-      console.error('Error fetching employee stats:', error);
-      throw error;
+    if (!force && this._inflight.stats) {
+      return this._inflight.stats;
     }
+    this._inflight.stats = (async () => {
+      try {
+        const response = await fetch(`${this.baseURL}/stats`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        this._cache.stats = data;
+        this._cache.ts = Date.now();
+        return data;
+      } catch (error) {
+        console.error('Error fetching employee stats:', error);
+        throw error;
+      } finally {
+        delete this._inflight.stats;
+      }
+    })();
+    return this._inflight.stats;
+  }
+
+  /**
+   * HR Metrics payload — full enough for KPIs/charts, without profile photos.
+   * Prefer this over getEmployees({ force: true }) on the metrics dashboard.
+   */
+  async getEmployeesForMetrics({ force = false } = {}) {
+    if (!force && this._isCacheValid() && this._cache.metrics) {
+      return this._cache.metrics;
+    }
+    if (!force && this._inflight.metrics) {
+      return this._inflight.metrics;
+    }
+    this._inflight.metrics = (async () => {
+      try {
+        const response = await fetch(`${this.baseURL}?${new URLSearchParams({ view: 'metrics' })}`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        this._cache.metrics = data;
+        this._cache.ts = Date.now();
+        return data;
+      } catch (error) {
+        console.error('Error fetching employees for metrics:', error);
+        throw error;
+      } finally {
+        delete this._inflight.metrics;
+      }
+    })();
+    return this._inflight.metrics;
   }
 
   // Get all employees (full records — use only when editing/detail views need everything)
@@ -182,29 +224,38 @@ class EmployeeService {
     if (!force && !statusFilter && this._isCacheValid() && this._cache.full) {
       return this._cache.full;
     }
-    try {
-      const url = statusFilter
-        ? `${this.baseURL}?${new URLSearchParams({ status: statusFilter })}`
-        : this.baseURL;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!statusFilter) {
-        this._cache.full = data;
-        this._cache.ts = Date.now();
-      }
-      return data;
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      throw error;
+    const inflightKey = statusFilter ? `full:${statusFilter}` : 'full';
+    if (!force && this._inflight[inflightKey]) {
+      return this._inflight[inflightKey];
     }
+    this._inflight[inflightKey] = (async () => {
+      try {
+        const url = statusFilter
+          ? `${this.baseURL}?${new URLSearchParams({ status: statusFilter })}`
+          : this.baseURL;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!statusFilter) {
+          this._cache.full = data;
+          this._cache.ts = Date.now();
+        }
+        return data;
+      } catch (error) {
+        console.error('Error fetching employees:', error);
+        throw error;
+      } finally {
+        delete this._inflight[inflightKey];
+      }
+    })();
+    return this._inflight[inflightKey];
   }
 
   // Batch fetch profile photos for a list of employee IDs (current page only).

@@ -37,7 +37,7 @@ function EditAssignTaskModal({
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        const data = await employeeService.getEmployees();
+        const data = await employeeService.getEmployeesList();
         // employeeService may return either an array or an object { employees: [...] }
         setEmployees(
           Array.isArray(data)

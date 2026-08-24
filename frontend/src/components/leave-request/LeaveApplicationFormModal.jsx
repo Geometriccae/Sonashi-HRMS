@@ -7,7 +7,6 @@ import {
     getApprovedLeavesForEmployee,
 } from "../../utils/leaveCalculator";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
-import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import "./LeaveForm.css"; // Reusing the shared clean modal styles
 
@@ -33,7 +32,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                     const data = await EmployeeService.getEmployee(empIdToFetch);
                     if (data) setEmployeeDetails(data);
                 } else if (leaveRequest.employeeId) {
-                    const allEmps = await EmployeeService.getEmployees();
+                    const allEmps = await EmployeeService.getEmployeesList();
                     const match = allEmps.find(
                         (e) => String(e.employeeId) === String(leaveRequest.employeeId)
                     );
@@ -80,6 +79,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
     };
 
     const handleDownloadExcel = async () => {
+        const ExcelJS = (await import("exceljs")).default;
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Leave Report');
         

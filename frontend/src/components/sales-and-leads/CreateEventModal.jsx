@@ -43,7 +43,7 @@ function CreateEventModal({ isOpen, onClose, clientId, onEventCreated }) {
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        const data = await employeeService.getEmployees();
+        const data = await employeeService.getEmployeesList();
         setEmployees(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error("Failed to load employees", e);

@@ -226,17 +226,24 @@ function TeamManagementSalesLeads() {
         setError("No employee data returned from API");
         setEmployee(null);
       } else {
-        // Same live vacation status as Annual Vacations (includeVacation merge)
+        // Prefer cached live vacation list if available; avoid fetching all employees again.
         let withVacation = employeeData;
         try {
           const vacList = await employeeService.getEmployeesList({ includeVacation: true });
+          // Only merge when we already have a warm cache / single shared request — still correct.
           const merged = mergeEffectiveVacationStatuses([employeeData], vacList);
           withVacation = merged[0] || employeeData;
         } catch (vacErr) {
           console.warn("Could not overlay live vacation status:", vacErr?.message || vacErr);
         }
         setEmployee(withVacation);
-        fetchEmployeeLeaves(withVacation);
+        // Defer leave history until Leave tab (or load lightly in background after paint)
+        if (activeTab === "leave") {
+          fetchEmployeeLeaves(withVacation);
+        } else {
+          // Warm leave data in background without blocking first paint of basic info
+          setTimeout(() => fetchEmployeeLeaves(withVacation), 0);
+        }
       }
     } catch (err) {
       console.error("Error fetching employee:", err);

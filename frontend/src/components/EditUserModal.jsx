@@ -32,7 +32,7 @@ const EditUserModal = ({ isOpen, onClose, onSubmit, userToEdit }) => {
 
   const fetchEmployees = async () => {
     try {
-      const data = await EmployeeService.getEmployees();
+      const data = await EmployeeService.getEmployeesList();
       setEmployees(data);
     } catch (err) {
       console.error("Failed to fetch employees:", err);

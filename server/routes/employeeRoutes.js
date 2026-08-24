@@ -327,6 +327,12 @@ const EMPLOYEE_LIST_FIELDS = [
   'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt',
 ].join(' ');
 
+/** HR Metrics: list fields + demographics/salary needed for charts (no profile photos). */
+const EMPLOYEE_METRICS_FIELDS = [
+  EMPLOYEE_LIST_FIELDS,
+  'gender', 'dateOfBirth', 'designation', 'salaryDetails',
+].join(' ');
+
 const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const DYNAMIC_VACATION_STATUSES = new Set(['Vacation Pending', 'On Vacation', 'Vacation Approved']);
 const APPROVED_LEAVE_SELECT =
@@ -629,6 +635,8 @@ router.get('/', authMiddleware, async (req, res) => {
     const query = Employee.find(filter).sort({ createdAt: -1 });
     if (view === 'list') {
       query.select(EMPLOYEE_LIST_FIELDS).lean();
+    } else if (view === 'metrics') {
+      query.select(EMPLOYEE_METRICS_FIELDS).lean();
     } else {
       query.select('-profilePhoto').lean();
     }

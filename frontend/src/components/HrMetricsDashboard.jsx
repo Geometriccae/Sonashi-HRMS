@@ -394,7 +394,7 @@ export default function HrMetricsDashboard() {
       try {
         const [employeeResponse, leaveResponse, attendanceTrendResponse, salarySlipResponse] =
           await Promise.all([
-            employeeService.getEmployees({ force: true }),
+            employeeService.getEmployeesForMetrics(),
             leaveRequestService.getLeaveRequests(),
             attendanceService.getMonthlySummary(activeYear),
             salarySlipService.getAllSalarySlips("", filters.year || currentYear),

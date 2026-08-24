@@ -1,8 +1,12 @@
 import React, { useState, useRef } from "react";
-import * as XLSX from "xlsx";
 import leaveRequestService from "../../services/LeaveRequestService";
 import { useToast } from "../../context/ToastContext";
 import "./LeaveForm.css"; // Reuse modal styles
+
+const loadXlsx = async () => {
+    const mod = await import("xlsx");
+    return mod.default || mod;
+};
 
 function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
     const { showToast } = useToast();
@@ -27,8 +31,9 @@ function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
     const parseExcel = (file) => {
         setIsParsing(true);
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
+                const XLSX = await loadXlsx();
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: "array" });
                 

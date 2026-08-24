@@ -147,7 +147,7 @@ function LeaveRequestTable({ onUpdate }) {
             const uniqueDepts = [...new Set(data.map(req => req.department).filter(Boolean))];
             setDepartments(uniqueDepts.sort());
             
-            if (onUpdate) onUpdate();
+            if (onUpdate) onUpdate(data);
         } catch (error) {
             console.error("Error fetching leave requests:", error);
             showToast("Failed to fetch leave requests.", "error");

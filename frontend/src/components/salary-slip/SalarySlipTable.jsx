@@ -7,8 +7,6 @@ import salarySlipService from "../../services/SalarySlipService";
 import expenseService from "../../services/ExpenseService";
 import employeeService from "../../services/EmployeeService";
 import config from "../../config/config";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import SalarySlipBulkImportModal from "./SalarySlipBulkImportModal";
 import SalarySlipManualAddModal from "./SalarySlipManualAddModal";
 import SalarySlipEditModal from "./SalarySlipEditModal";
@@ -19,6 +17,14 @@ import {
     useUrlListPage,
     useResetPageOnFilterChange,
 } from "../../hooks/usePersistedListPage";
+
+const loadJsPdf = async () => {
+    const [{ default: jsPDF }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+    ]);
+    return { jsPDF };
+};
 
 const DownloadIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -545,6 +551,7 @@ function SalarySlipTable({ userRole }) {
 
     const handleDownload = async (slip) => {
         try {
+            const { jsPDF } = await loadJsPdf();
             const doc = new jsPDF();
             const pageWidth = doc.internal.pageSize.getWidth();
             const pageHeight = doc.internal.pageSize.getHeight();
