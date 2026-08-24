@@ -14,7 +14,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
-import { buildYetToGoFromLeaves, findLeaveForEmployee } from "../utils/yetToGoHelpers";
+import { buildYetToGoFromLeaves, findLeaveForEmployee, filterReturnedBackEmployees } from "../utils/yetToGoHelpers";
 import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
 import { canUpdateVacationReturn } from "../utils/permissions";
 
@@ -108,8 +108,10 @@ function DashboardOverview() {
       setIsLoading(true);
       try {
         // Same source as Annual Vacations: stored vacationStatus + leave list for Yet-to-go
+        employeeService.invalidateCache();
+        leaveRequestService.invalidateCache();
         const [empRes, leaveRes] = await Promise.all([
-          employeeService.getEmployeesList(),
+          employeeService.getEmployeesList({ force: true }),
           leaveRequestService.getLeaveRequests({ view: "lite" }),
         ]);
         const empList = Array.isArray(empRes) ? empRes : empRes?.data || [];
@@ -130,7 +132,6 @@ function DashboardOverview() {
         let visaExpiry = 0;
         let passportExpiry = 0;
         let attOnVacation = 0;
-        let attVacReturn = 0;
 
         empList.forEach(emp => {
           const vs = emp.vacationStatus || "Onsite";
@@ -138,10 +139,8 @@ function DashboardOverview() {
           if (isWorkingEmployeeStatus(emp.employeeStatus)) active++;
           else if (isNonWorkingEmployeeStatus(emp.employeeStatus)) inactive++;
 
-          // Count vacation statuses for current staff only
-          if (isWorkingEmployeeStatus(emp.employeeStatus)) {
-            if (vs === "On Vacation") attOnVacation++;
-            else if (vs === "Vacation Approved") attVacReturn++;
+          if (isWorkingEmployeeStatus(emp.employeeStatus) && vs === "On Vacation") {
+            attOnVacation++;
           }
 
           if (emp.visaExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
@@ -165,7 +164,7 @@ function DashboardOverview() {
         );
         let onVacation = attOnVacation;
         let upcomingVacation = yetToGoList.length;
-        let vacationReturn = attVacReturn;
+        let vacationReturn = filterReturnedBackEmployees(empList, leaveList).length;
 
         if (isMounted) {
           setData({ employees: empList, leaveRequests: leaveList });
@@ -246,22 +245,21 @@ function DashboardOverview() {
       );
 
       // Recompute vacation counts the same way as Annual Vacations (working staff only)
-      let attOnVacation = 0, attVacReturn = 0;
+      let attOnVacation = 0;
       updatedEmployees.forEach(e => {
         if (!isWorkingEmployeeStatus(e.employeeStatus)) return;
-        const vs = e.vacationStatus || "Onsite";
-        if (vs === "On Vacation") attOnVacation++;
-        else if (vs === "Vacation Approved") attVacReturn++;
+        if ((e.vacationStatus || "Onsite") === "On Vacation") attOnVacation++;
       });
+      const leaveSource = data.leaveRequests || [];
       const upcomingVacation = buildYetToGoFromLeaves(
         updatedEmployees,
-        data.leaveRequests || []
+        leaveSource
       ).filter((row) => isWorkingEmployeeStatus(row.employeeStatus)).length;
       setCounts(prev => ({
         ...prev,
         onVacation: attOnVacation,
         upcomingVacation,
-        vacationReturn: attVacReturn
+        vacationReturn: filterReturnedBackEmployees(updatedEmployees, leaveSource).length
       }));
 
       setData(prev => ({ ...prev, employees: updatedEmployees }));
@@ -386,8 +384,7 @@ function DashboardOverview() {
           break;
         }
         case "Returned back from vacation": {
-          list = empSource
-            .filter(e => isWorkingEmployeeStatus(e.employeeStatus) && e.vacationStatus === "Vacation Approved")
+          list = filterReturnedBackEmployees(empSource, leaveSource)
             .map(e => {
               const leave = findLeaveForEmployee(e, leaveSource, empSource, "returned");
               return {

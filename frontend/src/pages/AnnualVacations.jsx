@@ -20,6 +20,7 @@ import {
   formatExperienceLabel,
   findLeaveForEmployee,
   buildYetToGoFromLeaves,
+  filterReturnedBackEmployees,
 } from "../utils/yetToGoHelpers";
 import { canUpdateVacationReturn } from "../utils/permissions";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
@@ -384,7 +385,7 @@ function AnnualVacations() {
     const onVacation = working.filter(e => e.vacationStatus === "On Vacation").length;
     const yetToGo    = buildYetToGoFromLeaves(empList, leaveList)
       .filter(row => isWorkingEmployeeStatus(row.employeeStatus)).length;
-    const returned   = working.filter(e => e.vacationStatus === "Vacation Approved").length;
+    const returned   = filterReturnedBackEmployees(empList, leaveList).length;
     setCounts({ onVacation, yetToGo, returned });
   };
 
@@ -396,12 +397,12 @@ function AnnualVacations() {
       return buildYetToGoFromLeaves(empList, leaveList);
     }
 
-    const statusMap = { onVacation: "On Vacation", returned: "Vacation Approved" };
-    const targetStatus = statusMap[tabKey];
+    const sourceList =
+      tabKey === "returned"
+        ? filterReturnedBackEmployees(empList, leaveList)
+        : empList.filter(e => e.vacationStatus === "On Vacation");
 
-    return empList
-      .filter(e => e.vacationStatus === targetStatus)
-      .map(e => {
+    return sourceList.map(e => {
         const leave = findLeaveForEmployee(e, leaveList, empList, tabKey);
         return {
           ...e,

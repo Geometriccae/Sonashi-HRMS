@@ -1,3 +1,5 @@
+import { isWorkingEmployeeStatus } from "./employeeStatusDisplay";
+
 export const APPROVED_LEAVE_STATUSES = ["Approved", "HOD Approved"];
 export const YET_TO_GO_LEAVE_STATUSES = APPROVED_LEAVE_STATUSES;
 
@@ -324,5 +326,44 @@ export const mergeEffectiveVacationStatuses = (employees, vacationList) => {
     const nextStatus = fromId !== undefined ? fromId : fromCode;
     if (nextStatus === undefined) return emp;
     return { ...emp, vacationStatus: nextStatus };
+  });
+};
+
+/**
+ * Actual return day used for "Returned Back / Last 1 month".
+ * Prefer stored return / first working day, then the linked leave end date.
+ */
+export const getVacationReturnDate = (emp, leave) =>
+  toDayStart(
+    emp?.returnDate || emp?.firstWorkingDay || leave?.endDate || emp?.leaveEndDate
+  );
+
+/** Inclusive window: today back one calendar month. */
+export const isDateWithinLastMonth = (value, now = new Date()) => {
+  const day = toDayStart(value);
+  if (!day) return false;
+  const today = toDayStart(now);
+  const from = new Date(today);
+  from.setMonth(from.getMonth() - 1);
+  return day >= from && day <= today;
+};
+
+/**
+ * Single source of truth for Dashboard + Annual Vacations "Returned Back":
+ * working employee, stored vacationStatus === Vacation Approved,
+ * and return date within the last 1 month.
+ */
+export const isReturnedBackInLastMonth = (emp, leave, now = new Date()) => {
+  if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
+  if ((emp?.vacationStatus || "Onsite") !== "Vacation Approved") return false;
+  return isDateWithinLastMonth(getVacationReturnDate(emp, leave), now);
+};
+
+export const filterReturnedBackEmployees = (empList, leaveList, now = new Date()) => {
+  const employees = Array.isArray(empList) ? empList : [];
+  const leaves = Array.isArray(leaveList) ? leaveList : [];
+  return employees.filter((emp) => {
+    const leave = findLeaveForEmployee(emp, leaves, employees, "returned");
+    return isReturnedBackInLastMonth(emp, leave, now);
   });
 };
