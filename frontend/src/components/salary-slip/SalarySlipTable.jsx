@@ -930,7 +930,25 @@ function SalarySlipTable({ userRole }) {
         setIsGenerating(true);
         try {
             const resp = await salarySlipService.generateBulkSalarySlips(selectedMonth, selectedYear);
-            showToast(resp.message || "Bulk generation completed.", "success");
+            const skipped = Array.isArray(resp?.skipped) ? resp.skipped : [];
+            const fullMonthLeave = skipped.filter((s) =>
+                String(s.reason || "").toLowerCase().includes("approved leave for the entire month")
+            );
+            if (fullMonthLeave.length > 0) {
+                const names = fullMonthLeave
+                    .slice(0, 5)
+                    .map((s) => s.name)
+                    .filter(Boolean)
+                    .join(", ");
+                const more =
+                    fullMonthLeave.length > 5 ? ` (+${fullMonthLeave.length - 5} more)` : "";
+                showToast(
+                    `Skipped (full-month approved leave): ${names}${more}. ${resp.message || ""}`.trim(),
+                    "info"
+                );
+            } else {
+                showToast(resp.message || "Bulk generation completed.", "success");
+            }
             fetchData();
         } catch (error) {
             const errorMsg = error.message.includes('Unexpected token') 

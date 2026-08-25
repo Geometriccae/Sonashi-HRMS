@@ -17,6 +17,10 @@ const {
     computePayablePayrollDays,
     scaleSalaryAmount,
 } = require('../utils/payrollPayableDays');
+const {
+    isSalarySlipEligibleForMonth,
+    FULL_MONTH_LEAVE_REASON,
+} = require('../utils/salarySlipEligibility');
 
 // One-time cleanup to remove stale database indexes that cause import failures
 SalarySlip.on('index', (err) => {
@@ -155,9 +159,49 @@ router.post('/create', requireStrictAdmin, async (req, res) => {
         const slipData = { ...req.body, uploadedBy: req.user._id };
         if (!slipData.emailId) return res.status(400).json({ message: 'Email ID is required' });
 
+        const email = String(slipData.emailId).trim().toLowerCase();
+        const month = slipData.month;
+        const year = slipData.year;
+
+        if (month && year) {
+            const period = getPayrollPeriod(month, year);
+            if (period) {
+                const monthEndInclusive = new Date(period.end);
+                monthEndInclusive.setHours(23, 59, 59, 999);
+                const emp = await Employee.findOne({ emailId: email }).lean();
+                if (emp) {
+                    const [attendanceRecords, leaveRequests] = await Promise.all([
+                        Attendance.find({
+                            employee: emp._id,
+                            date: { $gte: period.start, $lte: monthEndInclusive },
+                        }).lean(),
+                        LeaveRequest.find({
+                            status: { $in: ['Approved', 'HOD Approved'] },
+                            startDate: { $lte: monthEndInclusive },
+                            endDate: { $gte: period.start },
+                        })
+                            .populate('employee', 'employeeId username emailId')
+                            .lean(),
+                    ]);
+                    const eligibility = isSalarySlipEligibleForMonth({
+                        employee: emp,
+                        month,
+                        year,
+                        attendanceRecords,
+                        leaveRequests,
+                    });
+                    if (!eligibility.eligible) {
+                        return res.status(400).json({
+                            message: eligibility.reason || FULL_MONTH_LEAVE_REASON,
+                        });
+                    }
+                }
+            }
+        }
+
         const slip = await SalarySlip.findOneAndUpdate(
-            { emailId: slipData.emailId.trim().toLowerCase(), month: slipData.month, year: slipData.year },
-            { ...slipData, emailId: slipData.emailId.trim().toLowerCase() },
+            { emailId: email, month: slipData.month, year: slipData.year },
+            { ...slipData, emailId: email },
             { upsert: true, new: true }
         );
         res.status(201).json(slip);
@@ -198,7 +242,9 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
                 status: { $in: ['Approved', 'HOD Approved'] },
                 startDate: { $lte: monthEndInclusive },
                 endDate: { $gte: period.start },
-            }).lean(),
+            })
+                .populate('employee', 'employeeId username emailId')
+                .lean(),
         ]);
 
         const results = [];
@@ -209,6 +255,21 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
             try {
                 if (!emp.emailId) {
                     skipped.push({ name: emp.employeeName, reason: "No email ID" });
+                    continue;
+                }
+
+                const eligibility = isSalarySlipEligibleForMonth({
+                    employee: emp,
+                    month,
+                    year,
+                    attendanceRecords,
+                    leaveRequests,
+                });
+                if (!eligibility.eligible) {
+                    skipped.push({
+                        name: emp.employeeName,
+                        reason: eligibility.reason || FULL_MONTH_LEAVE_REASON,
+                    });
                     continue;
                 }
 

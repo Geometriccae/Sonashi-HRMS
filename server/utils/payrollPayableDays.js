@@ -71,20 +71,34 @@ const normalizeName = (name) =>
 const leaveMatchesEmployee = (leave, employee) => {
   if (!leave || !employee) return false;
   const empMongo = String(employee._id || "");
-  const empCode = String(employee.employeeId || "");
+  const empCode = String(employee.employeeId || "").toLowerCase();
   const empName = normalizeName(employee.employeeName);
+
+  const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+  if (empMongo && recordId && recordId === empMongo) return true;
 
   const populated = leave.employee;
   if (populated && typeof populated === "object") {
-    if (populated.employeeId && String(populated.employeeId) === empMongo) return true;
-    if (normalizeName(populated.username) && normalizeName(populated.username) === empName) return true;
+    const linkedEmp = populated.employeeId?._id || populated.employeeId || null;
+    if (linkedEmp && String(linkedEmp) === empMongo) return true;
+    if (populated._id && String(populated._id) === empMongo) return true;
   } else if (populated && String(populated) === empMongo) {
     return true;
   }
 
-  if (leave.employeeId && (String(leave.employeeId) === empCode || String(leave.employeeId) === empMongo)) {
-    return true;
+  if (leave.employeeId) {
+    const rid = String(leave.employeeId).toLowerCase();
+    if (empMongo && rid === empMongo.toLowerCase()) return true;
+    if (empCode && rid === empCode) return true;
   }
+
+  const hasRef = Boolean(
+    recordId ||
+      leave.employeeId ||
+      (populated && (populated._id || populated.employeeId || populated))
+  );
+  if (hasRef) return false;
+
   const leaveName = normalizeName(leave.employeeName || "");
   return Boolean(empName && leaveName && leaveName === empName);
 };
