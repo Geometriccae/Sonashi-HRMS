@@ -62,7 +62,11 @@ export const resolvePeriodRange = ({ year, month, startDate, endDate, activeYear
     if (end) end.setHours(23, 59, 59, 999);
     return { start, end };
   }
-  const y = year && year !== "All" ? year : activeYear;
+  // Year = All → no workforce date window (same pool as Dashboard total headcount)
+  if (!year || year === "All") {
+    return { start: null, end: null };
+  }
+  const y = year;
   return yearRangeBounds(y, month && month !== "All" ? month : "All");
 };
 

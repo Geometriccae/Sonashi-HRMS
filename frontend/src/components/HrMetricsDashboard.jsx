@@ -335,7 +335,7 @@ export default function HrMetricsDashboard() {
   const currentYear = String(new Date().getFullYear());
   const yearFromUrl = searchParams.get("year");
   const [filters, setFilters] = useState({
-    year: yearFromUrl && yearFromUrl !== "All" ? yearFromUrl : currentYear,
+    year: yearFromUrl || "All",
     month: searchParams.get("month") || "All",
     startDate: searchParams.get("startDate") || "",
     endDate: searchParams.get("endDate") || "",
@@ -351,23 +351,26 @@ export default function HrMetricsDashboard() {
   }));
 
   const selectedRange = useMemo(
-    () => resolvePeriodRange({ ...filters, activeYear: Number(filters.year) || Number(currentYear) }),
+    () => resolvePeriodRange({ ...filters, activeYear: Number(currentYear) }),
     [filters, currentYear]
   );
+  const yearIsAll = !filters.year || filters.year === "All";
   const activeYear = useMemo(() => {
+    if (yearIsAll) return Number(currentYear);
     const parsed = Number(filters.year);
     const liveYear = new Date().getFullYear();
     if (!Number.isFinite(parsed) || parsed > liveYear) return liveYear;
     return parsed;
-  }, [filters.year]);
+  }, [filters.year, yearIsAll, currentYear]);
+  const yearLabel = yearIsAll ? "All" : String(activeYear);
   const asOfDate = useMemo(
-    () => selectedRange.end || new Date(activeYear, 11, 31, 23, 59, 59, 999),
-    [selectedRange.end, activeYear]
+    () => selectedRange.end || new Date(),
+    [selectedRange.end]
   );
 
   useEffect(() => {
     const params = new URLSearchParams();
-    params.set("year", String(activeYear));
+    params.set("year", yearIsAll ? "All" : String(activeYear));
     if (filters.month && filters.month !== "All") params.set("month", filters.month);
     if (filters.startDate) params.set("startDate", filters.startDate);
     if (filters.endDate) params.set("endDate", filters.endDate);
@@ -382,7 +385,7 @@ export default function HrMetricsDashboard() {
     if (searchParams.toString() !== qs) {
       setSearchParams(params, { replace: true });
     }
-  }, [activeYear, filters, searchParams, setSearchParams]);
+  }, [activeYear, yearIsAll, filters, searchParams, setSearchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -406,7 +409,7 @@ export default function HrMetricsDashboard() {
         // Secondary: salary slips + attendance — do not block first paint
         Promise.all([
           attendanceService.getMonthlySummary(activeYear).catch(() => []),
-          salarySlipService.getAllSalarySlips("", filters.year || currentYear).catch(() => []),
+          salarySlipService.getAllSalarySlips("", yearIsAll ? "" : String(activeYear)).catch(() => []),
         ]).then(([attendanceTrendResponse, salarySlipResponse]) => {
           if (!isMounted) return;
           setAttendanceMonthlySummary(Array.isArray(attendanceTrendResponse) ? attendanceTrendResponse : []);
@@ -442,7 +445,7 @@ export default function HrMetricsDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [filters.year, currentYear, selectedRange.start, selectedRange.end, activeYear]);
+  }, [filters.year, currentYear, selectedRange.start, selectedRange.end, activeYear, yearIsAll]);
 
   const filterOptions = useMemo(() => {
     const buildOptions = (getter) => [
@@ -457,7 +460,7 @@ export default function HrMetricsDashboard() {
     }
 
     return {
-      years: yearsFromJoining,
+      years: ["All", ...yearsFromJoining.filter((y) => y !== "All")],
       departments: buildOptions((employee) => employee.department),
       designations: buildOptions((employee) => employee.designation || employee.role),
       locations: buildOptions((employee) => employee.office),
@@ -516,7 +519,11 @@ export default function HrMetricsDashboard() {
   }, [attendanceRecords, employeeIdSet]);
 
   const kpis = useMemo(() => {
-    const computed = computeKpis(filteredEmployees, selectedRange, asOfDate);
+    // Year=All: workforce is all-time (matches Dashboard); joiners/exits still use the live calendar year
+    const periodForJoinExit = yearIsAll
+      ? yearRangeBounds(Number(currentYear), filters.month !== "All" ? filters.month : "All")
+      : selectedRange;
+    const computed = computeKpis(filteredEmployees, periodForJoinExit, asOfDate);
     const payrollFromSlips = sumPayrollFromSlips(filteredSalarySlips);
     return {
       ...computed,
@@ -524,7 +531,7 @@ export default function HrMetricsDashboard() {
       totalPayroll: payrollFromSlips,
       payrollSlipCount: filteredSalarySlips.length,
     };
-  }, [filteredEmployees, selectedRange, asOfDate, filteredSalarySlips]);
+  }, [filteredEmployees, selectedRange, asOfDate, filteredSalarySlips, yearIsAll, currentYear, filters.month]);
 
   const openEmployeeDrillDown = useCallback((title, employeeList, columns = EMPLOYEE_BASE_COLUMNS) => {
     const list = employeeList || [];
@@ -726,7 +733,10 @@ export default function HrMetricsDashboard() {
   }, [kpis.lists.withSalary]);
 
   const exitOverview = useMemo(() => {
-    const exitEmployees = getPeriodExits(filteredEmployees, selectedRange);
+    const periodForJoinExit = yearIsAll
+      ? yearRangeBounds(Number(currentYear), filters.month !== "All" ? filters.month : "All")
+      : selectedRange;
+    const exitEmployees = getPeriodExits(filteredEmployees, periodForJoinExit);
     const exitTypes = addPercentages(
       getValueLabelPairs(exitEmployees, (employee) => employee.employeeStatus)
     );
@@ -739,7 +749,7 @@ export default function HrMetricsDashboard() {
       exitEmployees,
       rehireEligible: null,
     };
-  }, [filteredEmployees, selectedRange, kpis.attrition]);
+  }, [filteredEmployees, selectedRange, kpis.attrition, yearIsAll, currentYear, filters.month]);
 
   const employeeOverviewCharts = useMemo(() => {
     const departments = getValueLabelPairs(filteredEmployees, (employee) => employee.department);
@@ -1133,19 +1143,19 @@ export default function HrMetricsDashboard() {
 
       <div className={styles.metricsGrid}>
         <MetricCard
-          label={`Total Employees (${activeYear})`}
+          label={`Total Employees (${yearLabel})`}
           value={formatCount(kpis.totalEmployees)}
-          onClick={() => openEmployeeDrillDown(`Total Employees (${activeYear})`, kpis.lists.workforce)}
+          onClick={() => openEmployeeDrillDown(`Total Employees (${yearLabel})`, kpis.lists.workforce)}
         />
         <MetricCard
           label="Active Employees"
           value={formatCount(kpis.activeEmployees)}
-          onClick={() => openEmployeeDrillDown(`Active Employees (${activeYear})`, kpis.lists.active)}
+          onClick={() => openEmployeeDrillDown(`Active Employees (${yearLabel})`, kpis.lists.active)}
         />
         <MetricCard
           label="New Joiners"
           value={formatCount(kpis.newJoiners)}
-          onClick={() => openEmployeeDrillDown(`New Joiners – ${activeYear}`, kpis.lists.joiners, [
+          onClick={() => openEmployeeDrillDown(`New Joiners – ${yearIsAll ? currentYear : yearLabel}`, kpis.lists.joiners, [
             ...EMPLOYEE_BASE_COLUMNS.slice(0, 5),
             { title: "Status", dataIndex: "status", key: "status", width: 120 },
             { title: "Location", dataIndex: "location", key: "location", width: 160 },
@@ -1154,7 +1164,7 @@ export default function HrMetricsDashboard() {
         <MetricCard
           label="Total Exits"
           value={formatCount(kpis.totalExits)}
-          onClick={() => openEmployeeDrillDown(`Exits – ${activeYear}`, kpis.lists.exits, [
+          onClick={() => openEmployeeDrillDown(`Exits – ${yearIsAll ? currentYear : yearLabel}`, kpis.lists.exits, [
             ...EMPLOYEE_BASE_COLUMNS.slice(0, 4),
             { title: "Joining Date", dataIndex: "doj", key: "doj", width: 110 },
             { title: "Last Working Day", dataIndex: "lastWorkingDay", key: "lastWorkingDay", width: 130 },
@@ -1185,13 +1195,13 @@ export default function HrMetricsDashboard() {
           label="Total Payroll"
           value={formatCurrency(kpis.totalPayroll)}
           subtext={kpis.payrollSlipCount ? `${kpis.payrollSlipCount} salary slip(s)` : "No salary slips for period"}
-          onClick={() => openPayrollDrillDown(`Total Payroll – ${activeYear}`, filteredSalarySlips)}
+          onClick={() => openPayrollDrillDown(`Total Payroll – ${yearLabel}`, filteredSalarySlips)}
         />
         <MetricCard
           label="Attrition %"
           value={formatPercent(kpis.attrition)}
           subtext="Exits ÷ avg headcount in period"
-          onClick={() => openEmployeeDrillDown(`Attrition Exits – ${activeYear}`, kpis.lists.exits, [
+          onClick={() => openEmployeeDrillDown(`Attrition Exits – ${yearIsAll ? currentYear : yearLabel}`, kpis.lists.exits, [
             ...EMPLOYEE_BASE_COLUMNS.slice(0, 4),
             { title: "Joining Date", dataIndex: "doj", key: "doj", width: 110 },
             { title: "Last Working Day", dataIndex: "lastWorkingDay", key: "lastWorkingDay", width: 130 },
@@ -1538,7 +1548,7 @@ export default function HrMetricsDashboard() {
               {
                 label: "Total Exits",
                 value: formatCount(exitOverview.totalExits),
-                onClick: () => openEmployeeDrillDown(`Exits – ${activeYear}`, exitOverview.exitEmployees || [], [
+                onClick: () => openEmployeeDrillDown(`Exits – ${yearIsAll ? currentYear : yearLabel}`, exitOverview.exitEmployees || [], [
                   ...EMPLOYEE_BASE_COLUMNS.slice(0, 4),
                   { title: "Joining Date", dataIndex: "doj", key: "doj", width: 110 },
                   { title: "Last Working Day", dataIndex: "lastWorkingDay", key: "lastWorkingDay", width: 130 },
@@ -1549,7 +1559,7 @@ export default function HrMetricsDashboard() {
               {
                 label: "Attrition %",
                 value: formatPercent(exitOverview.attrition),
-                onClick: () => openEmployeeDrillDown(`Attrition Exits – ${activeYear}`, exitOverview.exitEmployees || []),
+                onClick: () => openEmployeeDrillDown(`Attrition Exits – ${yearIsAll ? currentYear : yearLabel}`, exitOverview.exitEmployees || []),
               },
               { label: "Rehire Eligible", value: "No data" },
             ]}
