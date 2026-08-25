@@ -916,12 +916,7 @@ function SalarySlipTable({ userRole }) {
             return;
         }
 
-        // Check if slips already exist for the selected month/year
-        if (salarySlips.length > 0) {
-            showToast(`Salary slips for ${selectedMonth} ${selectedYear} have already been generated.`, "info");
-            return;
-        }
-        
+        // Always allow generate/regenerate — backend upserts existing and creates missing employees
         setGenerateConfirmOpen(true);
     };
 
@@ -934,6 +929,9 @@ function SalarySlipTable({ userRole }) {
             const fullMonthLeave = skipped.filter((s) =>
                 String(s.reason || "").toLowerCase().includes("approved leave for the entire month")
             );
+            const baseMsg =
+                resp.message ||
+                `Generated/updated ${resp.count ?? 0} salary slip(s) for ${selectedMonth} ${selectedYear}.`;
             if (fullMonthLeave.length > 0) {
                 const names = fullMonthLeave
                     .slice(0, 5)
@@ -943,11 +941,11 @@ function SalarySlipTable({ userRole }) {
                 const more =
                     fullMonthLeave.length > 5 ? ` (+${fullMonthLeave.length - 5} more)` : "";
                 showToast(
-                    `Skipped (full-month approved leave): ${names}${more}. ${resp.message || ""}`.trim(),
+                    `${baseMsg} Skipped (full-month approved leave): ${names}${more}`.trim(),
                     "info"
                 );
             } else {
-                showToast(resp.message || "Bulk generation completed.", "success");
+                showToast(baseMsg, "success");
             }
             fetchData();
         } catch (error) {
@@ -1477,8 +1475,8 @@ function SalarySlipTable({ userRole }) {
                 onClose={() => setGenerateConfirmOpen(false)}
                 onConfirm={confirmGenerateBulk}
                 title="Generate Salary Slips"
-                message={`Generate/Update salary slips for all active employees for ${selectedMonth} ${selectedYear}?`}
-                confirmText="Generate Now"
+                message={`Generate or update salary slips for ${selectedMonth} ${selectedYear}? Missing eligible employees will be added; existing slips for this month will be updated.`}
+                confirmText={salarySlips.length > 0 ? "Regenerate Now" : "Generate Now"}
                 confirmColor="#16a34a"
                 icon="success"
             />
