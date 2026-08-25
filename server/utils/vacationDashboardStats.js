@@ -1,7 +1,8 @@
 /**
  * Fast dashboard / annual-vacation aggregates and paginated tab rows.
- * Returned Back rule matches frontend yetToGoHelpers:
- * working + vacationStatus === "Vacation Approved" + return date within last 1 month.
+ * Returned Back: working employees whose approved leave ended in the last 6 months
+ * (leave history), excluding currently On Vacation / Yet to Go. Does not require
+ * vacationStatus to still be "Vacation Approved".
  */
 
 const Employee = require('../models/Employee');
@@ -22,7 +23,7 @@ const {
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const APPROVED_LEAVE_SELECT =
-  'employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department';
+  'employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department';
 
 const EMP_LEAN_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId',
@@ -60,7 +61,7 @@ function normalizeName(name) {
 function lastMonthWindow(now = new Date()) {
   const today = toDayStart(now);
   const from = new Date(today);
-  from.setMonth(from.getMonth() - 1);
+  from.setMonth(from.getMonth() - 6);
   const todayEnd = new Date(today);
   todayEnd.setHours(23, 59, 59, 999);
   return { today, from, todayEnd };
@@ -68,7 +69,7 @@ function lastMonthWindow(now = new Date()) {
 
 function getVacationReturnDate(emp, leave) {
   return toDayStart(
-    emp?.returnDate || emp?.firstWorkingDay || leave?.endDate || emp?.leaveEndDate
+    leave?.endDate || emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
   );
 }
 
@@ -79,10 +80,62 @@ function isDateWithinLastMonth(value, now = new Date()) {
   return day >= from && day <= today;
 }
 
+/**
+ * Returned Back (last 6 months): use leave history end/return dates.
+ * Do not require vacationStatus to still be "Vacation Approved" (many staff
+ * are set back to Onsite after return and would otherwise disappear).
+ * Exclude people currently On Vacation / Yet to Go.
+ */
 function isReturnedBackInLastMonth(emp, leave, now = new Date()) {
   if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
-  if ((emp?.vacationStatus || 'Onsite') !== 'Vacation Approved') return false;
-  return isDateWithinLastMonth(getVacationReturnDate(emp, leave), now);
+  const vs = emp?.vacationStatus || 'Onsite';
+  if (vs === 'On Vacation' || vs === 'Vacation Pending') return false;
+
+  const leaveEnd = toDayStart(leave?.endDate);
+  const empReturn = toDayStart(
+    emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
+  );
+  // Prefer leave history end date when a completed leave is linked
+  const returnDate = leaveEnd || empReturn;
+  if (!isDateWithinLastMonth(returnDate, now)) return false;
+
+  if (leaveEnd) {
+    const today = toDayStart(now);
+    if (today && leaveEnd <= today) return true;
+  }
+  if (vs === 'Vacation Approved') return true;
+  return false;
+}
+
+function filterReturnedBackEmployees(empList, leaveList, now = new Date()) {
+  const employees = Array.isArray(empList) ? empList : [];
+  const leaves = Array.isArray(leaveList) ? leaveList : [];
+  const { today, from } = lastMonthWindow(now);
+
+  return employees.filter((emp) => {
+    if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
+    const vs = emp?.vacationStatus || 'Onsite';
+    if (vs === 'On Vacation' || vs === 'Vacation Pending') return false;
+
+    // Approved leaves for this employee that have already ended inside the window
+    const endedInWindow = leaves
+      .filter((req) => {
+        if (!APPROVED_LEAVE_STATUSES.includes(req.status)) return false;
+        if (!leaveMatchesEmployee(req, emp, employees)) return false;
+        const end = toDayStart(req.endDate);
+        if (!end || end > today) return false;
+        return end >= from && end <= today;
+      })
+      .sort((a, b) => toDayStart(b.endDate) - toDayStart(a.endDate));
+
+    const vacationEnded = endedInWindow.filter((r) => r.leaveType === 'Vacation');
+    const leave =
+      (vacationEnded.length > 0 ? vacationEnded[0] : null) ||
+      endedInWindow[0] ||
+      findLeaveForEmployee(emp, leaves, employees, 'returned');
+
+    return isReturnedBackInLastMonth(emp, leave, now);
+  });
 }
 
 async function loadApprovedLeaves() {
@@ -110,15 +163,32 @@ async function loadEmployeesLean() {
 
 function findLinkedEmployee(req, empList) {
   if (!Array.isArray(empList) || empList.length === 0) return null;
+
+  const recordId = req.employeeRecordId?._id || req.employeeRecordId;
+  if (recordId) {
+    const byRecord = empList.find((e) => String(e._id) === String(recordId));
+    if (byRecord) return byRecord;
+  }
+
   const populated = req.employee;
   if (populated?.employeeId) {
-    const byRef = empList.find((e) => String(e._id) === String(populated.employeeId));
+    const byRef = empList.find((e) => String(e._id) === String(populated.employeeId._id || populated.employeeId));
     if (byRef) return byRef;
   }
-  if (req.employeeId) {
-    const byCode = empList.find((e) => String(e.employeeId) === String(req.employeeId));
+
+  const ownerId = populated?._id || populated || req.employee;
+  if (ownerId) {
+    const byOwner = empList.find((e) => String(e._id) === String(ownerId));
+    if (byOwner) return byOwner;
+  }
+
+  const code = req.employeeId;
+  if (code) {
+    const byCode = empList.find((e) => String(e.employeeId) === String(code));
     if (byCode) return byCode;
   }
+
+  // Name fallback: LeaveRequest.employee is often User._id (not in empList)
   const reqName = normalizeName(req.employeeName || populated?.username);
   if (!reqName) return null;
   const exact = empList.find((e) => normalizeName(e.employeeName) === reqName);
@@ -150,11 +220,22 @@ function getEffectiveVacationStatus(req, linkedEmployee, todayValue = new Date()
 function leaveMatchesEmployee(req, emp, empList) {
   const linked = findLinkedEmployee(req, empList);
   if (linked && String(linked._id) === String(emp._id)) return true;
-  const userEmpId = req.employee?.employeeId;
+
+  const recordId = req.employeeRecordId?._id || req.employeeRecordId;
+  if (recordId && String(recordId) === String(emp._id)) return true;
+
+  const userEmpId = req.employee?.employeeId?._id || req.employee?.employeeId;
   if (userEmpId && String(userEmpId) === String(emp._id)) return true;
+
+  const ownerId = req.employee?._id || req.employee;
+  if (ownerId && String(ownerId) === String(emp._id)) return true;
+
+  if (req.employeeId && String(req.employeeId) === String(emp.employeeId)) return true;
+
   const reqEmail = String(req.employee?.emailId || '').trim().toLowerCase();
   const empEmail = String(emp.emailId || '').trim().toLowerCase();
   if (reqEmail && empEmail && reqEmail === empEmail) return true;
+
   const reqName = normalizeName(req.employeeName || req.employee?.username);
   const empName = normalizeName(emp.employeeName);
   return Boolean(reqName && empName && reqName === empName);
@@ -183,8 +264,16 @@ function findLeaveForEmployee(emp, leaveList, empList, tabKey) {
     return upcoming[0] || null;
   }
   if (tabKey === 'returned') {
+    const { today, from } = lastMonthWindow();
     const past = pool
-      .filter((req) => getEffectiveVacationStatus(req, emp, today) === 'Vacation Approved')
+      .filter((req) => {
+        const end = toDayStart(req.endDate);
+        if (!end || end > today) return false;
+        // Prefer leaves that ended in the 6-month window; allow ended leave even if
+        // travel date is missing (getEffectiveVacationStatus would return null).
+        if (end >= from) return true;
+        return getEffectiveVacationStatus(req, emp, today) === 'Vacation Approved';
+      })
       .sort((a, b) => toDayStart(b.endDate) - toDayStart(a.endDate));
     return past[0] || null;
   }
@@ -302,25 +391,19 @@ function buildYetToGoFromLeaves(empList, leaveList) {
   return rows;
 }
 
-function filterReturnedBackEmployees(empList, leaveList, now = new Date()) {
-  const employees = Array.isArray(empList) ? empList : [];
-  const leaves = Array.isArray(leaveList) ? leaveList : [];
-  return employees.filter((emp) => {
-    const leave = findLeaveForEmployee(emp, leaves, employees, 'returned');
-    return isReturnedBackInLastMonth(emp, leave, now);
-  });
-}
-
 function enrichEmployeeRows(empList, leaveList, tabKey) {
   return empList.map((e) => {
     const leave = findLeaveForEmployee(e, leaveList, empList, tabKey);
+    const leaveEnd = leave?.endDate || e.leaveEndDate || null;
     return {
       ...e,
       _source: 'employee',
       linkedEmployeeId: e._id,
       linkedLeaveId: leave?._id || null,
       startDate: leave?.startDate || null,
-      endDate: leave?.endDate || e.leaveEndDate || null,
+      endDate: leaveEnd,
+      // For Returned Back list: show leave end when returnDate was cleared after mark-onsite
+      returnDate: e.returnDate || (tabKey === 'returned' ? leaveEnd : e.returnDate) || null,
       experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
     };
   });
@@ -413,7 +496,8 @@ function applyRowFilters(rows, query = {}) {
 
 /**
  * Lightweight counts for Dashboard + Annual Vacations cards.
- * Returned Back uses the same last-1-month rule as the frontend.
+ * Returned Back = approved leave ended in last 6 months (leave history),
+ * excluding people currently On Vacation / Yet to Go.
  * Yet to Go uses the same leave+employee builder as Annual Vacations.
  */
 async function getDashboardSummary({ force = false } = {}) {
