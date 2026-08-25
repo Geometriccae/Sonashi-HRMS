@@ -8,6 +8,12 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
 const { patchListCacheEmployee, invalidateApprovedLeavesCache } = require('../utils/employeeListCache');
+const {
+    resolveLeaveOwnerIds,
+    buildEmployeeLeaveMongoFilter,
+    enrichLeaveRowsWithEmployeeIdentity,
+    identityFieldsFromEmployee,
+} = require('../utils/leaveEmployeeIdentity');
 
 const CHANGE_STATUSES = ['Created', 'Modified', 'Cancelled', 'Approved', 'Rejected', 'Error'];
 
@@ -18,6 +24,22 @@ let _leaveMetricsCache = { key: '', data: null, ts: 0 };
 
 function leaveListCacheKey(role, status, employeeId) {
   return `${role || ''}|${status || ''}|${employeeId || ''}`;
+}
+
+/** Merge an extra Mongo clause into a filter without clobbering existing $or/$and. */
+function andMongoClause(filter, clause) {
+  if (!clause) {
+    if (!filter) return {};
+    if (filter.$and) return { ...filter, $and: [...filter.$and] };
+    return { ...filter };
+  }
+  if (!filter || Object.keys(filter).length === 0) {
+    return { ...clause };
+  }
+  if (filter.$and) {
+    return { ...filter, $and: [...filter.$and, clause] };
+  }
+  return { $and: [{ ...filter }, clause] };
 }
 
 function getLeaveListCache(key) {
@@ -122,6 +144,11 @@ async function resolveLeaveEmployeeTarget(employeeId, employeeName, fallbackUser
 async function resolveEmployeeForLeave(leaveRequest) {
     if (!leaveRequest) return null;
 
+    if (leaveRequest.employeeRecordId) {
+        const byRecord = await Employee.findById(leaveRequest.employeeRecordId);
+        if (byRecord) return byRecord;
+    }
+
     const empRef = leaveRequest.employee?._id || leaveRequest.employee;
     if (empRef) {
         const user = await User.findById(empRef).populate('employeeId');
@@ -130,19 +157,20 @@ async function resolveEmployeeForLeave(leaveRequest) {
             const emp = await Employee.findById(linkedId);
             if (emp) return emp;
         }
-        if (user) {
-            const byUser = await Employee.findOne({
-                $or: [
-                    { employeeName: user.username },
-                    { emailId: user.emailId },
-                ],
-            });
-            if (byUser) return byUser;
-        }
 
         // leave.employee may be the Employee._id when no User account exists
         const asEmployee = await Employee.findById(empRef);
         if (asEmployee) return asEmployee;
+
+        if (user) {
+            const byUser = await Employee.findOne({
+                $or: [
+                    { emailId: user.emailId },
+                    { employeeName: user.username },
+                ],
+            });
+            if (byUser) return byUser;
+        }
     }
 
     if (leaveRequest.employeeId) {
@@ -152,9 +180,6 @@ async function resolveEmployeeForLeave(leaveRequest) {
         if (byMongo) return byMongo;
     }
 
-    if (leaveRequest.employeeName) {
-        return Employee.findOne({ employeeName: leaveRequest.employeeName });
-    }
     return null;
 }
 
@@ -352,7 +377,11 @@ function parseLocalDate(dateStr) {
 // Get all leave requests
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const { status, employeeId } = req.query;
+        const { status } = req.query;
+        // Accept Employee._id, User._id, or HR code — never match by name alone for ownership
+        const employeeKey = String(
+            req.query.employeeRecordId || req.query.employeeId || ''
+        ).trim();
         const view = String(req.query.view || '').toLowerCase();
         const isLite = view === 'lite' || view === 'vacation';
         const page = parseInt(req.query.page, 10);
@@ -366,11 +395,9 @@ router.get('/', authMiddleware, async (req, res) => {
         const startDate = String(req.query.startDate || '').trim();
         const endDate = String(req.query.endDate || '').trim();
         const leaveType = String(req.query.leaveType || '').trim();
-        const filter = {};
+        let filter = {};
 
         if (req.user.role === 'hod') {
-            // HOD sees only Pending requests (waiting for HOD approval)
-            // and also sees requests they have already processed (HOD Approved, Approved, Rejected)
             if (status && status !== 'All') {
                 if (status === 'History') {
                     filter.status = { $in: ['Approved', 'Rejected', 'Cancelled'] };
@@ -378,11 +405,7 @@ router.get('/', authMiddleware, async (req, res) => {
                     filter.status = status;
                 }
             } else {
-                // Default: show Pending (for approval) and completed ones
                 filter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
-            }
-            if (employeeId) {
-                filter.employee = employeeId;
             }
         } else if (
           req.user.role === 'admin' ||
@@ -390,7 +413,6 @@ router.get('/', authMiddleware, async (req, res) => {
           req.user.role === 'viewer' ||
           req.user.role === 'authorize_user'
         ) {
-            // Admin and HR see Pending requests, HOD processed requests, and final ones
             const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'];
 
             if (status && status !== 'All') {
@@ -399,18 +421,12 @@ router.get('/', authMiddleware, async (req, res) => {
                 } else if (visibleStatuses.includes(status)) {
                     filter.status = status;
                 } else {
-                    // If requesting a status admin/HR shouldn't see, return nothing
                     filter.status = 'RESTRICTED_VIEW';
                 }
             } else {
-                // Default: show Pending (for approval) and completed ones
                 filter.status = { $in: visibleStatuses };
             }
-            if (employeeId) {
-                filter.employee = employeeId;
-            }
         } else {
-            // Regular Employees can only see their own requests
             filter.employee = req.user.id;
             if (status && status !== 'All') {
                 if (status === 'History') {
@@ -421,18 +437,40 @@ router.get('/', authMiddleware, async (req, res) => {
             }
         }
 
-        // Vacation/dashboard lite: only approved leaves, minimal fields (no heavy populates)
+        let resolvedOwner = null;
+        if (
+            employeeKey &&
+            (req.user.role === 'hod' ||
+                req.user.role === 'admin' ||
+                req.user.role === 'hr' ||
+                req.user.role === 'viewer' ||
+                req.user.role === 'authorize_user')
+        ) {
+            resolvedOwner = await resolveLeaveOwnerIds(employeeKey, { User, Employee });
+            const ownerFilter = buildEmployeeLeaveMongoFilter(resolvedOwner);
+            if (ownerFilter) {
+                filter = andMongoClause(filter, ownerFilter);
+            } else {
+                filter = andMongoClause(filter, { _id: null });
+            }
+        }
+
         if (isLite) {
             filter.status = { $in: ['Approved', 'HOD Approved'] };
         }
 
-        // Table filters (applied before pagination)
         if (search) {
             const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-            filter.$or = [
+            const searchOr = [
                 { employeeName: regex },
                 { employeeId: regex },
             ];
+            const searchOwner = await resolveLeaveOwnerIds(search, { User, Employee });
+            const searchOwnerFilter = buildEmployeeLeaveMongoFilter(searchOwner);
+            if (searchOwnerFilter) {
+                searchOr.push(searchOwnerFilter);
+            }
+            filter = andMongoClause(filter, { $or: searchOr });
         }
         if (department && department !== 'All') {
             filter.department = department;
@@ -486,11 +524,11 @@ router.get('/', authMiddleware, async (req, res) => {
             }
         }
 
-        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeId || filter.employee)
+        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeKey || '')
           + (isLite ? '|lite' : '')
           + (paginate
             ? `|p${page}|l${limit}|s${search}|d${department}|m${reportingManager}|y${year}|mo${month}|sd${startDate}|ed${endDate}|lt${leaveType}`
-            : '|all');
+            : '|all|v2id');
         const skipCache =
           String(req.query.fresh || '') === '1' ||
           String(req.query.fresh || '').toLowerCase() === 'true';
@@ -500,14 +538,15 @@ router.get('/', authMiddleware, async (req, res) => {
         }
 
         const LEAVE_TABLE_SELECT =
-          'employee employeeId employeeName company department reportingManager leaveType startDate endDate reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
+          'employee employeeRecordId employeeId employeeName company department reportingManager leaveType startDate endDate reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
 
         let leaveRequests;
         if (isLite) {
             leaveRequests = await LeaveRequest.find(filter)
-                .select('employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn requestAirfare')
+                .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn requestAirfare')
                 .sort({ appliedOn: -1 })
                 .lean();
+            leaveRequests = await enrichLeaveRowsWithEmployeeIdentity(leaveRequests, { User, Employee });
             setLeaveListCache(cacheKey, leaveRequests);
             return res.json(leaveRequests);
         }
@@ -516,24 +555,28 @@ router.get('/', authMiddleware, async (req, res) => {
             const safeLimit = Math.min(100, Math.max(1, limit));
             const skip = (page - 1) * safeLimit;
 
-            // Metrics are role-visible totals (not table year/search filters) — same as previous UI cards
-            const baseStatusFilter = {};
+            let baseStatusFilter = {};
             if (req.user.role === 'hod' || req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer' || req.user.role === 'authorize_user') {
                 baseStatusFilter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
             } else {
                 baseStatusFilter.employee = req.user.id;
             }
-            if (employeeId && (req.user.role === 'hod' || req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer' || req.user.role === 'authorize_user')) {
-                baseStatusFilter.employee = employeeId;
+            if (employeeKey && (req.user.role === 'hod' || req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer' || req.user.role === 'authorize_user')) {
+                const ownerFilter = buildEmployeeLeaveMongoFilter(resolvedOwner || await resolveLeaveOwnerIds(employeeKey, { User, Employee }));
+                if (ownerFilter) {
+                    baseStatusFilter = andMongoClause(baseStatusFilter, ownerFilter);
+                } else {
+                    baseStatusFilter = andMongoClause(baseStatusFilter, { _id: null });
+                }
             }
 
-            const metricsKey = `metrics|${req.user?.role || ''}|${employeeId || ''}`;
+            const metricsKey = `metrics|${req.user?.role || ''}|${employeeKey || ''}|v2`;
             let metricsBundle = getLeaveMetricsCache(metricsKey);
             if (!metricsBundle) {
                 const [pending, approved, rejected, allVisible, departments, managers] = await Promise.all([
-                    LeaveRequest.countDocuments({ ...baseStatusFilter, status: 'Pending' }),
-                    LeaveRequest.countDocuments({ ...baseStatusFilter, status: 'Approved' }),
-                    LeaveRequest.countDocuments({ ...baseStatusFilter, status: 'Rejected' }),
+                    LeaveRequest.countDocuments(andMongoClause({ ...baseStatusFilter }, { status: 'Pending' })),
+                    LeaveRequest.countDocuments(andMongoClause({ ...baseStatusFilter }, { status: 'Approved' })),
+                    LeaveRequest.countDocuments(andMongoClause({ ...baseStatusFilter }, { status: 'Rejected' })),
                     LeaveRequest.countDocuments(baseStatusFilter),
                     LeaveRequest.distinct('department', baseStatusFilter),
                     LeaveRequest.distinct('reportingManager', baseStatusFilter),
@@ -548,7 +591,7 @@ router.get('/', authMiddleware, async (req, res) => {
                 setLeaveMetricsCache(metricsKey, metricsBundle);
             }
 
-            const [rows, total] = await Promise.all([
+            const [rowsRaw, total] = await Promise.all([
                 LeaveRequest.find(filter)
                     .select(LEAVE_TABLE_SELECT)
                     .populate('employee', 'username emailId employeeId role')
@@ -558,6 +601,7 @@ router.get('/', authMiddleware, async (req, res) => {
                     .lean(),
                 LeaveRequest.countDocuments(filter),
             ]);
+            const rows = await enrichLeaveRowsWithEmployeeIdentity(rowsRaw, { User, Employee });
 
             const payload = {
                 data: rows,
@@ -580,12 +624,58 @@ router.get('/', authMiddleware, async (req, res) => {
             .sort({ appliedOn: -1 })
             .lean();
 
+        leaveRequests = await enrichLeaveRowsWithEmployeeIdentity(leaveRequests, { User, Employee });
+
         setLeaveListCache(cacheKey, leaveRequests);
 
         res.json(leaveRequests);
     } catch (error) {
         console.error('Error fetching leave requests:', error);
         res.status(500).json({ message: 'Error fetching leave requests', error: error.message });
+    }
+});
+
+/**
+ * Admin/HR-only consistency probe for one employee (dev/validation).
+ * GET /api/leave-requests/consistency-check?employeeRecordId=<Employee._id>
+ */
+router.get('/consistency-check', authMiddleware, async (req, res) => {
+    try {
+        const role = String(req.user?.role || '').toLowerCase();
+        if (role !== 'admin' && role !== 'hr') {
+            return res.status(403).json({ message: 'Admin or HR only' });
+        }
+        const key = String(req.query.employeeRecordId || req.query.employeeId || '').trim();
+        if (!key) {
+            return res.status(400).json({ message: 'employeeRecordId required' });
+        }
+        const resolved = await resolveLeaveOwnerIds(key, { User, Employee });
+        const ownerFilter = buildEmployeeLeaveMongoFilter(resolved);
+        if (!ownerFilter || !resolved.employeeRecordId) {
+            return res.status(404).json({ message: 'Employee not found', resolved });
+        }
+        const leaves = await LeaveRequest.find(ownerFilter)
+            .select('employee employeeRecordId employeeId employeeName startDate endDate leaveType status requestAirfare appliedOn')
+            .sort({ startDate: -1 })
+            .lean();
+        const enriched = await enrichLeaveRowsWithEmployeeIdentity(leaves, { User, Employee });
+        const byStatus = enriched.reduce((acc, l) => {
+            const s = l.status || 'Unknown';
+            acc[s] = (acc[s] || 0) + 1;
+            return acc;
+        }, {});
+        res.json({
+            employeeRecordId: resolved.employeeRecordId,
+            employeeCode: resolved.employeeCode,
+            employeeName: resolved.employeeName,
+            ownerIds: resolved.ownerIds,
+            totalLeaveRecords: enriched.length,
+            byStatus,
+            leaves: enriched,
+        });
+    } catch (error) {
+        console.error('consistency-check error:', error);
+        res.status(500).json({ message: error.message });
     }
 });
 
@@ -602,17 +692,19 @@ router.post('/', authMiddleware, async (req, res) => {
         const targetUserId = resolved.targetId;
         const resolvedEmployeeName = resolved.employeeName || employeeName || req.user.username;
 
+        let employeeObj = null;
+        if (employeeId && isObjectIdStr(String(employeeId))) {
+            employeeObj = await Employee.findById(employeeId);
+        } else if (req.user && req.user.employeeId) {
+            employeeObj = await Employee.findById(req.user.employeeId);
+        }
+
         // Validate dates against Employee's Joining Date (DOJ)
         if (startDate && endDate) {
             const start = new Date(startDate);
             const end = new Date(endDate);
             if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                let employeeObj = null;
-                if (employeeId && isObjectIdStr(String(employeeId))) {
-                    employeeObj = await Employee.findById(employeeId);
-                } else if (req.user && req.user.employeeId) {
-                    employeeObj = await Employee.findById(req.user.employeeId);
-                } else if (req.user) {
+                if (!employeeObj && req.user) {
                     employeeObj = await Employee.findOne({
                         $or: [
                             { employeeName: req.user.username },
@@ -673,7 +765,8 @@ router.post('/', authMiddleware, async (req, res) => {
             changedByUser: createEntry.changedByUser,
             changedOn: createEntry.changedOn,
             changeRemarks: createEntry.remarks,
-            statusChangeHistory: [createEntry]
+            statusChangeHistory: [createEntry],
+            ...identityFieldsFromEmployee(employeeObj),
         });
 
         const savedRequest = await newLeaveRequest.save();
@@ -842,6 +935,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
             }
             if (resolved.employeeName) {
                 updateData.employeeName = resolved.employeeName;
+            }
+            const empForIdentity = await Employee.findById(employeeId).select('_id employeeId').lean();
+            if (empForIdentity) {
+                Object.assign(updateData, identityFieldsFromEmployee(empForIdentity));
+            } else {
+                const asUser = await User.findById(employeeId).select('employeeId').lean();
+                if (asUser?.employeeId) {
+                    const linked = await Employee.findById(asUser.employeeId).select('_id employeeId').lean();
+                    if (linked) Object.assign(updateData, identityFieldsFromEmployee(linked));
+                }
             }
         }
         if (employeeName && updateData.employeeName === undefined) updateData.employeeName = employeeName;
@@ -1251,7 +1354,7 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
 
                 newLeaves.push({
                     employee: targetUserId,
-                    employeeName: row.employeeName || row.employeeId || 'Unknown Employee',
+                    employeeName: matchedEmp?.employeeName || row.employeeName || row.employeeId || 'Unknown Employee',
                     company: row.company || 'Unknown Company',
                     department: matchedEmp?.department || row.department || '',
                     reportingManager: matchedEmp?.reportingManager || row.reportingManager || '',
@@ -1264,7 +1367,8 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
                     requestAirfare: row.requestAirfare === true || String(row.requestAirfare).toLowerCase() === 'yes' || String(row.requestAirfare).toLowerCase() === 'true',
                     appliedOn: row.appliedOn ? new Date(row.appliedOn) : new Date(),
                     adminApprovedBy: req.user.id,
-                    adminApprovedAt: new Date()
+                    adminApprovedAt: new Date(),
+                    ...identityFieldsFromEmployee(matchedEmp),
                 });
             } catch (err) {
                 errors.push(`[Sheet ${row.sheetName || 'Unknown'}] Row ${row.rowNumber || 'Unknown'}: Failed to process "${row.employeeName}" - ${err.message}`);

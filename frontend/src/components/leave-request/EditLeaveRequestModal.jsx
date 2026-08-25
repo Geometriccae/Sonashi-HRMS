@@ -15,6 +15,7 @@ import {
     calculateLeaveDays,
     getApprovedLeavesForEmployee,
 } from "../../utils/leaveCalculator";
+import { fetchEmployeeLeaveHistory } from "../../utils/fetchEmployeeLeaveHistory";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
@@ -28,6 +29,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [userRole, setUserRole] = useState("");
     const [employees, setEmployees] = useState([]);
+    const [employeeLeaveHistory, setEmployeeLeaveHistory] = useState([]);
     const [error, setError] = useState("");
     const [formData, setFormData] = useState({
         employeeId: "",
@@ -82,7 +84,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const populateFormFromLeave = (req) => {
         if (!req) return;
-        const rawEmpId = req.employee?._id || req.employee || req.employeeId || "";
+        const recordId = req.employeeRecordId?._id || req.employeeRecordId || "";
+        const rawEmpId = recordId || req.employee?._id || req.employee || req.employeeId || "";
         const empIdStr =
             rawEmpId && typeof rawEmpId === "object"
                 ? String(rawEmpId._id || rawEmpId)
@@ -170,8 +173,44 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 fetchEmployees();
             }
             fetchDepartmentOptions();
+        } else {
+            setEmployeeLeaveHistory([]);
         }
     }, [isOpen]);
+
+    // Load this employee's full leave history for Taken / Balance (same source as Team Entitlement)
+    useEffect(() => {
+        if (!isOpen) return;
+        const empMongoId =
+            formData.employeeId ||
+            leaveRequest?.employeeRecordId ||
+            leaveRequest?.employee?.employeeId?._id ||
+            leaveRequest?.employee?.employeeId ||
+            "";
+        if (!empMongoId || !/^[a-fA-F0-9]{24}$/.test(String(empMongoId))) {
+            setEmployeeLeaveHistory([]);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const rows = await fetchEmployeeLeaveHistory(empMongoId);
+                if (!cancelled) setEmployeeLeaveHistory(rows);
+            } catch (err) {
+                console.error("Failed to load employee leave history", err);
+                if (!cancelled) setEmployeeLeaveHistory([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        isOpen,
+        formData.employeeId,
+        leaveRequest?._id,
+        leaveRequest?.employeeRecordId,
+        leaveRequest?.employee?.employeeId,
+    ]);
 
     const fetchDepartmentOptions = async () => {
         try {
@@ -392,6 +431,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     // Resolve Employee master (doj / visa live on Employee, not User on leaveRequest.employee)
     const linkedEmployeeId =
+        targetLeave?.employeeRecordId?._id ||
+        targetLeave?.employeeRecordId ||
+        leaveRequest?.employeeRecordId?._id ||
+        leaveRequest?.employeeRecordId ||
         targetLeave?.employee?.employeeId?._id ||
         targetLeave?.employee?.employeeId ||
         leaveRequest?.employee?.employeeId?._id ||
@@ -407,11 +450,19 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                         (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
                             ? targetLeave.employee
                             : null);
-                        
-    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
+
+    // Full leave history for this employee (not the year-filtered Leave Management page)
+    const balanceLeaveSource =
+        employeeLeaveHistory.length > 0
+            ? employeeLeaveHistory
+            : Array.isArray(allLeaveRequests)
+              ? allLeaveRequests
+              : [];
+
+    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, balanceLeaveSource) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     // Same employee-ID + approved filter as leaveCalculator (not name / Imported).
     const employeeLeaves = selectedEmp && typeof selectedEmp === "object"
-        ? getApprovedLeavesForEmployee(selectedEmp, allLeaveRequests)
+        ? getApprovedLeavesForEmployee(selectedEmp, balanceLeaveSource)
         : [];
     const years = buildLeaveHistoryYears(selectedEmp?.doj);
 

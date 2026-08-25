@@ -515,12 +515,15 @@ function Reports() {
           (selectedId && String(e._id) === selectedId)
         );
         leaves = leaves.filter(l => {
+          const leaveRecordId = String(l.employeeRecordId?._id || l.employeeRecordId || "");
           const leaveEmpId = String(l.employee?._id || l.employee || "");
-          const leaveCode = String(l.employeeId || l.employee?.employeeId || "");
+          const leaveLinked = String(l.employee?.employeeId?._id || l.employee?.employeeId || "");
+          const leaveCode = String(l.linkedEmployeeCode || l.employeeId || l.employee?.employeeId || "");
           return (
+            (selectedId && leaveRecordId === selectedId) ||
+            (selectedId && leaveLinked === selectedId) ||
             (selectedId && leaveEmpId === selectedId) ||
-            (selectedCode && leaveCode === selectedCode) ||
-            (selectedEmp.employeeName && l.employeeName === selectedEmp.employeeName)
+            (selectedCode && leaveCode === selectedCode)
           );
         });
       }
@@ -756,10 +759,9 @@ function Reports() {
           );
           leaves = leaves.filter(
             (l) =>
-              l.employeeName === selectedEmp.employeeName ||
-              l.employeeId === selectedEmp.employeeId ||
-              l.employeeId === filterEmployee ||
-              findLinkedEmployee(l, [selectedEmp])
+              findLinkedEmployee(l, [selectedEmp]) ||
+              String(l.employeeRecordId || "") === String(selectedEmp._id) ||
+              String(l.employeeId || "") === String(selectedEmp.employeeId || "")
           );
         }
       }

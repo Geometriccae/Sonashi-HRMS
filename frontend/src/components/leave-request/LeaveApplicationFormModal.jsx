@@ -6,37 +6,61 @@ import {
     filterLeavesForEmployee,
     getApprovedLeavesForEmployee,
 } from "../../utils/leaveCalculator";
+import { fetchEmployeeLeaveHistory } from "../../utils/fetchEmployeeLeaveHistory";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { saveAs } from "file-saver";
 import "./LeaveForm.css"; // Reusing the shared clean modal styles
 
 function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequests, onEditLeave, canEdit = false }) {
     const [employeeDetails, setEmployeeDetails] = useState({});
+    const [employeeLeaveHistory, setEmployeeLeaveHistory] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [expandedYear, setExpandedYear] = useState(null);
 
     useEffect(() => {
         if (!isOpen || !leaveRequest) {
             setEmployeeDetails({});
+            setEmployeeLeaveHistory([]);
             return;
         }
 
         const fetchEmployee = async () => {
             setIsLoading(true);
             setEmployeeDetails({});
+            setEmployeeLeaveHistory([]);
             try {
                 const emp = leaveRequest.employee;
-                const empIdToFetch = emp?._id || emp;
+                const recordId =
+                    leaveRequest.employeeRecordId?._id ||
+                    leaveRequest.employeeRecordId ||
+                    emp?.employeeId?._id ||
+                    emp?.employeeId ||
+                    "";
+                const empIdToFetch = recordId || emp?._id || emp;
 
+                let resolvedEmp = null;
                 if (empIdToFetch && /^[a-fA-F0-9]{24}$/.test(String(empIdToFetch))) {
                     const data = await EmployeeService.getEmployee(empIdToFetch);
-                    if (data) setEmployeeDetails(data);
-                } else if (leaveRequest.employeeId) {
+                    if (data) {
+                        resolvedEmp = data;
+                        setEmployeeDetails(data);
+                    }
+                }
+                if (!resolvedEmp && leaveRequest.employeeId) {
                     const allEmps = await EmployeeService.getEmployeesList();
                     const match = allEmps.find(
                         (e) => String(e.employeeId) === String(leaveRequest.employeeId)
                     );
-                    if (match) setEmployeeDetails(match);
+                    if (match) {
+                        resolvedEmp = match;
+                        setEmployeeDetails(match);
+                    }
+                }
+
+                const historyId = resolvedEmp?._id || recordId;
+                if (historyId) {
+                    const rows = await fetchEmployeeLeaveHistory(historyId);
+                    setEmployeeLeaveHistory(rows);
                 }
             } catch (error) {
                 console.error("Error fetching employee details:", error);
@@ -46,14 +70,20 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         };
 
         fetchEmployee();
-    }, [isOpen, leaveRequest?._id, leaveRequest?.employee, leaveRequest?.employeeId]);
+    }, [isOpen, leaveRequest?._id, leaveRequest?.employee, leaveRequest?.employeeId, leaveRequest?.employeeRecordId]);
 
     if (!isOpen || !leaveRequest) return null;
 
     const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
-    const employeeLeaveRecords = filterLeavesForEmployee(employee, allLeaveRequests);
-    const leaveStats = calculateLeaveBalance(employee, allLeaveRequests);
-    const employeeLeaves = getApprovedLeavesForEmployee(employee, allLeaveRequests);
+    const balanceLeaveSource =
+        employeeLeaveHistory.length > 0
+            ? employeeLeaveHistory
+            : Array.isArray(allLeaveRequests)
+              ? allLeaveRequests
+              : [];
+    const employeeLeaveRecords = filterLeavesForEmployee(employee, balanceLeaveSource);
+    const leaveStats = calculateLeaveBalance(employee, balanceLeaveSource);
+    const employeeLeaves = getApprovedLeavesForEmployee(employee, balanceLeaveSource);
 
     const years = buildLeaveHistoryYears(employee.doj);
 

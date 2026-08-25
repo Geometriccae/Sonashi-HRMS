@@ -33,6 +33,22 @@ const leaveRequestSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    /**
+     * Canonical Team Management Employee._id.
+     * leave.employee may be User._id or Employee._id; this field always points
+     * at the Employee record when known (set on create/update/import; enriched on read).
+     */
+    employeeRecordId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+        default: null,
+        index: true
+    },
+    /** HR employee code (e.g. IDMO-032) — not a Mongo ObjectId */
+    employeeId: {
+        type: String,
+        default: ''
+    },
     employeeName: {
         type: String,
         required: true

@@ -247,11 +247,21 @@ export function matchesLeaveEmployee(req, emp) {
     const empCode = String(emp.employeeId || "").toLowerCase();
     const empEmail = String(emp.emailId || "").trim().toLowerCase();
 
+    // Canonical Employee._id from API enrichment (preferred)
+    const recordId = String(req.employeeRecordId?._id || req.employeeRecordId || "").toLowerCase();
+    if (empMongoId && recordId && recordId === empMongoId) return true;
+
+    const linkedCode = String(req.linkedEmployeeCode || "").toLowerCase();
+    if (empCode && linkedCode && linkedCode === empCode) return true;
+
     const reqRef = String(req.employee?._id || req.employee || "").toLowerCase();
     if (empMongoId && reqRef && reqRef === empMongoId) return true;
 
+    // User.employeeId → Employee._id (populated or enriched)
     const userEmpId = req.employee?.employeeId;
-    if (userEmpId && empMongoId && String(userEmpId).toLowerCase() === empMongoId) return true;
+    if (userEmpId && empMongoId && String(userEmpId._id || userEmpId).toLowerCase() === empMongoId) {
+        return true;
+    }
 
     if (req.employeeId) {
         const rid = String(req.employeeId).toLowerCase();
@@ -264,7 +274,14 @@ export function matchesLeaveEmployee(req, emp) {
         if (reqEmail && reqEmail === empEmail) return true;
     }
 
-    const hasEmployeeRef = Boolean(reqRef || req.employeeId || req.employee?.employeeId);
+    // Name match ONLY when the leave has no employee identity fields
+    const hasEmployeeRef = Boolean(
+        reqRef ||
+        req.employeeId ||
+        req.employeeRecordId ||
+        req.linkedEmployeeCode ||
+        req.employee?.employeeId
+    );
     if (!hasEmployeeRef) {
         const reqName = String(req.employeeName || "").toLowerCase().trim();
         const empName = String(emp.employeeName || emp.name || "").toLowerCase().trim();

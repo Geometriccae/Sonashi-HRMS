@@ -483,13 +483,13 @@ export default function HrMetricsDashboard() {
 
   const filteredLeaves = useMemo(() => {
     return leaves.filter((leave) => {
-      const employeeId = String(
-        leave.employee?._id || leave.employee || leave.employeeId || ""
-      );
-      const employeeName = String(leave.employeeName || "").trim().toLowerCase();
+      const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+      const linkedViaUser = String(leave.employee?.employeeId?._id || leave.employee?.employeeId || "");
+      const employeeId = String(leave.employee?._id || leave.employee || leave.employeeId || "");
       const matchesEmployee =
-        (employeeId && employeeIdSet.has(employeeId)) ||
-        (employeeName && employeeNameSet.has(employeeName));
+        (recordId && employeeIdSet.has(recordId)) ||
+        (linkedViaUser && employeeIdSet.has(linkedViaUser)) ||
+        (employeeId && employeeIdSet.has(employeeId));
       if (!matchesEmployee) return false;
 
       if (selectedRange.start && selectedRange.end) {
@@ -497,7 +497,7 @@ export default function HrMetricsDashboard() {
       }
       return true;
     });
-  }, [leaves, employeeIdSet, employeeNameSet, selectedRange]);
+  }, [leaves, employeeIdSet, selectedRange]);
 
   const filteredSalarySlips = useMemo(
     () => filterSalarySlipsForWorkforce(salarySlips, filteredEmployees, selectedRange, {
@@ -622,11 +622,14 @@ export default function HrMetricsDashboard() {
       approvedLeaves.forEach((leave) => {
         if (!names.has(String(leave.leaveType || "").toLowerCase())) return;
         const emp = filteredEmployees.find((e) => {
+          const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+          const linkedViaUser = String(leave.employee?.employeeId?._id || leave.employee?.employeeId || "");
           const id = String(leave.employee?._id || leave.employee || "");
-          const name = String(leave.employeeName || "").trim().toLowerCase();
+          const empId = String(e._id || e.id || "");
           return (
-            (id && String(e._id || e.id) === id) ||
-            (name && String(e.employeeName || "").trim().toLowerCase() === name)
+            (recordId && empId === recordId) ||
+            (linkedViaUser && empId === linkedViaUser) ||
+            (id && empId === id)
           );
         });
         if (!emp) return;
@@ -639,9 +642,9 @@ export default function HrMetricsDashboard() {
     };
 
     // Index leaves once — avoid O(employees × leaves) full scans in calculateLeaveBalance
+    // Keys must use Employee._id / HR code — leave.employee is often User._id
     const leavesByEmpId = new Map();
     const leavesByEmpCode = new Map();
-    const leavesByEmpName = new Map();
     const pushLeave = (map, key, leave) => {
       if (!key) return;
       if (!map.has(key)) map.set(key, []);
@@ -649,23 +652,24 @@ export default function HrMetricsDashboard() {
     };
     (leaves || []).forEach((leave) => {
       if (!["Approved", "HOD Approved"].includes(leave.status)) return;
-      pushLeave(leavesByEmpId, String(leave.employee?._id || leave.employee || ""), leave);
-      pushLeave(leavesByEmpCode, String(leave.employeeId || "").trim().toLowerCase(), leave);
-      pushLeave(leavesByEmpName, String(leave.employeeName || "").trim().toLowerCase(), leave);
+      const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+      const ownerId = String(leave.employee?._id || leave.employee || "");
+      const linkedViaUser = String(leave.employee?.employeeId?._id || leave.employee?.employeeId || "");
+      const code = String(leave.linkedEmployeeCode || leave.employeeId || "").trim().toLowerCase();
+      if (recordId) pushLeave(leavesByEmpId, recordId, leave);
+      if (linkedViaUser) pushLeave(leavesByEmpId, linkedViaUser, leave);
+      if (ownerId && recordId && ownerId === recordId) pushLeave(leavesByEmpId, ownerId, leave);
+      if (code && !/^[a-f0-9]{24}$/i.test(code)) pushLeave(leavesByEmpCode, code, leave);
     });
 
     const aggregateBalance = filteredEmployees.reduce(
       (acc, employee) => {
-        // Pass only this employee's leaves so each balance calc does not scan the full leave list.
         const empId = String(employee._id || employee.id || "");
         const empCode = String(employee.employeeId || "").trim().toLowerCase();
-        const empName = String(employee.employeeName || "").trim().toLowerCase();
         const empLeaves = [
           ...(empId && leavesByEmpId.has(empId) ? leavesByEmpId.get(empId) : []),
           ...(empCode && leavesByEmpCode.has(empCode) ? leavesByEmpCode.get(empCode) : []),
-          ...(empName && leavesByEmpName.has(empName) ? leavesByEmpName.get(empName) : []),
         ];
-        // Dedupe by leave _id
         const seenLeave = new Set();
         const uniqueLeaves = empLeaves.filter((l) => {
           const id = String(l._id || "");

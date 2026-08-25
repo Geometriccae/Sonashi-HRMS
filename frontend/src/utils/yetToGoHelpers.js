@@ -75,16 +75,37 @@ export const computeExperienceYears = (doj, totalYearsExperience) => {
 export const findLinkedEmployee = (req, empList) => {
   if (!Array.isArray(empList) || empList.length === 0) return null;
 
+  const recordId = req.employeeRecordId?._id || req.employeeRecordId;
+  if (recordId) {
+    const byRecord = empList.find((e) => String(e._id) === String(recordId));
+    if (byRecord) return byRecord;
+  }
+
   const populated = req.employee;
   if (populated?.employeeId) {
-    const byRef = empList.find((e) => String(e._id) === String(populated.employeeId));
+    const byRef = empList.find((e) => String(e._id) === String(populated.employeeId._id || populated.employeeId));
     if (byRef) return byRef;
   }
 
-  if (req.employeeId) {
-    const byCode = empList.find((e) => String(e.employeeId) === String(req.employeeId));
+  const ownerId = populated?._id || populated || req.employee;
+  if (ownerId) {
+    const byOwner = empList.find((e) => String(e._id) === String(ownerId));
+    if (byOwner) return byOwner;
+  }
+
+  const code = req.linkedEmployeeCode || req.employeeId;
+  if (code) {
+    const byCode = empList.find((e) => String(e.employeeId) === String(code));
     if (byCode) return byCode;
   }
+
+  // Name fallback only when leave has no employee identity
+  const hasId =
+    Boolean(recordId) ||
+    Boolean(populated?.employeeId) ||
+    Boolean(ownerId) ||
+    Boolean(code);
+  if (hasId) return null;
 
   const reqName = normalizeName(req.employeeName || populated?.username);
   if (!reqName) return null;

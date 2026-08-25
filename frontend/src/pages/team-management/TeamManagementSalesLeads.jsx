@@ -156,7 +156,10 @@ function TeamManagementSalesLeads() {
     if (!emp?._id && !employeeId) return;
 
     try {
-      const leaves = await leaveRequestService.getLeaveRequests();
+      const leaves = await leaveRequestService.getLeaveRequests({
+        employeeRecordId: emp._id || employeeId,
+        force: true,
+      });
       const allLeaves = Array.isArray(leaves) ? leaves : leaves.data || [];
       if (gen !== leaveFetchGenRef.current) return;
 

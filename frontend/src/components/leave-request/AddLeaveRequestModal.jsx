@@ -16,6 +16,7 @@ import {
     calculateLeaveDays,
     getApprovedLeavesForEmployee,
 } from "../../utils/leaveCalculator";
+import { fetchEmployeeLeaveHistory } from "../../utils/fetchEmployeeLeaveHistory";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
@@ -27,6 +28,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     const { showToast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [employees, setEmployees] = useState([]);
+    const [employeeLeaveHistory, setEmployeeLeaveHistory] = useState([]);
     const [userRole, setUserRole] = useState("");
     const [error, setError] = useState("");
     const [loggedInUser, setLoggedInUser] = useState({ id: "", username: "" });
@@ -90,8 +92,30 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             setError("");
             setSelectedYearDetails(null);
             setBaselines({ start: "", end: "" });
+        } else {
+            setEmployeeLeaveHistory([]);
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen || !formData.employeeId || !/^[a-fA-F0-9]{24}$/.test(String(formData.employeeId))) {
+            if (!formData.employeeId) setEmployeeLeaveHistory([]);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const rows = await fetchEmployeeLeaveHistory(formData.employeeId);
+                if (!cancelled) setEmployeeLeaveHistory(rows);
+            } catch (err) {
+                console.error("Failed to load employee leave history", err);
+                if (!cancelled) setEmployeeLeaveHistory([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, formData.employeeId]);
 
     const fetchDepartmentOptions = async () => {
         try {
@@ -320,11 +344,17 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         }
     };
 
-    // Calculate History Logic (Same as View Template)
+    // Calculate History Logic (Same as View Template / Team Leave Entitlement)
     const selectedEmp = employees.find(e => e._id === formData.employeeId);
-    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0 };
+    const balanceLeaveSource =
+        employeeLeaveHistory.length > 0
+            ? employeeLeaveHistory
+            : Array.isArray(allLeaveRequests)
+              ? allLeaveRequests
+              : [];
+    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, balanceLeaveSource) : { entitlement: 0, totalTaken: 0, balance: 0 };
     const employeeLeaves = selectedEmp
-        ? getApprovedLeavesForEmployee(selectedEmp, allLeaveRequests)
+        ? getApprovedLeavesForEmployee(selectedEmp, balanceLeaveSource)
         : [];
     const years = buildLeaveHistoryYears(selectedEmp?.doj);
 
