@@ -56,17 +56,49 @@ export function employeeMatchesSearch(employee, query) {
   return fields.some((value) => String(value || "").toLowerCase().includes(q));
 }
 
+/** UI/API category: Active | InActive | All */
+export function normalizeEmployeeCategory(category) {
+  const c = String(category || "Active").trim();
+  if (c === "All" || c === "") return "All";
+  if (
+    c === "InActive" ||
+    c === "Inactive" ||
+    c === "Ex" ||
+    c === "Ex-Employees" ||
+    c === "Ex Employees"
+  ) {
+    return "InActive";
+  }
+  return "Active";
+}
+
+export function employeeMatchesCategory(employee, category) {
+  const c = normalizeEmployeeCategory(category);
+  if (c === "All") return true;
+  if (c === "InActive") return isNonWorkingEmployeeStatus(employee?.employeeStatus);
+  return isWorkingEmployeeStatus(employee?.employeeStatus);
+}
+
+/** Query param for GET /employees?status= — empty means All. */
+export function apiStatusForEmployeeCategory(category) {
+  const c = normalizeEmployeeCategory(category);
+  if (c === "All") return "";
+  return c;
+}
+
+export function filterEmployeesByCategory(employees, category, searchQuery = "") {
+  return (employees || []).filter((employee) => {
+    if (!employeeMatchesCategory(employee, category)) return false;
+    return employeeMatchesSearch(employee, searchQuery);
+  });
+}
+
 /**
- * Default HR lists/dropdowns: current (working) employees only.
- * A non-empty search also returns matching ex-employees.
+ * Default HR lists/dropdowns: currently working employees only.
+ * Search does not pull in ex-employees.
  */
 export function filterEmployeesForDefaultList(employees, searchQuery = "") {
-  return (employees || []).filter((employee) => {
-    if (isWorkingEmployeeStatus(employee?.employeeStatus)) {
-      return employeeMatchesSearch(employee, searchQuery);
-    }
-    return String(searchQuery || "").trim() !== "" && employeeMatchesSearch(employee, searchQuery);
-  });
+  return filterEmployeesByCategory(employees, "Active", searchQuery);
 }
 
 /** Native <select> lists: current staff, plus a currently selected ex-employee if any. */
@@ -94,8 +126,8 @@ export function toSearchableEmployeeOption(employee, extra = {}) {
   };
 }
 
-/** react-select: hide inactive options until the user types a search. */
-export function filterReactSelectEmployeeOption(option, inputValue) {
+/** react-select: Active-employee pickers never list ex-employees. */
+export function filterReactSelectEmployeeOption(option, inputValue, { includeInactive = false } = {}) {
   const q = String(inputValue || "").trim().toLowerCase();
   const data = option?.data || option || {};
   const haystack = [
@@ -110,8 +142,13 @@ export function filterReactSelectEmployeeOption(option, inputValue) {
     .map((value) => String(value || "").toLowerCase())
     .join(" ");
   if (q && !haystack.includes(q)) return false;
-  if (!q && data.inactive) return false;
+  if (!includeInactive && data.inactive) return false;
   return true;
+}
+
+/** Reports / All-employees pickers: text match only (dataset already category-filtered). */
+export function filterReactSelectEmployeeOptionIncludingInactive(option, inputValue) {
+  return filterReactSelectEmployeeOption(option, inputValue, { includeInactive: true });
 }
 
 function startOfLocalDay(date) {

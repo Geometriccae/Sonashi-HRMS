@@ -650,21 +650,31 @@ router.get('/', authMiddleware, async (req, res) => {
       }
     }
 
-    const filter = {};
+    let filter = {};
     if (status === 'Active') Object.assign(filter, workingStatusFilter());
     else if (status === 'InActive') Object.assign(filter, nonWorkingStatusFilter());
     else if (status && EMPLOYEE_STATUS_VALUES.includes(status)) filter.employeeStatus = status;
 
     if (search) {
       const regex = new RegExp(search, 'i');
-      filter.$or = [
-        { employeeName: regex },
-        { employeeId: regex },
-        { emailId: regex },
-        { role: regex },
-        { department: regex },
-        { mobile: regex },
-      ];
+      const searchClause = {
+        $or: [
+          { employeeName: regex },
+          { employeeId: regex },
+          { emailId: regex },
+          { role: regex },
+          { department: regex },
+          { mobile: regex },
+        ],
+      };
+      // Status filter (Active / Ex / All) must stay applied together with search.
+      if (filter.$and) {
+        filter.$and.push(searchClause);
+      } else if (filter.employeeStatus || Object.keys(filter).length) {
+        filter = { $and: [{ ...filter }, searchClause] };
+      } else {
+        Object.assign(filter, searchClause);
+      }
     }
 
     const [codeMap, approvedLeaves] = await Promise.all([getCompanyCodeMap(), approvedLeavesPromise]);

@@ -292,15 +292,34 @@ function findLeaveForEmployee(emp, leaveList, empList, tabKey) {
   )[0];
 }
 
-function computeExperienceYears(doj, totalYearsExperience) {
-  if (doj) {
-    const joinDate = new Date(doj);
-    if (!Number.isNaN(joinDate.getTime())) {
-      const now = new Date();
-      if (now < joinDate) return 0;
-      return Math.round(((now - joinDate) / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10;
+function toExperienceCalendarDate(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const dateOnly = value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (dateOnly) {
+      return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
     }
   }
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+
+function computeExperienceMonthsFromDoj(doj, asOf = new Date()) {
+  const joinDate = toExperienceCalendarDate(doj);
+  const refDate = toExperienceCalendarDate(asOf) || toExperienceCalendarDate(new Date());
+  if (!joinDate || !refDate) return null;
+  if (refDate < joinDate) return 0;
+  let years = refDate.getFullYear() - joinDate.getFullYear();
+  let months = refDate.getMonth() - joinDate.getMonth();
+  let totalMonths = years * 12 + months;
+  if (refDate.getDate() < joinDate.getDate()) totalMonths -= 1;
+  return Math.max(0, totalMonths);
+}
+
+function computeExperienceYears(doj, totalYearsExperience, asOf = new Date()) {
+  const months = computeExperienceMonthsFromDoj(doj, asOf);
+  if (months != null) return Math.round((months / 12) * 10) / 10;
   if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
     return Number(totalYearsExperience);
   }
@@ -351,7 +370,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         startDate: req.startDate,
         endDate: req.endDate,
         leaveStatus: req.status,
-        experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience),
+        experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience, req.startDate),
         vacationStatus: 'Vacation Pending',
       });
     } else {
@@ -384,7 +403,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         startDate: leave?.startDate || null,
         endDate: leave?.endDate || null,
         leaveStatus: leave?.status || null,
-        experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+        experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate),
         vacationStatus: 'Vacation Pending',
       });
     });
@@ -405,7 +424,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
       startDate: leave?.startDate || e.travellingDate || null,
       endDate: leave?.endDate || e.leaveEndDate || null,
       leaveStatus: leave?.status || null,
-      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate || e.travellingDate),
       vacationStatus: 'Vacation Pending',
     });
   });
@@ -435,7 +454,7 @@ function enrichEmployeeRows(empList, leaveList, tabKey) {
       endDate: leaveEnd,
       // For Returned Back list: show leave end when returnDate was cleared after mark-onsite
       returnDate: e.returnDate || (tabKey === 'returned' ? leaveEnd : e.returnDate) || null,
-      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate),
     };
   });
 }
@@ -532,7 +551,7 @@ function applyRowFilters(rows, query = {}) {
       if (dojTo && !Number.isNaN(dojTo.getTime()) && doj > dojTo) return false;
     }
 
-    const exp = computeExperienceYears(item.doj, item.totalYearsExperience);
+    const exp = computeExperienceYears(item.doj, item.totalYearsExperience, item.startDate || item.travellingDate);
     if (expMin != null && !Number.isNaN(expMin) && (exp == null || exp < expMin)) return false;
     if (expMax != null && !Number.isNaN(expMax) && (exp == null || exp > expMax)) return false;
 

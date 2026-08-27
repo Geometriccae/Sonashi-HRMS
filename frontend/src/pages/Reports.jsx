@@ -17,9 +17,9 @@ import {
   isWorkingEmployeeStatus,
   formatEmployeeStatusDisplay,
   toSearchableEmployeeOption,
-  filterReactSelectEmployeeOption,
+  filterReactSelectEmployeeOptionIncludingInactive,
 } from "../utils/employeeStatusDisplay";
-import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel, computeExperienceMonthsFromDoj } from "../utils/yetToGoHelpers";
 import { useUrlListView } from "../hooks/usePersistedListPage";
 
 const loadXlsx = async () => {
@@ -632,18 +632,6 @@ function Reports() {
     setShowPreview(false);
   };
 
-  // Compute experience in months from Date of Joining
-  const computeExperienceFromDoj = (doj) => {
-    if (!doj) return null;
-    const joinDate = new Date(doj);
-    if (isNaN(joinDate.getTime())) return null;
-    const now = new Date();
-    const years = now.getFullYear() - joinDate.getFullYear();
-    const months = now.getMonth() - joinDate.getMonth();
-    const totalMonths = years * 12 + months - (now.getDate() < joinDate.getDate() ? 1 : 0);
-    return Math.max(0, totalMonths);
-  };
-
   const formatExperience = (totalMonths) => {
     if (totalMonths == null) return "N/A";
     const y = Math.floor(totalMonths / 12);
@@ -654,7 +642,10 @@ function Reports() {
   };
 
   const getEmployeeExperienceMonths = (e) => {
-    const fromDoj = computeExperienceFromDoj(e.doj);
+    const asOf = (isNonWorkingEmployeeStatus(e.employeeStatus) && e.lastWorkingDay)
+      ? e.lastWorkingDay
+      : new Date();
+    const fromDoj = computeExperienceMonthsFromDoj(e.doj, asOf);
     return fromDoj != null ? fromDoj : ((e.totalYearsExperience || 0) * 12);
   };
 
@@ -1551,7 +1542,7 @@ function Reports() {
                           if (!inputValue) return true;
                           return String(option.label || "").toLowerCase().includes(inputValue.trim().toLowerCase());
                         }
-                        return filterReactSelectEmployeeOption(option, inputValue);
+                        return filterReactSelectEmployeeOptionIncludingInactive(option, inputValue);
                       }}
                     />
                   </div>

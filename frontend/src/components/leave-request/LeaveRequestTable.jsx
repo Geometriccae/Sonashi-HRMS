@@ -136,7 +136,7 @@ function LeaveRequestTable({ onUpdate }) {
     const canEditLeaveRequests = canEditLeaves(userRole);
 
     useEffect(() => {
-        const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+        const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
         return () => clearTimeout(t);
     }, [searchQuery]);
 

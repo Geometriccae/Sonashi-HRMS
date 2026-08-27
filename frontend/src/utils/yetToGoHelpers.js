@@ -20,32 +20,39 @@ export const toDayStart = (value) => {
 export const normalizeName = (name) =>
   String(name || "").toLowerCase().replace(/[\s_.-]+/g, "").trim();
 
-/** Completed years + months from DOJ as of today (calendar tenure). */
-export const computeExperienceMonthsFromDoj = (doj, asOf = new Date()) => {
-  if (!doj) return null;
-  const joinDate = new Date(doj);
-  if (Number.isNaN(joinDate.getTime())) return null;
-  const now = new Date(asOf);
-  joinDate.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-  if (now < joinDate) return 0;
+/** Calendar date for experience: date-only strings stay as picked; datetimes use local Y/M/D (matches DOJ display). */
+const toExperienceCalendarDate = (value) => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const dateOnly = value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (dateOnly) {
+      return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+    }
+  }
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+};
 
-  let years = now.getFullYear() - joinDate.getFullYear();
-  let months = now.getMonth() - joinDate.getMonth();
+/** Completed years + months from DOJ as of a reference date (calendar tenure). */
+export const computeExperienceMonthsFromDoj = (doj, asOf = new Date()) => {
+  const joinDate = toExperienceCalendarDate(doj);
+  const refDate = toExperienceCalendarDate(asOf) || toExperienceCalendarDate(new Date());
+  if (!joinDate || !refDate) return null;
+  if (refDate < joinDate) return 0;
+
+  let years = refDate.getFullYear() - joinDate.getFullYear();
+  let months = refDate.getMonth() - joinDate.getMonth();
   let totalMonths = years * 12 + months;
-  if (now.getDate() < joinDate.getDate()) totalMonths -= 1;
+  if (refDate.getDate() < joinDate.getDate()) totalMonths -= 1;
   return Math.max(0, totalMonths);
 };
 
-/** Display: "2 Years and 6 months" (from DOJ; fallback to stored years only if no DOJ). */
-export const formatExperienceLabel = (doj, totalYearsExperience, asOf = new Date()) => {
-  let totalMonths = computeExperienceMonthsFromDoj(doj, asOf);
-  if (totalMonths == null) {
-    if (totalYearsExperience == null || Number.isNaN(Number(totalYearsExperience))) return null;
-    totalMonths = Math.round(Number(totalYearsExperience) * 12);
-  }
-  const y = Math.floor(totalMonths / 12);
-  const m = totalMonths % 12;
+const formatMonthsAsExperience = (totalMonths) => {
+  if (totalMonths == null || Number.isNaN(Number(totalMonths))) return null;
+  const months = Math.max(0, Math.floor(Number(totalMonths)));
+  const y = Math.floor(months / 12);
+  const m = months % 12;
   if (y === 0 && m === 0) return "0 months";
   if (y === 0) return `${m} month${m !== 1 ? "s" : ""}`;
   if (m === 0) return `${y} Year${y !== 1 ? "s" : ""}`;
@@ -53,19 +60,38 @@ export const formatExperienceLabel = (doj, totalYearsExperience, asOf = new Date
 };
 
 /**
- * Numeric years for filters — always prefer DOJ as of today (same day-fraction as leave tenure).
+ * Structured experience from DOJ → referenceDate.
+ * referenceDate defaults to today when omitted.
+ */
+export const calculateExperience = (doj, referenceDate = new Date(), storedYears = null) => {
+  let totalMonths = computeExperienceMonthsFromDoj(doj, referenceDate);
+  if (totalMonths == null) {
+    if (storedYears == null || Number.isNaN(Number(storedYears))) {
+      return { years: 0, months: 0, totalMonths: null, formatted: null };
+    }
+    totalMonths = Math.round(Number(storedYears) * 12);
+  }
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+  return {
+    years,
+    months,
+    totalMonths,
+    formatted: formatMonthsAsExperience(totalMonths),
+  };
+};
+
+/** Display: "2 Years and 6 months" (from DOJ as of referenceDate; fallback to stored years if no DOJ). */
+export const formatExperienceLabel = (doj, totalYearsExperience, asOf = new Date()) =>
+  calculateExperience(doj, asOf, totalYearsExperience).formatted;
+
+/**
+ * Numeric years for filters — DOJ as of the given reference date (today when omitted).
  * Stored totalYearsExperience is only a fallback when DOJ is missing (it can be stale).
  */
-export const computeExperienceYears = (doj, totalYearsExperience) => {
-  if (doj) {
-    const joinDate = new Date(doj);
-    if (!Number.isNaN(joinDate.getTime())) {
-      const now = new Date();
-      if (now < joinDate) return 0;
-      const years = (now - joinDate) / (1000 * 60 * 60 * 24 * 365.25);
-      return Math.round(years * 10) / 10;
-    }
-  }
+export const computeExperienceYears = (doj, totalYearsExperience, asOf = new Date()) => {
+  const months = computeExperienceMonthsFromDoj(doj, asOf);
+  if (months != null) return Math.round((months / 12) * 10) / 10;
   if (totalYearsExperience != null && !Number.isNaN(Number(totalYearsExperience))) {
     return Number(totalYearsExperience);
   }
@@ -155,6 +181,7 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     nationality: linked?.nationality || "",
     doj: linked?.doj || null,
     totalYearsExperience: linked?.totalYearsExperience ?? null,
+    experienceYears: computeExperienceYears(linked?.doj, linked?.totalYearsExperience, req.startDate),
     travellingDate: linked?.travellingDate || req.travellingDate || null,
     lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
     returnDate: linked?.returnDate || req.returnDate || null,
@@ -284,7 +311,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         startDate: req.startDate,
         endDate: req.endDate,
         leaveStatus: req.status,
-        experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience),
+        experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience, req.startDate),
         vacationStatus: "Vacation Pending",
       });
     } else {
@@ -308,7 +335,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         startDate: leave?.startDate || null,
         endDate: leave?.endDate || null,
         leaveStatus: leave?.status || null,
-        experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+        experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate),
         vacationStatus: "Vacation Pending",
       });
     });
@@ -328,7 +355,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
       startDate: leave?.startDate || e.travellingDate || null,
       endDate: leave?.endDate || e.leaveEndDate || null,
       leaveStatus: leave?.status || null,
-      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate || e.travellingDate),
       vacationStatus: "Vacation Pending",
     });
   });

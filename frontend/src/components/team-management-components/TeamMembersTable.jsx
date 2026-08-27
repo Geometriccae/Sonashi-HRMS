@@ -49,6 +49,7 @@ import {
   isWorkingEmployeeStatus,
   isNonWorkingEmployeeStatus,
   EMPLOYEE_STATUS_VALUES,
+  apiStatusForEmployeeCategory,
 } from "../../utils/employeeStatusDisplay";
 import { HR_METRICS_LIST_PARAM_KEYS } from "../../utils/hrMetricsFilters";
 
@@ -194,7 +195,7 @@ function TeamMembersTable() {
   const currentPage = Math.max(1, Number(searchParams.get("page")) || 1);
   const itemsPerPage = Number(searchParams.get("size")) || 20;
   const activeFilter = searchParams.get("filter") || "Active";
-  const searchTerm = searchParams.get("q") || "";
+  const urlSearch = searchParams.get("q") || "";
   const listReturnPath = useMemo(() => {
     const query = searchParams.toString();
     return query ? `/teammanagement?${query}` : "/teammanagement";
@@ -262,7 +263,8 @@ function TeamMembersTable() {
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+  const [searchInput, setSearchInput] = useState(urlSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
   const canEditEmployees =
@@ -277,9 +279,14 @@ function TeamMembersTable() {
   const [periodResetSaving, setPeriodResetSaving] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    const t = setTimeout(() => setDebouncedSearch(String(searchInput || "").trim()), 350);
     return () => clearTimeout(t);
-  }, [searchTerm]);
+  }, [searchInput]);
+
+  useEffect(() => {
+    if ((debouncedSearch || "") === (urlSearch || "")) return;
+    patchSearchParams({ q: debouncedSearch }, { resetPage: true });
+  }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchEmployees();
@@ -327,15 +334,9 @@ function TeamMembersTable() {
 
   const fetchEmployees = async ({ soft = false } = {}) => {
     try {
-      if (!soft) setLoading(true);
+      if (!soft && employees.length === 0) setLoading(true);
       setError(null);
-      // Active + empty search → working staff only. Active + search also matches ex-employees (same UX as before).
-      let status = '';
-      if (activeFilter === 'Active' && !String(debouncedSearch || '').trim()) {
-        status = 'Active';
-      } else if (activeFilter === 'Inactive') {
-        status = 'InActive';
-      }
+      const status = apiStatusForEmployeeCategory(activeFilter);
       const result = await employeeService.getEmployeesListPaginated({
         page: currentPage,
         limit: itemsPerPage,
@@ -1121,10 +1122,10 @@ function TeamMembersTable() {
         <Input
           placeholder="Search by name, employee ID, email, role..."
           prefix={<SearchOutlined style={{ color: "#98A1B0" }} />}
-          value={searchTerm}
-          onChange={(e) => patchSearchParams({ q: e.target.value }, { resetPage: true })}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           allowClear
-          onClear={() => patchSearchParams({ q: "" }, { resetPage: true })}
+          onClear={() => setSearchInput("")}
           style={{ width: 320, borderRadius: 24 }}
         />
       </div>
@@ -1140,7 +1141,7 @@ function TeamMembersTable() {
           emptyText: (
             <Empty
               description={
-                searchTerm ? "No employees match your search." : "No employees found."
+                searchInput ? "No employees match your search." : "No employees found."
               }
             />
           ),

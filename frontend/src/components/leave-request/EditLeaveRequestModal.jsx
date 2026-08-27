@@ -18,7 +18,7 @@ import {
 import { fetchEmployeeLeaveHistory } from "../../utils/fetchEmployeeLeaveHistory";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
-import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus, employeesForNativeSelect } from "../../utils/employeeStatusDisplay";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
@@ -410,7 +410,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const baseDepartmentOptions = dynamicDepartmentOptions;
 
-    const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp));
+    const employeeOptions = employeesForNativeSelect(employees, formData.employeeId).map((emp) => toSearchableEmployeeOption(emp));
 
     const reportingManagerOptions = employees.map(emp => ({
         value: emp.employeeName || emp.name || "Unknown",
@@ -450,6 +450,14 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                         (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
                             ? targetLeave.employee
                             : null);
+
+    const experienceLabel = selectedEmp
+        ? (formatExperienceLabel(
+            selectedEmp.doj,
+            selectedEmp.totalYearsExperience,
+            formData.startDate || new Date()
+        ) || "N/A")
+        : "N/A";
 
     // Full leave history for this employee (not the year-filtered Leave Management page)
     const balanceLeaveSource =
@@ -724,11 +732,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={
-                                                selectedEmp
-                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
-                                                    : "N/A"
-                                            } 
+                                            value={experienceLabel} 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -864,9 +868,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
                                     <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
-                                        {selectedEmp
-                                            ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
-                                            : "N/A"}
+                                        {experienceLabel}
                                     </div>
                                 </div>
                             </div>
