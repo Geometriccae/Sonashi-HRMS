@@ -642,13 +642,6 @@ function AnnualVacations() {
           return;
         }
         await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
-        if (item.linkedLeaveId && tertiaryDateValue) {
-          try {
-            await leaveRequestService.updateLeaveRequest(item.linkedLeaveId, {
-              endDate: new Date(tertiaryDateValue).toISOString(),
-            });
-          } catch (_) { /* employee dates already saved */ }
-        }
         showToast("Status updated successfully.");
         employeeService.invalidateCache();
         leaveRequestService.invalidateCache();

@@ -1,0 +1,6364 @@
+{
+  "file": "C:/Users/Digi Ideacentre/Downloads/Staff Leave Report_Master tracker_August_2026.xlsx",
+  "applied": true,
+  "generatedAt": "2026-08-26T05:15:04.064Z",
+  "excelEmployees": 141,
+  "excelLeaveSlots": 910,
+  "softwareEmployees": 175,
+  "rows": [
+    {
+      "status": "MATCHED",
+      "excelId": "IDFO-000",
+      "excelName": "KANTESH GAGAN DAS NIHALACHANDANI",
+      "excelDoj": "2007-08-01",
+      "softwareId": "IDFO-000",
+      "softwareName": "KANTESH NIHALCHANDANI",
+      "softwareDoj": "2007-08-01",
+      "yearly": {
+        "2010": 9,
+        "2011": 20,
+        "2012": 12,
+        "2013": 21,
+        "2014": 26,
+        "2015": 14,
+        "2016": 33,
+        "2018": 21,
+        "2019": 26,
+        "2020": 0,
+        "2021": 21,
+        "2022": 10,
+        "2023": 36,
+        "2024": 0,
+        "2025": 26,
+        "2026": 4
+      },
+      "last5Taken": 97,
+      "avrg": 19.4,
+      "leaveDue": 59.79561643835618,
+      "workingYrs": 19.07123287671233
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMO-032",
+      "excelName": "PAWAN JAIKISHIN KOTAI",
+      "excelDoj": "2014-09-01",
+      "softwareId": "IDMO-032",
+      "softwareName": "PAWAN JAIKISHIN KOTAI",
+      "softwareDoj": "2014-09-01",
+      "yearly": {
+        "2016": 23,
+        "2019": 28,
+        "2020": 37,
+        "2021": 31,
+        "2022": 22,
+        "2023": 21,
+        "2024": 24,
+        "2025": 24,
+        "2026": 19
+      },
+      "last5Taken": 178,
+      "avrg": 35.6,
+      "leaveDue": -31.590136986301378,
+      "workingYrs": 11.98082191780822
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMO-044",
+      "excelName": "SANDEEP PULLANCHIODAN RAMATH SURENDRAN KURINHERI",
+      "excelDoj": "2017-01-05",
+      "softwareId": "IDMO-044",
+      "softwareName": "SANDEEP PULLANCHIODAN RAMATH SURENDRAN KURINHERI",
+      "softwareDoj": "2017-01-05",
+      "yearly": {
+        "2018": 21,
+        "2019": 41,
+        "2020": 14,
+        "2021": 104,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 10
+      },
+      "last5Taken": 114,
+      "avrg": 22.8,
+      "leaveDue": 40.615890410958905,
+      "workingYrs": 9.632876712328768
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMO-133",
+      "excelName": "AMAL SID",
+      "excelDoj": "2022-07-20",
+      "softwareId": "IDMO-133",
+      "softwareName": "AMAL SID SUPRASIDHAN",
+      "softwareDoj": "2022-10-06",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 52,
+        "2025": 6,
+        "2026": 30
+      },
+      "last5Taken": 88,
+      "avrg": 23.157894736842106,
+      "leaveDue": 25.999999999999996,
+      "workingYrs": 4.093150684931507
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMO-134",
+      "excelName": "PRAJNA PUTTUR DIVAKARA",
+      "excelDoj": "2022-11-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 14
+      },
+      "last5Taken": 14,
+      "avrg": 2.8,
+      "leaveDue": 98.66520547945206,
+      "workingYrs": 3.808219178082192
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMO-139",
+      "excelName": "PRAJNA SACHIN POOJARY",
+      "excelDoj": "2022-12-05",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 14
+      },
+      "last5Taken": 14,
+      "avrg": 2.8,
+      "leaveDue": 95.68438356164384,
+      "workingYrs": 3.7150684931506848
+    },
+    {
+      "status": "MATCHED + EMPLOYEE ID MISMATCH + DOJ MISMATCH",
+      "excelId": "IDMO-197",
+      "excelName": "NAINIKA GIRISH",
+      "excelDoj": "2025-01-01",
+      "softwareId": "IDMO-198",
+      "softwareName": "NAINIKA GIRISH",
+      "softwareDoj": "2025-01-14",
+      "yearly": {
+        "2026": 30
+      },
+      "last5Taken": 30,
+      "avrg": 21.42857142857143,
+      "leaveDue": 13.73776908023483,
+      "workingYrs": 1.6383561643835616
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMO-154",
+      "excelName": "UMESH KUMAR PANDEY",
+      "excelDoj": "2023-07-07",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 93.86301369863013,
+      "workingYrs": 3.128767123287671
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMO-165",
+      "excelName": "ADARSH VERNEKAR",
+      "excelDoj": "2024-01-10",
+      "softwareId": "IDMO-165",
+      "softwareName": "ADARSH VERNEKAR",
+      "softwareDoj": "2024-03-13",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 28
+      },
+      "last5Taken": 28,
+      "avrg": 5.6,
+      "leaveDue": 63.84109589041095,
+      "workingYrs": 2.6164383561643834
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMO-178",
+      "excelName": "MELVIN THOMAS",
+      "excelDoj": "2024-05-20",
+      "softwareId": "IDMO-178",
+      "softwareName": "MELVIN ABRAHAM THOMAS",
+      "softwareDoj": "2024-05-20",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2026": 60
+      },
+      "last5Taken": 60,
+      "avrg": 27.397260273972602,
+      "leaveDue": 5.690373428410585,
+      "workingYrs": 2.2575342465753425
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMS-001",
+      "excelName": "SANJAY MICHUMAL PUNJABI",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDMS-001",
+      "softwareName": "SANJAY MIRCHUMAL PUNJABI",
+      "softwareDoj": "1997-08-01",
+      "yearly": {
+        "2010": 8,
+        "2011": 10,
+        "2012": 5,
+        "2013": 4,
+        "2014": 5,
+        "2015": 10,
+        "2016": 5,
+        "2019": 4,
+        "2020": 3,
+        "2021": 0,
+        "2022": 15,
+        "2023": 16,
+        "2024": 8,
+        "2026": 7
+      },
+      "last5Taken": 49,
+      "avrg": 9.8,
+      "leaveDue": 113.95013698630137,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMS-031",
+      "excelName": "UMAIR RIAZ MUHAMMAD RIAZ SHOUQ",
+      "excelDoj": "2014-08-01",
+      "softwareId": "IDMS-031",
+      "softwareName": "UMAIR RIAZ MUHAMMAD RIAZ SHOUQ",
+      "softwareDoj": "2014-08-01",
+      "yearly": {
+        "2019": 16,
+        "2020": 41,
+        "2021": 0,
+        "2022": 0,
+        "2023": 32,
+        "2024": 0
+      },
+      "last5Taken": 32,
+      "avrg": 6.4,
+      "leaveDue": 133.12986301369864,
+      "workingYrs": 12.065753424657535
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMO-002",
+      "excelName": "MAHESH CHAINANI RAMCHAND",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDMO-002",
+      "softwareName": "MAHESH CHAINANI RAMCHAND",
+      "softwareDoj": "1994-01-01",
+      "yearly": {
+        "2010": 21,
+        "2011": 33,
+        "2012": 14,
+        "2013": 15,
+        "2014": 11,
+        "2015": 31,
+        "2016": 34,
+        "2017": 18,
+        "2018": 18,
+        "2019": 13,
+        "2020": 0,
+        "2021": 16,
+        "2022": 23,
+        "2023": 19,
+        "2024": 12,
+        "2025": 15,
+        "2026": 17
+      },
+      "last5Taken": 102,
+      "avrg": 20.4,
+      "leaveDue": 54.15452054794522,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMS-003",
+      "excelName": "JITESH CHAWLA",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDMS-003",
+      "softwareName": "JITESH CHAWLA",
+      "softwareDoj": "2007-01-01",
+      "yearly": {
+        "2010": 89,
+        "2011": 45,
+        "2012": 13,
+        "2013": 29,
+        "2014": 14,
+        "2015": 31,
+        "2016": 23,
+        "2018": 13,
+        "2020": 0,
+        "2021": 28,
+        "2022": 16,
+        "2023": 22,
+        "2024": 15,
+        "2025": 20
+      },
+      "last5Taken": 81,
+      "avrg": 16.2,
+      "leaveDue": 77.84712328767124,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBS-012",
+      "excelName": "VIJAY KUMAR ASHOK KUMAR",
+      "excelDoj": "2007-03-01",
+      "softwareId": "IDBS-012",
+      "softwareName": "VIJAY KUMAR ASHOK KUMAR",
+      "softwareDoj": "2007-03-01",
+      "yearly": {
+        "2010": 31,
+        "2011": 6,
+        "2012": 34,
+        "2014": 34,
+        "2015": 13,
+        "2016": 11,
+        "2018": 10,
+        "2019": 18,
+        "2020": 1,
+        "2021": 0,
+        "2022": 8,
+        "2023": 37,
+        "2024": 2,
+        "2025": 4
+      },
+      "last5Taken": 52,
+      "avrg": 10.4,
+      "leaveDue": 110.5654794520548,
+      "workingYrs": 19.49041095890411
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBO-036",
+      "excelName": "ASHFAQ MUHAMMAD AHAMED",
+      "excelDoj": "2015-02-01",
+      "softwareId": "IDBO-036",
+      "softwareName": "ASHFAQ MUHAMMAD AHAMED",
+      "softwareDoj": "2015-02-01",
+      "yearly": {
+        "2015": 5,
+        "2016": 20,
+        "2018": 51,
+        "2019": 22,
+        "2020": 20,
+        "2021": 6,
+        "2022": 60,
+        "2023": 5,
+        "2024": 13,
+        "2026": 10
+      },
+      "last5Taken": 104,
+      "avrg": 20.8,
+      "leaveDue": 51.89808219178082,
+      "workingYrs": 11.561643835616438
+    },
+    {
+      "status": "MATCHED + EMPLOYEE ID MISMATCH",
+      "excelId": "IDMO-090",
+      "excelName": "GAURAV NATHANI SANTOSH NATHANI",
+      "excelDoj": "2021-05-01",
+      "softwareId": "IDMM-090",
+      "softwareName": "GAURAV NATHANI SANTOSH NATHANI",
+      "softwareDoj": "2021-05-01",
+      "yearly": {
+        "2021": 16,
+        "2022": 0,
+        "2023": 6,
+        "2024": 26
+      },
+      "last5Taken": 48,
+      "avrg": 9.6,
+      "leaveDue": 108.37150684931505,
+      "workingYrs": 5.3123287671232875
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMS-004",
+      "excelName": "NISHITH SURENDRAN NATHAN KAVIL VADAKKE VEETIL SURENDRAN KUNIYIL",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDMS-004",
+      "softwareName": "NISHITH SURENDRAN NATHAN KAVIL VADAKKE VEETIL SURENDRAN KUNIYIL",
+      "softwareDoj": "2006-01-01",
+      "yearly": {
+        "2010": 0,
+        "2011": 0,
+        "2012": 66,
+        "2014": 42,
+        "2016": 4,
+        "2018": 8,
+        "2020": 0,
+        "2021": 0,
+        "2022": 35,
+        "2023": 12,
+        "2024": 28
+      },
+      "last5Taken": 75,
+      "avrg": 15,
+      "leaveDue": 84.6164383561644,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBS-024",
+      "excelName": "ASLAMBHAI ARIFBHAI SHEIKH SHEIKH ARIFBHI MEHMOODBHAI",
+      "excelDoj": "2013-03-01",
+      "softwareId": "IDBS-024",
+      "softwareName": "ASLAMBHAI ARIFBHAI SHEIKH SHEIKH ARIFBHI MEHMOODBHAI",
+      "softwareDoj": "2013-03-01",
+      "yearly": {
+        "2016": 37,
+        "2018": 7,
+        "2020": 0,
+        "2021": 0,
+        "2022": 11,
+        "2023": 0,
+        "2024": 19
+      },
+      "last5Taken": 30,
+      "avrg": 6,
+      "leaveDue": 135.38630136986302,
+      "workingYrs": 13.484931506849316
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBS-016",
+      "excelName": "PRAVEEN KUMAR PERIYADAN KADINHIPALLY",
+      "excelDoj": "2010-11-01",
+      "softwareId": "IDBS-016",
+      "softwareName": "PRAVEEN KUMAR PERIYADAN KADINHIPALLY",
+      "softwareDoj": "2010-11-01",
+      "yearly": {
+        "2010": 0,
+        "2011": 0,
+        "2012": 40,
+        "2013": 44,
+        "2014": 23,
+        "2015": 50,
+        "2016": 38,
+        "2018": 47,
+        "2019": 49,
+        "2020": 0,
+        "2021": 29,
+        "2022": 20,
+        "2023": 35,
+        "2024": 28
+      },
+      "last5Taken": 112,
+      "avrg": 22.4,
+      "leaveDue": 42.8723287671233,
+      "workingYrs": 15.816438356164383
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMS-108",
+      "excelName": "DEEPAK PUSHPAN PUSHPANGANGADHARAN",
+      "excelDoj": "2022-04-01",
+      "softwareId": "IDMS-108",
+      "softwareName": "DEEPAK PUSHPAN PUSHPANGANGADHARAN",
+      "softwareDoj": "2022-05-06",
+      "yearly": {
+        "2022": 7,
+        "2023": 16,
+        "2024": 37,
+        "2025": 17,
+        "2026": 69
+      },
+      "last5Taken": 77,
+      "avrg": 17.855781448538757,
+      "leaveDue": 52.36986301369862,
+      "workingYrs": 4.394520547945206
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMS-109",
+      "excelName": "JITHIN PANDIYATH RAJAN PANDIYATH RAMAN RAJAN",
+      "excelDoj": "2022-04-01",
+      "softwareId": "IDMS-109",
+      "softwareName": "JITHIN PANDIYATH RAJAN PANDIYATH RAMAN RAJAN",
+      "softwareDoj": "2022-04-01",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 21
+      },
+      "last5Taken": 21,
+      "avrg": 4.2,
+      "leaveDue": 113.3786301369863,
+      "workingYrs": 4.394520547945206
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMS-017",
+      "excelName": "PRAMOD POINACHI KUNHI RAMAN POINACHI",
+      "excelDoj": "2022-04-01",
+      "softwareId": "IDMS-017",
+      "softwareName": "PRAMOD POINACHI KUNHI RAMAN POINACHI",
+      "softwareDoj": "2022-05-01",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 26,
+        "2026": 9
+      },
+      "last5Taken": 35,
+      "avrg": 8.120649651972158,
+      "leaveDue": 94.35095191176937,
+      "workingYrs": 4.394520547945206
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBM-023",
+      "excelName": "PRABHAKAR PONNAM ANJAIAH PONNAM",
+      "excelDoj": "2012-12-01",
+      "softwareId": "IDBM-023",
+      "softwareName": "PRABHAKAR PONNAM ANJAIAH PONNAM",
+      "softwareDoj": "2012-12-01",
+      "yearly": {
+        "2012": 0,
+        "2018": 47,
+        "2019": 86,
+        "2020": 0,
+        "2021": 58,
+        "2022": 45,
+        "2023": 46,
+        "2024": 0,
+        "2025": 46
+      },
+      "last5Taken": 195,
+      "avrg": 39,
+      "leaveDue": -50.76986301369863,
+      "workingYrs": 13.73150684931507
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-034",
+      "excelName": "GANGARAJAM BAKKAIAH ODNALA",
+      "excelDoj": "2014-10-01",
+      "softwareId": "IDMM-034",
+      "softwareName": "GANGARAJAM BAKKAIAH ODNALA",
+      "softwareDoj": "2014-10-01",
+      "yearly": {
+        "2010": 0,
+        "2014": 0,
+        "2019": 78,
+        "2020": 0,
+        "2021": 102,
+        "2022": 0,
+        "2023": 57,
+        "2024": 41,
+        "2025": 9
+      },
+      "last5Taken": 209,
+      "avrg": 41.8,
+      "leaveDue": -66.5649315068493,
+      "workingYrs": 11.898630136986302
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-028",
+      "excelName": "MOHAMMED JABID MOIDU KUNHI",
+      "excelDoj": "2014-05-01",
+      "softwareId": "IDMM-028",
+      "softwareName": "MOHAMMED JABID MOIDU KUNHI",
+      "softwareDoj": "2014-05-01",
+      "yearly": {
+        "2015": 48,
+        "2016": 22,
+        "2019": 62,
+        "2020": 0,
+        "2021": 61,
+        "2022": 0,
+        "2023": 61,
+        "2024": 0,
+        "2025": 8
+      },
+      "last5Taken": 130,
+      "avrg": 26,
+      "leaveDue": 22.564383561643837,
+      "workingYrs": 12.317808219178081
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-021",
+      "excelName": "ARUN KANNOTHIL MANIKANDAN KANNOTHIL",
+      "excelDoj": "2011-12-01",
+      "softwareId": "IDMM-021",
+      "softwareName": "ARUN KANNOTHIL MANIKANDAN KANNOTHIL",
+      "softwareDoj": "2011-12-01",
+      "yearly": {
+        "2010": 0,
+        "2012": 0,
+        "2014": 81,
+        "2019": 31,
+        "2020": 21,
+        "2021": 0,
+        "2022": 61,
+        "2023": 0,
+        "2024": 62
+      },
+      "last5Taken": 144,
+      "avrg": 28.8,
+      "leaveDue": 6.769315068493147,
+      "workingYrs": 14.734246575342466
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDBM-040",
+      "excelName": "PARAMESH CHANDRAIAH NASPURI CHANDRAIAH POSANNA NASPURI",
+      "excelDoj": "2016-06-01",
+      "softwareId": "IDBM-040",
+      "softwareName": "PARAMESH CHANDRAIAH NASPURI CHANDRAIAH POSANNA NASPURI",
+      "softwareDoj": "2016-06-09",
+      "yearly": {
+        "2019": 63,
+        "2020": 40,
+        "2021": 23,
+        "2022": 0,
+        "2023": 31,
+        "2024": 0,
+        "2025": 81
+      },
+      "last5Taken": 175,
+      "avrg": 35,
+      "leaveDue": -28.205479452054796,
+      "workingYrs": 10.23013698630137
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDBM-043",
+      "excelName": "MUHAMMAD SABIR MUHAMMAD SAEED",
+      "excelDoj": "2016-11-01",
+      "softwareId": "IDBM-043",
+      "softwareName": "MUHAMMAD SABIR MUHAMMAD SAEED",
+      "softwareDoj": "2016-12-04",
+      "yearly": {
+        "2018": 21,
+        "2019": 50,
+        "2020": 0,
+        "2021": 131,
+        "2022": 0,
+        "2023": 0,
+        "2024": 63,
+        "2025": 59,
+        "2026": 106
+      },
+      "last5Taken": 359,
+      "avrg": 71.8,
+      "leaveDue": -235.79780821917808,
+      "workingYrs": 9.810958904109588
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDBM-048",
+      "excelName": "SUNIL KUMAR RAM JIVAN",
+      "excelDoj": "2017-08-01",
+      "softwareId": "IDBM-048",
+      "softwareName": "SUNIL KUMAR RAM JIVAN",
+      "softwareDoj": "2017-09-10",
+      "yearly": {
+        "2019": 61,
+        "2020": 0,
+        "2021": 30,
+        "2022": 30,
+        "2023": 0,
+        "2024": 78
+      },
+      "last5Taken": 138,
+      "avrg": 27.6,
+      "leaveDue": 13.538630136986294,
+      "workingYrs": 9.063013698630137
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-050",
+      "excelName": "AKASH RAVINDRA TAMBEKAR RAVINDRA PANDURAG TAMBEKAR",
+      "excelDoj": "2017-09-01",
+      "softwareId": "IDMM-050",
+      "softwareName": "AKASH RAVINDRA TAMBEKAR RAVINDRA PANDURAG TAMBEKAR",
+      "softwareDoj": "2017-10-11",
+      "yearly": {
+        "2019": 31,
+        "2020": 0,
+        "2021": 0,
+        "2022": 63,
+        "2023": 34,
+        "2024": 40,
+        "2025": 32
+      },
+      "last5Taken": 169,
+      "avrg": 33.8,
+      "leaveDue": -21.43616438356163,
+      "workingYrs": 8.978082191780821
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-053",
+      "excelName": "THIRUPATHI JAINAPURAPU BHEEMAIAH JAINAPURAPU",
+      "excelDoj": "2018-01-01",
+      "softwareId": "IDMM-053",
+      "softwareName": "THIRUPATHI JAINAPURAPU BHEEMAIAH JAINAPURAPU",
+      "softwareDoj": "2018-03-01",
+      "yearly": {
+        "2019": 24,
+        "2020": 0,
+        "2021": 0,
+        "2022": 46,
+        "2023": 28,
+        "2024": 34,
+        "2026": 4
+      },
+      "last5Taken": 112,
+      "avrg": 22.4,
+      "leaveDue": 42.8723287671233,
+      "workingYrs": 8.643835616438356
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-010",
+      "excelName": "SAI KUMAR EDUGUNURI NADAIAH EDUGUNURI",
+      "excelDoj": "2018-01-01",
+      "softwareId": "IDMM-010",
+      "softwareName": "SAI KUMAR EDUGUNURI NADAIAH EDUGUNURI",
+      "softwareDoj": "2018-02-27",
+      "yearly": {
+        "2020": 165,
+        "2021": 0,
+        "2022": 77,
+        "2023": 0,
+        "2024": 50,
+        "2026": 88
+      },
+      "last5Taken": 292,
+      "avrg": 58.4,
+      "leaveDue": -160.20712328767124,
+      "workingYrs": 8.643835616438356
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-054",
+      "excelName": "MOHAMMED TAHIR KHAN PATHAN",
+      "excelDoj": "2018-02-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2020": 0,
+        "2021": 24,
+        "2022": 64,
+        "2023": 0,
+        "2024": 62
+      },
+      "last5Taken": 150,
+      "avrg": 30,
+      "leaveDue": null,
+      "workingYrs": 8.558904109589042
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-055",
+      "excelName": "GANESH KANAUJIA RAM CHANDAR KANAUJIA",
+      "excelDoj": "2018-04-01",
+      "softwareId": "IDMM-055",
+      "softwareName": "GANESH KANAUJIA RAM CHANDAR KANAUJIA",
+      "softwareDoj": "2018-04-26",
+      "yearly": {
+        "2019": 7,
+        "2020": 97,
+        "2021": 0,
+        "2022": 0,
+        "2023": 63,
+        "2024": 0,
+        "2025": 61
+      },
+      "last5Taken": 221,
+      "avrg": 44.2,
+      "leaveDue": -80.10356164383563,
+      "workingYrs": 8.397260273972602
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-056",
+      "excelName": "NOOH THANCHANKANDY MOIDEEN KUTTY KALLIAN KATTIL",
+      "excelDoj": "2018-07-01",
+      "softwareId": "IDMM-056",
+      "softwareName": "NOOH THANCHANKANDY MOIDEEN KUTTY KALLIAN KATTIL",
+      "softwareDoj": "2018-08-12",
+      "yearly": {
+        "2019": 13,
+        "2020": 27,
+        "2021": 55,
+        "2022": 45,
+        "2023": 51,
+        "2024": 31,
+        "2025": 7,
+        "2026": 82
+      },
+      "last5Taken": 216,
+      "avrg": 43.2,
+      "leaveDue": -74.46246575342468,
+      "workingYrs": 8.147945205479452
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-058",
+      "excelName": "KAREEM CHOKKIYAN MOIDEENKUTTY VALAPPIL",
+      "excelDoj": "2019-01-01",
+      "softwareId": "IDMM-058",
+      "softwareName": "KAREEM CHOKKIYAN MOIDEENKUTTY VALAPPIL",
+      "softwareDoj": "2019-01-01",
+      "yearly": {
+        "2018": 0,
+        "2020": 0,
+        "2021": 27,
+        "2022": 33,
+        "2023": 0,
+        "2024": 61
+      },
+      "last5Taken": 121,
+      "avrg": 24.2,
+      "leaveDue": 32.718356164383565,
+      "workingYrs": 7.6438356164383565
+    },
+    {
+      "status": "MATCHED + EMPLOYEE ID MISMATCH + DOJ MISMATCH",
+      "excelId": "IDMM-059",
+      "excelName": "MIDHUN VALIYAPURAKKAL MOHANAN MOHANAN VALIYAPURAKKAL VELAYUDHAN",
+      "excelDoj": "2019-02-01",
+      "softwareId": "IDMM-208",
+      "softwareName": "MIDHUN VALIYAPURAKKAL MOHANAN MOHANAN VALIYAPURAKKAL VELAYUDHAN",
+      "softwareDoj": "2025-04-05",
+      "yearly": {
+        "2020": 0,
+        "2021": 138,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": 138,
+      "avrg": 27.6,
+      "leaveDue": 13.538630136986294,
+      "workingYrs": 7.558904109589041
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-061",
+      "excelName": "ABU SALIH MAYYERI MOHAMMED KUTTY MAYYERI",
+      "excelDoj": "2019-06-01",
+      "softwareId": "IDMM-061",
+      "softwareName": "ABU SALIH MAYYERI MOHAMMED KUTTY MAYYERI",
+      "softwareDoj": "2019-06-01",
+      "yearly": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 61,
+        "2023": 0,
+        "2024": 63
+      },
+      "last5Taken": 124,
+      "avrg": 24.8,
+      "leaveDue": 29.333698630136983,
+      "workingYrs": 7.23013698630137
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-062",
+      "excelName": "MUHAMMAD ABID MUHAMMAD SAEED",
+      "excelDoj": "2019-06-01",
+      "softwareId": "IDMM-062",
+      "softwareName": "MUHAMMAD ABID MUHAMMAD SAEED",
+      "softwareDoj": "2019-06-01",
+      "yearly": {
+        "2020": 0,
+        "2021": 91,
+        "2022": 0,
+        "2023": 0,
+        "2024": 45,
+        "2025": 18,
+        "2026": 44
+      },
+      "last5Taken": 198,
+      "avrg": 39.6,
+      "leaveDue": -54.15452054794522,
+      "workingYrs": 7.23013698630137
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-065",
+      "excelName": "ATHUL ELLIKANDAVIDA KRISHNAN ALLIKANDAVIDA",
+      "excelDoj": "2019-06-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 108,
+        "2023": 0,
+        "2024": 39
+      },
+      "last5Taken": 147,
+      "avrg": 29.4,
+      "leaveDue": 3.3846575342465837,
+      "workingYrs": 7.23013698630137
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-068",
+      "excelName": "VAMSHI VADNALA GANGADHAR VADNALA",
+      "excelDoj": "2019-10-01",
+      "softwareId": "IDMM-068",
+      "softwareName": "VAMSHI VADNALA GANGADHAR VADNALA",
+      "softwareDoj": "2020-02-15",
+      "yearly": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 60,
+        "2023": 0,
+        "2024": 0,
+        "2025": 59
+      },
+      "last5Taken": 119,
+      "avrg": 23.8,
+      "leaveDue": 40.42739726027397,
+      "workingYrs": 6.895890410958904
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-074",
+      "excelName": "MOHAMMED RAHIM UDDIN EMDAD HOSSAIN",
+      "excelDoj": "2020-10-01",
+      "softwareId": "IDMM-074",
+      "softwareName": "MOHAMMED RAHIM UDDIN EMDAD HOSSAIN",
+      "softwareDoj": "2020-10-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 62,
+        "2024": 38
+      },
+      "last5Taken": 100,
+      "avrg": 20,
+      "leaveDue": 58.93150684931506,
+      "workingYrs": 5.8931506849315065
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-076",
+      "excelName": "SANJAY SHIV POOJAN",
+      "excelDoj": "2020-12-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 42,
+        "2023": 0,
+        "2024": 0,
+        "2025": 97
+      },
+      "last5Taken": 139,
+      "avrg": 33.333333333333336,
+      "leaveDue": -19.086757990867593,
+      "workingYrs": 5.726027397260274
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-077",
+      "excelName": "VISHAL RAVINDRA TAMBEKAR RAVINDRA PANDURANG TAMBEKAR",
+      "excelDoj": "2020-12-01",
+      "softwareId": "IDMM-077",
+      "softwareName": "VISHAL RAVINDRA TAMBEKAR RAVINDRA PANDURANG TAMBEKAR",
+      "softwareDoj": "2021-02-17",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 60,
+        "2024": 7,
+        "2025": 91,
+        "2026": 31
+      },
+      "last5Taken": 189,
+      "avrg": 37.8,
+      "leaveDue": -42.99616438356163,
+      "workingYrs": 5.512328767123288
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-079",
+      "excelName": "BYJU KAKOTH KUNHIKANNAN",
+      "excelDoj": "2021-01-01",
+      "softwareId": "IDMM-079",
+      "softwareName": "BYJU KAKOTH KUNHIKANNAN",
+      "softwareDoj": "2021-01-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 35,
+        "2023": 0,
+        "2024": 55,
+        "2025": 31
+      },
+      "last5Taken": 121,
+      "avrg": 24.2,
+      "leaveDue": 32.718356164383565,
+      "workingYrs": 5.641095890410959
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-081",
+      "excelName": "ASHOK KUMAR CHAURASIYA SIYA",
+      "excelDoj": "2021-01-01",
+      "softwareId": "IDMM-081",
+      "softwareName": "ASHOK KUMAR CHAURASIYA SIYA RAM",
+      "softwareDoj": "2021-04-11",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 60,
+        "2024": 35,
+        "2026": 50
+      },
+      "last5Taken": 145,
+      "avrg": 29,
+      "leaveDue": 5.367123287671233,
+      "workingYrs": 5.641095890410959
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-087",
+      "excelName": "ANWAR JATTIPALLA ISUBU",
+      "excelDoj": "2021-04-01",
+      "softwareId": "IDMM-087",
+      "softwareName": "ANWAR JATTIPALLA ISUBU",
+      "softwareDoj": "2021-05-23",
+      "yearly": {
+        "2021": 0,
+        "2022": 15,
+        "2023": 32,
+        "2024": 40,
+        "2025": 54
+      },
+      "last5Taken": 141,
+      "avrg": 28.2,
+      "leaveDue": 9.710136986301373,
+      "workingYrs": 5.394520547945206
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-092",
+      "excelName": "MANGAL SINGH TEHAL SINGH",
+      "excelDoj": "2021-07-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 39,
+        "2025": 93
+      },
+      "last5Taken": 132,
+      "avrg": 37.60683760683761,
+      "leaveDue": -39.138742536002816,
+      "workingYrs": 5.145205479452055
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-094",
+      "excelName": "FAHAD HOSSAIN DOLON MD DEWAR HOSSEN",
+      "excelDoj": "2021-07-01",
+      "softwareId": "IDMM-094",
+      "softwareName": "FAHAD HOSSAIN DOLON MD DEWAR HOSSEN",
+      "softwareDoj": "2021-09-14",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 61
+      },
+      "last5Taken": 61,
+      "avrg": 17.428571428571427,
+      "leaveDue": 64.6825831702544,
+      "workingYrs": 5.145205479452055
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-096",
+      "excelName": "MEHBOOB ALOM MOULANA ABUL KALAM",
+      "excelDoj": "2021-08-01",
+      "softwareId": "IDMM-096",
+      "softwareName": "MEHBOOB ALOM MOULANA ABUL KALAM",
+      "softwareDoj": "2021-11-02",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 131
+      },
+      "last5Taken": 131,
+      "avrg": 29.11111111111111,
+      "leaveDue": 4.271537290715375,
+      "workingYrs": 5.06027397260274
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-095",
+      "excelName": "MOHAMMAD REAZ UDDIN MOHAMMAD DULAL MIA",
+      "excelDoj": "2021-07-01",
+      "softwareId": "IDMM-095",
+      "softwareName": "MOHAMMAD REAZ UDDIN MOHAMMAD DULAL MIA",
+      "softwareDoj": "2021-07-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 12,
+        "2024": 48,
+        "2025": 16,
+        "2026": 46
+      },
+      "last5Taken": 122,
+      "avrg": 25.363825363825367,
+      "leaveDue": 22.2917437985931,
+      "workingYrs": 5.145205479452055
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-098",
+      "excelName": "FIRDUS ALOM TALUKDAR MOKTAR UDDIN TALUKDAR",
+      "excelDoj": "2021-10-01",
+      "softwareId": "IDMM-098",
+      "softwareName": "FIRDUS ALOM TALUKDAR MOKTAR UDDIN TALUKDAR",
+      "softwareDoj": "2021-11-28",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 61,
+        "2025": 1,
+        "2026": 91
+      },
+      "last5Taken": 153,
+      "avrg": 32.34672304439746,
+      "leaveDue": -11.109965536215906,
+      "workingYrs": 4.8931506849315065
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-104",
+      "excelName": "BISWAJIT DEB BIKASH DEB",
+      "excelDoj": "2021-10-01",
+      "softwareId": "IDMM-104",
+      "softwareName": "BISWAJIT DEB BIKASH DEB",
+      "softwareDoj": "2022-02-09",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 136.02739726027397,
+      "workingYrs": 4.8931506849315065
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-099",
+      "excelName": "SHAMIL NISATH SULAIMAN SYED SULAIMAN",
+      "excelDoj": "2021-10-01",
+      "softwareId": "IDMM-099",
+      "softwareName": "SHAMIL NISATH SULAIMAN SYED SULAIMAN",
+      "softwareDoj": "2021-10-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 42,
+        "2024": 31,
+        "2025": 45,
+        "2026": 44
+      },
+      "last5Taken": 162,
+      "avrg": 33.128834355828225,
+      "leaveDue": -15.309857971258108,
+      "workingYrs": 4.8931506849315065
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-102",
+      "excelName": "SUDHIR KUMAR SUBEDAR",
+      "excelDoj": "2021-10-01",
+      "softwareId": "IDMM-102",
+      "softwareName": "SUDHIR KUMAR SUBEDAR",
+      "softwareDoj": "2022-02-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 77
+      },
+      "last5Taken": 77,
+      "avrg": 15.4,
+      "leaveDue": 66.52,
+      "workingYrs": 4.8931506849315065
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-120",
+      "excelName": "AMIL TAJ MUHAMMAD TAJ",
+      "excelDoj": "2022-02-15",
+      "softwareId": "IDMM-120",
+      "softwareName": "AMIL TAJ MUHAMMAD TAJ",
+      "softwareDoj": "2022-02-14",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 61
+      },
+      "last5Taken": 61,
+      "avrg": 12.2,
+      "leaveDue": 80.41698630136987,
+      "workingYrs": 4.517808219178082
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-118",
+      "excelName": "SABITH MANAPPATTU NOUSHAD NOUSHAD MANAPPATTU MAJEED",
+      "excelDoj": "2022-02-01",
+      "softwareId": "IDMM-118",
+      "softwareName": "SABITH MANAPPATTU NOUSHAD NOUSHAD MANAPPATTU MAJEED",
+      "softwareDoj": "2022-02-18",
+      "yearly": {
+        "2022": 0,
+        "2023": 15,
+        "2024": 66
+      },
+      "last5Taken": 81,
+      "avrg": 16.2,
+      "leaveDue": 62.875068493150685,
+      "workingYrs": 4.556164383561644
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-119",
+      "excelName": "JIBEESH KANIYAM KANDI MEETHAL",
+      "excelDoj": "2022-05-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2022": 0,
+        "2023": 9,
+        "2024": 0
+      },
+      "last5Taken": 9,
+      "avrg": 1.8,
+      "leaveDue": 121.6076712328767,
+      "workingYrs": 4.3123287671232875
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-112",
+      "excelName": "MD SUHAL AHMED MD TAFAZZUL ALI",
+      "excelDoj": "2022-04-01",
+      "softwareId": "IDMM-112",
+      "softwareName": "MD SUHAL AHMED MD TAFAZZUL ALI",
+      "softwareDoj": "2022-06-11",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 93,
+        "2025": 111,
+        "2026": 24
+      },
+      "last5Taken": 204,
+      "avrg": 40.8,
+      "leaveDue": -47.46082191780821,
+      "workingYrs": 4.394520547945206
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-110",
+      "excelName": "MUHAMMED RASHEEQUE NEROM PARAMMAL MUHAMMAD LUKHMAN NEROM PARAMMAL",
+      "excelDoj": "2022-04-01",
+      "softwareId": "IDMM-110",
+      "softwareName": "MUHAMMED RASHEEQUE NEROM PARAMMAL MUHAMMAD LUKHMAN NEROM PARAMMAL",
+      "softwareDoj": "2022-05-27",
+      "yearly": {
+        "2022": 0,
+        "2023": 18,
+        "2024": 47,
+        "2025": 8,
+        "2026": 24
+      },
+      "last5Taken": 97,
+      "avrg": 22.877358490566035,
+      "leaveDue": 30.207805634530896,
+      "workingYrs": 4.394520547945206
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-115",
+      "excelName": "MOTIUR RAHMAN SOHID ULLAH",
+      "excelDoj": "2022-04-01",
+      "softwareId": "IDMM-115",
+      "softwareName": "MOTIUR RAHMAN SOHID ULLAH",
+      "softwareDoj": "2022-05-01",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 64
+      },
+      "last5Taken": 64,
+      "avrg": 12.8,
+      "leaveDue": 75.58575342465754,
+      "workingYrs": 4.394520547945206
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-116",
+      "excelName": "MD MONJURUL ISLAM MD OMAR FARUK",
+      "excelDoj": "2022-04-01",
+      "softwareId": "IDMM-116",
+      "softwareName": "MD MONJURUL ISLAM MD OMAR FARUK",
+      "softwareDoj": "2022-07-14",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 66,
+        "2026": 58
+      },
+      "last5Taken": 66,
+      "avrg": 13.2,
+      "leaveDue": 69.04109589041097,
+      "workingYrs": 4.394520547945206
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-126",
+      "excelName": "MUHAMMED SHANIR POOCHADIYAN",
+      "excelDoj": "2022-08-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 60
+      },
+      "last5Taken": 60,
+      "avrg": 24.793388429752067,
+      "leaveDue": 21.140269444129967,
+      "workingYrs": 4.06027397260274
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-122",
+      "excelName": "VIKASH KUMAR RAJENDRA KUMAR",
+      "excelDoj": "2022-06-22",
+      "softwareId": "IDMM-122",
+      "softwareName": "VIKASH KUMAR RAJENDRA KUMAR",
+      "softwareDoj": "2022-05-01",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 31,
+        "2025": 6,
+        "2026": 58
+      },
+      "last5Taken": 37,
+      "avrg": 8.872901678657074,
+      "leaveDue": 88.0971058769423,
+      "workingYrs": 4.16986301369863
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-125",
+      "excelName": "SADIK ALOM IMAN UDDIN",
+      "excelDoj": "2022-05-01",
+      "softwareId": "IDMM-125",
+      "softwareName": "SADIK ALOM IMAN UDDIN",
+      "softwareDoj": "2022-08-01",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 61,
+        "2025": 91
+      },
+      "last5Taken": 152,
+      "avrg": 30.4,
+      "leaveDue": -1.6241095890410904,
+      "workingYrs": 4.3123287671232875
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-131",
+      "excelName": "UMESH PAYYAM VALAPPIL",
+      "excelDoj": "2022-09-01",
+      "softwareId": "IDMM-131",
+      "softwareName": "UMESH PAYYAM VALAPPIL",
+      "softwareDoj": "2022-10-06",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 18,
+        "2025": 58
+      },
+      "last5Taken": 76,
+      "avrg": 19,
+      "leaveDue": 43.09589041095891,
+      "workingYrs": 3.9753424657534246
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-106",
+      "excelName": "MAHADI HASAN ARAFAT",
+      "excelDoj": "2021-11-13",
+      "softwareId": "IDMM-106",
+      "softwareName": "MAHADI HASAN ARAFAT",
+      "softwareDoj": "2022-12-08",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 60
+      },
+      "last5Taken": 60,
+      "avrg": 12,
+      "leaveDue": 66.72328767123288,
+      "workingYrs": 4.7753424657534245
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-138",
+      "excelName": "MOHAMMED SALIH PEECHI",
+      "excelDoj": "2022-11-28",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 41
+      },
+      "last5Taken": 41,
+      "avrg": 20.19704433497537,
+      "leaveDue": 33.598623388892634,
+      "workingYrs": 3.734246575342466
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-137",
+      "excelName": "SACHIN KANOUJIYA",
+      "excelDoj": "2022-11-28",
+      "softwareId": "IDMM-137",
+      "softwareName": "SACHIN KANOUJIYA",
+      "softwareDoj": "2022-11-28",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 59,
+        "2026": 61
+      },
+      "last5Taken": 59,
+      "avrg": 11.8,
+      "leaveDue": 66.06849315068493,
+      "workingYrs": 3.734246575342466
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-136",
+      "excelName": "PRAVEEN KUMAR KESHWANI",
+      "excelDoj": "2022-11-28",
+      "softwareId": "IDMM-136",
+      "softwareName": "PRAVEEN KUMAR KESHWANI",
+      "softwareDoj": "2023-01-05",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 67,
+        "2026": 61
+      },
+      "last5Taken": 67,
+      "avrg": 13.4,
+      "leaveDue": 60.26027397260274,
+      "workingYrs": 3.734246575342466
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-142",
+      "excelName": "SHEKAR VEMULAWADA GANGANNAVEMULAWADA",
+      "excelDoj": "2023-01-12",
+      "softwareId": "IDMM-142",
+      "softwareName": "SHEKAR VEMULAWADA GANGANNAVEMULAWADA",
+      "softwareDoj": "2023-01-12",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 25,
+        "2024": 0,
+        "2025": 79,
+        "2026": 80
+      },
+      "last5Taken": 104,
+      "avrg": 20.8,
+      "leaveDue": 33.220821917808216,
+      "workingYrs": 3.610958904109589
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-141",
+      "excelName": "MAHARAJ HOSSAIN RIFAT MD BAHAR MIA",
+      "excelDoj": "2022-12-05",
+      "softwareId": "IDMM-141",
+      "softwareName": "MAHARAJ HOSSAIN RIFAT MD",
+      "softwareDoj": "2023-03-17",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 27,
+        "2025": 52,
+        "2026": 61
+      },
+      "last5Taken": 79,
+      "avrg": 22.96511627906977,
+      "leaveDue": 24.169162153552083,
+      "workingYrs": 3.7150684931506848
+    },
+    {
+      "status": "MATCHED + EMPLOYEE ID MISMATCH + DOJ MISMATCH",
+      "excelId": "IDMM-144",
+      "excelName": "FAHIM AHMAD MOHAMMAD YAKOB",
+      "excelDoj": "2023-02-10",
+      "softwareId": "IDMM-143",
+      "softwareName": "FAHIM AHMAD MOHAMMAD YAKOB",
+      "softwareDoj": "2023-04-03",
+      "yearly": {
+        "2022": 0,
+        "2023": 17,
+        "2024": 19,
+        "2026": 61
+      },
+      "last5Taken": 36,
+      "avrg": 10.619469026548671,
+      "leaveDue": 65.68141592920354,
+      "workingYrs": 3.5315068493150683
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-146",
+      "excelName": "MUHAMMED YASIR PADINHARE THODI",
+      "excelDoj": "2023-04-08",
+      "softwareId": "IDMM-146",
+      "softwareName": "MUHAMMED YASIR PADINJARE",
+      "softwareDoj": "2023-05-22",
+      "yearly": {
+        "2022": 0,
+        "2023": 14,
+        "2024": 0,
+        "2025": 19,
+        "2026": 80
+      },
+      "last5Taken": 33,
+      "avrg": 10.153846153846153,
+      "leaveDue": 64.59515279241306,
+      "workingYrs": 3.3753424657534246
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-147",
+      "excelName": "SUNIL KUMAR JAYSWAL",
+      "excelDoj": "2023-04-15",
+      "softwareId": "IDMM-147",
+      "softwareName": "SUNIL KUMAR JAISWAL",
+      "softwareDoj": "2023-04-15",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 41
+      },
+      "last5Taken": 41,
+      "avrg": 8.2,
+      "leaveDue": 70.77534246575343,
+      "workingYrs": 3.356164383561644
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-148",
+      "excelName": "NIJIL CHITTILAPPILLY JOHNSON",
+      "excelDoj": "2023-04-29",
+      "softwareId": "IDMM-148",
+      "softwareName": "NIJIL CHITTILAPPILLY",
+      "softwareDoj": "2023-06-08",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 70
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 96.24657534246576,
+      "workingYrs": 3.317808219178082
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-152",
+      "excelName": "VIJAYASINGAM RAJASINGAM",
+      "excelDoj": "2023-06-28",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 33,
+        "2026": 31
+      },
+      "last5Taken": 33,
+      "avrg": 6.6,
+      "leaveDue": 73.79013698630136,
+      "workingYrs": 3.1534246575342464
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-153",
+      "excelName": "ZAKARIA AHMED",
+      "excelDoj": "2023-07-03",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 7
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 94.19178082191782,
+      "workingYrs": 3.1397260273972605
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-151",
+      "excelName": "PRINCE KANOJIA MANI RAM",
+      "excelDoj": "2023-06-27",
+      "softwareId": "IDMM-151",
+      "softwareName": "PRINCE KANOJIA MANI RAM",
+      "softwareDoj": "2023-06-17",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 70
+      },
+      "last5Taken": 70,
+      "avrg": 22.151898734177212,
+      "leaveDue": 24.769897693774933,
+      "workingYrs": 3.1561643835616437
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-157",
+      "excelName": "KAILASH KUMAR",
+      "excelDoj": "2023-08-21",
+      "softwareId": "IDMM-157",
+      "softwareName": "KAILASH KUMAR",
+      "softwareDoj": "2023-10-04",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 54,
+        "2026": 31
+      },
+      "last5Taken": 85,
+      "avrg": 29.51388888888889,
+      "leaveDue": 1.4023972602739714,
+      "workingYrs": 3.0054794520547947
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-156",
+      "excelName": "PARWEZ ALEM MD ALAM",
+      "excelDoj": "2023-08-17",
+      "softwareId": "IDMM-156",
+      "softwareName": "MD PARWEZ ALEM",
+      "softwareDoj": "2023-08-17",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 73,
+        "2026": 7
+      },
+      "last5Taken": 80,
+      "avrg": 26.490066225165563,
+      "leaveDue": 10.587498866007438,
+      "workingYrs": 3.0164383561643837
+    },
+    {
+      "status": "MATCHED + EMPLOYEE ID MISMATCH + DOJ MISMATCH",
+      "excelId": "IDMM-159",
+      "excelName": "DAL BAHADUR MAGAR",
+      "excelDoj": "2023-10-25",
+      "softwareId": "IDMM-160",
+      "softwareName": "DAL BAHADUR MAGAR",
+      "softwareDoj": "2024-02-07",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 68
+      },
+      "last5Taken": 68,
+      "avrg": 13.6,
+      "leaveDue": 46.369315068493144,
+      "workingYrs": 2.8273972602739725
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-159",
+      "excelName": "Pavan Krishna",
+      "excelDoj": "2023-10-25",
+      "softwareId": "IDMM-159",
+      "softwareName": "PAVAN KRISHNAJI GURAV",
+      "softwareDoj": "2024-02-10",
+      "yearly": {
+        "2026": 129
+      },
+      "last5Taken": 129,
+      "avrg": 49.61538461538461,
+      "leaveDue": -55.460484720758686,
+      "workingYrs": 2.8273972602739725
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-163",
+      "excelName": "PRADEEP KUMAR",
+      "excelDoj": "2023-12-01",
+      "softwareId": "IDMM-163",
+      "softwareName": "PRADEEP KUMAR",
+      "softwareDoj": "2024-02-20",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 43
+      },
+      "last5Taken": 43,
+      "avrg": 8.6,
+      "leaveDue": 58.336986301369855,
+      "workingYrs": 2.7260273972602738
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-161",
+      "excelName": "USMAN HUSSAIN",
+      "excelDoj": "2023-11-23",
+      "softwareId": "IDMM-161",
+      "softwareName": "USMAN HUSSAIN",
+      "softwareDoj": "2024-03-13",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 68
+      },
+      "last5Taken": 68,
+      "avrg": 24.727272727272727,
+      "leaveDue": 14.489165628891659,
+      "workingYrs": 2.747945205479452
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-162",
+      "excelName": "FAISAL SHAHZAD",
+      "excelDoj": "2023-12-01",
+      "softwareId": "IDMM-162",
+      "softwareName": "FAISAL SHAHZAD",
+      "softwareDoj": "2024-03-12",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 81.78082191780821,
+      "workingYrs": 2.7260273972602738
+    },
+    {
+      "status": "MATCHED + EMPLOYEE ID MISMATCH + DOJ MISMATCH",
+      "excelId": "IDMM-168",
+      "excelName": "BADUSHA THAYYIL CHEERAKUZHIYIL",
+      "excelDoj": "2024-02-08",
+      "softwareId": "75",
+      "softwareName": "BADUSHA THAYYIL",
+      "softwareDoj": "2024-02-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 53
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 71.58904109589041,
+      "workingYrs": 2.536986301369863
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "",
+      "excelName": "MOHAMMAD USMAN",
+      "excelDoj": "2024-02-07",
+      "softwareId": "IDMM-168",
+      "softwareName": "MOHAMMAD USMAN",
+      "softwareDoj": "2024-05-08",
+      "yearly": {},
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 67.3972602739726,
+      "workingYrs": 2.5397260273972604
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-167",
+      "excelName": "SUMESH MINIYEDATH",
+      "excelDoj": "2024-02-03",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 76.52054794520548,
+      "workingYrs": 2.5506849315068494
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-166",
+      "excelName": "SAINUL HABID",
+      "excelDoj": "2024-02-02",
+      "softwareId": "IDMM-166",
+      "softwareName": "SAINUL HABID",
+      "softwareDoj": "2024-04-03",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 17
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 71.58904109589041,
+      "workingYrs": 2.5534246575342467
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-171",
+      "excelName": "STOBIN JOHNY",
+      "excelDoj": "2024-03-11",
+      "softwareId": "IDMM-171",
+      "softwareName": "STOBIN JOHNY",
+      "softwareDoj": "2024-05-16",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 27,
+        "2026": 53
+      },
+      "last5Taken": 80,
+      "avrg": 35.242290748898675,
+      "leaveDue": -11.892100657775625,
+      "workingYrs": 2.4493150684931506
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-173",
+      "excelName": "AJEET GAUTAM",
+      "excelDoj": "2024-03-20",
+      "softwareId": "IDMM-173",
+      "softwareName": "AJEET GAUTAM",
+      "softwareDoj": "2024-03-20",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 72.73972602739725,
+      "workingYrs": 2.4246575342465753
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-169",
+      "excelName": "MAHESH KUMAR CHINTAKINDI",
+      "excelDoj": "2024-03-06",
+      "softwareId": "IDMM-169",
+      "softwareName": "MAHESH KUMAR CHINTAKINDI",
+      "softwareDoj": "2024-03-06",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 55
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 73.89041095890411,
+      "workingYrs": 2.463013698630137
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-181",
+      "excelName": "SHARSHAD VALAPPIL",
+      "excelDoj": "2024-05-22",
+      "softwareId": "IDMM-181",
+      "softwareName": "SHARSHAD VALAPPIL",
+      "softwareDoj": "2024-05-22",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 67.56164383561644,
+      "workingYrs": 2.252054794520548
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMM-170",
+      "excelName": "MOIDUL ALOM BARBHUYAN",
+      "excelDoj": "2024-03-09",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 73.64383561643837,
+      "workingYrs": 2.4547945205479453
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-179",
+      "excelName": "MANJEET JAISAWAL",
+      "excelDoj": "2024-05-20",
+      "softwareId": "IDMM-179",
+      "softwareName": "MANJEET JAISAWAL",
+      "softwareDoj": "2024-07-03",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 67.72602739726028,
+      "workingYrs": 2.2575342465753425
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-190",
+      "excelName": "Mohamed Shajahan",
+      "excelDoj": "2024-06-05",
+      "softwareId": "IDMM-190",
+      "softwareName": "MOHAMED SHAJAHAN",
+      "softwareDoj": "2024-06-05",
+      "yearly": {
+        "2026": 55
+      },
+      "last5Taken": 55,
+      "avrg": 11,
+      "leaveDue": 39.509589041095886,
+      "workingYrs": 2.213698630136986
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMM-177",
+      "excelName": "SARATH KUMAR RAVEENDRAN PILLAI SHYLAJA",
+      "excelDoj": "2024-05-09",
+      "softwareId": "IDMM-177",
+      "softwareName": "SARATH KUMAR RAVEENDRAN PILLAI SHYLAJA",
+      "softwareDoj": "2024-08-06",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 61.315068493150676,
+      "workingYrs": 2.287671232876712
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "",
+      "excelName": "Habibur Rahman",
+      "excelDoj": "2024-09-25",
+      "softwareId": "IDMM 194",
+      "softwareName": "HABIBUR RAHMAN",
+      "softwareDoj": "2024-09-25",
+      "yearly": {},
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": null,
+      "workingYrs": null
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-194",
+      "excelName": "DEVID SHARMAN",
+      "excelDoj": "2024-10-05",
+      "softwareId": "IDMM-194",
+      "softwareName": "DEVID SHARMA",
+      "softwareDoj": "2024-10-05",
+      "yearly": {},
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": null,
+      "workingYrs": null
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMD-007",
+      "excelName": "ZAFAR IQBAL MOHAMMAD AZIIZ KHAN",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDMD-007",
+      "softwareName": "ZAFAR IQBAL MOHAMMAD AZIIZ KHAN",
+      "softwareDoj": "1992-01-01",
+      "yearly": {
+        "2010": 0,
+        "2011": 93,
+        "2012": 67,
+        "2020": 207,
+        "2021": 0,
+        "2022": 0,
+        "2023": 66,
+        "2024": 0
+      },
+      "last5Taken": 66,
+      "avrg": 13.2,
+      "leaveDue": 94.77041095890412,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDBD-011",
+      "excelName": "BASHARAT AHMAD AHMAD ULLAH KHAN",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDBD-011",
+      "softwareName": "BASHARAT AHMAD AHMAD ULLAH KHAN",
+      "softwareDoj": "2001-01-01",
+      "yearly": {
+        "2010": 5,
+        "2011": 19,
+        "2012": 0,
+        "2013": 74,
+        "2019": 76,
+        "2020": 0,
+        "2021": 32,
+        "2022": 64,
+        "2023": 0,
+        "2024": 59,
+        "2025": 12
+      },
+      "last5Taken": 155,
+      "avrg": 31,
+      "leaveDue": -5.641095890410959,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBD-022",
+      "excelName": "MUHAMMAD NASIR TAJ MUHAMMAD TAJ",
+      "excelDoj": "2012-02-01",
+      "softwareId": "IDBD-022",
+      "softwareName": "MUHAMMAD NASIR TAJ MUHAMMAD TAJ",
+      "softwareDoj": "2012-02-01",
+      "yearly": {
+        "2010": 0,
+        "2012": 0,
+        "2018": 85,
+        "2020": 0,
+        "2021": 0,
+        "2022": 74,
+        "2023": 0,
+        "2024": 23,
+        "2025": 59
+      },
+      "last5Taken": 97,
+      "avrg": 19.4,
+      "leaveDue": 59.79561643835618,
+      "workingYrs": 14.564383561643835
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBD-020",
+      "excelName": "RAMEEZ ZAFAR ZAFAR IQBAL",
+      "excelDoj": "2011-11-01",
+      "softwareId": "IDBD-020",
+      "softwareName": "RAMEEZ ZAFAR ZAFAR IQBAL",
+      "softwareDoj": "2011-11-01",
+      "yearly": {
+        "2012": 0,
+        "2020": 102,
+        "2021": 0,
+        "2022": 80,
+        "2023": 0,
+        "2024": 0,
+        "2025": 76
+      },
+      "last5Taken": 258,
+      "avrg": 51.6,
+      "leaveDue": -121.84767123287672,
+      "workingYrs": 14.816438356164383
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMD-013",
+      "excelName": "MOHSIN BASHIR SARDAR MUHANNAD BASHIR KHAN",
+      "excelDoj": "2007-04-01",
+      "softwareId": "IDMD-013",
+      "softwareName": "MOHSIN BASHIR SARDAR MUHANNAD BASHIR KHAN",
+      "softwareDoj": "2007-04-01",
+      "yearly": {
+        "2010": 0,
+        "2011": 0,
+        "2012": 114,
+        "2018": 11,
+        "2019": 77,
+        "2020": 0,
+        "2021": 0,
+        "2022": 39,
+        "2023": 50,
+        "2024": 57,
+        "2025": 12
+      },
+      "last5Taken": 146,
+      "avrg": 29.2,
+      "leaveDue": 4.512876712328771,
+      "workingYrs": 19.405479452054795
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMD-072",
+      "excelName": "MUHAMMAD QAMAR UZ ZAMAN MUHAMMAD ZAFAR KHAN NEW DRIVER",
+      "excelDoj": "2020-10-01",
+      "softwareId": "IDMD-072",
+      "softwareName": "MUHAMMAD QAMAR UZ ZAMAN MUHAMMAD ZAFAR KHAN",
+      "softwareDoj": "2020-11-19",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 69
+      },
+      "last5Taken": 69,
+      "avrg": 13.8,
+      "leaveDue": 95.4690410958904,
+      "workingYrs": 5.8931506849315065
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMD-093",
+      "excelName": "MANOJ GEORGE GEORGE POOPPANA THOMAS",
+      "excelDoj": "2021-07-01",
+      "softwareId": "IDMD-093",
+      "softwareName": "MANOJ GEORGE GEORGE POOPPANA THOMAS",
+      "softwareDoj": "2021-09-16",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 78
+      },
+      "last5Taken": 78,
+      "avrg": 15.6,
+      "leaveDue": 74.09095890410958,
+      "workingYrs": 5.145205479452055
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMD-149",
+      "excelName": "MUHAMMAD FAISAL NAEEM",
+      "excelDoj": "2023-05-22",
+      "softwareId": "IDMD-149",
+      "softwareName": "MUHAMMAD FAISAL NAEEM",
+      "softwareDoj": "2023-06-20",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 14
+      },
+      "last5Taken": 14,
+      "avrg": 4.895104895104895,
+      "leaveDue": 79.7166395248587,
+      "workingYrs": 3.254794520547945
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMD-192",
+      "excelName": "Tayyab Akram",
+      "excelDoj": "2024-06-22",
+      "softwareId": "IDMD-192",
+      "softwareName": "TAYYAB AKRAM",
+      "softwareDoj": "2024-06-22",
+      "yearly": {
+        "2025": 53
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": null,
+      "workingYrs": null
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBC-006",
+      "excelName": "RAJESH KANAKKODIKANDARI RAVUNNI KUTTY PANEZHIMUNDAKKAL",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDBC-006",
+      "softwareName": "RAJESH KANAKKODIKANDARI RAVUNNI KUTTY PANEZHIMUNDAKKAL",
+      "softwareDoj": "2007-01-01",
+      "yearly": {
+        "2010": 61,
+        "2011": 0,
+        "2012": 0,
+        "2013": 89,
+        "2018": 10,
+        "2019": 47,
+        "2020": 0,
+        "2021": 18,
+        "2022": 0,
+        "2023": 0,
+        "2024": 50
+      },
+      "last5Taken": 68,
+      "avrg": 13.6,
+      "leaveDue": 92.51397260273973,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMC-107",
+      "excelName": "PRAMOD KUMARAN VATTAKKANDATHIL",
+      "excelDoj": "2011-01-01",
+      "softwareId": "IDMC-107",
+      "softwareName": "PRAMOD KUMARAN VATTAKKANDATHIL",
+      "softwareDoj": "2011-03-01",
+      "yearly": {
+        "2012": 0,
+        "2013": 84,
+        "2018": 31,
+        "2019": 34,
+        "2020": 0,
+        "2021": 51,
+        "2022": 41,
+        "2023": 0,
+        "2024": 0,
+        "2025": 62
+      },
+      "last5Taken": 92,
+      "avrg": 18.4,
+      "leaveDue": 65.43671232876713,
+      "workingYrs": 15.64931506849315
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMC-025",
+      "excelName": "JAGEESH PANDIKA THARAMMAL JAYARAJAN PANDIKA THARAMMAL",
+      "excelDoj": "2013-07-01",
+      "softwareId": "IDMC-025",
+      "softwareName": "JAGEESH PANDIKA THARAMMAL JAYARAJAN PANDIKA THARAMMAL",
+      "softwareDoj": "2013-07-01",
+      "yearly": {
+        "2019": 61,
+        "2020": 0,
+        "2021": 0,
+        "2022": 61,
+        "2023": 0,
+        "2024": 0,
+        "2025": 60
+      },
+      "last5Taken": 61,
+      "avrg": 12.2,
+      "leaveDue": 100.41150684931507,
+      "workingYrs": 13.150684931506849
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMC-051",
+      "excelName": "RAHUL ARIMBOOTH RAMANAN ARIMBOOTH",
+      "excelDoj": "2017-09-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2019": 4,
+        "2020": 57,
+        "2021": 0,
+        "2022": 61,
+        "2023": 10,
+        "2024": 49
+      },
+      "last5Taken": 177,
+      "avrg": 35.4,
+      "leaveDue": -30.461917808219173,
+      "workingYrs": 8.978082191780821
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMC-070",
+      "excelName": "MAHTAB AHMED MAROOF MUHAMMAD MARROF S/C NEW",
+      "excelDoj": "2020-12-07",
+      "softwareId": "IDMC-070",
+      "softwareName": "MAHTAB AHMED MAROOF MUHAMMAD MARROF",
+      "softwareDoj": "2020-12-07",
+      "yearly": {
+        "2020": 0,
+        "2021": 0,
+        "2022": 61,
+        "2023": 0,
+        "2024": 57,
+        "2026": 64
+      },
+      "last5Taken": 182,
+      "avrg": 36.4,
+      "leaveDue": -36.54136986301369,
+      "workingYrs": 5.7095890410958905
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMC-047",
+      "excelName": "SUNIL GOPALAN KOLOTHODY",
+      "excelDoj": "2010-02-01",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2010": 63,
+        "2011": 0,
+        "2012": 89,
+        "2020": 0,
+        "2021": 127,
+        "2022": 0,
+        "2023": 61,
+        "2024": 0
+      },
+      "last5Taken": 188,
+      "avrg": 37.6,
+      "leaveDue": -42.8723287671233,
+      "workingYrs": 16.564383561643837
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMC-127",
+      "excelName": "RAJMOHAN KANAKKAZHI KANDARI RAVUNNIKUTTY NAIR PANAZHIMUNDAKKAL",
+      "excelDoj": "2022-06-01",
+      "softwareId": "IDMC-127",
+      "softwareName": "RAJMOHAN KANAKKAZHI KANDARI RAVUNNIKUTTY NAIR PANAZHIMUNDAKKAL",
+      "softwareDoj": "2022-06-30",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 13,
+        "2025": 55
+      },
+      "last5Taken": 13,
+      "avrg": 2.6,
+      "leaveDue": 115.83068493150685,
+      "workingYrs": 4.227397260273973
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMC-132",
+      "excelName": "PASSANG TAMANG",
+      "excelDoj": "2022-09-13",
+      "softwareId": "IDMC-132",
+      "softwareName": "PASSANG TAMANG",
+      "softwareDoj": "2022-11-21",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 60
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 117.53424657534246,
+      "workingYrs": 3.9424657534246577
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMC-140",
+      "excelName": "VAHAB KOYAKUTTY",
+      "excelDoj": "2022-12-05",
+      "softwareId": "IDMC-140",
+      "softwareName": "VAHAB KOYAKUTTY",
+      "softwareDoj": "2023-02-08",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 60
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 106.10958904109589,
+      "workingYrs": 3.7150684931506848
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMC-150",
+      "excelName": "HASEEB FIAZ MUHAMMAD FIAZ",
+      "excelDoj": "2023-05-08",
+      "softwareId": "IDMC-150",
+      "softwareName": "HASEEB FIAZ MUHAMMAD FIAZ",
+      "softwareDoj": "2023-07-20",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 82
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 98.79452054794521,
+      "workingYrs": 3.293150684931507
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDMC-158",
+      "excelName": "ADEEB FIAZ MUHAMMAD FIAZ",
+      "excelDoj": "2023-10-02",
+      "softwareId": "IDMC-158",
+      "softwareName": "ADEEB FIAZ MUHAMMAD FIAZ",
+      "softwareDoj": "2024-01-05",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 60
+      },
+      "last5Taken": 60,
+      "avrg": 12,
+      "leaveDue": 47.342465753424655,
+      "workingYrs": 2.8904109589041096
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDMC-164",
+      "excelName": "MANNAN MAINDUDDIN",
+      "excelDoj": "2023-12-20",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 7
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 80.21917808219179,
+      "workingYrs": 2.673972602739726
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMW-005",
+      "excelName": "SURESH NARSAIAH KHOICHERLA",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDMW-005",
+      "softwareName": "SURESH NARSAIAH KHOICHERLA",
+      "softwareDoj": "2007-01-01",
+      "yearly": {
+        "2010": 71,
+        "2011": 17,
+        "2012": 68,
+        "2013": 19,
+        "2014": 69,
+        "2017": 59,
+        "2018": 32,
+        "2019": 31,
+        "2020": 0,
+        "2021": 44,
+        "2022": 0,
+        "2023": 22,
+        "2024": 32,
+        "2025": 14,
+        "2026": 57
+      },
+      "last5Taken": 112,
+      "avrg": 22.4,
+      "leaveDue": 42.8723287671233,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED + EMPLOYEE ID MISMATCH",
+      "excelId": "IDMS-138",
+      "excelName": "ROHIT NATHANI",
+      "excelDoj": "2022-06-22",
+      "softwareId": "IDMS-128",
+      "softwareName": "ROHIT NATHANI",
+      "softwareDoj": "2022-06-22",
+      "yearly": {
+        "2022": 0,
+        "2023": 0,
+        "2024": 57
+      },
+      "last5Taken": 57,
+      "avrg": 11.4,
+      "leaveDue": 72.87123287671234,
+      "workingYrs": 4.16986301369863
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMC-045",
+      "excelName": "KRISHNA GAUTAM",
+      "excelDoj": "2017-05-01",
+      "softwareId": "IDMC-045",
+      "softwareName": "KRISHNA GAUTAM",
+      "softwareDoj": "2017-05-01",
+      "yearly": {
+        "2019": 64,
+        "2020": 0,
+        "2021": 0,
+        "2022": 61,
+        "2023": 0,
+        "2024": 0,
+        "2025": 65
+      },
+      "last5Taken": 61,
+      "avrg": 12.2,
+      "leaveDue": 100.41150684931507,
+      "workingYrs": 9.315068493150685
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBC-027",
+      "excelName": "BIPLAB TAMANG BARAN KUMAR TAMANG",
+      "excelDoj": "2013-12-01",
+      "softwareId": "IDBC-027",
+      "softwareName": "BIPLAB TAMANG BARAN KUMAR TAMANG",
+      "softwareDoj": "2013-12-01",
+      "yearly": {
+        "2010": 0,
+        "2011": 0,
+        "2012": 0,
+        "2013": 0,
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 64
+      },
+      "last5Taken": 64,
+      "avrg": 12.8,
+      "leaveDue": 97.02684931506849,
+      "workingYrs": 12.73150684931507
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDML-008",
+      "excelName": "SAJJAD HUSSAIN MOHAMMAD KHAN",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDML-008",
+      "softwareName": "SAJJAD HUSSAIN MOHAMMAD KHAN",
+      "softwareDoj": "2007-01-01",
+      "yearly": {
+        "2010": 0,
+        "2011": 121,
+        "2012": 0,
+        "2014": 96,
+        "2016": 59,
+        "2017": 15,
+        "2020": 63,
+        "2021": 12,
+        "2022": 68,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": 80,
+      "avrg": 16,
+      "leaveDue": 78.97534246575343,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDBL-009",
+      "excelName": "MOHAMMAD SAJID MAHMOUD",
+      "excelDoj": "2007-01-01",
+      "softwareId": "IDBL-009",
+      "softwareName": "MOHAMMAD SAJID MAHMOUD",
+      "softwareDoj": "2007-01-01",
+      "yearly": {
+        "2010": 82,
+        "2011": 0,
+        "2012": 0,
+        "2013": 76,
+        "2020": 175,
+        "2021": 0,
+        "2022": 0,
+        "2023": 87,
+        "2024": 82,
+        "2025": 18
+      },
+      "last5Taken": 344,
+      "avrg": 68.8,
+      "leaveDue": -218.8745205479452,
+      "workingYrs": 19.65205479452055
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDBL-014",
+      "excelName": "MUHAMMAD FARYAD MUHAMMED KHAN",
+      "excelDoj": "2007-09-01",
+      "softwareId": "IDBL-014",
+      "softwareName": "MUHAMMAD FARYAD MUHAMMED KHAN",
+      "softwareDoj": "2007-09-23",
+      "yearly": {
+        "2010": 32,
+        "2011": 0,
+        "2012": 75,
+        "2013": 19,
+        "2019": 92,
+        "2020": 0,
+        "2021": 0,
+        "2022": 99,
+        "2023": 0,
+        "2024": 0,
+        "2025": 75
+      },
+      "last5Taken": 99,
+      "avrg": 19.8,
+      "leaveDue": 57.53917808219178,
+      "workingYrs": 18.986301369863014
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMW-015",
+      "excelName": "SRINIVAS GUNDARAPU GUDARAPU BALAIAH",
+      "excelDoj": "2008-12-01",
+      "softwareId": "IDMW-015",
+      "softwareName": "SRINIVAS GUNDARAPU GUDARAPU BALAIAH",
+      "softwareDoj": "2008-12-01",
+      "yearly": {
+        "2010": 0,
+        "2011": 60,
+        "2012": 0,
+        "2020": 40,
+        "2021": 22,
+        "2022": 36,
+        "2023": 20,
+        "2024": 29,
+        "2025": 35,
+        "2026": 7
+      },
+      "last5Taken": 189,
+      "avrg": 37.8,
+      "leaveDue": -44.00054794520547,
+      "workingYrs": 17.734246575342464
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDML-019",
+      "excelName": "MUHAMMAD NADEEM KAFEEL MUHAMMAD KAFEEL KHAN",
+      "excelDoj": "2011-06-01",
+      "softwareId": "IDML-019",
+      "softwareName": "MUHAMMAD NADEEM KAFEEL MUHAMMAD KAFEEL KHAN",
+      "softwareDoj": "2011-06-01",
+      "yearly": {
+        "2012": 0,
+        "2020": 0,
+        "2021": 163,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 78
+      },
+      "last5Taken": 163,
+      "avrg": 32.6,
+      "leaveDue": -14.666849315068502,
+      "workingYrs": 15.235616438356164
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDML-038",
+      "excelName": "MUHAMMAD ISHTIAQ MUHAMMAD AKBAR",
+      "excelDoj": "2015-06-01",
+      "softwareId": "IDML-038",
+      "softwareName": "MUHAMMAD ISHTIAQ MUHAMMAD AKBAR",
+      "softwareDoj": "2015-06-01",
+      "yearly": {
+        "2019": 47,
+        "2020": 52,
+        "2021": 0,
+        "2022": 0,
+        "2023": 77,
+        "2024": 36
+      },
+      "last5Taken": 165,
+      "avrg": 33,
+      "leaveDue": -16.923287671232877,
+      "workingYrs": 11.232876712328768
+    },
+    {
+      "status": "MATCHED + NAME MISMATCH + DOJ MISMATCH",
+      "excelId": "IDML-084",
+      "excelName": "MUHAMMAD MAHTAB MUHAMMAD IRSHAD NEW W/H STAFF",
+      "excelDoj": "2021-03-01",
+      "softwareId": "IDML-084",
+      "softwareName": "MUHAMMAD MEHTAB MUHAMMAD IRSHAD",
+      "softwareDoj": "2021-05-23",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 53,
+        "2024": 24,
+        "2026": 64
+      },
+      "last5Taken": 77,
+      "avrg": 15.4,
+      "leaveDue": 80,
+      "workingYrs": 5.47945205479452
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDML-091",
+      "excelName": "SHEKAR KADATHALA SRINIVAS KADATHALA",
+      "excelDoj": "2021-06-01",
+      "softwareId": "IDML-091",
+      "softwareName": "SHEKAR KADATHALA SRINIVAS KADATHALA",
+      "softwareDoj": "2021-09-14",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 62,
+        "2024": 0
+      },
+      "last5Taken": 62,
+      "avrg": 12.4,
+      "leaveDue": 87.56602739726029,
+      "workingYrs": 5.227397260273973
+    },
+    {
+      "status": "MATCHED + DOJ MISMATCH",
+      "excelId": "IDML-103",
+      "excelName": "NABEEL KAFEEL MUHAMMED KAFEEL KHAN",
+      "excelDoj": "2021-10-01",
+      "softwareId": "IDML-103",
+      "softwareName": "NABEEL KAFEEL MUHAMMED KAFEEL KHAN",
+      "softwareDoj": "2022-02-15",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 146.79452054794518,
+      "workingYrs": 4.8931506849315065
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDML-129",
+      "excelName": "UMER AURANGZAIB",
+      "excelDoj": "2022-06-01",
+      "softwareId": "IDML-129",
+      "softwareName": "UMER AURANGZAIB",
+      "softwareDoj": "2022-06-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 92
+      },
+      "last5Taken": 92,
+      "avrg": 23,
+      "leaveDue": 27.712328767123285,
+      "workingYrs": 4.227397260273973
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDML-145",
+      "excelName": "ZAIN SHAFIQUE MUHAMMED SHAFIQUE",
+      "excelDoj": "2023-03-17",
+      "softwareId": "IDML-145",
+      "softwareName": "ZAIN SHAFIQUE MUHAMMAD SHAFIQUE",
+      "softwareDoj": "2023-03-17",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": 99.6164383561644,
+      "workingYrs": 3.4356164383561643
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDML-155",
+      "excelName": "MUHAMMED ZULQARNAN",
+      "excelDoj": "2023-08-18",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2026": 64
+      },
+      "last5Taken": 64,
+      "avrg": 21.262458471760798,
+      "leaveDue": 26.332316934419513,
+      "workingYrs": 3.0136986301369864
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDML-193",
+      "excelName": "Muhammad Imran",
+      "excelDoj": "2024-09-16",
+      "softwareId": "IDML-193",
+      "softwareName": "MUHAMMAD IMRAN QARBAN HUSSAIN",
+      "softwareDoj": "2024-09-16",
+      "yearly": {},
+      "last5Taken": null,
+      "avrg": null,
+      "leaveDue": null,
+      "workingYrs": 1.9315068493150684
+    },
+    {
+      "status": "MATCHED",
+      "excelId": "IDMM-206",
+      "excelName": "Kundan Singh",
+      "excelDoj": "2025-03-01",
+      "softwareId": "IDMM-206",
+      "softwareName": "KUNDAN SINGH CHOTU SINGH",
+      "softwareDoj": "2025-03-01",
+      "yearly": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0,
+        "2025": 27
+      },
+      "last5Taken": 27,
+      "avrg": 26.73267326732673,
+      "leaveDue": 4.3057100230571015,
+      "workingYrs": 1.4767123287671233
+    },
+    {
+      "status": "MISSING IN SOFTWARE",
+      "excelId": "IDFM-180",
+      "excelName": "Jihad Hossan",
+      "excelDoj": "2024-05-22",
+      "softwareId": "",
+      "softwareName": "",
+      "softwareDoj": "",
+      "yearly": {
+        "2025": 18
+      },
+      "last5Taken": 18,
+      "avrg": 23.684210526315788,
+      "leaveDue": null,
+      "workingYrs": 2.252054794520548
+    }
+  ],
+  "missingInSoftware": [
+    {
+      "employeeId": "IDMO-134",
+      "staffName": "PRAJNA PUTTUR DIVAKARA",
+      "doj": "2022-11-01"
+    },
+    {
+      "employeeId": "IDMO-139",
+      "staffName": "PRAJNA SACHIN POOJARY",
+      "doj": "2022-12-05"
+    },
+    {
+      "employeeId": "IDMO-154",
+      "staffName": "UMESH KUMAR PANDEY",
+      "doj": "2023-07-07"
+    },
+    {
+      "employeeId": "IDMM-054",
+      "staffName": "MOHAMMED TAHIR KHAN PATHAN",
+      "doj": "2018-02-01"
+    },
+    {
+      "employeeId": "IDMM-065",
+      "staffName": "ATHUL ELLIKANDAVIDA KRISHNAN ALLIKANDAVIDA",
+      "doj": "2019-06-01"
+    },
+    {
+      "employeeId": "IDMM-076",
+      "staffName": "SANJAY SHIV POOJAN",
+      "doj": "2020-12-01"
+    },
+    {
+      "employeeId": "IDMM-092",
+      "staffName": "MANGAL SINGH TEHAL SINGH",
+      "doj": "2021-07-01"
+    },
+    {
+      "employeeId": "IDMM-119",
+      "staffName": "JIBEESH KANIYAM KANDI MEETHAL",
+      "doj": "2022-05-01"
+    },
+    {
+      "employeeId": "IDMM-126",
+      "staffName": "MUHAMMED SHANIR POOCHADIYAN",
+      "doj": "2022-08-01"
+    },
+    {
+      "employeeId": "IDMM-138",
+      "staffName": "MOHAMMED SALIH PEECHI",
+      "doj": "2022-11-28"
+    },
+    {
+      "employeeId": "IDMM-152",
+      "staffName": "VIJAYASINGAM RAJASINGAM",
+      "doj": "2023-06-28"
+    },
+    {
+      "employeeId": "IDMM-153",
+      "staffName": "ZAKARIA AHMED",
+      "doj": "2023-07-03"
+    },
+    {
+      "employeeId": "IDMM-167",
+      "staffName": "SUMESH MINIYEDATH",
+      "doj": "2024-02-03"
+    },
+    {
+      "employeeId": "IDMM-170",
+      "staffName": "MOIDUL ALOM BARBHUYAN",
+      "doj": "2024-03-09"
+    },
+    {
+      "employeeId": "IDMC-051",
+      "staffName": "RAHUL ARIMBOOTH RAMANAN ARIMBOOTH",
+      "doj": "2017-09-01"
+    },
+    {
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "doj": "2010-02-01"
+    },
+    {
+      "employeeId": "IDMC-164",
+      "staffName": "MANNAN MAINDUDDIN",
+      "doj": "2023-12-20"
+    },
+    {
+      "employeeId": "IDML-155",
+      "staffName": "MUHAMMED ZULQARNAN",
+      "doj": "2023-08-18"
+    },
+    {
+      "employeeId": "IDFM-180",
+      "staffName": "Jihad Hossan",
+      "doj": "2024-05-22"
+    }
+  ],
+  "missingInExcel": [
+    {
+      "employeeId": "N/A",
+      "employeeName": "KAILASH BHAGWANDAS LAUNGANI",
+      "doj": "2007-01-01"
+    },
+    {
+      "employeeId": "NA",
+      "employeeName": "RONAK JIADEV DEVNANI JAIDEV ASSUDOMAL DEVNANI(MADAM STAFF)",
+      "doj": "2019-06-01"
+    },
+    {
+      "employeeId": "IDFM-186",
+      "employeeName": "SAIMON HOSSAIN",
+      "doj": "2024-01-04"
+    },
+    {
+      "employeeId": "IDMM-175",
+      "employeeName": "DHARMA BK",
+      "doj": "2024-05-09"
+    },
+    {
+      "employeeId": "IDMM-191",
+      "employeeName": "UPASHNA RAI WAIBA",
+      "doj": "2024-08-18"
+    },
+    {
+      "employeeId": "IDMM-202",
+      "employeeName": "MUHAMMED SINAN KUNNUMMAL",
+      "doj": "2025-01-14"
+    },
+    {
+      "employeeId": "IDMC 195",
+      "employeeName": "ANILKUMAR BALAKRISHNA PILLAI",
+      "doj": "2025-01-27"
+    },
+    {
+      "employeeId": "IDMM-201",
+      "employeeName": "MUJAHID PARVEJ MOHAMMAD",
+      "doj": "2025-02-04"
+    },
+    {
+      "employeeId": "IDMM-203",
+      "employeeName": "AKASH KUMAR AJAY KUMAR",
+      "doj": "2025-02-12"
+    },
+    {
+      "employeeId": "IDML-213",
+      "employeeName": "AMEEN RIASAT",
+      "doj": "2025-03-01"
+    },
+    {
+      "employeeId": "IDMM-200",
+      "employeeName": "BISHNU GAUTAM",
+      "doj": "2025-03-14"
+    },
+    {
+      "employeeId": "IDMC-207",
+      "employeeName": "SUFIYAN SHARAFUDEEN",
+      "doj": "2025-03-17"
+    },
+    {
+      "employeeId": "IDMM-199",
+      "employeeName": "SUDIP ADHIKARI",
+      "doj": "2025-03-22"
+    },
+    {
+      "employeeId": "IDMM-210",
+      "employeeName": "SHAMSHAD ALI",
+      "doj": "2025-03-27"
+    },
+    {
+      "employeeId": "IDMM-211",
+      "employeeName": "LIVIN VIJAYAN LEELA",
+      "doj": "2025-04-13"
+    },
+    {
+      "employeeId": "IDMM-209",
+      "employeeName": "SAI KAMPELLI",
+      "doj": "2025-04-16"
+    },
+    {
+      "employeeId": "IDML-212",
+      "employeeName": "NARESH MATHULAPURAM",
+      "doj": "2025-05-23"
+    },
+    {
+      "employeeId": "IDMM-214",
+      "employeeName": "MUHAMMED ISHHAK NEERATTIL",
+      "doj": "2025-05-30"
+    },
+    {
+      "employeeId": "IDMO-215",
+      "employeeName": "SALEM MUBARAK ABDULLA BAKHEET ALMAHRI",
+      "doj": "2025-07-16"
+    },
+    {
+      "employeeId": "IDMD-216",
+      "employeeName": "RASHID MEHMOOD KHAN ABDUL WAHEED",
+      "doj": "2025-07-22"
+    },
+    {
+      "employeeId": "IDMM-218",
+      "employeeName": "SHUBHAM KANAUJIYA RAJ KUMAR KANAUJIYA",
+      "doj": "2025-07-27"
+    },
+    {
+      "employeeId": "IDMC-219",
+      "employeeName": "GOWTHAM KOLANGIAPPAN",
+      "doj": "2025-08-01"
+    },
+    {
+      "employeeId": "IDMM-220",
+      "employeeName": "ANOOP KOOTTAMANNIL",
+      "doj": "2025-08-18"
+    },
+    {
+      "employeeId": "IDMC-221",
+      "employeeName": "ARJUN SURESH SURESH",
+      "doj": "2025-09-19"
+    },
+    {
+      "employeeId": "IDMM-222",
+      "employeeName": "RAMESHWAR DAYAL GUPTA",
+      "doj": "2025-10-04"
+    },
+    {
+      "employeeId": "IDMO-223",
+      "employeeName": "KHADIJA ABDULLA MOHAMMAD MURAD ALBLOOSHI",
+      "doj": "2025-10-06"
+    },
+    {
+      "employeeId": "IDMM-224",
+      "employeeName": "ARVIND KUMAR",
+      "doj": "2025-10-13"
+    },
+    {
+      "employeeId": "IDMM-225",
+      "employeeName": "MOHAMMAD ASIM KHAN",
+      "doj": "2025-10-15"
+    },
+    {
+      "employeeId": "IDMM-226",
+      "employeeName": "ZAHID RAHMAN",
+      "doj": "2025-10-31"
+    },
+    {
+      "employeeId": "IDML-227",
+      "employeeName": "TALHAT HANIF",
+      "doj": "2025-11-04"
+    },
+    {
+      "employeeId": "IDMO-228",
+      "employeeName": "ASFANDYAR NASEER AHMED",
+      "doj": "2025-11-08"
+    },
+    {
+      "employeeId": "IDMO-229",
+      "employeeName": "WANGDEN TAMANG",
+      "doj": "2025-11-14"
+    },
+    {
+      "employeeId": "IDMM-230",
+      "employeeName": "VIJAYSINGAM RAJASINGAM",
+      "doj": "2025-12-20"
+    },
+    {
+      "employeeId": "IDMM-231",
+      "employeeName": "SUNEER CHEKKYOT",
+      "doj": "2025-12-23"
+    },
+    {
+      "employeeId": "IDMM-232",
+      "employeeName": "RIYAJUDDIN MUGAL",
+      "doj": "2025-12-27"
+    },
+    {
+      "employeeId": "IDMM-233",
+      "employeeName": "MOHD IMRAN",
+      "doj": "2026-01-13"
+    },
+    {
+      "employeeId": "IDMM-234",
+      "employeeName": "RAM SANUJ",
+      "doj": "2026-02-04"
+    },
+    {
+      "employeeId": "IDMM-235",
+      "employeeName": "ASHISH KUMAR VERMA",
+      "doj": "2026-02-05"
+    },
+    {
+      "employeeId": "IDMM-236",
+      "employeeName": "SIKANDER SINGH",
+      "doj": "2026-02-09"
+    },
+    {
+      "employeeId": "IDMO-237",
+      "employeeName": "SREEKUTTAN VL",
+      "doj": "2026-02-09"
+    },
+    {
+      "employeeId": "IDMM-239",
+      "employeeName": "MOHD ANAS",
+      "doj": "2026-04-01"
+    },
+    {
+      "employeeId": "IDMM-240",
+      "employeeName": "PANKAJ JAISAWAL",
+      "doj": "2026-02-27"
+    },
+    {
+      "employeeId": "IDMM-241",
+      "employeeName": "AKHIL DOODH NATH",
+      "doj": "2026-02-27"
+    },
+    {
+      "employeeId": "IDBS-032",
+      "employeeName": "MANISH KUMAR ",
+      "doj": "2026-03-27"
+    },
+    {
+      "employeeId": "IDMM-244",
+      "employeeName": "MUHAMMED SHIYAS MACHAYIL",
+      "doj": "2026-07-11"
+    },
+    {
+      "employeeId": "114",
+      "employeeName": "JASPAL SINGH RAJMEET SINGH",
+      "doj": "2026-07-01"
+    },
+    {
+      "employeeId": "IDMO-243",
+      "employeeName": "SARAN KOLAKKADAN JAYAKUMAR",
+      "doj": "2026-07-01"
+    },
+    {
+      "employeeId": "2",
+      "employeeName": "NANDA JAIDEV DEVNANI",
+      "doj": "2007-01-01"
+    },
+    {
+      "employeeId": "IDMC-071",
+      "employeeName": "SULOVE CHHETRI RATAN CHHETRI",
+      "doj": "2020-07-01"
+    }
+  ],
+  "unmatchedLeaveSlots": [
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "21JULY TO 17TH AUG",
+      "start": "2010-07-21",
+      "end": "2010-08-17",
+      "days": 27
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "JOBIN ALIAS ELAMAN",
+      "start": "2010-04-01",
+      "end": "2010-05-30",
+      "days": 59
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2010-04-01",
+      "end": "2010-06-18",
+      "days": 78
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2010-10-01",
+      "end": "2010-10-21",
+      "days": 20
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "BASHEER IBRAHIM",
+      "start": "2010-05-18",
+      "end": "2010-06-29",
+      "days": 42
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2010-01-09",
+      "end": "2010-03-05",
+      "days": 55
+    },
+    {
+      "year": 2010,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2010-01-01",
+      "end": "2010-02-22",
+      "days": 52
+    },
+    {
+      "year": 2010,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2010-07-01",
+      "end": "2010-07-12",
+      "days": 11
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2010-07-24",
+      "end": "2010-12-17",
+      "days": 146
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "SATHIAJITH SHEKHARAN",
+      "start": "2010-01-01",
+      "end": "2010-02-27",
+      "days": 57
+    },
+    {
+      "year": 2010,
+      "employeeId": "",
+      "staffName": "UMESH KARIPPIDI",
+      "start": "2010-01-01",
+      "end": "2010-01-06",
+      "days": 5
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "NITIN KAUSHIK",
+      "start": "2011-09-01",
+      "end": "2011-09-18",
+      "days": 17
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "JOBIN ALIAS ELAMAN",
+      "start": "2011-12-17",
+      "end": "2011-12-31",
+      "days": 14
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2011-08-20",
+      "end": "2011-09-25",
+      "days": 36
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "ANEESH KANIYANTE VALAPPIL ANANDAN",
+      "start": "2011-09-08",
+      "end": "2011-10-12",
+      "days": 34
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2011-09-29",
+      "end": "2011-12-31",
+      "days": 93
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "MUHAMMAD WAHDAT",
+      "start": "2011-06-01",
+      "end": "2011-09-23",
+      "days": 114
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "MOHAMMAD AFTAB RAJA WALI DAD",
+      "start": "2011-03-01",
+      "end": "2011-05-01",
+      "days": 61
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2011-09-28",
+      "end": "2011-12-31",
+      "days": 94
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "MUHAMMAD IRFAN KHAN MUHAMMAD",
+      "start": "2011-07-10",
+      "end": "2011-09-22",
+      "days": 74
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "MEHTAB AHMED",
+      "start": "2011-11-01",
+      "end": "2011-11-18",
+      "days": 17
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "SATHIAJITH SHEKHARAN",
+      "start": "2011-04-15",
+      "end": "2011-07-10",
+      "days": 86
+    },
+    {
+      "year": 2011,
+      "employeeId": "",
+      "staffName": "UMESH KARIPPIDI",
+      "start": "2011-06-09",
+      "end": "2011-07-19",
+      "days": 40
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "NITIN KAUSHIK",
+      "start": "2012-09-01",
+      "end": "2012-09-18",
+      "days": 17
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "JOBIN ALIAS ELAMAN",
+      "start": "2012-01-01",
+      "end": "2012-01-11",
+      "days": 10
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "JOBIN ALIAS ELAMAN",
+      "start": "2012-10-14",
+      "end": "2012-12-15",
+      "days": 62
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "LHOSALYN REYES CORPUZ",
+      "start": "2012-07-25",
+      "end": "2012-09-19",
+      "days": 56
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2012-06-01",
+      "end": "2012-08-19",
+      "days": 79
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2012-06-12",
+      "end": "2012-08-19",
+      "days": 68
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "BASHEER IBRAHIM",
+      "start": "2012-05-22",
+      "end": "2012-07-24",
+      "days": 63
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "BASHEER IBRAHIM",
+      "start": "2012-08-01",
+      "end": "2012-09-18",
+      "days": 48
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "SOORAJ CHANDRAN",
+      "start": "2012-04-01",
+      "end": "2012-06-02",
+      "days": 62
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "ANEESH KANIYANTE VALAPPIL ANANDAN",
+      "start": "2012-08-26",
+      "end": "2012-10-10",
+      "days": 45
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "MOHAMMAD TABREZ SHEIK HUSSAIN",
+      "start": "2012-02-01",
+      "end": "2012-02-13",
+      "days": 12
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2012-04-01",
+      "end": "2012-05-11",
+      "days": 40
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "ZAKARIYA PORUVATTIL ISMAIL",
+      "start": "2012-10-20",
+      "end": "2012-11-05",
+      "days": 16
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2012-11-15",
+      "end": "2012-12-14",
+      "days": 29
+    },
+    {
+      "year": 2012,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2012-08-01",
+      "end": "2012-10-29",
+      "days": 89
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2012-01-01",
+      "end": "2012-02-18",
+      "days": 48
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2012-11-14",
+      "end": "2012-12-31",
+      "days": 47
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "SHEBIN KADUKAPEEDIKA SHAMSUDEEN",
+      "start": "2012-01-21",
+      "end": "2012-02-20",
+      "days": 30
+    },
+    {
+      "year": 2012,
+      "employeeId": "",
+      "staffName": "UMESH KARIPPIDI",
+      "start": "2012-08-26",
+      "end": "2012-10-03",
+      "days": 38
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "NITIN KAUSHIK",
+      "start": "2013-09-01",
+      "end": "2013-09-18",
+      "days": 17
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "JOBIN ALIAS ELAMAN",
+      "start": "2013-11-20",
+      "end": "2013-12-06",
+      "days": 18
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "ABIRAL THAPA",
+      "start": "2013-07-10",
+      "end": "2013-09-11",
+      "days": 63
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2013-02-20",
+      "end": "2013-02-28",
+      "days": 8
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2013-09-10",
+      "end": "2013-09-26",
+      "days": 16
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "ANEESH KANIYANTE VALAPPIL ANANDAN",
+      "start": "2013-11-15",
+      "end": "2013-12-31",
+      "days": 46
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2013-04-02",
+      "end": "2013-05-16",
+      "days": 44
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "MUHAMMED NAZIM",
+      "start": "2013-08-12",
+      "end": "2013-11-03",
+      "days": 83
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "NOOH THACHANKANDY MOIOEEN KUTTY",
+      "start": "2013-01-02",
+      "end": "2013-02-18",
+      "days": 47
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "SHAFIK DEVASAM PARAMBIL",
+      "start": "2013-07-01",
+      "end": "2013-07-15",
+      "days": 14
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "ABDUL NAMEER POTTAMEL",
+      "start": "2013-08-20",
+      "end": "2013-09-08",
+      "days": 19
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "MOHAMMAD AFTAB RAJA WALI DAD",
+      "start": "2013-06-16",
+      "end": "2013-07-18",
+      "days": 32
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2013-01-01",
+      "end": "2013-03-08",
+      "days": 66
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "MUHAMMAD IRFAN KHAN MUHAMMAD",
+      "start": "2013-03-24",
+      "end": "2013-05-10",
+      "days": 47
+    },
+    {
+      "year": 2013,
+      "employeeId": "",
+      "staffName": "SHEBIN KADUKAPEEDIKA SHAMSUDEEN",
+      "start": "2013-03-18",
+      "end": "2013-04-30",
+      "days": 43
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "SANTHOSH NATHANI",
+      "start": "2014-02-16",
+      "end": "2014-03-04",
+      "days": 16
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "SANTHOSH NATHANI",
+      "start": "2014-10-18",
+      "end": "2014-11-10",
+      "days": 23
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "LHOSALYN REYES CORPUZ",
+      "start": "2014-03-01",
+      "end": "2014-03-08",
+      "days": 7
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "LHOSALYN REYES CORPUZ",
+      "start": "2014-12-27",
+      "end": "2014-12-31",
+      "days": 4
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "NANDA KUMAR",
+      "start": "2014-09-06",
+      "end": "2014-09-23",
+      "days": 17
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2014-08-01",
+      "end": "2014-10-10",
+      "days": 70
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2014-09-24",
+      "end": "2014-11-03",
+      "days": 40
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "ANEESH KANIYANTE VALAPPIL ANANDAN",
+      "start": "2014-01-01",
+      "end": "2014-01-02",
+      "days": 1
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2014-05-09",
+      "end": "2014-06-01",
+      "days": 23
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "MUHAMMED NAZIM",
+      "start": "2014-12-14",
+      "end": "2014-12-31",
+      "days": 17
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR KASHAVENI",
+      "start": "2014-03-01",
+      "end": "2014-05-07",
+      "days": 67
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "TAPAN DEV",
+      "start": "2014-06-13",
+      "end": "2014-07-31",
+      "days": 48
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "SHAFIK DEVASAM PARAMBIL",
+      "start": "2014-06-08",
+      "end": "2014-07-31",
+      "days": 53
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "ABDUL NAMEER POTTAMEL",
+      "start": "2014-09-23",
+      "end": "2014-11-30",
+      "days": 68
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "RAFEEKH CHERIYANDI HOUSE",
+      "start": "2014-03-15",
+      "end": "2014-03-25",
+      "days": 10
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "SAJEEV PATTAKKAL",
+      "start": "2014-03-01",
+      "end": "2014-04-19",
+      "days": 49
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "MUHAMMED RAFI CHALIKANDY",
+      "start": "2014-07-20",
+      "end": "2014-08-22",
+      "days": 33
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "SHARAFUDHEEN POROT PATILLATH",
+      "start": "2014-11-11",
+      "end": "2014-12-14",
+      "days": 33
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "MUHAMMAD NIYAS KURIYAKATH",
+      "start": "2014-12-14",
+      "end": "2014-12-31",
+      "days": 17
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2014-02-13",
+      "end": "2014-05-10",
+      "days": 86
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "MUHAMMAD WAHDAT",
+      "start": "2014-06-21",
+      "end": "2014-07-12",
+      "days": 21
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "MUHAMMAD WAHDAT",
+      "start": "2014-07-31",
+      "end": "2014-10-23",
+      "days": 84
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "VISHNU PARINTHIRIKKATTIL KUMARAN",
+      "start": "2014-07-16",
+      "end": "2014-09-27",
+      "days": 73
+    },
+    {
+      "year": 2014,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2014-11-01",
+      "end": "2014-12-31",
+      "days": 60
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "MUHAMMAD IRFAN KHAN MUHAMMAD",
+      "start": "2014-06-05",
+      "end": "2014-08-31",
+      "days": 87
+    },
+    {
+      "year": 2014,
+      "employeeId": "",
+      "staffName": "BABER BASHIR SARDAR",
+      "start": "2014-02-12",
+      "end": "2014-05-02",
+      "days": 79
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "SANTHOSH NATHANI",
+      "start": "2015-04-25",
+      "end": "2015-10-31",
+      "days": 189
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "ABIRAL THAPA",
+      "start": "2015-10-01",
+      "end": "2015-12-05",
+      "days": 65
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2015-04-01",
+      "end": "2015-04-05",
+      "days": 4
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2015-12-29",
+      "end": "2015-12-31",
+      "days": 2
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2015-04-02",
+      "end": "2015-05-22",
+      "days": 50
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR KASHAVENI",
+      "start": "2015-10-01",
+      "end": "2015-11-07",
+      "days": 37
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "TAPAN DEV",
+      "start": "2015-08-04",
+      "end": "2015-10-08",
+      "days": 65
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "ABDUL NAMEER POTTAMEL",
+      "start": "2015-09-29",
+      "end": "2015-12-07",
+      "days": 69
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "SHAMEER MUNDAKKATTU THODI",
+      "start": "2015-02-15",
+      "end": "2015-04-30",
+      "days": 74
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MUHAMMED RAFI CHALIKANDY",
+      "start": "2015-09-04",
+      "end": "2015-11-23",
+      "days": 80
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "DHANOOP PADMANABHAN",
+      "start": "2015-01-01",
+      "end": "2015-01-21",
+      "days": 20
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "DHANOOP PADMANABHAN",
+      "start": "2015-09-29",
+      "end": "2015-12-14",
+      "days": 76
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "SHARAFUDHEEN POROT PATILLATH",
+      "start": "2015-07-27",
+      "end": "2015-09-06",
+      "days": 41
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "VINEESH CHERUVATHUR",
+      "start": "2015-11-26",
+      "end": "2015-12-31",
+      "days": 35
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MUHAMMAD NIYAS KURIYAKATH",
+      "start": "2015-01-01",
+      "end": "2015-01-03",
+      "days": 2
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "FAZIL ASHRAF KUZHIKANDATHIL",
+      "start": "2015-04-01",
+      "end": "2015-04-14",
+      "days": 13
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "BYJU KAKKOTH",
+      "start": "2015-04-20",
+      "end": "2015-05-08",
+      "days": 18
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MUJEEB ELLIKERRAKKATH",
+      "start": "2015-08-11",
+      "end": "2015-09-25",
+      "days": 45
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MOHD JABID MOIDU KUNHI",
+      "start": "2015-11-11",
+      "end": "2015-12-29",
+      "days": 48
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "SEWAK RUKMAN RAI",
+      "start": "2015-11-02",
+      "end": "2015-12-26",
+      "days": 54
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "ABHILASH CHANDRACHOODAN NAIR",
+      "start": "2015-01-26",
+      "end": "2015-02-05",
+      "days": 10
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "ABHILASH CHANDRACHOODAN NAIR",
+      "start": "2015-06-01",
+      "end": "2015-07-31",
+      "days": 60
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2015-11-10",
+      "end": "2015-12-01",
+      "days": 21
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MUHAMMAD WAHDAT",
+      "start": "2015-11-29",
+      "end": "2015-12-31",
+      "days": 32
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2015-02-07",
+      "end": "2015-04-06",
+      "days": 58
+    },
+    {
+      "year": 2015,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2015-01-01",
+      "end": "2015-01-31",
+      "days": 30
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MOHAMMAD AFTAB RAJA WALI DAD",
+      "start": "2015-04-04",
+      "end": "2015-07-26",
+      "days": 113
+    },
+    {
+      "year": 2015,
+      "employeeId": "",
+      "staffName": "MEHTAB AHMED",
+      "start": "2015-03-04",
+      "end": "2015-05-19",
+      "days": 76
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "SREEKANTH",
+      "start": "2016-09-30",
+      "end": "2016-11-15",
+      "days": 46
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "DANNA",
+      "start": "2016-07-26",
+      "end": "2016-07-30",
+      "days": 4
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "ARUN KANAKODE",
+      "start": "2016-11-18",
+      "end": "2016-12-02",
+      "days": 14
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2016-08-01",
+      "end": "2016-10-09",
+      "days": 69
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2016-01-01",
+      "end": "2016-02-20",
+      "days": 50
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2016-08-26",
+      "end": "2016-08-30",
+      "days": 4
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2016-04-27",
+      "end": "2016-06-04",
+      "days": 38
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "VINEESH CHERUVATHUR",
+      "start": "2016-01-01",
+      "end": "2016-02-06",
+      "days": 36
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "VINEESH CHERUVATHUR",
+      "start": "2016-11-04",
+      "end": "2016-11-16",
+      "days": 12
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "MUHAMMED NAZIM",
+      "start": "2016-02-01",
+      "end": "2016-04-02",
+      "days": 61
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "MUHAMMED NAZIM",
+      "start": "2016-09-26",
+      "end": "2016-09-30",
+      "days": 4
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR KASHAVENI",
+      "start": "2016-11-01",
+      "end": "2016-12-03",
+      "days": 32
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "TAPAN DEV",
+      "start": "2016-09-13",
+      "end": "2016-10-20",
+      "days": 37
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "TAPAN DEV",
+      "start": "2016-11-01",
+      "end": "2016-12-31",
+      "days": 60
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "SHAMEER MUNDAKKATTU THODI",
+      "start": "2016-02-22",
+      "end": "2016-03-03",
+      "days": 10
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "SHAMEER MUNDAKKATTU THODI",
+      "start": "2016-11-25",
+      "end": "2016-12-31",
+      "days": 36
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "DHANOOP PADMANABHAN",
+      "start": "2016-03-28",
+      "end": "2016-04-23",
+      "days": 26
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "MUHAMMAD NIYAS KURIYAKATH",
+      "start": "2016-02-01",
+      "end": "2016-04-02",
+      "days": 61
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "VINOD KUNHAPPU KUNHAPPU",
+      "start": "2016-01-04",
+      "end": "2016-04-10",
+      "days": 97
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "FAZIL ASHRAF KUZHIKANDATHIL",
+      "start": "2016-04-28",
+      "end": "2016-07-01",
+      "days": 64
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "BYJU KAKKOTH",
+      "start": "2016-05-04",
+      "end": "2016-07-15",
+      "days": 72
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "ABHILASH CHANDRACHOODAN NAIR",
+      "start": "2016-05-23",
+      "end": "2016-07-31",
+      "days": 69
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2016-11-28",
+      "end": "2016-12-31",
+      "days": 33
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "SAHAL MUHAMMED",
+      "start": "2016-03-01",
+      "end": "2016-03-13",
+      "days": 12
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "SAHAL MUHAMMED",
+      "start": "2016-11-22",
+      "end": "2016-12-12",
+      "days": 20
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "Dileep Kumar",
+      "start": "2016-08-15",
+      "end": "2016-08-30",
+      "days": 15
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "AJNAS",
+      "start": "2016-07-29",
+      "end": "2016-09-22",
+      "days": 55
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "MOHD JABID MOIDU KUNHI",
+      "start": "2016-11-05",
+      "end": "2016-11-27",
+      "days": 22
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "SUBHADIN CHUNNUM TAMANG",
+      "start": "2016-10-21",
+      "end": "2016-12-31",
+      "days": 71
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2016-10-01",
+      "end": "2016-12-01",
+      "days": 61
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2016-06-05",
+      "end": "2016-07-10",
+      "days": 35
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "NIKHIL NALLATT",
+      "start": "2016-03-03",
+      "end": "2016-05-28",
+      "days": 86
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "KALIDHU MOHAMMED IQBAL",
+      "start": "2016-10-01",
+      "end": "2016-11-16",
+      "days": 46
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "MUHAMMED NADEEM",
+      "start": "2016-03-01",
+      "end": "2016-05-30",
+      "days": 90
+    },
+    {
+      "year": 2016,
+      "employeeId": "",
+      "staffName": "HAREESH CHANDRAN THOTTIPARAMBIL",
+      "start": "2016-09-02",
+      "end": "2016-12-31",
+      "days": 120
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SREEKANTH",
+      "start": "2017-09-09",
+      "end": "2017-10-31",
+      "days": 52
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "DANNA",
+      "start": "2017-03-24",
+      "end": "2017-05-04",
+      "days": 41
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "ABIRAL THAPA",
+      "start": "2017-12-04",
+      "end": "2017-12-31",
+      "days": 27
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2017-07-28",
+      "end": "2017-08-11",
+      "days": 14
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2017-09-16",
+      "end": "2017-09-26",
+      "days": 10
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "ABDUL NAMEER POTTAMEL",
+      "start": "2017-01-01",
+      "end": "2017-01-07",
+      "days": 6
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "ABDUL NAMEER POTTAMEL",
+      "start": "2017-07-01",
+      "end": "2017-07-10",
+      "days": 9
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "VINEESH CHERUVATHUR",
+      "start": "2017-09-01",
+      "end": "2017-10-10",
+      "days": 39
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR KASHAVENI",
+      "start": "2017-12-05",
+      "end": "2017-12-31",
+      "days": 26
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHAMEER MUNDAKKATTU THODI",
+      "start": "2017-01-01",
+      "end": "2017-01-04",
+      "days": 3
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHAMEER MUNDAKKATTU THODI",
+      "start": "2017-09-04",
+      "end": "2017-10-03",
+      "days": 29
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "DHANOOP PADMANABHAN",
+      "start": "2017-05-02",
+      "end": "2017-06-04",
+      "days": 33
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHARAFUDHEEN POROT PATILLATH",
+      "start": "2017-10-03",
+      "end": "2017-12-31",
+      "days": 89
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "VINOD KUNHAPPU KUNHAPPU",
+      "start": "2017-04-09",
+      "end": "2017-06-17",
+      "days": 69
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "FAZIL ASHRAF KUZHIKANDATHIL",
+      "start": "2017-04-23",
+      "end": "2017-07-18",
+      "days": 86
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2017-01-01",
+      "end": "2017-02-16",
+      "days": 46
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "Gangarajan",
+      "start": "2017-02-02",
+      "end": "2017-04-06",
+      "days": 63
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHALA AL MOHD",
+      "start": "2017-08-15",
+      "end": "2017-09-17",
+      "days": 33
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHIJU",
+      "start": "2017-04-01",
+      "end": "2017-06-10",
+      "days": 70
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHIJU",
+      "start": "2017-08-02",
+      "end": "2017-08-12",
+      "days": 10
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "Mallesh",
+      "start": "2017-08-01",
+      "end": "2017-10-03",
+      "days": 63
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "Sathisha Somanna Soladamukhi",
+      "start": "2017-04-14",
+      "end": "2017-05-10",
+      "days": 26
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "MOHD JABID MOIDU KUNHI",
+      "start": "2017-08-01",
+      "end": "2017-09-07",
+      "days": 37
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SUBHADIN CHUNNUM TAMANG",
+      "start": "2017-01-01",
+      "end": "2017-01-04",
+      "days": 3
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHIYAS KETANHOTH MEETHAL",
+      "start": "2017-08-08",
+      "end": "2017-08-25",
+      "days": 17
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "SHIYAS KETANHOTH MEETHAL",
+      "start": "2017-10-01",
+      "end": "2017-12-31",
+      "days": 91
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "Mejon Chittilappilly Jose",
+      "start": "2017-02-18",
+      "end": "2017-03-01",
+      "days": 11
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2017-05-16",
+      "end": "2017-05-31",
+      "days": 15
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2017-06-01",
+      "end": "2017-07-19",
+      "days": 48
+    },
+    {
+      "year": 2017,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2017-03-20",
+      "end": "2017-07-24",
+      "days": 126
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "MEHTAB AHMED",
+      "start": "2017-09-01",
+      "end": "2017-11-28",
+      "days": 88
+    },
+    {
+      "year": 2017,
+      "employeeId": "",
+      "staffName": "MUHAMMAD KHITAB",
+      "start": "2017-04-14",
+      "end": "2017-07-04",
+      "days": 81
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "DANNA",
+      "start": "2018-01-01",
+      "end": "2018-01-09",
+      "days": 8
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "ABIRAL THAPA",
+      "start": "2018-01-01",
+      "end": "2018-02-11",
+      "days": 41
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "ABIRAL THAPA",
+      "start": "2018-03-01",
+      "end": "2018-03-17",
+      "days": 16
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2018-02-17",
+      "end": "2018-03-17",
+      "days": 28
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "HITESH TEKWANI",
+      "start": "2018-11-10",
+      "end": "2018-11-13",
+      "days": 3
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2018-04-28",
+      "end": "2018-05-07",
+      "days": 9
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2018-03-13",
+      "end": "2018-04-21",
+      "days": 39
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2018-09-15",
+      "end": "2018-09-23",
+      "days": 8
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "VINEESH CHERUVATHUR",
+      "start": "2018-10-06",
+      "end": "2018-11-10",
+      "days": 35
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "MUHAMMED NAZIM",
+      "start": "2018-02-01",
+      "end": "2018-04-05",
+      "days": 63
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "DHANOOP PADMANABHAN",
+      "start": "2018-04-24",
+      "end": "2018-06-23",
+      "days": 60
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "SHARAFUDHEEN POROT PATILLATH",
+      "start": "2018-01-01",
+      "end": "2018-01-03",
+      "days": 2
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "MUHAMMAD NIYAS KURIYAKATH",
+      "start": "2018-02-01",
+      "end": "2018-03-18",
+      "days": 45
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "BYJU KAKKOTH",
+      "start": "2018-06-10",
+      "end": "2018-08-23",
+      "days": 74
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2018-01-02",
+      "end": "2018-02-01",
+      "days": 30
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2018-07-17",
+      "end": "2018-07-31",
+      "days": 14
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "Dileep Kumar",
+      "start": "2018-04-01",
+      "end": "2018-05-15",
+      "days": 44
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "AJNAS",
+      "start": "2018-03-03",
+      "end": "2018-06-18",
+      "days": 107
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "AJNAS",
+      "start": "2018-11-17",
+      "end": "2018-11-28",
+      "days": 11
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "VIKAS",
+      "start": "2018-02-01",
+      "end": "2018-04-13",
+      "days": 71
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "SUBHADIN CHUNNUM TAMANG",
+      "start": "2018-04-15",
+      "end": "2018-05-04",
+      "days": 19
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "BIPLAB DEV",
+      "start": "2018-08-13",
+      "end": "2018-10-25",
+      "days": 73
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "IMRAN KHAN",
+      "start": "2018-12-08",
+      "end": "2018-12-31",
+      "days": 23
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "Mejon Chittilappilly Jose",
+      "start": "2018-12-15",
+      "end": "2018-12-31",
+      "days": 16
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "KWAJA NIJAMUDDIN",
+      "start": "2018-05-04",
+      "end": "2018-05-10",
+      "days": 6
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "RAJEEVAN",
+      "start": "2018-03-20",
+      "end": "2018-04-14",
+      "days": 25
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2018-02-15",
+      "end": "2018-05-01",
+      "days": 75
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "NAZAM KHAN MEHMOOD AHMED",
+      "start": "2018-04-16",
+      "end": "2018-05-01",
+      "days": 15
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "VISHNU PARINTHIRIKKATTIL KUMARAN",
+      "start": "2018-01-25",
+      "end": "2018-02-26",
+      "days": 32
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "RAHEEM",
+      "start": "2018-06-29",
+      "end": "2018-08-01",
+      "days": 33
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "BABER BASHIR SARDAR",
+      "start": "2018-09-01",
+      "end": "2018-11-30",
+      "days": 90
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "MUHAMMAD KHITAB",
+      "start": "2018-04-28",
+      "end": "2018-06-06",
+      "days": 39
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "yasin",
+      "start": "2018-08-04",
+      "end": "2018-11-10",
+      "days": 98
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "NARSIAH JAISETTI",
+      "start": "2018-06-23",
+      "end": "2018-07-09",
+      "days": 16
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "ABDUL NAMEER POTTAMEL",
+      "start": "2018-02-17",
+      "end": "2018-06-30",
+      "days": 133
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "SHALA AL MOHD",
+      "start": "2018-07-21",
+      "end": "2018-09-23",
+      "days": 64
+    },
+    {
+      "year": 2018,
+      "employeeId": "",
+      "staffName": "SHIYAS KETANHOTH MEETHAL",
+      "start": "2018-01-01",
+      "end": "2018-01-27",
+      "days": 26
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SREEKANTH",
+      "start": "2019-04-11",
+      "end": "2019-05-17",
+      "days": 36
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SREEKANTH",
+      "start": "2019-12-11",
+      "end": "2019-12-17",
+      "days": 6
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2019-05-01",
+      "end": "2019-07-01",
+      "days": 61
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "HITESH TEKWANI",
+      "start": "2019-10-24",
+      "end": "2019-11-02",
+      "days": 9
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "HITESH TEKWANI",
+      "start": "2019-11-14",
+      "end": "2019-11-22",
+      "days": 8
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2019-01-05",
+      "end": "2019-02-09",
+      "days": 35
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "THOUFEEK POTTAMMAL",
+      "start": "2019-09-18",
+      "end": "2019-09-23",
+      "days": 5
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2019-07-13",
+      "end": "2019-08-31",
+      "days": 49
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "TAPAN DEV",
+      "start": "2019-01-07",
+      "end": "2019-03-11",
+      "days": 63
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SHARAFUDHEEN POROT PATILLATH",
+      "start": "2019-10-27",
+      "end": "2019-12-25",
+      "days": 59
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "VINOD KUNHAPPU KUNHAPPU",
+      "start": "2019-10-24",
+      "end": "2019-12-31",
+      "days": 68
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "FAZIL ASHRAF KUZHIKANDATHIL",
+      "start": "2019-06-01",
+      "end": "2019-06-26",
+      "days": 25
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2019-12-25",
+      "end": "2019-12-31",
+      "days": 6
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "Gangarajan",
+      "start": "2019-04-29",
+      "end": "2019-07-16",
+      "days": 78
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SHIJU",
+      "start": "2019-01-21",
+      "end": "2019-03-02",
+      "days": 40
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "Mallesh",
+      "start": "2019-07-29",
+      "end": "2019-10-16",
+      "days": 79
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "VIKAS",
+      "start": "2019-02-03",
+      "end": "2019-03-06",
+      "days": 31
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "MOHD JABID MOIDU KUNHI",
+      "start": "2019-07-31",
+      "end": "2019-10-01",
+      "days": 62
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SUBHADIN CHUNNUM TAMANG",
+      "start": "2019-09-29",
+      "end": "2019-12-01",
+      "days": 63
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "MUHD USMAN",
+      "start": "2019-10-30",
+      "end": "2019-12-31",
+      "days": 62
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "IMRAN KHAN",
+      "start": "2019-01-01",
+      "end": "2019-02-11",
+      "days": 41
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "ABDUL ZUBIR",
+      "start": "2019-07-29",
+      "end": "2019-09-27",
+      "days": 60
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "KWAJA NIJAMUDDIN",
+      "start": "2019-06-09",
+      "end": "2019-08-09",
+      "days": 61
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "RAJEEVAN",
+      "start": "2019-08-31",
+      "end": "2019-10-15",
+      "days": 45
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SYED MURTUZA",
+      "start": "2019-08-02",
+      "end": "2019-10-01",
+      "days": 60
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SUNIL KUMAR",
+      "start": "2019-10-29",
+      "end": "2019-12-29",
+      "days": 61
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "UMESH NAIK",
+      "start": "2019-05-09",
+      "end": "2019-05-16",
+      "days": 7
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "SAMSEER MANGALADAN ASSU",
+      "start": "2019-05-20",
+      "end": "2019-06-19",
+      "days": 30
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "NOOH",
+      "start": "2019-10-19",
+      "end": "2019-11-01",
+      "days": 13
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "MUHAMMED BASITH NAUSAHD",
+      "start": "2019-12-12",
+      "end": "2019-12-31",
+      "days": 19
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2019-06-17",
+      "end": "2019-07-31",
+      "days": 44
+    },
+    {
+      "year": 2019,
+      "employeeId": "IDMC-051",
+      "staffName": "RAHUL ARIMBOOTH RAMANAN ARIMBOOTH",
+      "start": "2019-12-27",
+      "end": "2019-12-31",
+      "days": 4
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "BABER BASHIR SARDAR",
+      "start": "2019-08-26",
+      "end": "2019-09-19",
+      "days": 24
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "MUHAMMED NAZIM",
+      "start": "2019-02-05",
+      "end": "2019-02-14",
+      "days": 9
+    },
+    {
+      "year": 2019,
+      "employeeId": "",
+      "staffName": "Mejon Chittilappilly Jose",
+      "start": "2019-01-01",
+      "end": "2019-02-09",
+      "days": 39
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "ABIRAL THAPA",
+      "start": "2020-02-28",
+      "end": "2020-08-22",
+      "days": 176
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "KADER NAMTURUTHI",
+      "start": "2020-02-06",
+      "end": "2020-02-12",
+      "days": 6
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "HITESH TEKWANI",
+      "start": "2020-10-22",
+      "end": "2020-11-28",
+      "days": 37
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "MUHAMMAD NIYAS KURIYAKATH",
+      "start": "2020-02-01",
+      "end": "2020-07-28",
+      "days": 178
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "VINOD KUNHAPPU KUNHAPPU",
+      "start": "2020-01-01",
+      "end": "2020-01-09",
+      "days": 8
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2020-01-01",
+      "end": "2020-01-31",
+      "days": 30
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "Muhammad Shalim",
+      "start": "2020-01-01",
+      "end": "2020-03-03",
+      "days": 62
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "MUHD USMAN",
+      "start": "2020-01-01",
+      "end": "2020-01-02",
+      "days": 1
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "IMRAN KHAN",
+      "start": "2020-11-29",
+      "end": "2020-12-31",
+      "days": 32
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "RAJEEVAN",
+      "start": "2020-11-21",
+      "end": "2020-12-31",
+      "days": 40
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "NOOH",
+      "start": "2020-12-04",
+      "end": "2020-12-31",
+      "days": 27
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "MUHAMMED BASITH NAUSAHD",
+      "start": "2020-01-01",
+      "end": "2020-01-07",
+      "days": 6
+    },
+    {
+      "year": 2020,
+      "employeeId": "IDMC-051",
+      "staffName": "RAHUL ARIMBOOTH RAMANAN ARIMBOOTH",
+      "start": "2020-01-01",
+      "end": "2020-02-27",
+      "days": 57
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "Irfan Sajjad",
+      "start": "2020-12-03",
+      "end": "2020-12-31",
+      "days": 28
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "NARSIAH JAISETTI",
+      "start": "2020-10-05",
+      "end": "2020-12-23",
+      "days": 79
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "UNAIS(MERCHANDISER )",
+      "start": "2020-01-22",
+      "end": "2020-03-12",
+      "days": 50
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "MEHMOOD AHMED KHAN",
+      "start": "2020-01-23",
+      "end": "2020-02-22",
+      "days": 30
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "VISHNU PARINTHIRIKKATTIL KUMARAN",
+      "start": "2020-03-19",
+      "end": "2020-08-31",
+      "days": 165
+    },
+    {
+      "year": 2020,
+      "employeeId": "",
+      "staffName": "RAJENDRA PRASAD POTUGANTI",
+      "start": "2020-07-15",
+      "end": "2020-08-31",
+      "days": 47
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "SREEKANTH",
+      "start": "2021-01-03",
+      "end": "2021-02-07",
+      "days": 35
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "ABIRAL THAPA",
+      "start": "2021-10-11",
+      "end": "2021-11-04",
+      "days": 24
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2021-03-20",
+      "end": "2021-04-18",
+      "days": 29
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2021-11-24",
+      "end": "2021-12-31",
+      "days": 37
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "Gangarajan",
+      "start": "2021-09-03",
+      "end": "2021-12-14",
+      "days": 102
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "Gangarajan",
+      "start": "2021-11-24",
+      "end": "2021-11-24",
+      "days": 0
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "VIKAS",
+      "start": "2021-03-01",
+      "end": "2021-08-24",
+      "days": 176
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "MOHD JABID MOIDU KUNHI",
+      "start": "2021-07-04",
+      "end": "2021-09-03",
+      "days": 61
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "SUBHADIN CHUNNUM TAMANG",
+      "start": "2021-09-26",
+      "end": "2021-12-01",
+      "days": 66
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "BIPLAB DEV",
+      "start": "2021-04-02",
+      "end": "2021-08-27",
+      "days": 147
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "IMRAN KHAN",
+      "start": "2021-01-01",
+      "end": "2021-01-31",
+      "days": 30
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "SUNIL KUMAR",
+      "start": "2021-01-01",
+      "end": "2021-01-31",
+      "days": 30
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "TAHER KHAN",
+      "start": "2021-09-29",
+      "end": "2021-10-23",
+      "days": 24
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "ZEESHAN",
+      "start": "2021-01-24",
+      "end": "2021-01-31",
+      "days": 7
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "NOOH",
+      "start": "2021-01-01",
+      "end": "2021-02-25",
+      "days": 55
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "MUHAMMED BASITH NAUSAHD",
+      "start": "2021-08-24",
+      "end": "2021-10-19",
+      "days": 56
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "ABID MUHAMMAD(MERCHANDISER )",
+      "start": "2021-08-31",
+      "end": "2021-11-30",
+      "days": 91
+    },
+    {
+      "year": 2021,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2021-04-19",
+      "end": "2021-08-24",
+      "days": 127
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "MUHAMMED NADEEM",
+      "start": "2021-03-13",
+      "end": "2021-08-23",
+      "days": 163
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "Irfan Sajjad",
+      "start": "2021-01-01",
+      "end": "2021-02-28",
+      "days": 58
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "VINOD KUNHAPPU KUNHAPPU",
+      "start": "2021-03-29",
+      "end": "2021-09-30",
+      "days": 185
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "MUHAMMED FAYAS KUNDUVALPPIL",
+      "start": "2021-07-24",
+      "end": "2021-08-31",
+      "days": 38
+    },
+    {
+      "year": 2021,
+      "employeeId": "",
+      "staffName": "TAPAN DEV",
+      "start": "2021-02-04",
+      "end": "2021-11-05",
+      "days": 274
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "SREEKANTH",
+      "start": "2022-02-03",
+      "end": "2022-03-04",
+      "days": 29
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "PRAVEEN KUMAR PALERI PALODAN",
+      "start": "2022-02-01",
+      "end": "2022-02-21",
+      "days": 20
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "MUHAMMAD NIYAS KURIYAKATH",
+      "start": "2022-01-30",
+      "end": "2022-04-05",
+      "days": 65
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "KABEER",
+      "start": "2022-01-01",
+      "end": "2022-02-12",
+      "days": 42
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "SHIJU",
+      "start": "2022-05-12",
+      "end": "2022-07-13",
+      "days": 62
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "SUBHADIN CHUNNUM TAMANG",
+      "start": "2022-10-18",
+      "end": "2022-10-28",
+      "days": 10
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "BIPLAB DEV",
+      "start": "2022-09-30",
+      "end": "2022-10-17",
+      "days": 17
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "MUHD USMAN",
+      "start": "2022-04-23",
+      "end": "2022-07-14",
+      "days": 82
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "IMRAN KHAN",
+      "start": "2022-11-30",
+      "end": "2022-12-31",
+      "days": 31
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "SUNIL KUMAR",
+      "start": "2022-04-05",
+      "end": "2022-05-05",
+      "days": 30
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "UMESH NAIK",
+      "start": "2022-11-28",
+      "end": "2022-12-31",
+      "days": 33
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "TAHIR KHAN",
+      "start": "2022-08-10",
+      "end": "2022-10-13",
+      "days": 64
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "ZEESHAN",
+      "start": "2022-07-14",
+      "end": "2022-09-27",
+      "days": 75
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "NOOH",
+      "start": "2022-09-30",
+      "end": "2022-11-14",
+      "days": 45
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "SHIYAS (MERCHANDISER )",
+      "start": "2022-06-01",
+      "end": "2022-08-10",
+      "days": 70
+    },
+    {
+      "year": 2022,
+      "employeeId": "IDMM-065",
+      "staffName": "ATHUL ELLIKANDAVIDA KRISHNAN ALLIKANDAVIDA",
+      "start": "2022-03-01",
+      "end": "2022-06-17",
+      "days": 108
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "ANKIT KANOJIYA",
+      "start": "2022-03-01",
+      "end": "2022-05-01",
+      "days": 61
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "ANKIT KANOJIYA",
+      "start": "2022-12-03",
+      "end": "2022-12-10",
+      "days": 7
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "Shoukkath Ali",
+      "start": "2022-02-06",
+      "end": "2022-02-20",
+      "days": 14
+    },
+    {
+      "year": 2022,
+      "employeeId": "IDMM-076",
+      "staffName": "SANJAY SHIV POOJAN",
+      "start": "2022-01-24",
+      "end": "2022-03-07",
+      "days": 42
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "MUHAMMED RISHAM",
+      "start": "2022-02-05",
+      "end": "2022-03-08",
+      "days": 31
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "MUHAMMED RISHAM",
+      "start": "2022-07-18",
+      "end": "2022-08-16",
+      "days": 29
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "BYJU KAKKOTH",
+      "start": "2022-04-05",
+      "end": "2022-05-10",
+      "days": 35
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "LALIT GURJAR",
+      "start": "2022-05-01",
+      "end": "2022-05-26",
+      "days": 25
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "PRAVIN NETAJI TAMBEKAR",
+      "start": "2022-07-30",
+      "end": "2022-09-02",
+      "days": 34
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "RAMESH NAIK RAMA",
+      "start": "2022-04-01",
+      "end": "2022-09-28",
+      "days": 180
+    },
+    {
+      "year": 2022,
+      "employeeId": "IDMC-051",
+      "staffName": "RAHUL ARIMBOOTH RAMANAN ARIMBOOTH",
+      "start": "2022-04-03",
+      "end": "2022-06-03",
+      "days": 61
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "DINARAJ JAYARAJ DIVAKARAN",
+      "start": "2022-01-16",
+      "end": "2022-03-17",
+      "days": 60
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "VENKATESH",
+      "start": "2022-06-01",
+      "end": "2022-06-01",
+      "days": 0
+    },
+    {
+      "year": 2022,
+      "employeeId": "",
+      "staffName": "MUHAMMAD KHITAB",
+      "start": "2022-01-07",
+      "end": "2022-04-01",
+      "days": 84
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMO-123",
+      "staffName": "JISHNU JOHNY SHEEBA JOHNY VISWAMBARAN",
+      "start": "2023-09-01",
+      "end": "2023-09-11",
+      "days": 10
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDBM-033",
+      "staffName": "KABEER MULLAPURATH CHIRAPURATH",
+      "start": "2023-11-02",
+      "end": "2023-12-02",
+      "days": 30
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDBM-039",
+      "staffName": "BIPLAB DEB AJIT DEB",
+      "start": "2023-10-23",
+      "end": "2023-12-07",
+      "days": 45
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-042",
+      "staffName": "IMRAN KHAN MUBARAK MOHAMMED KHASIM",
+      "start": "2022-12-31",
+      "end": "2023-02-25",
+      "days": 56
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-049",
+      "staffName": "UMESH RAMA NAIK RAMA NAIK",
+      "start": "2023-01-01",
+      "end": "2023-01-04",
+      "days": 3
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-057",
+      "staffName": "ZESHAN ASLAM MUHAMMAD ASLAM",
+      "start": "2023-11-08",
+      "end": "2023-12-02",
+      "days": 24
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-060",
+      "staffName": "MUHAMMED BASITH MANAPPATTU NAUSHAD NAUSHAD",
+      "start": "2023-08-14",
+      "end": "2023-10-14",
+      "days": 61
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-067",
+      "staffName": "ANKIT KANOJIYA RAM KISHOR KANOJIYA",
+      "start": "2023-07-10",
+      "end": "2023-08-03",
+      "days": 24
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-073",
+      "staffName": "SHOUKKATHALI PALAKKOTTU PARAMBATH RAFEEQUE PALAKKOTTU PARAMBATH",
+      "start": "2023-02-28",
+      "end": "2023-05-01",
+      "days": 62
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-080",
+      "staffName": "MUHAMMED RISHAM VENGARATH PUTHIYAPURAYIL RAHIM",
+      "start": "2023-07-16",
+      "end": "2023-08-28",
+      "days": 43
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-119",
+      "staffName": "JIBEESH KANIYAM KANDI MEETHAL",
+      "start": "2023-04-06",
+      "end": "2023-04-15",
+      "days": 9
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMM-113",
+      "staffName": "KWAJA NIJAMUDDIN ANSAR PASHA",
+      "start": "2023-02-26",
+      "end": "2023-03-19",
+      "days": 21
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMC-051",
+      "staffName": "RAHUL ARIMBOOTH RAMANAN ARIMBOOTH",
+      "start": "2023-03-03",
+      "end": "2023-03-13",
+      "days": 10
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMC-047",
+      "staffName": "SUNIL GOPALAN KOLOTHODY",
+      "start": "2023-09-03",
+      "end": "2023-11-03",
+      "days": 61
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDML-052",
+      "staffName": "NARSAIAH JAISETTI JAISETTI RAMULU",
+      "start": "2023-02-01",
+      "end": "2023-04-17",
+      "days": 75
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDML-097",
+      "staffName": "MEHTAB AHMED WALI DAD KHAN OLD STAFF W/H",
+      "start": "2023-04-13",
+      "end": "2023-06-14",
+      "days": 62
+    },
+    {
+      "year": 2023,
+      "employeeId": "IDMO-130",
+      "staffName": "SURAJ UTHAMAN",
+      "start": "2023-08-20",
+      "end": "2023-09-03",
+      "days": 14
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMM-054",
+      "staffName": "MOHAMMED TAHIR KHAN PATHAN",
+      "start": "2024-09-27",
+      "end": "2024-11-28",
+      "days": 62
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMM-065",
+      "staffName": "ATHUL ELLIKANDAVIDA KRISHNAN ALLIKANDAVIDA",
+      "start": "2024-02-29",
+      "end": "2024-04-08",
+      "days": 39
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMM-092",
+      "staffName": "MANGAL SINGH TEHAL SINGH",
+      "start": "2024-01-15",
+      "end": "2024-02-23",
+      "days": 39
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMC-051",
+      "staffName": "RAHUL ARIMBOOTH RAMANAN ARIMBOOTH",
+      "start": "2024-08-15",
+      "end": "2024-10-03",
+      "days": 49
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDML-030",
+      "staffName": "MUHAMMAD KHITAB MUHAMMAD AFTAB KHAN",
+      "start": "2024-04-22",
+      "end": "2024-06-21",
+      "days": 60
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMO-130",
+      "staffName": "SURAJ UTHAMAN",
+      "start": "2024-01-22",
+      "end": "2024-02-04",
+      "days": 13
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMO-134",
+      "staffName": "PRAJNA PUTTUR DIVAKARA",
+      "start": "2024-04-07",
+      "end": "2024-04-21",
+      "days": 14
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMM-138",
+      "staffName": "MOHAMMED SALIH PEECHI",
+      "start": "2024-05-13",
+      "end": "2024-06-23",
+      "days": 41
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMO-139",
+      "staffName": "PRAJNA SACHIN POOJARY",
+      "start": "2024-04-28",
+      "end": "2024-05-12",
+      "days": 14
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMM-152",
+      "staffName": "VIJAYASINGAM RAJASINGAM",
+      "start": "2024-03-09",
+      "end": "2024-04-11",
+      "days": 33
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "ABIRAL ARUN THAPA",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "RANJITH KUMAR NAMPELLY RAJAIAH",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "MUHAMMED BASITH MANAPPATTU NAUSHAD NAUSHAD",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "MEHTAB AHMED WALI DAD KHAN OLD STAFF W/H",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "MUHAMMAD NIYAS KURIYAKATH MULLAVAPPIL NAZER",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "SHIJU VARAKKOTH KUNHIKANNAN NAMBIAR PEEDIKA VALAPPIL",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "SUBHADIN CHUNNUM TAMANG TAMANG",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "MUHAMMAD USMAN RIAZ AHMAD",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "IMRAN KHAN MUBARAK MOHAMMED KHASIM",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "UMESH RAMA NAIK RAMA NAIK",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "ZESHAN ASLAM MUHAMMAD ASLAM",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "SHOUKKATHALI PALAKKOTTU PARAMBATH RAFEEQUE PALAKKOTTU PARAMBATH",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "PRAVIN TAMBEKAR NETAJI",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "SAJUDEEN SAJEER SAJUDHEEN",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "MUKHTAR AHMAD ABDUL RAHMAN CHOPAN",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "AKSHAY SHAJI",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "AJNAS VATTA KANDI ABDULLA THIYYAROTH",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "KWAJA NIJAMUDDIN ANSAR PASHA",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "ZIA UL MUSTAFA BASHARAT MUHAMMAD BASHART",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "AJITH KUMARAN ANITHAMONI KUMARAN SADASIVAN",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "DINARAJ JAYARAJ DIVAKARAN",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "VENKATESH RAMANNA KODISHALA RAMANNA LAXMAYA KODISHALA",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "IRFAN SAJJAD SAJJAD HUSSAIN",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "NARSAIAH JAISETTI JAISETTI RAMULU",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "SHIYAS KETANHOTH MEETHAL ABDULLA",
+      "start": "2024-06-01",
+      "end": "2024-06-01",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "",
+      "staffName": "JISHNU JOHNY SHEEBA JOHNY VISWAMBARAN",
+      "start": "2024-09-05",
+      "end": "2024-09-05",
+      "days": 0
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMM-126",
+      "staffName": "MUHAMMED SHANIR POOCHADIYAN",
+      "start": "2024-09-01",
+      "end": "2024-10-31",
+      "days": 60
+    },
+    {
+      "year": 2024,
+      "employeeId": "IDMM-119",
+      "staffName": "JIBEESH KANIYAM KANDI MEETHAL",
+      "start": "2024-09-07",
+      "end": "2024-09-07",
+      "days": 0
+    },
+    {
+      "year": 2025,
+      "employeeId": "IDMM-076",
+      "staffName": "SANJAY SHIV POOJAN",
+      "start": "2025-05-01",
+      "end": "2025-08-06",
+      "days": 97
+    },
+    {
+      "year": 2025,
+      "employeeId": "IDMM-092",
+      "staffName": "MANGAL SINGH TEHAL SINGH",
+      "start": "2025-01-15",
+      "end": "2025-04-18",
+      "days": 93
+    },
+    {
+      "year": 2025,
+      "employeeId": "IDMC-164",
+      "staffName": "MANNAN MAINDUDDIN",
+      "start": "2025-01-08",
+      "end": "2025-01-15",
+      "days": 7
+    },
+    {
+      "year": 2025,
+      "employeeId": "IDFM-180",
+      "staffName": "Jihad Hossan",
+      "start": "2025-02-17",
+      "end": "2025-03-07",
+      "days": 18
+    },
+    {
+      "year": 2026,
+      "employeeId": "IDML-155",
+      "staffName": "MUHAMMED ZULQARNAN",
+      "start": "2026-05-03",
+      "end": "2026-07-06",
+      "days": 64
+    }
+  ],
+  "counts": {
+    "created": 0,
+    "updated": 0,
+    "skipped": 528,
+    "dojUpdated": 0,
+    "idUpdated": 0,
+    "leftoverTagged": 28
+  }
+}

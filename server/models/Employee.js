@@ -119,6 +119,14 @@ const employeeSchema = new mongoose.Schema({
   medicalInsurance: { type: Boolean, default: false },
   airFare: { type: Boolean, default: false },
 
+  /**
+   * Exact yearly leave-taken values from the client Master tracker sheet.
+   * Keys are calendar years as strings ("2010"…"2026"). Null years are omitted.
+   * Used by the central leave calculator; never hardcoded in the UI.
+   */
+  excelLeaveYearTaken: { type: mongoose.Schema.Types.Mixed, default: null },
+  excelLeaveImportedAt: { type: Date, default: null },
+
   assignedProjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Client" }], // multiple projects can be assigned
 
   events: [assignEventSchema],

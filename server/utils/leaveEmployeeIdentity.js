@@ -229,6 +229,79 @@ function identityFieldsFromEmployee(empDoc) {
   };
 }
 
+function compactName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function firstNameToken(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .find((t) => t.length >= 3 && !/^(mr|mrs|ms|miss|mdm|dr)$/i.test(t)) || "";
+}
+
+const COMMON_FIRST = new Set([
+  "muhammad", "mohammed", "mohammad", "mohd", "ahmed", "ahmad",
+  "abdul", "syed", "kumar", "singh", "md",
+]);
+
+function namesCompatible(excelName, softwareName) {
+  const ca = compactName(excelName);
+  const cb = compactName(softwareName);
+  if (!ca || !cb) return false;
+  if (ca === cb) return true;
+  if (ca.length >= 8 && cb.length >= 8 && (ca.startsWith(cb) || cb.startsWith(ca))) return true;
+  const fa = firstNameToken(excelName);
+  const fb = firstNameToken(softwareName);
+  if (fa && fb && fa === fb && fa.length >= 5) return true;
+  return false;
+}
+
+function matchEmployeeFromExcel(employees, excelId, excelName) {
+  const list = employees || [];
+  const id = String(excelId || "").trim();
+  if (id && /^id[a-z]{2,4}-\d+/i.test(id)) {
+    const hit = list.find((e) => String(e.employeeId || "").toLowerCase() === id.toLowerCase());
+    if (hit && namesCompatible(excelName, hit.employeeName)) return hit;
+  }
+  const compact = compactName(excelName);
+  if (!compact) return null;
+  const exact = list.filter((e) => compactName(e.employeeName) === compact);
+  if (exact.length === 1) return exact[0];
+  const starts = list.filter((e) => {
+    const n = compactName(e.employeeName);
+    return n && compact && (n.startsWith(compact) || compact.startsWith(n)) && Math.min(n.length, compact.length) >= 10;
+  });
+  if (starts.length === 1) return starts[0];
+  const first = firstNameToken(excelName);
+  const second = String(excelName || "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 3)[1];
+  if (first && second) {
+    const two = list.filter((e) => {
+      const tokens = String(e.employeeName || "")
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, " ")
+        .split(/\s+/)
+        .filter((t) => t.length >= 3);
+      return tokens[0] === first && tokens[1] === second;
+    });
+    if (two.length === 1) return two[0];
+  }
+  if (first && first.length >= 7 && !COMMON_FIRST.has(first)) {
+    const byFirst = list.filter((e) => firstNameToken(e.employeeName) === first);
+    if (byFirst.length === 1) return byFirst[0];
+  }
+  return exact[0] || null;
+}
+
 module.exports = {
   isObjectIdStr,
   oid,
@@ -236,4 +309,5 @@ module.exports = {
   buildEmployeeLeaveMongoFilter,
   enrichLeaveRowsWithEmployeeIdentity,
   identityFieldsFromEmployee,
+  matchEmployeeFromExcel,
 };

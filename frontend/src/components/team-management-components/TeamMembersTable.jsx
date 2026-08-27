@@ -31,7 +31,6 @@ import AddEmployeeModal from "./AddEmployeeModal";
 import EditEmployeeModal from "./EditEmployeeModal";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 import employeeService from "../../services/EmployeeService";
-import leaveRequestService from "../../services/LeaveRequestService";
 import styles from "./TeamMembersTable.module.css";
 import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
@@ -502,6 +501,7 @@ function TeamMembersTable() {
         )
       );
 
+      employeeService.invalidateCache?.();
       showToast("Vacation status updated successfully.", "success");
     } catch (err) {
       console.error("Failed to update vacation status:", err);
@@ -545,13 +545,6 @@ function TeamMembersTable() {
     setDatePromptSaving(true);
     try {
       await handleVacationStatusChange(employeeItem, newStatus, extraFields);
-      if (employeeItem.linkedLeaveId && tertiaryDateValue) {
-        try {
-          await leaveRequestService.updateLeaveRequest(employeeItem.linkedLeaveId, {
-            endDate: new Date(tertiaryDateValue).toISOString(),
-          });
-        } catch (_) { /* employee dates already saved */ }
-      }
       setDatePrompt(null);
     } catch (err) {
       // handled

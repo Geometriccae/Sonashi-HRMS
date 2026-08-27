@@ -438,8 +438,8 @@ function LeaveRequestTable({ onUpdate }) {
     };
 
     // Same inclusive calendar-day count as leave application (Calendar Days / balance)
-    const formatLeaveDaysLabel = (start, end) => {
-        const days = calculateLeaveDays(start, end);
+    const formatLeaveDaysLabel = (start, end, leaveDaysOverride = null) => {
+        const days = calculateLeaveDays(start, end, leaveDaysOverride);
         if (days == null || days <= 0) return "—";
         return `${days} ${days === 1 ? "Day" : "Days"}`;
     };
@@ -736,7 +736,7 @@ function LeaveRequestTable({ onUpdate }) {
                                 {activeFilter === "History" ? (
                                     <>
                                         <td>{req.reason}</td>
-                                        <td>{formatLeaveDaysLabel(req.startDate, req.endDate)}</td>
+                                        <td>{formatLeaveDaysLabel(req.startDate, req.endDate, req.leaveDays)}</td>
                                         <td>
                                             {formatDisplayDate(req.startDate)} - {formatDisplayDate(req.endDate)}
                                         </td>
@@ -760,7 +760,7 @@ function LeaveRequestTable({ onUpdate }) {
                                     </>
                                 ) : (
                                     <>
-                                        <td>{formatLeaveDaysLabel(req.startDate, req.endDate)}</td>
+                                        <td>{formatLeaveDaysLabel(req.startDate, req.endDate, req.leaveDays)}</td>
                                         <td>
                                             {formatDisplayDate(req.startDate)} - {formatDisplayDate(req.endDate)}
                                         </td>

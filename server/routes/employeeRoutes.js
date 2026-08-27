@@ -330,6 +330,7 @@ const EMPLOYEE_LIST_FIELDS = [
   'provisionPeriodStartDate', 'provisionPeriodEndDate',
   'reportingManager', 'assignedProjects',
   'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt',
+  'excelLeaveYearTaken', 'excelLeaveImportedAt',
 ].join(' ');
 
 /** HR Metrics: list fields + demographics/salary needed for charts (no profile photos). */
@@ -341,7 +342,7 @@ const EMPLOYEE_METRICS_FIELDS = [
 const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const DYNAMIC_VACATION_STATUSES = new Set(['Vacation Pending', 'On Vacation', 'Vacation Approved']);
 const APPROVED_LEAVE_SELECT =
-  'employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department';
+  'employee employeeRecordId employeeId employeeName leaveType startDate endDate leaveDays importSource status travellingDate lastWorkingDay returnDate firstWorkingDay department requestAirfare';
 
 async function getApprovedLeavesForVacation() {
   const cached = getApprovedLeavesCache();
@@ -471,30 +472,38 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
     const employeeLeaves = leavesForEmployee(employee);
     const todayDate = toCalendarDate(new Date());
     const returnDay = toCalendarDate(employee.returnDate);
+    const vs = employee.vacationStatus;
 
-    // Admin marked return: keep Vacation Approved when today is on/after return date,
-    // unless a newer leave is still upcoming / currently away after that return.
-    if (
-      employee.vacationStatus === 'Vacation Approved' &&
-      returnDay &&
-      todayDate &&
-      todayDate >= returnDay
-    ) {
-      const activeAfterReturn = employeeLeaves.find((leave) => {
+    const newerLeaveAfter = (fromDay) =>
+      employeeLeaves.find((leave) => {
         const status = getEffectiveVacationStatusFromLeave(leave, employee);
         if (status === 'On Vacation') {
           const travel = getLeaveTravelStartDate(leave, employee);
-          return travel && travel >= returnDay;
+          return Boolean(travel && fromDay && travel >= fromDay);
         }
         if (status === 'Vacation Pending') {
           const travel = getLeaveTravelStartDate(leave, employee);
-          return travel && travel > returnDay;
+          return Boolean(travel && fromDay && travel > fromDay);
         }
         return false;
       });
-      if (!activeAfterReturn) {
+
+    // Team Management stored status is the source of truth for dashboard / vacation tabs.
+    // Do not overwrite Yet to Go / On Vacation / Returned from leave.endDate
+    // (leave dates stay for leave-day calculation only).
+    if (vs === 'Vacation Approved') {
+      if (newerLeaveAfter(returnDay)) {
+        // A newer trip after this return — fall through to date-based status.
+      } else if (!returnDay || (todayDate && todayDate >= returnDay)) {
         return { ...employee, vacationStatus: 'Vacation Approved' };
       }
+    } else if (vs === 'On Vacation') {
+      if (returnDay && todayDate && todayDate >= returnDay && !newerLeaveAfter(returnDay)) {
+        return { ...employee, vacationStatus: 'Vacation Approved' };
+      }
+      return { ...employee, vacationStatus: 'On Vacation' };
+    } else if (vs === 'Vacation Pending') {
+      return { ...employee, vacationStatus: 'Vacation Pending' };
     }
 
     const activeLeave = employeeLeaves.find(
@@ -1985,7 +1994,8 @@ router.delete('/:id/events/:eventId', authMiddleware, blockViewerWrites, async (
 /**
  * Mark / update staff return from vacation (early or extended).
  * Allowed: admin, hod, hr, authorize_user.
- * Updates leave end date, vacation status, return dates, and attendance.
+ * Stores return/entry dates on the Employee record.
+ * Does not replace LeaveRequest.endDate (approved leave period / Excel days).
  * Does not change leave approval workflow.
  */
 router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
@@ -2055,15 +2065,18 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
 
     if (leave) {
       const actor = req.user?.username || req.user?.emailId || 'System';
-      const plannedEnd = leave.endDate ? new Date(leave.endDate) : null;
-      let remark = 'Vacation return date updated';
-      if (plannedEnd && !Number.isNaN(plannedEnd.getTime())) {
-        plannedEnd.setHours(0, 0, 0, 0);
-        if (returnDt < plannedEnd) remark = 'Returned earlier than planned; leave end date updated';
-        else if (returnDt > plannedEnd) remark = 'Vacation extended; leave end date updated';
+      const remark = 'Vacation return recorded; approved leave dates unchanged';
+      // Freeze Excel/approved day count so travel/return dates cannot inflate Taken.
+      if (leave.leaveDays == null && leave.startDate && leave.endDate) {
+        const start = new Date(leave.startDate);
+        const end = new Date(leave.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+        const days = Math.round((end.getTime() - start.getTime()) / 86400000);
+        if (Number.isFinite(days) && days >= 0) {
+          leave.leaveDays = days === 0 ? 1 : days;
+        }
       }
-
-      leave.endDate = returnDt;
       leave.changeStatus = 'Modified';
       leave.changedBy = actor;
       leave.changedByUser = req.user._id || req.user.id || null;

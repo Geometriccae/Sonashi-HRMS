@@ -215,14 +215,19 @@ function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
                             return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}T00:00:00.000Z`;
                         };
 
+                        const startMs = Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate());
+                        const endMs = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
+                        const excelDays = Math.max(0, Math.round((endMs - startMs) / 86400000));
+
                         allLeaves.push({
                             rowNumber: r + 1, // Absolute Excel row number
                             sheetName: sheetName,
                             employeeId: String(empId || ''),
                             employeeName: String(empName || ''),
-                            leaveType: 'Vacation', // Changed from Annual to match backend enum
+                            leaveType: 'Vacation',
                             startDate: formatUTC(startDate),
                             endDate: formatUTC(endDate),
+                            leaveDays: excelDays,
                             reason: `Imported from ${sheetName}`,
                             status: 'Approved',
                             requestAirfare: false,

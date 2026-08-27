@@ -284,7 +284,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                                                                                 )}
                                                                             </td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "13px", color: "#334155", textAlign: "right" }}>
-                                                                                {calculateLeaveDays(leave.startDate, leave.endDate) || 0} Days
+                                                                                {calculateLeaveDays(leave.startDate, leave.endDate, leave.leaveDays) || 0} Days
                                                                             </td>
                                                                             <td style={{ padding: "10px 16px", fontSize: "12px", textAlign: "center" }}>
                                                                                 <span style={{

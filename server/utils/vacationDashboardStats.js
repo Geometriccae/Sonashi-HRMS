@@ -68,9 +68,13 @@ function lastMonthWindow(now = new Date()) {
 }
 
 function getVacationReturnDate(emp, leave) {
-  return toDayStart(
-    leave?.endDate || emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
-  );
+  const vs = emp?.vacationStatus || 'Onsite';
+  const empReturn = emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate;
+  // Team Management return date wins over planned leave.endDate (leave days stay unchanged).
+  if (vs === 'Vacation Approved' && empReturn) {
+    return toDayStart(empReturn);
+  }
+  return toDayStart(leave?.endDate || empReturn);
 }
 
 function isDateWithinLastMonth(value, now = new Date()) {
@@ -92,18 +96,14 @@ function isReturnedBackInLastMonth(emp, leave, now = new Date()) {
   if (vs === 'On Vacation' || vs === 'Vacation Pending') return false;
 
   const leaveEnd = toDayStart(leave?.endDate);
-  const empReturn = toDayStart(
-    emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
-  );
-  // Prefer leave history end date when a completed leave is linked
-  const returnDate = leaveEnd || empReturn;
+  const returnDate = getVacationReturnDate(emp, leave);
   if (!isDateWithinLastMonth(returnDate, now)) return false;
 
+  if (vs === 'Vacation Approved') return true;
   if (leaveEnd) {
     const today = toDayStart(now);
     if (today && leaveEnd <= today) return true;
   }
-  if (vs === 'Vacation Approved') return true;
   return false;
 }
 
@@ -116,6 +116,13 @@ function filterReturnedBackEmployees(empList, leaveList, now = new Date()) {
     if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
     const vs = emp?.vacationStatus || 'Onsite';
     if (vs === 'On Vacation' || vs === 'Vacation Pending') return false;
+
+    if (vs === 'Vacation Approved') {
+      const empReturn = toDayStart(
+        emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
+      );
+      if (empReturn && isDateWithinLastMonth(empReturn, now)) return true;
+    }
 
     // Approved leaves for this employee that have already ended inside the window
     const endedInWindow = leaves
@@ -206,6 +213,9 @@ function getLeaveTravelDate(req, linkedEmployee) {
 }
 
 function getEffectiveVacationStatus(req, linkedEmployee, todayValue = new Date()) {
+  const vs = linkedEmployee?.vacationStatus;
+  // TM On Vacation / Returned must not be reclassified from leave dates.
+  if (vs === 'On Vacation' || vs === 'Vacation Approved') return vs;
   if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
   const today = toDayStart(todayValue);
   const travelDate = getLeaveTravelDate(req, linkedEmployee);
@@ -379,6 +389,27 @@ function buildYetToGoFromLeaves(empList, leaveList) {
       });
     });
 
+  // Team Management "Yet to go" must appear even when leave travel dates already passed.
+  safeEmpList.forEach((e) => {
+    if (e?.vacationStatus !== 'Vacation Pending') return;
+    if (!isWorkingEmployeeStatus(e.employeeStatus)) return;
+    const dedupeKey = String(e._id);
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    const leave = findLeaveForEmployee(e, safeLeaveList, safeEmpList, 'yetToGo');
+    rows.push({
+      ...e,
+      _source: 'employee',
+      linkedEmployeeId: e._id,
+      linkedLeaveId: leave?._id || null,
+      startDate: leave?.startDate || e.travellingDate || null,
+      endDate: leave?.endDate || e.leaveEndDate || null,
+      leaveStatus: leave?.status || null,
+      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+      vacationStatus: 'Vacation Pending',
+    });
+  });
+
   rows.sort((a, b) => {
     const aStart = toDayStart(a.startDate);
     const bStart = toDayStart(b.startDate);
@@ -409,15 +440,48 @@ function enrichEmployeeRows(empList, leaveList, tabKey) {
   });
 }
 
+function buildYetToGoTabRows(empList, leaveList) {
+  const storedPending = (Array.isArray(empList) ? empList : []).filter(
+    (e) => isWorkingEmployeeStatus(e.employeeStatus) && e.vacationStatus === 'Vacation Pending'
+  );
+  const seen = new Set(storedPending.map((e) => String(e._id)));
+  const rows = enrichEmployeeRows(storedPending, leaveList, 'yetToGo').map((row) => ({
+    ...row,
+    vacationStatus: 'Vacation Pending',
+  }));
+
+  buildYetToGoFromLeaves(empList, leaveList).forEach((row) => {
+    if (!isWorkingEmployeeStatus(row.employeeStatus) && row._source !== 'leave') return;
+    if (row.vacationStatus === 'On Vacation' || row.vacationStatus === 'Vacation Approved') return;
+    const id = String(row._id || row.linkedEmployeeId || '');
+    if (id && seen.has(id)) return;
+    if (id) seen.add(id);
+    rows.push(row);
+  });
+  return rows;
+}
+
+function buildReturnedTabRows(empList, leaveList, now = new Date()) {
+  const fromHistory = filterReturnedBackEmployees(empList, leaveList, now);
+  const seen = new Set(fromHistory.map((e) => String(e._id)));
+  const extraStored = (Array.isArray(empList) ? empList : []).filter((e) => {
+    if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
+    if (e.vacationStatus !== 'Vacation Approved') return false;
+    if (seen.has(String(e._id))) return false;
+    const when = toDayStart(e.returnDate || e.firstWorkingDay || e.leaveEndDate);
+    return Boolean(when && isDateWithinLastMonth(when, now));
+  });
+  extraStored.forEach((e) => seen.add(String(e._id)));
+  return enrichEmployeeRows([...fromHistory, ...extraStored], leaveList, 'returned');
+}
+
 async function buildTabRows(tabKey) {
   const [empList, leaveList] = await Promise.all([loadEmployeesLean(), loadApprovedLeaves()]);
   if (tabKey === 'yetToGo') {
-    return buildYetToGoFromLeaves(empList, leaveList).filter((row) =>
-      isWorkingEmployeeStatus(row.employeeStatus)
-    );
+    return buildYetToGoTabRows(empList, leaveList);
   }
   if (tabKey === 'returned') {
-    return enrichEmployeeRows(filterReturnedBackEmployees(empList, leaveList), leaveList, 'returned');
+    return buildReturnedTabRows(empList, leaveList);
   }
   // onVacation — stored vacationStatus (Annual Vacations source of truth)
   const onVac = empList.filter(
@@ -519,6 +583,7 @@ async function getDashboardSummary({ force = false } = {}) {
     activeEmployees,
     inactiveEmployees,
     onVacation,
+    yetToGoStored,
     returnedBackFast,
     visaExpiry,
     passportExpiry,
@@ -529,6 +594,7 @@ async function getDashboardSummary({ force = false } = {}) {
     Employee.countDocuments(working),
     Employee.countDocuments(nonWorkingStatusFilter()),
     Employee.countDocuments({ ...working, vacationStatus: 'On Vacation' }),
+    Employee.countDocuments({ ...working, vacationStatus: 'Vacation Pending' }),
     Employee.countDocuments({
       ...working,
       vacationStatus: 'Vacation Approved',
@@ -550,11 +616,14 @@ async function getDashboardSummary({ force = false } = {}) {
     loadApprovedLeaves(),
   ]);
 
-  // Authoritative Returned Back (may enrich return date from linked leave endDate)
-  const returnedBack = filterReturnedBackEmployees(empList, leaveList, now).length;
-  const yetToGo = buildYetToGoFromLeaves(empList, leaveList).filter((row) =>
-    isWorkingEmployeeStatus(row.employeeStatus)
-  ).length;
+  const yetToGo = Math.max(
+    yetToGoStored,
+    buildYetToGoTabRows(empList, leaveList).length
+  );
+  const returnedBack = Math.max(
+    returnedBackFast,
+    buildReturnedTabRows(empList, leaveList, now).length
+  );
 
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
   const filterOptions = {

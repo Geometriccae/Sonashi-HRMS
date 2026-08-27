@@ -29,13 +29,47 @@ const {
     DAYS_PER_YEAR,
 } = LEAVE_POLICY;
 
-export const calculateLeaveDays = (startDate, endDate) => {
+export const calculateLeaveDays = (startDate, endDate, leaveDaysOverride = null) => {
+    if (leaveDaysOverride != null && leaveDaysOverride !== "") {
+        const stored = Number(leaveDaysOverride);
+        if (Number.isFinite(stored) && stored >= 0) return stored;
+    }
     const s = toLeaveCalendarDate(startDate);
     const e = toLeaveCalendarDate(endDate);
     if (!s || !e) return null;
-    const days = Math.round((utcDay(e) - utcDay(s)) / MS_PER_DAY) + 1;
-    return days > 0 ? days : null;
+    const days = Math.round((utcDay(e) - utcDay(s)) / MS_PER_DAY);
+    if (days < 0) return null;
+    // Excel Master Tracker: END − START. Same calendar day counts as 1 for live requests.
+    return days === 0 ? 1 : days;
 };
+
+export function leaveRequestDays(req) {
+    if (!req) return 0;
+    if (req.excludeFromBalance) return 0;
+    if (req.leaveDays != null && req.leaveDays !== "") {
+        const stored = Number(req.leaveDays);
+        if (Number.isFinite(stored) && stored >= 0) return stored;
+    }
+    const remarks = String(req.changeRemarks || "");
+    // Vacation return used to overwrite endDate with travel/entry date — never treat that as leave.
+    if (/leave end date updated|vacation return|returned earlier|vacation extended/i.test(remarks)) {
+        return 0;
+    }
+    return calculateLeaveDays(req.startDate, req.endDate) || 0;
+}
+
+function getExcelYearTaken(employee, year) {
+    const map = employee?.excelLeaveYearTaken;
+    if (!map || typeof map !== "object") return null;
+    const v = map[year] ?? map[String(year)];
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+function isExcelImportedLeave(req) {
+    return String(req?.importSource || "") === "excel-master-tracker";
+}
 
 export function toLeaveCalendarDate(value) {
     if (!value) return null;
@@ -111,9 +145,7 @@ export function getLeaveTillDate(asOf = new Date()) {
 export function getActiveLeaveWindow(calculationDateInput = null, joiningDate = null) {
     const end = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
     const join = toLeaveCalendarDate(joiningDate);
-
-    const windowStart = new Date(end);
-    windowStart.setFullYear(windowStart.getFullYear() - MAX_ACTIVE_YEARS);
+    const windowStart = new Date(end.getFullYear() - MAX_ACTIVE_YEARS, 0, 1);
 
     let effectiveStart = windowStart;
     if (join) {
@@ -169,7 +201,7 @@ export function lastFiveLeaveYears(tillDate) {
 }
 
 /** Inclusive overlap day count between a leave span and a date range. */
-export function leaveDaysOverlappingRange(leaveStart, leaveEnd, rangeStart, rangeEnd) {
+export function leaveDaysOverlappingRange(leaveStart, leaveEnd, rangeStart, rangeEnd, leaveDaysOverride = null) {
     const start = toLeaveCalendarDate(leaveStart);
     const end = toLeaveCalendarDate(leaveEnd) || start;
     const rangeFrom = toLeaveCalendarDate(rangeStart);
@@ -180,7 +212,7 @@ export function leaveDaysOverlappingRange(leaveStart, leaveEnd, rangeStart, rang
     const overlapEnd = end < rangeTo ? end : rangeTo;
     if (overlapStart > overlapEnd) return 0;
 
-    return calculateLeaveDays(overlapStart, overlapEnd) || 0;
+    return calculateLeaveDays(overlapStart, overlapEnd, leaveDaysOverride) || 0;
 }
 
 function mergeLeaveIntervals(leaves) {
@@ -266,7 +298,8 @@ export function matchesLeaveEmployee(req, emp) {
     if (req.employeeId) {
         const rid = String(req.employeeId).toLowerCase();
         if (empMongoId && rid === empMongoId) return true;
-        if (empCode && rid === empCode) return true;
+        // Match HR staff codes only (IDFO-000). Company codes like FZCO must not pull other people's leave.
+        if (empCode && rid === empCode && /^id[a-z]{2,4}-\d+/i.test(empCode)) return true;
     }
 
     if (empEmail) {
@@ -305,28 +338,41 @@ export function getApprovedLeavesForEmployee(employee, allLeaveRequests) {
     );
 }
 
-/** Assign merged leave days to calendar years within [rangeStart, rangeEnd]. */
+/** Assign leave days to the start-date calendar year (Excel yearly-sheet convention). */
 export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStart, rangeEnd) {
     const byYear = {};
+    const liveByYear = {};
     const rangeFrom = toLeaveCalendarDate(rangeStart);
     const rangeTo = toLeaveCalendarDate(rangeEnd);
     if (!rangeFrom || !rangeTo) return byYear;
 
-    const merged = mergeLeaveIntervals(getApprovedLeavesForEmployee(employee, allLeaveRequests));
-
-    merged.forEach((interval) => {
-        const overlapStart = interval.start > rangeFrom ? interval.start : rangeFrom;
-        const overlapEnd = interval.end < rangeTo ? interval.end : rangeTo;
-        if (overlapStart > overlapEnd) return;
-
-        let cursor = new Date(overlapStart);
-        while (cursor <= overlapEnd) {
-            const year = cursor.getFullYear();
-            byYear[year] = (byYear[year] || 0) + 1;
-            cursor.setDate(cursor.getDate() + 1);
+    getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
+        const start = toLeaveCalendarDate(req.startDate);
+        if (!start) return;
+        const year = start.getFullYear();
+        const yearStart = new Date(year, 0, 1);
+        const yearEnd = new Date(year, 11, 31);
+        if (yearEnd < rangeFrom || yearStart > rangeTo) return;
+        const days = leaveRequestDays(req);
+        if (!isExcelImportedLeave(req)) {
+            liveByYear[year] = (liveByYear[year] || 0) + days;
         }
+        byYear[year] = (byYear[year] || 0) + days;
     });
 
+    const startYear = rangeFrom.getFullYear();
+    const endYear = rangeTo.getFullYear();
+    for (let year = startYear; year <= endYear; year += 1) {
+        const excelVal = getExcelYearTaken(employee, year);
+        const live = liveByYear[year] || 0;
+        if (excelVal != null) {
+            // Master-sheet yearly total is the historical source of truth.
+            // Live (non-imported) approved leave after the import is added on top.
+            byYear[year] = roundLeaveNumber(excelVal + live);
+        } else if (byYear[year] != null) {
+            byYear[year] = roundLeaveNumber(byYear[year]);
+        }
+    }
     return byYear;
 }
 
@@ -529,3 +575,24 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
         airfareUsedRecently,
     };
 };
+
+/** Alias used by API docs / one-function contract. */
+export function calculateEmployeeLeaveSummary(employee, allLeaveRequests, calculationDate = null) {
+    const calc = computeExcelLeaveCalculation(employee, allLeaveRequests, calculationDate);
+    return {
+        employeeId: employee?.employeeId || "",
+        employeeName: employee?.employeeName || employee?.name || "",
+        doj: calc.joiningDate,
+        currentDate: calc.calculationDate,
+        rollingWindowStart: calc.windowStart,
+        rollingWindowEnd: calc.calculationDate,
+        entitlement: calc.entitlement,
+        activeTaken: calc.activeTakenDays,
+        expired: calc.expiredDays,
+        available: calc.availableDays,
+        historicalTaken: calc.historicalTakenDays,
+        yearlyLeave: calc.historicalYearTotals,
+        workingYears: calc.workingYears,
+        last5Years: calc.last5Years,
+    };
+}

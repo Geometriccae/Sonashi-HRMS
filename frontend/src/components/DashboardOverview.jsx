@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styles from "./DashboardOverview.module.css";
 import employeeService from "../services/EmployeeService";
-import leaveRequestService from "../services/LeaveRequestService";
 import {
   FaUsers,
   FaUserCheck,
@@ -131,7 +130,7 @@ function DashboardOverview() {
       setIsLoading(true);
       try {
         // Counts only — do not fetch all employees / leaves on dashboard open
-        const summary = await employeeService.getEmployeeStats({ force: false });
+        const summary = await employeeService.getEmployeeStats({ force: true });
         if (isMounted) {
           setCounts(applySummaryToCounts(summary));
         }
@@ -236,13 +235,6 @@ function DashboardOverview() {
     setDatePromptSaving(true);
     try {
       await handleVacationStatusChange(employeeItem, newStatus, extraFields);
-      if (employeeItem.linkedLeaveId && tertiaryDateValue) {
-        try {
-          await leaveRequestService.updateLeaveRequest(employeeItem.linkedLeaveId, {
-            endDate: new Date(tertiaryDateValue).toISOString(),
-          });
-        } catch (_) { /* employee dates already saved */ }
-      }
       setDatePrompt(null);
       if (categoryToReopen) {
         handleCardClick(categoryToReopen);

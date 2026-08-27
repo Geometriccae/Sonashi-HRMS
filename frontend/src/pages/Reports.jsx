@@ -795,7 +795,7 @@ function Reports() {
 
         if (hasDateFilter && !isDateMatch(start)) continue;
 
-        const days = calculateLeaveDays(start, end || start) || 0;
+        const days = calculateLeaveDays(start, end || start, leave.leaveDays) || 0;
 
         rows.push({
           "Employee ID": emp?.employeeId || leave.employeeId || "",

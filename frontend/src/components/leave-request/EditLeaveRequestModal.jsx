@@ -957,7 +957,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                                             {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
                                                                                         </button>
                                                                                         <div style={{ fontSize: "11px", color: "#64748b" }}>
-                                                                                            {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate) || 0} Days
+                                                                                            {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate, req.leaveDays) || 0} Days
                                                                                         </div>
                                                                                     </div>
                                                                                     <div style={{ textAlign: "right" }}>

@@ -78,6 +78,19 @@ const leaveRequestSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
+    /**
+     * Excel / imported day count when it differs from a live date-diff.
+     * Leave totals use this value when present.
+     */
+    leaveDays: {
+        type: Number,
+        default: null
+    },
+    /** excel-master-tracker = imported historical row; live requests leave this empty. */
+    importSource: {
+        type: String,
+        default: ''
+    },
     reason: {
         type: String,
         required: true

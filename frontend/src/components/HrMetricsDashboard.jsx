@@ -616,7 +616,7 @@ export default function HrMetricsDashboard() {
 
     const totalsByType = approvedLeaves.reduce((acc, leave) => {
       const key = leave.leaveType || "Other";
-      const days = calculateLeaveDays(leave.startDate, leave.endDate) || 0;
+      const days = calculateLeaveDays(leave.startDate, leave.endDate, leave.leaveDays) || 0;
       acc[key] = (acc[key] || 0) + days;
       acc.total += days;
       return acc;

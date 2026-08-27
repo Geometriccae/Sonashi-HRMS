@@ -97,6 +97,19 @@ function applyChangeAudit(updateData, changeStatus, user, remarks = '') {
 
 const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
 
+function excelLeaveDays(start, end) {
+    if (!start || !end) return null;
+    const s = new Date(start);
+    const e = new Date(end);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return null;
+    const days = Math.round(
+        (Date.UTC(e.getFullYear(), e.getMonth(), e.getDate()) -
+            Date.UTC(s.getFullYear(), s.getMonth(), s.getDate())) / 86400000
+    );
+    if (!Number.isFinite(days) || days < 0) return null;
+    return days === 0 ? 1 : days;
+}
+
 /**
  * Map form employeeId (Employee._id or User._id) to the leave.employee owner ref.
  * Prefer linked User; if the Employee has no login User, store Employee._id
@@ -528,7 +541,7 @@ router.get('/', authMiddleware, async (req, res) => {
           + (isLite ? '|lite' : '')
           + (paginate
             ? `|p${page}|l${limit}|s${search}|d${department}|m${reportingManager}|y${year}|mo${month}|sd${startDate}|ed${endDate}|lt${leaveType}`
-            : '|all|v2id');
+            : '|all|v3leaveDays');
         const skipCache =
           String(req.query.fresh || '') === '1' ||
           String(req.query.fresh || '').toLowerCase() === 'true';
@@ -538,12 +551,12 @@ router.get('/', authMiddleware, async (req, res) => {
         }
 
         const LEAVE_TABLE_SELECT =
-          'employee employeeRecordId employeeId employeeName company department reportingManager leaveType startDate endDate reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
+          'employee employeeRecordId employeeId employeeName company department reportingManager leaveType startDate endDate leaveDays importSource reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
 
         let leaveRequests;
         if (isLite) {
             leaveRequests = await LeaveRequest.find(filter)
-                .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn requestAirfare')
+                .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate leaveDays importSource status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn requestAirfare')
                 .sort({ appliedOn: -1 })
                 .lean();
             leaveRequests = await enrichLeaveRowsWithEmployeeIdentity(leaveRequests, { User, Employee });
@@ -655,7 +668,7 @@ router.get('/consistency-check', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Employee not found', resolved });
         }
         const leaves = await LeaveRequest.find(ownerFilter)
-            .select('employee employeeRecordId employeeId employeeName startDate endDate leaveType status requestAirfare appliedOn')
+            .select('employee employeeRecordId employeeId employeeName startDate endDate leaveDays importSource leaveType status requestAirfare appliedOn')
             .sort({ startDate: -1 })
             .lean();
         const enriched = await enrichLeaveRowsWithEmployeeIdentity(leaves, { User, Employee });
@@ -753,6 +766,9 @@ router.post('/', authMiddleware, async (req, res) => {
             leaveType,
             startDate: new Date(startDate),
             endDate: new Date(endDate),
+            leaveDays: req.body.leaveDays != null && Number.isFinite(Number(req.body.leaveDays))
+                ? Number(req.body.leaveDays)
+                : excelLeaveDays(startDate, endDate),
             reason,
             status: isPastLeave ? 'Approved' : 'Pending',
             isPastLeave: isPastLeave,
@@ -999,6 +1015,13 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
         const effectiveStart = updateData.startDate || oldRequest.startDate;
         const effectiveEnd = updateData.endDate || oldRequest.endDate;
+        if (updateData.startDate || updateData.endDate) {
+            if (req.body.leaveDays != null && Number.isFinite(Number(req.body.leaveDays))) {
+                updateData.leaveDays = Number(req.body.leaveDays);
+            } else if (oldRequest.importSource !== 'excel-master-tracker') {
+                updateData.leaveDays = excelLeaveDays(effectiveStart, effectiveEnd);
+            }
+        }
 
         // Validate dates against Employee's Joining Date (DOJ)
         if (effectiveStart && effectiveEnd) {
@@ -1300,6 +1323,24 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
             if (u.username) userNameMap[String(u.username).toLowerCase().replace(/[\s_.-]/g, '')] = u;
         });
 
+        const existingApproved = await LeaveRequest.find({
+            status: { $in: ['Approved', 'HOD Approved'] },
+        })
+            .select('employee employeeRecordId employeeId startDate endDate')
+            .lean();
+        const existingByKey = new Map();
+        existingApproved.forEach((row) => {
+            const start = row.startDate ? new Date(row.startDate).toISOString().slice(0, 10) : '';
+            const end = row.endDate ? new Date(row.endDate).toISOString().slice(0, 10) : start;
+            const owner = String(row.employeeRecordId || row.employee || '');
+            if (start && owner) existingByKey.set(`${owner}|${start}|${end}`, row);
+            if (row.employeeId && start) {
+                existingByKey.set(`${String(row.employeeId).toLowerCase()}|${start}|${end}`, row);
+            }
+        });
+        const seenImportKeys = new Set();
+        let skippedDuplicates = 0;
+
         for (let i = 0; i < leaves.length; i++) {
             const row = leaves[i];
             try {
@@ -1352,6 +1393,22 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
                     endDate = startDate; // fallback to single day
                 }
 
+                const startKey = startDate.toISOString().slice(0, 10);
+                const endKey = endDate.toISOString().slice(0, 10);
+                const ownerKey = String(matchedEmp?._id || targetUserId);
+                const codeKey = String(matchedEmp?.employeeId || rawId || '').toLowerCase();
+                const dupKeys = [
+                    `${ownerKey}|${startKey}|${endKey}`,
+                    codeKey ? `${codeKey}|${startKey}|${endKey}` : '',
+                ].filter(Boolean);
+                if (dupKeys.some((k) => seenImportKeys.has(k) || existingByKey.has(k))) {
+                    skippedDuplicates += 1;
+                    continue;
+                }
+                dupKeys.forEach((k) => seenImportKeys.add(k));
+
+                const leaveDaysRaw = row.leaveDays != null ? Number(row.leaveDays) : null;
+
                 newLeaves.push({
                     employee: targetUserId,
                     employeeName: matchedEmp?.employeeName || row.employeeName || row.employeeId || 'Unknown Employee',
@@ -1361,6 +1418,8 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
                     leaveType: row.leaveType || 'Personal Leave',
                     startDate: startDate,
                     endDate: endDate,
+                    leaveDays: Number.isFinite(leaveDaysRaw) ? leaveDaysRaw : undefined,
+                    importSource: 'excel-master-tracker',
                     reason: row.reason || 'Imported from Excel',
                     status: row.status || 'Approved', // Defaults to Approved for imported history
                     isPastLeave: true,
@@ -1383,7 +1442,8 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
         res.json({
             message: `Successfully imported ${newLeaves.length} leave requests.`,
             errors: errors.length > 0 ? errors : undefined,
-            importedCount: newLeaves.length
+            importedCount: newLeaves.length,
+            skippedDuplicates,
         });
     } catch (error) {
         console.error('Error bulk importing leave requests:', error);

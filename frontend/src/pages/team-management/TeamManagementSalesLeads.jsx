@@ -23,7 +23,7 @@ import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, ex
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance, calculateLeaveDays, filterLeavesForEmployee } from "../../utils/leaveCalculator";
-import { formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { formatVacationStatusLabel, formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
@@ -229,24 +229,7 @@ function TeamManagementSalesLeads() {
         setError("No employee data returned from API");
         setEmployee(null);
       } else {
-        // Prefer cached live vacation list if available; avoid fetching all employees again.
-        let withVacation = employeeData;
-        try {
-          const vacList = await employeeService.getEmployeesList({ includeVacation: true });
-          // Only merge when we already have a warm cache / single shared request — still correct.
-          const merged = mergeEffectiveVacationStatuses([employeeData], vacList);
-          withVacation = merged[0] || employeeData;
-        } catch (vacErr) {
-          console.warn("Could not overlay live vacation status:", vacErr?.message || vacErr);
-        }
-        setEmployee(withVacation);
-        // Defer leave history until Leave tab (or load lightly in background after paint)
-        if (activeTab === "leave") {
-          fetchEmployeeLeaves(withVacation);
-        } else {
-          // Warm leave data in background without blocking first paint of basic info
-          setTimeout(() => fetchEmployeeLeaves(withVacation), 0);
-        }
+        setEmployee(employeeData);
       }
     } catch (err) {
       console.error("Error fetching employee:", err);
@@ -1219,7 +1202,7 @@ function TeamManagementSalesLeads() {
                               <td>{new Date(leave.endDate).toLocaleDateString('en-GB')}</td>
                               <td style={{ textAlign: "center", fontWeight: 600 }}>
                                 {(() => {
-                                  const days = calculateLeaveDays(leave.startDate, leave.endDate);
+                                  const days = calculateLeaveDays(leave.startDate, leave.endDate, leave.leaveDays);
                                   return days != null ? `${days} ${days === 1 ? "day" : "days"}` : "—";
                                 })()}
                               </td>

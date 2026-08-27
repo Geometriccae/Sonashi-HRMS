@@ -125,6 +125,8 @@ export const getLeaveTravelDate = (req, linkedEmployee) =>
   toDayStart(linkedEmployee?.travellingDate || req.travellingDate || req.startDate);
 
 export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new Date()) => {
+  const vs = linkedEmployee?.vacationStatus;
+  if (vs === "On Vacation" || vs === "Vacation Approved") return vs;
   if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
 
   const today = toDayStart(todayValue);
@@ -311,6 +313,26 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
       });
     });
 
+  safeEmpList.forEach((e) => {
+    if (e?.vacationStatus !== "Vacation Pending") return;
+    if (!isWorkingEmployeeStatus(e.employeeStatus)) return;
+    const dedupeKey = String(e._id);
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    const leave = findLeaveForEmployee(e, safeLeaveList, safeEmpList, "yetToGo");
+    rows.push({
+      ...e,
+      _source: "employee",
+      linkedEmployeeId: e._id,
+      linkedLeaveId: leave?._id || null,
+      startDate: leave?.startDate || e.travellingDate || null,
+      endDate: leave?.endDate || e.leaveEndDate || null,
+      leaveStatus: leave?.status || null,
+      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
+      vacationStatus: "Vacation Pending",
+    });
+  });
+
   rows.sort((a, b) => {
     const aStart = toDayStart(a.startDate);
     const bStart = toDayStart(b.startDate);
@@ -360,12 +382,17 @@ export const mergeEffectiveVacationStatuses = (employees, vacationList) => {
 
 /**
  * Actual return day used for "Returned Back / Last 6 months".
- * Prefer linked leave end date (leave history), then stored return fields.
+ * Team Management returnDate wins over planned leave.endDate so early return
+ * shows on the dashboard without changing leave-day calculation.
  */
-export const getVacationReturnDate = (emp, leave) =>
-  toDayStart(
-    leave?.endDate || emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
-  );
+export const getVacationReturnDate = (emp, leave) => {
+  const vs = emp?.vacationStatus || "Onsite";
+  const empReturn = emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate;
+  if (vs === "Vacation Approved" && empReturn) {
+    return toDayStart(empReturn);
+  }
+  return toDayStart(leave?.endDate || empReturn);
+};
 
 /** Inclusive window: today back six calendar months. */
 export const isDateWithinLastMonth = (value, now = new Date()) => {
@@ -388,17 +415,14 @@ export const isReturnedBackInLastMonth = (emp, leave, now = new Date()) => {
   if (vs === "On Vacation" || vs === "Vacation Pending") return false;
 
   const leaveEnd = toDayStart(leave?.endDate);
-  const empReturn = toDayStart(
-    emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
-  );
-  const returnDate = leaveEnd || empReturn;
+  const returnDate = getVacationReturnDate(emp, leave);
   if (!isDateWithinLastMonth(returnDate, now)) return false;
 
+  if (vs === "Vacation Approved") return true;
   if (leaveEnd) {
     const today = toDayStart(now);
     if (today && leaveEnd <= today) return true;
   }
-  if (vs === "Vacation Approved") return true;
   return false;
 };
 
@@ -413,6 +437,13 @@ export const filterReturnedBackEmployees = (empList, leaveList, now = new Date()
     if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
     const vs = emp?.vacationStatus || "Onsite";
     if (vs === "On Vacation" || vs === "Vacation Pending") return false;
+
+    if (vs === "Vacation Approved") {
+      const empReturn = toDayStart(
+        emp?.returnDate || emp?.firstWorkingDay || emp?.leaveEndDate
+      );
+      if (empReturn && isDateWithinLastMonth(empReturn, now)) return true;
+    }
 
     const endedInWindow = leaves
       .filter((req) => {

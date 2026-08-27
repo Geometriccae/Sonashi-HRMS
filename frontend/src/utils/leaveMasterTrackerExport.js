@@ -67,7 +67,7 @@ const groupLeavesByYear = (leaves) => {
     if (!start) return;
     const year = start.getFullYear();
     // Inclusive days — same rule as Leave Management / leaveCalculator
-    const days = calculateLeaveDays(start, end) || 0;
+    const days = calculateLeaveDays(start, end, req.leaveDays) || 0;
     if (!byYear[year]) byYear[year] = [];
     byYear[year].push({
       start,
@@ -141,9 +141,8 @@ export function buildLeaveMasterTrackerData({
     const yearHasCompanyTicket = {};
     years.forEach((y) => {
       const list = leavesByYear[y] || [];
-      // Prefer live leave slots for year totals (keeps sheet TOTAL in sync with leave rows)
-      const slotTotal = list.reduce((sum, l) => sum + (l.days || 0), 0);
-      yearTotals[y] = slotTotal > 0 ? slotTotal : (calc.yearTotals[y] || 0);
+      const calcYear = calc.historicalYearTotals?.[y] ?? calc.yearTotals?.[y];
+      yearTotals[y] = calcYear != null ? calcYear : list.reduce((sum, l) => sum + (l.days || 0), 0);
       yearHasCompanyTicket[y] = list.some((l) => l.requestAirfare);
     });
 
@@ -317,11 +316,8 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
     };
     yrsCell.numFmt = "0.00";
 
-    // LEAVE DUE = (Average Leave × 30) − Leave Taken
-    dueCell.value = {
-      formula: `ROUND(${colLetter(colAvrg)}${excelRow}*30-${colLetter(colLast5Taken)}${excelRow},2)`,
-      result: row.leaveDue,
-    };
+    // LEAVE DUE / Available = active entitlement − last-5-year taken (central calculator)
+    dueCell.value = row.leaveDue;
     dueCell.numFmt = "0.00";
 
     r.getCell(colWorkingYrs).value = row.workingYrs;
@@ -409,9 +405,9 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
         const dayCell = r.getCell(daysStartCol + s);
         const startRef = `${colLetter(dateStartCol + s * 2)}${excelRow}`;
         const endRef = `${colLetter(dateStartCol + s * 2 + 1)}${excelRow}`;
-        // Inclusive days (same as Leave Management): end − start + 1
+        // Excel Master Tracker: END − START (same calendar day = 1 for a live request)
         dayCell.value = {
-          formula: `IF(OR(${startRef}="",${endRef}=""),0,${endRef}-${startRef}+1)`,
+          formula: `IF(OR(${startRef}="",${endRef}=""),0,IF(${endRef}=${startRef},1,${endRef}-${startRef}))`,
           result: leave ? leave.days : 0,
         };
         if (leave?.requestAirfare) applyYellow(dayCell);
