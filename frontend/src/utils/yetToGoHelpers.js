@@ -148,11 +148,9 @@ export const findLinkedEmployee = (req, empList) => {
 };
 
 export const getLeaveTravelDate = (req, linkedEmployee) =>
-  toDayStart(linkedEmployee?.travellingDate || req.travellingDate || req.startDate);
+  toDayStart(req?.travellingDate || req?.startDate || linkedEmployee?.travellingDate);
 
 export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new Date()) => {
-  const vs = linkedEmployee?.vacationStatus;
-  if (vs === "On Vacation" || vs === "Vacation Approved") return vs;
   if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
 
   const today = toDayStart(todayValue);
@@ -160,8 +158,12 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
   const leaveEndDate = toDayStart(req?.endDate);
 
   if (!today || !travelDate || !leaveEndDate) return null;
+
+  const returnDay = toDayStart(linkedEmployee?.returnDate);
+  if (returnDay && today >= returnDay && travelDate <= returnDay && today < leaveEndDate) {
+    return "Vacation Approved";
+  }
   if (today < travelDate) return "Vacation Pending";
-  // End date is return / last day — on that day treat as returned (matches vacation-return)
   if (today >= travelDate && today < leaveEndDate) return "On Vacation";
   if (today >= leaveEndDate) return "Vacation Approved";
   return null;

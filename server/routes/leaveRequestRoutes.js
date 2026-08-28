@@ -8,6 +8,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
 const { patchListCacheEmployee, invalidateApprovedLeavesCache } = require('../utils/employeeListCache');
+const { resolveEmployeeVacationStatus, APPROVED_LEAVE_STATUSES } = require('../utils/vacationStatusFromDates');
 const {
     resolveLeaveOwnerIds,
     buildEmployeeLeaveMongoFilter,
@@ -197,39 +198,30 @@ async function resolveEmployeeForLeave(leaveRequest) {
 }
 
 /**
- * After final leave approval: mark employee as Vacation Pending (Yet to go)
- * for any leave type that has not started yet. Does not override On Vacation.
+ * Recalculate vacation status from approved leave dates and persist it
+ * so stored employee.vacationStatus matches every other route.
  */
-async function syncYetToGoVacationStatus(leaveRequest) {
+async function syncEmployeeVacationStatus(leaveRequest) {
     try {
-        if (!leaveRequest || leaveRequest.status !== 'Approved') return;
-
-        const start = leaveRequest.startDate ? new Date(leaveRequest.startDate) : null;
-        if (!start || Number.isNaN(start.getTime())) return;
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startDay = new Date(start);
-        startDay.setHours(0, 0, 0, 0);
-        if (startDay < today) return; // already started — not "yet to go"
-
+        if (!leaveRequest) return;
         const emp = await resolveEmployeeForLeave(leaveRequest);
-        if (!emp) {
-            console.warn('[Leave] Yet-to-go sync skipped: employee not found for', leaveRequest.employeeName);
-            return;
+        if (!emp) return;
+
+        const leaves = await LeaveRequest.find({
+            status: { $in: APPROVED_LEAVE_STATUSES },
+        })
+            .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate returnDate')
+            .lean();
+
+        const empPlain = typeof emp.toObject === 'function' ? emp.toObject() : emp;
+        const vacationStatus = resolveEmployeeVacationStatus(empPlain, leaves) || 'Onsite';
+
+        if (String(emp.vacationStatus) !== String(vacationStatus)) {
+            await Employee.findByIdAndUpdate(emp._id, { vacationStatus });
         }
-
-        if (emp.vacationStatus === 'On Vacation') return;
-
-        if (emp.vacationStatus !== 'Vacation Pending') {
-            await Employee.findByIdAndUpdate(emp._id, { vacationStatus: 'Vacation Pending' });
-            console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id} (${leaveRequest.leaveType || 'leave'})`);
-        }
-
-        // Patch cache in-place — full invalidate caused multi-second cold Mongo reloads
-        patchListCacheEmployee(emp._id, { vacationStatus: 'Vacation Pending' });
+        patchListCacheEmployee(emp._id, { vacationStatus });
     } catch (err) {
-        console.error('[Leave] Yet-to-go vacationStatus sync error:', err.message || err);
+        console.error('[Leave] Vacation status sync error:', err.message || err);
     }
 }
 
@@ -787,6 +779,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
         const savedRequest = await newLeaveRequest.save();
         invalidateLeaveListCache();
+        await syncEmployeeVacationStatus(savedRequest);
 
         if (isPastLeave && req.body.visaExpiryDate && employeeId) {
             await Employee.findByIdAndUpdate(employeeId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
@@ -1124,6 +1117,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             .populate('changedByUser', 'username');
 
         invalidateLeaveListCache();
+        await syncEmployeeVacationStatus(updatedRequest);
 
         if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
             sendLeaveStatusToEmployee(updatedRequest, updateData.status)
@@ -1133,11 +1127,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
             const io = req.app.get('io');
             notifyLeaveStatusChange(io, updatedRequest, updateData.status, req.user.role)
                 .catch((e) => console.error('[Leave] Status notification error:', e));
-        }
-
-        // Yet to go card: after Authorize/Approve, mark employee Vacation Pending
-        if (updateData.status === 'Approved') {
-            await syncYetToGoVacationStatus(updatedRequest);
         }
 
         res.json(updatedRequest);
@@ -1227,6 +1216,7 @@ router.post('/:id/revert', authMiddleware, async (req, res) => {
             .populate('changedByUser', 'username');
 
         invalidateLeaveListCache();
+        await syncEmployeeVacationStatus(updatedRequest);
 
         const io = req.app.get('io');
         notifyLeaveStatusChange(io, updatedRequest, 'Cancelled', req.user.role)
@@ -1259,6 +1249,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Leave request not found' });
         }
         invalidateLeaveListCache();
+        await syncEmployeeVacationStatus(deletedRequest);
         res.json({ message: 'Leave request deleted successfully' });
     } catch (error) {
         console.error('Error deleting leave request:', error);
@@ -1278,8 +1269,16 @@ router.post('/bulk-delete', authMiddleware, async (req, res) => {
             return res.status(400).json({ message: 'No leave request IDs provided' });
         }
 
+        const toDelete = await LeaveRequest.find({ _id: { $in: ids } }).lean();
         const result = await LeaveRequest.deleteMany({ _id: { $in: ids } });
         invalidateLeaveListCache();
+        const seen = new Set();
+        for (const row of toDelete) {
+            const key = String(row.employeeRecordId || row.employee || row.employeeId || row.employeeName || '');
+            if (key && seen.has(key)) continue;
+            if (key) seen.add(key);
+            await syncEmployeeVacationStatus(row);
+        }
         res.json({ message: `Successfully deleted ${result.deletedCount} leave requests`, deletedCount: result.deletedCount });
     } catch (error) {
         console.error('Error bulk deleting leave requests:', error);
@@ -1437,6 +1436,13 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
         if (newLeaves.length > 0) {
             await LeaveRequest.insertMany(newLeaves);
             invalidateLeaveListCache();
+            const synced = new Set();
+            for (const row of newLeaves) {
+                const key = String(row.employeeRecordId || row.employee || row.employeeId || row.employeeName || '');
+                if (key && synced.has(key)) continue;
+                if (key) synced.add(key);
+                await syncEmployeeVacationStatus(row);
+            }
         }
 
         res.json({

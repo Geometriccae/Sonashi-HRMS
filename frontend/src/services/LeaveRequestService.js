@@ -1,5 +1,6 @@
 import axios from "axios";
 import config from "../config/config";
+import employeeService from "./EmployeeService";
 
 let baseURL = config.API_BASE_URL || '';
 if (!baseURL.endsWith('/api')) {
@@ -27,6 +28,11 @@ const cacheKeyFor = (params = {}) => {
 const invalidateLeaveCache = () => {
     _cache = { data: null, key: "", ts: 0 };
     _inflight = {};
+};
+
+const invalidateLeaveAndEmployeeCache = () => {
+    invalidateLeaveCache();
+    employeeService.invalidateCache();
 };
 
 const getLeaveRequests = async (params = {}) => {
@@ -61,7 +67,7 @@ const createLeaveRequest = async (data) => {
     const response = await axios.post(API_URL, data, {
         headers: getAuthHeader()
     });
-    invalidateLeaveCache();
+    invalidateLeaveAndEmployeeCache();
     return response.data;
 };
 
@@ -69,7 +75,7 @@ const updateLeaveRequest = async (id, data) => {
     const response = await axios.put(`${API_URL}/${id}`, data, {
         headers: getAuthHeader()
     });
-    invalidateLeaveCache();
+    invalidateLeaveAndEmployeeCache();
     return response.data;
 };
 
@@ -77,7 +83,7 @@ const deleteLeaveRequest = async (id) => {
     const response = await axios.delete(`${API_URL}/${id}`, {
         headers: getAuthHeader()
     });
-    invalidateLeaveCache();
+    invalidateLeaveAndEmployeeCache();
     return response.data;
 };
 
@@ -86,33 +92,33 @@ const leaveRequestService = {
     createLeaveRequest,
     updateLeaveRequest,
     deleteLeaveRequest,
-    invalidateCache: invalidateLeaveCache,
+    invalidateCache: invalidateLeaveAndEmployeeCache,
     approveLeaveRequest: async (id, status) => {
         const response = await axios.put(`${API_URL}/${id}`, { status }, {
             headers: getAuthHeader()
         });
-        invalidateLeaveCache();
+        invalidateLeaveAndEmployeeCache();
         return response.data;
     },
     revertLeaveRequest: async (id) => {
         const response = await axios.post(`${API_URL}/${id}/revert`, {}, {
             headers: getAuthHeader()
         });
-        invalidateLeaveCache();
+        invalidateLeaveAndEmployeeCache();
         return response.data;
     },
     bulkImport: async (leaves) => {
         const response = await axios.post(`${API_URL}/bulk-import`, { leaves }, {
             headers: getAuthHeader()
         });
-        invalidateLeaveCache();
+        invalidateLeaveAndEmployeeCache();
         return response.data;
     },
     bulkDelete: async (ids) => {
         const response = await axios.post(`${API_URL}/bulk-delete`, { ids }, {
             headers: getAuthHeader()
         });
-        invalidateLeaveCache();
+        invalidateLeaveAndEmployeeCache();
         return response.data;
     }
 };
