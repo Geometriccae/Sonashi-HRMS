@@ -352,7 +352,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             : Array.isArray(allLeaveRequests)
               ? allLeaveRequests
               : [];
-    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, balanceLeaveSource) : { entitlement: 0, totalTaken: 0, balance: 0 };
+    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, balanceLeaveSource, formData.startDate || new Date()) : { entitlement: 0, totalTaken: 0, balance: 0 };
     const employeeLeaves = selectedEmp
         ? getApprovedLeavesForEmployee(selectedEmp, balanceLeaveSource)
         : [];

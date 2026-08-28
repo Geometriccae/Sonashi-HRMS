@@ -1,10 +1,10 @@
 import ExcelJS from "exceljs";
 import {
-  calculateLeaveDays,
   computeExcelLeaveCalculation,
   getApprovedLeavesForEmployee,
   getLeaveTillDate,
   lastFiveLeaveYears,
+  leaveRequestDays,
   toLeaveCalendarDate,
 } from "./leaveCalculator";
 
@@ -66,8 +66,9 @@ const groupLeavesByYear = (leaves) => {
     const end = parseDate(req.endDate) || start;
     if (!start) return;
     const year = start.getFullYear();
-    // Inclusive days — same rule as Leave Management / leaveCalculator
-    const days = calculateLeaveDays(start, end, req.leaveDays) || 0;
+    // Eligible Taken days — same rule as leaveCalculator (not raw date spans)
+    const days = leaveRequestDays(req);
+    if (!days) return;
     if (!byYear[year]) byYear[year] = [];
     byYear[year].push({
       start,
@@ -300,9 +301,9 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
       last5Cell.value = row.last5Taken;
     }
 
-    // Avrg = Working Years capped at 5 (matches leaveCalculator averageLeave)
+    // Avrg = last-5-year taken / min(5, window years) — Excel column Z
     avrgCell.value = {
-      formula: `ROUND(MIN(${colLetter(colLast5Days)}${excelRow}/365,5),2)`,
+      formula: `IF(${colLetter(colYrs)}${excelRow}=0,0,ROUND(${colLetter(colLast5Taken)}${excelRow}/MIN(5,${colLetter(colYrs)}${excelRow}),2))`,
       result: row.avrg,
     };
     avrgCell.numFmt = "0.00";
@@ -316,8 +317,11 @@ export function buildLeaveMasterTrackerWorkbook(trackerData) {
     };
     yrsCell.numFmt = "0.00";
 
-    // LEAVE DUE / Available = active entitlement − last-5-year taken (central calculator)
-    dueCell.value = row.leaveDue;
+    // LEAVE DUE = (30 − Avrg) × yrs — same formula as the client master tracker
+    dueCell.value = {
+      formula: `SUM(30-${colLetter(colAvrg)}${excelRow})*${colLetter(colYrs)}${excelRow}`,
+      result: row.leaveDue,
+    };
     dueCell.numFmt = "0.00";
 
     r.getCell(colWorkingYrs).value = row.workingYrs;

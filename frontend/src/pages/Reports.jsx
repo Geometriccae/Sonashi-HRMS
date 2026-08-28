@@ -543,7 +543,7 @@ function Reports() {
       || String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
     );
 
-    let tillDate = new Date(new Date().getFullYear(), 11, 31);
+    let tillDate = new Date();
     if (filterYear !== "All" && !Number.isNaN(Number(filterYear))) {
       tillDate = new Date(Number(filterYear), 11, 31);
     } else if (endDate) {

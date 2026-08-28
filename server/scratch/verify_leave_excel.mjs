@@ -3,41 +3,30 @@ import {
   computeExcelLeaveCalculation,
   countCompletedMonths,
   getActiveLeaveWindow,
+  leaveRequestDays,
+  matchesLeaveEmployee,
 } from "../../frontend/src/utils/leaveCalculator.js";
 
 const asOf = new Date(2026, 7, 24); // 24/08/2026
+const asOf2027 = new Date(2027, 7, 24);
+const asOf2028 = new Date(2028, 7, 24);
 
 const empA = computeExcelLeaveCalculation({ employeeName: "A", doj: "2017-01-01" }, [], asOf);
 const empB = computeExcelLeaveCalculation({ employeeName: "B", doj: "2021-01-01" }, [], asOf);
 const empC = computeExcelLeaveCalculation({ employeeName: "C", doj: "2024-01-01" }, [], asOf);
 const empD = computeExcelLeaveCalculation({ employeeName: "D", doj: "2025-01-01" }, [], asOf);
 const empE = computeExcelLeaveCalculation({ employeeName: "E", doj: "2026-03-01" }, [], asOf);
+const empExact5 = computeExcelLeaveCalculation({ employeeName: "Exact5", doj: "2021-08-24" }, [], asOf);
+const emp2y = computeExcelLeaveCalculation({ employeeName: "2y", doj: "2024-08-24" }, [], asOf);
+const emp3y = computeExcelLeaveCalculation({ employeeName: "3y", doj: "2023-08-24" }, [], asOf);
 
-const empExact5 = computeExcelLeaveCalculation(
-  { employeeName: "Exact5", doj: "2021-08-24" },
-  [],
-  asOf
-);
-
-const emp66 = computeExcelLeaveCalculation(
-  { employeeName: "66m", doj: "2021-02-01" },
-  [],
-  asOf
-);
+const win2026 = getActiveLeaveWindow(asOf, "2007-08-01");
+const win2027 = getActiveLeaveWindow(asOf2027, "2007-08-01");
+const win2028 = getActiveLeaveWindow(asOf2028, "2007-08-01");
 
 const oldWindowLeave = [
-  {
-    status: "Approved",
-    employeeName: "Hist",
-    startDate: "2018-01-01",
-    endDate: "2018-01-20",
-  },
-  {
-    status: "Approved",
-    employeeName: "Hist",
-    startDate: "2023-06-01",
-    endDate: "2023-07-02",
-  },
+  { status: "Approved", employeeName: "Hist", startDate: "2018-01-01", endDate: "2018-01-21" },
+  { status: "Approved", employeeName: "Hist", startDate: "2023-06-01", endDate: "2023-07-03" },
 ];
 const empHist = computeExcelLeaveCalculation(
   { employeeName: "Hist", doj: "2014-01-01" },
@@ -47,89 +36,132 @@ const empHist = computeExcelLeaveCalculation(
 
 const empTaken = computeExcelLeaveCalculation(
   { employeeName: "Taken", doj: "2017-01-01" },
-  [
-    {
-      status: "Approved",
-      employeeName: "Taken",
-      startDate: "2024-01-01",
-      endDate: "2024-02-01",
-    },
-  ],
+  [{ status: "Approved", employeeName: "Taken", startDate: "2024-01-01", endDate: "2024-02-02" }],
   asOf
 );
 
-const { effectiveStart: histStart } = getActiveLeaveWindow(asOf, "2014-01-01");
+const near = (a, b, tol = 0.15) => Math.abs(Number(a) - Number(b)) <= tol;
 
 const checks = [
   ["2.5 accrual helper", accrueLeaveDays(6) === 15 && accrueLeaveDays(60) === 150],
   ["completed months 24/02→24/08 = 6", countCompletedMonths("2026-02-24", asOf) === 6],
-  ["completed months exact 5y = 60", countCompletedMonths("2021-08-24", asOf) === 60],
+  ["2026 window starts 2021-01-01", win2026.windowStart.getFullYear() === 2021 && win2026.windowStart.getMonth() === 0 && win2026.windowStart.getDate() === 1],
+  ["2027 window starts 2022-01-01", win2027.windowStart.getFullYear() === 2022],
+  ["2028 window starts 2023-01-01", win2028.windowStart.getFullYear() === 2023],
   ["A >5y entitlement capped 150", empA.entitlement === 150],
   ["A expired > 0", empA.expiredDays > 0],
-  ["A available 150 with no taken", empA.leaveDue === 150],
-  ["B ~5y+ entitlement 150", empB.entitlement === 150],
-  ["C ~31m entitlement 77.5", empC.activeEligibleMonths === 31 && empC.entitlement === 77.5 && empC.expiredDays === 0],
-  ["C less than 5y not capped at 150", empC.entitlement < 150],
-  ["exact 24 months from DOJ = 60", (() => {
-    const e = computeExcelLeaveCalculation({ employeeName: "24m", doj: "2024-08-24" }, [], asOf);
-    return e.activeEligibleMonths === 24 && e.entitlement === 60;
-  })()],
-  ["D ~1y entitlement ~45 (19m to Aug)", empD.activeEligibleMonths === 19 && empD.entitlement === 47.5],
-  ["E ~5m from Mar 1", empE.activeEligibleMonths === 5 && empE.entitlement === 12.5],
-  ["exact 5y = 150 / expired 0", empExact5.entitlement === 150 && empExact5.expiredDays === 0],
-  ["66 months total accrued 165", emp66.totalAccruedDays === 165],
-  ["66 months active 150 expired 15", emp66.entitlement === 150 && emp66.expiredDays === 15],
+  ["A leave due = 30×yrs when taken is 0", near(empA.leaveDue, empA.workingYearsExact * 30)],
+  ["B from window start entitlement 150, expired 0", empB.entitlement === 150 && empB.expiredDays === 0],
+  ["C less than 5y not 150", empC.entitlement < 150 && empC.expiredDays === 0],
+  ["C entitlement = windowYears × 30", near(empC.entitlement, empC.workingYearsExact * 30)],
+  ["DOJ after window start uses DOJ", empC.calculateLeaveDate.getTime() === new Date(2024, 0, 1).getTime()],
+  ["2 years ≈ 60", near(emp2y.entitlement, 60)],
+  ["3 years ≈ 90", near(emp3y.entitlement, 90)],
+  ["new joiner not 150", empE.entitlement > 0 && empE.entitlement < 30],
+  ["D not 150", empD.entitlement < 150],
   ["old leave not in active taken", empHist.totalTaken === 32],
   ["old leave historical before window", empHist.historicalTakenOutsideWindow === 20],
-  ["hist start is window not DOJ", histStart.getTime() === empHist.calculationStartDate.getTime()],
-  ["taken 32 → available 118", empTaken.totalTaken === 32 && empTaken.leaveDue === 118],
-  ["taken equals sum of active year totals", (() => {
-    const leaves = [
-      { status: "Approved", employeeName: "X", startDate: "2024-04-30", endDate: "2024-04-30" },
-      { status: "Approved", employeeName: "X", startDate: "2025-06-01", endDate: "2025-06-28" },
-      { status: "Approved", employeeName: "X", startDate: "2026-01-01", endDate: "2026-03-24" },
-    ];
-    const emp = { employeeName: "X", doj: "2024-05-01" };
-    const calc = computeExcelLeaveCalculation(emp, leaves, asOf);
-    const activeSum = Object.values(calc.yearTotals).reduce((s, d) => s + d, 0);
-    // Joining-year leave before exact DOJ still counts (imported Excel day)
-    return calc.totalTaken === activeSum && calc.totalTaken === 1 + 28 + 83;
+  ["taken 32 uses Excel LEAVE DUE formula", (() => {
+    const avrg = empTaken.totalTaken / Math.min(5, empTaken.workingYearsExact);
+    return empTaken.totalTaken === 32 && near(empTaken.leaveDue, (30 - avrg) * empTaken.workingYearsExact);
   })()],
-  ["screenshot case 54+28+1 = 83", (() => {
+  ["entitlement stays capped when leave due is not", empA.entitlement === 150 && empA.leaveDue > 150],
+  ["pre-DOJ years excluded", empC.historicalYearTotals[2021] == null || empC.historicalYearTotals[2021] === 0],
+  ["staff code mismatch never matches", matchesLeaveEmployee(
+    { employeeId: "IDMM-999", employeeName: "OTHER", status: "Approved", startDate: "2023-01-01", endDate: "2023-01-10" },
+    { _id: "aaaaaaaaaaaaaaaaaaaaaaaa", employeeId: "IDMM-151", employeeName: "PRINCE" }
+  ) === false],
+  ["staff code match is employee-specific", matchesLeaveEmployee(
+    { employeeId: "IDMM-151", employeeRecordId: "bbbbbbbbbbbbbbbbbbbbbbbb", status: "Approved" },
+    { _id: "aaaaaaaaaaaaaaaaaaaaaaaa", employeeId: "IDMM-151" }
+  ) === true],
+  ["implausible multi-year span is 0 Taken days", leaveRequestDays({
+    status: "Approved",
+    employeeId: "IDMM-151",
+    startDate: "2023-06-17",
+    endDate: "2026-07-20",
+    leaveDays: 1129,
+  }) === 0],
+  ["plausible stored leave days still count", leaveRequestDays({
+    status: "Approved",
+    employeeId: "IDMM-151",
+    startDate: "2026-01-01",
+    endDate: "2026-03-12",
+    leaveDays: 70,
+  }) === 70],
+  ["other employee's leave does not inflate Taken", (() => {
+    const emp = {
+      _id: "aaaaaaaaaaaaaaaaaaaaaaaa",
+      employeeId: "IDMM-151",
+      employeeName: "PRINCE",
+      doj: "2023-06-17",
+    };
     const leaves = [
-      { status: "Approved", employeeName: "Y", startDate: "2026-06-20", endDate: "2026-08-12" },
-      { status: "Approved", employeeName: "Y", startDate: "2025-04-08", endDate: "2025-05-05" },
-      { status: "Approved", employeeName: "Y", startDate: "2024-03-11", endDate: "2024-03-11" },
+      {
+        _id: "1",
+        status: "Approved",
+        employeeId: "IDMM-999",
+        employeeName: "OTHER PERSON",
+        startDate: "2023-01-01",
+        endDate: "2026-02-04",
+        leaveDays: 1129,
+      },
+      {
+        _id: "2",
+        status: "Approved",
+        employeeId: "IDMM-151",
+        employeeRecordId: emp._id,
+        startDate: "2026-01-01",
+        endDate: "2026-03-12",
+        leaveDays: 70,
+      },
+      {
+        _id: "2",
+        status: "Approved",
+        employeeId: "IDMM-151",
+        employeeRecordId: emp._id,
+        startDate: "2026-01-01",
+        endDate: "2026-03-12",
+        leaveDays: 70,
+      },
     ];
-    // ~2y 3m experience as of Aug 2026 → DOJ around May 2024
-    const emp = { employeeName: "Y", doj: "2024-05-01" };
     const calc = computeExcelLeaveCalculation(emp, leaves, asOf);
-    return (
-      calc.yearTotals[2026] === 54 &&
-      calc.yearTotals[2025] === 28 &&
-      calc.yearTotals[2024] === 1 &&
-      calc.totalTaken === 83
-    );
+    return calc.totalTaken === 70 && (calc.yearTotals[2023] || 0) === 0 && calc.yearTotals[2026] === 70;
   })()],
-  ["never double-deduct expired", empA.leaveDue === empA.entitlement - empA.totalTaken],
+  ["own implausible 2023 span does not invent Taken", (() => {
+    const emp = {
+      _id: "aaaaaaaaaaaaaaaaaaaaaaaa",
+      employeeId: "IDMM-151",
+      doj: "2023-06-17",
+      excelLeaveYearTaken: { 2023: 0, 2026: 70 },
+    };
+    const calc = computeExcelLeaveCalculation(emp, [{
+      _id: "3",
+      status: "Approved",
+      employeeId: "IDMM-151",
+      employeeRecordId: emp._id,
+      startDate: "2023-06-17",
+      endDate: "2026-07-20",
+      leaveDays: 1129,
+    }], asOf);
+    return (calc.yearTotals[2023] || 0) === 0 && calc.yearTotals[2026] === 70 && calc.totalTaken === 70;
+  })()],
 ];
 
 const failed = checks.filter(([, ok]) => !ok);
 if (failed.length) {
   console.error("FAIL", failed.map(([n]) => n));
-  console.log({ empA, empB, empC, empD, empE, empExact5, emp66, empHist, empTaken });
+  console.log({ empA, empB, empC, empD, empE, empExact5, emp2y, emp3y, empHist, empTaken });
   process.exit(1);
 }
 
 console.log("PASS", checks.map(([n]) => n).join("; "));
 console.log({
-  A: { ent: empA.entitlement, exp: empA.expiredDays, months: empA.totalEligibleMonths },
-  B: { ent: empB.entitlement, months: empB.activeEligibleMonths },
-  C: { ent: empC.entitlement, months: empC.activeEligibleMonths },
-  D: { ent: empD.entitlement, months: empD.activeEligibleMonths },
-  E: { ent: empE.entitlement, months: empE.activeEligibleMonths },
-  Exact5: { ent: empExact5.entitlement, exp: empExact5.expiredDays },
-  M66: { accrued: emp66.totalAccruedDays, ent: emp66.entitlement, exp: emp66.expiredDays },
-  Hist: { taken: empHist.totalTaken, histOld: empHist.historicalTakenOutsideWindow },
+  A: { ent: empA.entitlement, exp: empA.expiredDays, due: empA.leaveDue, yrs: empA.workingYears },
+  C: { ent: empC.entitlement, yrs: empC.workingYears, start: empC.calculateLeaveDate },
+  "2y": emp2y.entitlement,
+  "3y": emp3y.entitlement,
+  E: empE.entitlement,
   Taken: { taken: empTaken.totalTaken, due: empTaken.leaveDue },
+  windows: { 2026: win2026.windowStart.toISOString().slice(0, 10), 2027: win2027.windowStart.toISOString().slice(0, 10), 2028: win2028.windowStart.toISOString().slice(0, 10) },
 });

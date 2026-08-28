@@ -82,7 +82,7 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
               ? allLeaveRequests
               : [];
     const employeeLeaveRecords = filterLeavesForEmployee(employee, balanceLeaveSource);
-    const leaveStats = calculateLeaveBalance(employee, balanceLeaveSource);
+    const leaveStats = calculateLeaveBalance(employee, balanceLeaveSource, leaveRequest?.startDate || new Date());
     const employeeLeaves = getApprovedLeavesForEmployee(employee, balanceLeaveSource);
 
     const years = buildLeaveHistoryYears(employee.doj);

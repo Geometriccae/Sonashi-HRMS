@@ -25,7 +25,7 @@ function LeaveRequests() {
     const fetchLeaveBalance = async () => {
         try {
             const user = await UserService.getMe();
-            setLeaveBalance(user.leaveBalance !== undefined ? user.leaveBalance : 21);
+            setLeaveBalance(user.leaveBalance != null ? user.leaveBalance : "--");
         } catch (error) {
             console.error("Error fetching leave balance:", error);
         }

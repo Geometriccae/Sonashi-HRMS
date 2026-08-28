@@ -22,7 +22,7 @@ import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import attendanceService from "../services/AttendanceService";
 import salarySlipService from "../services/SalarySlipService";
-import { calculateLeaveBalance, calculateLeaveDays } from "../utils/leaveCalculator";
+import { calculateLeaveBalance, leaveRequestDays } from "../utils/leaveCalculator";
 import { CURRENCY_CODE } from "../utils/currency";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
 import {
@@ -616,7 +616,7 @@ export default function HrMetricsDashboard() {
 
     const totalsByType = approvedLeaves.reduce((acc, leave) => {
       const key = leave.leaveType || "Other";
-      const days = calculateLeaveDays(leave.startDate, leave.endDate, leave.leaveDays) || 0;
+      const days = leaveRequestDays(leave);
       acc[key] = (acc[key] || 0) + days;
       acc.total += days;
       return acc;

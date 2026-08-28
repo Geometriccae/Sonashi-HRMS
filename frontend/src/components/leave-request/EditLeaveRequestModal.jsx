@@ -467,7 +467,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
               ? allLeaveRequests
               : [];
 
-    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, balanceLeaveSource) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
+    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, balanceLeaveSource, formData.startDate || new Date()) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     // Same employee-ID + approved filter as leaveCalculator (not name / Imported).
     const employeeLeaves = selectedEmp && typeof selectedEmp === "object"
         ? getApprovedLeavesForEmployee(selectedEmp, balanceLeaveSource)
