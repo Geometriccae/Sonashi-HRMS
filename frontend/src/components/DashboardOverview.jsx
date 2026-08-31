@@ -196,6 +196,9 @@ function DashboardOverview() {
 
       employeeService.invalidateCache();
       await refreshSummary({ force: true });
+      if (selectedCategory) {
+        await handleCardClick(selectedCategory);
+      }
       return true;
     } catch (err) {
       console.error("Failed to update vacation status:", err);
@@ -258,7 +261,7 @@ function DashboardOverview() {
     }
   };
 
-  const handleCardClick = async (category) => {
+  async function handleCardClick(category) {
     const apiKey = CATEGORY_API_KEY[category];
     if (!apiKey) return;
 
@@ -282,7 +285,7 @@ function DashboardOverview() {
     } finally {
       setModalLoading(false);
     }
-  };
+  }
 
   const cards = [
     { label: "Total Employees", value: counts.total, icon: <FaUsers />, color: "#4f46e5", trend: "+3 this month" },

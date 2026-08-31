@@ -18,6 +18,7 @@ import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
 import AddIncrementModal from "../../components/team-management-components/AddIncrementModal";
 import AddLeaveRequestModal from "../../components/leave-request/AddLeaveRequestModal";
+import { displayEmployeeEmail } from "../../utils/employeeEmailDisplay";
 import EditLeaveRequestModal from "../../components/leave-request/EditLeaveRequestModal";
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
@@ -388,14 +389,20 @@ function TeamManagementSalesLeads() {
     setEvents(prev => [...prev, newEvent]);
   };
 
-  const handleEditEmployeeSubmit = async (updatedEmployee) => {
+  const handleEditEmployeeSubmit = async () => {
     try {
-      setEmployee(updatedEmployee);
+      employeeService.invalidateCache?.();
+      const fresh = await employeeService.getEmployee(employeeId);
+      if (!fresh) {
+        showToast("Employee was saved, but the latest record could not be loaded.", "error");
+        return;
+      }
+      setEmployee(fresh);
       setIsEditEmployeeModalOpen(false);
       showToast("Employee details updated successfully.", 'success');
     } catch (err) {
       console.error("Error updating employee:", err);
-      showToast("Failed to update employee.", 'error');
+      showToast("Failed to refresh employee after update.", "error");
     }
   };
 
@@ -853,11 +860,10 @@ function TeamManagementSalesLeads() {
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Employee ID</span><span className={styles.text10}>{employee.employeeId || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Employee Name</span><span className={styles.text10}>{employee.employeeName || "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Email ID</span><span className={styles.text10}>{employee.emailId || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Email ID</span><span className={styles.text10}>{displayEmployeeEmail(employee.emailId, "Not provided")}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Mobile Number</span><span className={styles.text10}>{employee.mobile || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}><span className={styles.text9}>Role</span><span className={styles.text10}>{employee.role || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Designation</span><span className={styles.text10}>{employee.designation || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Department</span><span className={styles.text10}>{employee.department || "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Attendance Status</span><span className={styles.text10}>{employee.attendance || "Not provided"}</span></div>
@@ -905,7 +911,6 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4}><span className={styles.text9}>Labour Card Expiry</span><span className={styles.text10}>{employee.labourCardExpiryDate ? new Date(employee.labourCardExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Visa Expiry</span><span className={styles.text10}>{employee.visaExpiryDate ? new Date(employee.visaExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Emirates ID Expiry</span><span className={styles.text10}>{employee.emiratesIdExpiryDate ? new Date(employee.emiratesIdExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Contract Renewal</span><span className={styles.text10}>{employee.contractRenewalDate ? new Date(employee.contractRenewalDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Office</span><span className={styles.text10}>{employee.office || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>

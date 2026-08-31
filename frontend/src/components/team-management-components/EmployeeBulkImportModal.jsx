@@ -19,7 +19,6 @@ export const EMPLOYEE_IMPORT_HEADERS = [
   "Email ID",
   "Emirates ID",
   "Nationality",
-  "Role",
   "Designation",
   "DOJ",
   "Total Year of Experience",
@@ -53,7 +52,6 @@ const SAMPLE_ROW = [
   "sample.employee@company.com",
   "",
   "AE",
-  "Sales Executive",
   "Executive",
   "2024-01-15",
   "3",
@@ -66,6 +64,8 @@ const SAMPLE_ROW = [
   "Project Sales",
   "Active",
   "Onsite",
+  "Yes",
+  "Yes",
   "Yes",
   "Acme Bank",
   "7654321098",
@@ -140,7 +140,7 @@ function EmployeeBulkImportModal({ isOpen, onClose, onSuccess }) {
           </p>
           <ul className={styles.requiredList}>
             <li>
-              <strong>Required:</strong> Employee ID, Employee Name, Role, Department
+              <strong>Required:</strong> Employee ID, Employee Name, Department
             </li>
             <li>
               <strong>Optional:</strong> Mobile Number (digits only — spaces and + are removed) and

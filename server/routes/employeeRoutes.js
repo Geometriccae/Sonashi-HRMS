@@ -101,12 +101,11 @@ function warmListCache() {
 }
 // =============================================
 
-/** Import rows only require these four fields (mobile & email are optional). */
+/** Import rows require Employee ID, Employee Name, Department (mobile & email are optional). */
 function importRowRequiredFieldsMissing(payload) {
   const missing = [];
   if (!String(payload?.employeeId ?? '').trim()) missing.push('employeeId');
   if (!String(payload?.employeeName ?? '').trim()) missing.push('employeeName');
-  if (!String(payload?.role ?? '').trim()) missing.push('role');
   if (!String(payload?.department ?? '').trim()) missing.push('department');
   return missing;
 }
@@ -364,7 +363,7 @@ async function withLiveVacationStatus(employees) {
   return Array.isArray(employees) ? resolved : resolved[0];
 }
 
-/** Persist the date-derived status so every route reads the same stored value. */
+/** Persist the resolved status so every route reads the same stored value. */
 async function persistLiveVacationStatus(employee) {
   if (!employee) return employee;
   const plain = typeof employee.toObject === 'function' ? employee.toObject() : { ...employee };
@@ -373,6 +372,10 @@ async function persistLiveVacationStatus(employee) {
     withStatus &&
     String(plain.vacationStatus || '') !== String(withStatus.vacationStatus || '')
   ) {
+    const keepManual = ['Vacation Approved', 'Vacation Pending'];
+    if (keepManual.includes(String(plain.vacationStatus || ''))) {
+      return { ...withStatus, vacationStatus: plain.vacationStatus };
+    }
     await Employee.findByIdAndUpdate(plain._id, { vacationStatus: withStatus.vacationStatus });
     invalidateListCache();
   }
@@ -958,15 +961,18 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
     if (Object.prototype.hasOwnProperty.call(updateData, 'mobile') && updateData.mobile != null) {
       updateData.mobile = String(updateData.mobile).replace(/\D/g, '');
     }
+
+    // Cleared Email ID must persist as no email (sparse unique index). Do not
+    // regenerate import.hrms.placeholder addresses on Employee Master save.
+    const unsetFields = {};
     if (Object.prototype.hasOwnProperty.call(updateData, 'emailId')) {
       const em = String(updateData.emailId || '').trim();
-      if (em) {
+      const isPlaceholder = em.toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_HOST}`);
+      if (em && !isPlaceholder) {
         updateData.emailId = em.toLowerCase();
       } else {
-        const cur = await Employee.findById(req.params.id).select('employeeId').lean();
-        const t = { employeeId: cur?.employeeId || 'emp', emailId: '' };
-        ensureEmployeeEmailForDb(t, `e${String(req.params.id).replace(/[^a-f0-9]/gi, '').slice(-12)}`);
-        updateData.emailId = t.emailId;
+        delete updateData.emailId;
+        unsetFields.emailId = 1;
       }
     }
 
@@ -990,15 +996,68 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
       updateData.vacationStatus = 'Onsite';
     }
 
+    // HR Onsite must persist. If live dates still say On Vacation / Yet to Go /
+    // Returned, stamp returnDate so the shared resolver will not overlay those back.
+    if (updateData.vacationStatus === 'Onsite' && !updateData.returnDate) {
+      const current = await Employee.findById(req.params.id).lean();
+      if (current) {
+        const derived = await withLiveVacationStatus(current);
+        const derivedVs = derived?.vacationStatus;
+        if (['On Vacation', 'Vacation Pending', 'Vacation Approved'].includes(derivedVs)) {
+          const now = new Date();
+          updateData.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+      }
+    }
+
+    // Yet to Go / On Vacation are HR overrides of the current trip. Clear
+    // returnDate so returned/onsite date rules cannot pull them back.
+    if (updateData.vacationStatus === 'Vacation Pending' && updateData.returnDate === undefined) {
+      updateData.returnDate = null;
+    }
+    if (updateData.vacationStatus === 'On Vacation' && updateData.returnDate === undefined) {
+      updateData.returnDate = null;
+    }
+    if (updateData.vacationStatus === 'Vacation Approved' && !updateData.returnDate) {
+      const now = new Date();
+      updateData.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
     if (Object.prototype.hasOwnProperty.call(updateData, 'companyCode')
       && !String(updateData.companyCode || '').trim()) {
       updateData.companyCode = '0000000172509';
     }
 
-    // Use $set so nested salaryDetails / bank fields merge correctly on update
+    // Only persist real Employee schema paths. Drop UI leftovers so a master-data
+    // save cannot create duplicates, wipe increments, or fail role validation.
+    const schemaPaths = new Set(
+      Object.keys(Employee.schema.paths).filter((p) => !p.includes('.'))
+    );
+    for (const key of Object.keys(updateData)) {
+      if (
+        !schemaPaths.has(key) ||
+        key === '_id' ||
+        key === '__v' ||
+        key === 'increments' ||
+        key === 'createdAt' ||
+        key === 'updatedAt'
+      ) {
+        delete updateData[key];
+      }
+    }
+    if (updateData.role !== undefined && !String(updateData.role).trim()) {
+      delete updateData.role;
+    }
+
+    // Use $set so nested salaryDetails / bank fields merge correctly on update.
+    // $unset emailId when the user cleared Email ID so sparse unique stays valid.
+    const updateOps = { $set: updateData };
+    if (Object.keys(unsetFields).length > 0) {
+      updateOps.$unset = unsetFields;
+    }
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
-      { $set: updateData },
+      updateOps,
       { new: true, runValidators: true }
     );
 
@@ -1956,7 +2015,11 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
     await employee.save();
     invalidateListCache();
     invalidateApprovedLeavesCache();
-    const withStatus = await persistLiveVacationStatus(employee);
+    // Do not re-derive from leave dates — that snaps Returned Back back to On Vacation
+    // while leave.endDate is still in the future.
+    const withStatus = typeof employee.toObject === 'function'
+      ? { ...employee.toObject(), vacationStatus: 'Vacation Approved' }
+      : employee;
 
     // Best-effort attendance Onsite for return day
     try {

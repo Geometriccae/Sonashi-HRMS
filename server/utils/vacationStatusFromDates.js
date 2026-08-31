@@ -6,6 +6,14 @@
  *   travel ≤ today < end      → On Vacation
  *   today ≥ end (last 6 mo.)  → Vacation Approved (Returned)
  *
+ * HR-saved statuses persist everywhere and are not immediately overwritten by
+ * still-open leave dates. The employee has one current status and appears in
+ * only that category (On Vacation / Yet to Go / Returned Back / Onsite).
+ *
+ * Stored Vacation Pending, On Vacation, and Vacation Approved are kept as saved.
+ * Vacation Pending still auto-advances to On Vacation on the travelling date.
+ * Onsite + returnDate is kept unless a later trip has reached its travel date.
+ *
  * Employment status (Active / Notice Period / Ex-employee) is separate.
  */
 
@@ -146,10 +154,38 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
         ? [...fromLeaves, empInterval]
         : fromLeaves;
 
+  const stored = employee?.vacationStatus;
+  const returnDay = toCalendarDate(employee?.returnDate);
+
+  // Yet to Go is an explicit HR status (On Vacation → Yet to Go, etc.).
+  if (stored === 'Vacation Pending') {
+    const travel =
+      empTravel
+      || ranked.map((row) => row.travel).filter(Boolean).sort((a, b) => a - b)[0]
+      || null;
+    if (travel && today.getTime() === travel.getTime() && ranked.some((row) => row.status === 'On Vacation')) {
+      return 'On Vacation';
+    }
+    return 'Vacation Pending';
+  }
+
+  // Return/entry date that has been reached = Returned Back.
+  // Leave end may still be in the future; persist must not keep them On Vacation.
+  if (returnDay && today >= returnDay) {
+    if (stored === 'Onsite') {
+      const laterTrip = ranked.filter((row) => row.travel && row.travel > returnDay);
+      if (laterTrip.some((row) => row.status === 'On Vacation')) return 'On Vacation';
+      return 'Onsite';
+    }
+    return 'Vacation Approved';
+  }
+
+  if (stored === 'Vacation Approved') return 'Vacation Approved';
+  if (stored === 'On Vacation') return 'On Vacation';
+
   if (ranked.some((row) => row.status === 'On Vacation')) return 'On Vacation';
   if (ranked.some((row) => row.status === 'Vacation Pending')) return 'Vacation Pending';
 
-  const returnDay = toCalendarDate(employee?.returnDate);
   const newerAfterReturn = ranked.some(
     (row) => returnDay && row.travel && row.travel >= returnDay && row.status !== 'Vacation Approved'
   );

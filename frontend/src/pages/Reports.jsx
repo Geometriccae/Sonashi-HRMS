@@ -77,7 +77,6 @@ const mapEmployeeMasterRow = (e) => {
     Nationality: e.nationality || "",
     Department: e.department || "",
     Designation: e.designation || "",
-    Role: e.role || "",
     Company: e.office || "",
     "Company Code": e.companyCode || "",
     "Office Location": e.office || "",
@@ -103,8 +102,7 @@ const mapEmployeeMasterRow = (e) => {
     "Labour Card Number": e.labourCardNumber || "",
     "Labour Card Expiry": formatReportDate(e.labourCardExpiryDate),
     "Visa Expiry": formatReportDate(e.visaExpiryDate),
-    "Work Permit No": e.workPermitNo || "",
-    "Contract Renewal Date": formatReportDate(e.contractRenewalDate),
+    "Person Code": e.workPermitNo || "",
     "Total Years Experience": formatExperienceLabel(
       e.doj,
       e.totalYearsExperience,
@@ -961,12 +959,17 @@ function Reports() {
           : employeeStatus === "InActive"
             ? "InActive"
             : undefined;
-      let empList = await fetchFullEmployees(statusForApi);
+      employeeService.invalidateCache();
+      let empList = await employeeService.getEmployees({
+        force: true,
+        status: statusForApi,
+      });
+      empList = Array.isArray(empList) ? empList : (empList.employees || empList.data || []);
       if (!Array.isArray(empList)) empList = [];
 
       // Same live vacation status as Annual Vacations (includeVacation merge)
       try {
-        const vacList = await employeeService.getEmployeesList({ includeVacation: true });
+        const vacList = await employeeService.getEmployeesList({ force: true, includeVacation: true });
         empList = mergeEffectiveVacationStatuses(empList, vacList);
       } catch (vacErr) {
         console.warn("Employees Master Data: vacation status overlay failed:", vacErr?.message || vacErr);

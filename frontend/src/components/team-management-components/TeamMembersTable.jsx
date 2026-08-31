@@ -53,19 +53,7 @@ import {
 } from "../../utils/employeeStatusDisplay";
 import { HR_METRICS_LIST_PARAM_KEYS } from "../../utils/hrMetricsFilters";
 
-/** Legacy server-generated placeholder emails — show as empty in the table. */
-const LEGACY_PLACEHOLDER_EMAIL_HOST = "import.hrms.placeholder";
-
-function displayEmployeeEmail(emailId) {
-  if (emailId == null || String(emailId).trim() === "") {
-    return { text: "—", isEmpty: true };
-  }
-  const s = String(emailId).trim();
-  if (s.toLowerCase().endsWith(`@${LEGACY_PLACEHOLDER_EMAIL_HOST}`)) {
-    return { text: "—", isEmpty: true };
-  }
-  return { text: s, isEmpty: false };
-}
+import { employeeEmailDisplayState } from "../../utils/employeeEmailDisplay";
 
 /** Stable string id for selection / delete (ObjectId vs string from API/socket). */
 function empRowId(memberOrId) {
@@ -463,9 +451,10 @@ function TeamMembersTable() {
     }
   };
 
-  const handleEditEmployeeSubmit = async (formData) => {
+  const handleEditEmployeeSubmit = async () => {
     try {
-      fetchEmployees();
+      employeeService.invalidateCache?.();
+      await fetchEmployees();
       showToast("Employee details updated successfully.", 'success');
     } catch (err) {
       console.error("Error refreshing employees after edit:", err);
@@ -949,7 +938,7 @@ function TeamMembersTable() {
         key: "emailId",
         sorter: (a, b) => (a.emailId || "").localeCompare(b.emailId || ""),
         render: (email) => {
-          const emailDisplay = displayEmployeeEmail(email);
+          const emailDisplay = employeeEmailDisplayState(email, "—");
           return (
             <Typography.Text type={emailDisplay.isEmpty ? "secondary" : undefined}>
               {emailDisplay.text}

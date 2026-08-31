@@ -264,7 +264,8 @@ function buildEmployeePayload(row, nameToId) {
   const employeeName = String(pickRaw(map, 'employeeName')).trim();
   const mobileDigits = normalizeMobileDigits(pickRaw(map, 'mobile'));
   const emailRaw = String(pickRaw(map, 'emailId')).trim();
-  const role = String(pickRaw(map, 'role')).trim();
+  const designation = String(pickRaw(map, 'designation') || '').trim();
+  const role = String(pickRaw(map, 'role') || designation || '-').trim();
   const department = String(pickRaw(map, 'department')).trim();
 
   const payload = {
@@ -278,7 +279,7 @@ function buildEmployeePayload(row, nameToId) {
     emiratesId: String(pickRaw(map, 'emiratesId') || '').trim(),
     nationality: String(pickRaw(map, 'nationality') || '').trim(),
     role,
-    designation: String(pickRaw(map, 'designation') || '').trim(),
+    designation,
     passportNo: String(pickRaw(map, 'passportNo') || '').trim(),
     remarks: String(pickRaw(map, 'remarks') || '').trim(),
     department,
