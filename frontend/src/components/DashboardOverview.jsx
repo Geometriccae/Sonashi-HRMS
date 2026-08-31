@@ -170,24 +170,26 @@ function DashboardOverview() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem.linkedEmployeeId || employeeItem._id || employeeItem.id;
     try {
-      // Returning from vacation (early or extended): sync leave end date + statuses
+      let updated = null;
       if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
         const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
         const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
-        await employeeService.markVacationReturn(empId, {
+        const result = await employeeService.markVacationReturn(empId, {
           returnDate,
           firstWorkingDay,
           leaveId: employeeItem.linkedLeaveId || null,
         });
+        updated = result?.employee || result;
       } else {
-        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+        updated = await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
       }
 
-      // Patch filteredList with both status and extra fields (dates)
+      const liveStatus = updated?.vacationStatus || newStatus;
+
       setFilteredList(prev =>
         prev.map(e =>
           (e._id === empId || e.id === empId || e.linkedEmployeeId === empId || String(e._id) === String(empId))
-            ? { ...e, vacationStatus: newStatus, ...extraFields }
+            ? { ...e, ...extraFields, vacationStatus: liveStatus }
             : e
         )
       );

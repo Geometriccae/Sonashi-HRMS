@@ -476,33 +476,38 @@ function TeamMembersTable() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem._id || employeeItem.id;
     try {
+      let updated = null;
       if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
         const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
         const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
-        await employeeService.markVacationReturn(empId, {
+        const result = await employeeService.markVacationReturn(empId, {
           returnDate,
           firstWorkingDay,
           leaveId: employeeItem.linkedLeaveId || null,
         });
+        updated = result?.employee || result;
       } else {
-        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+        updated = await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
       }
 
-      // Update in-state
+      const liveStatus = updated?.vacationStatus || newStatus;
+
       setEmployees(prev =>
         prev.map(e =>
           (e._id === empId || e.id === empId)
             ? {
                 ...e,
-                vacationStatus: newStatus,
+                ...(updated && typeof updated === "object" ? updated : {}),
                 ...extraFields,
-                attendance: newStatus === "Vacation Approved" ? "Onsite" : e.attendance,
+                vacationStatus: liveStatus,
+                attendance: liveStatus === "Vacation Approved" ? "Onsite" : e.attendance,
               }
             : e
         )
       );
 
       employeeService.invalidateCache?.();
+      await fetchEmployees({ soft: true });
       showToast("Vacation status updated successfully.", "success");
     } catch (err) {
       console.error("Failed to update vacation status:", err);

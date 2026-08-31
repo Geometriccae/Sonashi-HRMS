@@ -221,6 +221,11 @@ function getEffectiveVacationStatus(req, linkedEmployee, todayValue = new Date()
 }
 
 function leaveMatchesEmployee(req, emp, empList) {
+  const empStaff = String(emp.employeeId || '').trim().toLowerCase();
+  const reqStaff = String(req.employeeId || '').trim().toLowerCase();
+  const isStaff = (value) => /^id[a-z]{2}-\d+/i.test(value);
+  if (isStaff(reqStaff) && isStaff(empStaff) && reqStaff !== empStaff) return false;
+
   const linked = findLinkedEmployee(req, empList);
   if (linked && String(linked._id) === String(emp._id)) return true;
 

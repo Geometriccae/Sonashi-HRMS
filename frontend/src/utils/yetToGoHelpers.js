@@ -154,8 +154,10 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
   if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
 
   const today = toDayStart(todayValue);
-  const travelDate = getLeaveTravelDate(req, linkedEmployee);
-  const leaveEndDate = toDayStart(req?.endDate);
+  const empTravel = toDayStart(linkedEmployee?.travellingDate);
+  const empEnd = toDayStart(linkedEmployee?.leaveEndDate);
+  const travelDate = empTravel || getLeaveTravelDate(req, linkedEmployee);
+  const leaveEndDate = empEnd || toDayStart(req?.endDate);
 
   if (!today || !travelDate || !leaveEndDate) return null;
 
@@ -195,6 +197,11 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
 };
 
 export const leaveMatchesEmployee = (req, emp, empList) => {
+  const reqStaff = String(req.linkedEmployeeCode || req.employeeId || "").trim().toLowerCase();
+  const empStaff = String(emp.employeeId || "").trim().toLowerCase();
+  const isStaff = (value) => /^id[a-z]{2}-\d+/i.test(value);
+  if (isStaff(reqStaff) && isStaff(empStaff) && reqStaff !== empStaff) return false;
+
   const linked = findLinkedEmployee(req, empList);
   if (linked && String(linked._id) === String(emp._id)) return true;
 

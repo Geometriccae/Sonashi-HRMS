@@ -364,6 +364,21 @@ async function withLiveVacationStatus(employees) {
   return Array.isArray(employees) ? resolved : resolved[0];
 }
 
+/** Persist the date-derived status so every route reads the same stored value. */
+async function persistLiveVacationStatus(employee) {
+  if (!employee) return employee;
+  const plain = typeof employee.toObject === 'function' ? employee.toObject() : { ...employee };
+  const withStatus = await withLiveVacationStatus(plain);
+  if (
+    withStatus &&
+    String(plain.vacationStatus || '') !== String(withStatus.vacationStatus || '')
+  ) {
+    await Employee.findByIdAndUpdate(plain._id, { vacationStatus: withStatus.vacationStatus });
+    invalidateListCache();
+  }
+  return withStatus;
+}
+
 
 // Lightweight stats for dashboard / team management / annual vacation cards
 // Returns counts only — does not ship full employee or leave payloads.
@@ -860,6 +875,7 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
     const employee = new Employee(employeeData);
     const savedEmployee = await employee.save();
     invalidateListCache();
+    const withStatus = await persistLiveVacationStatus(savedEmployee);
 
     // Emit lightweight event so frontends can update lists in real-time
     try {
@@ -881,7 +897,7 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
       console.warn('Failed to send onboarding notification:', notifErr);
     }
 
-    res.status(201).json(savedEmployee);
+    res.status(201).json(withStatus || savedEmployee);
   } catch (error) {
     console.error("Create employee error:", error);
 
@@ -991,10 +1007,11 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
     }
 
     invalidateListCache();
+    const withStatus = await persistLiveVacationStatus(updatedEmployee);
     console.log('✅ Employee updated successfully:', updatedEmployee._id);
     res.json({
       message: 'Employee updated successfully',
-      employee: updatedEmployee
+      employee: withStatus || updatedEmployee
     });
 
   } catch (error) {
@@ -1939,6 +1956,7 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
     await employee.save();
     invalidateListCache();
     invalidateApprovedLeavesCache();
+    const withStatus = await persistLiveVacationStatus(employee);
 
     // Best-effort attendance Onsite for return day
     try {
@@ -1960,7 +1978,7 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
 
     res.json({
       message: 'Vacation return updated successfully',
-      employee,
+      employee: withStatus || employee,
       leave,
     });
   } catch (error) {

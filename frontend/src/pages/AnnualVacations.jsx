@@ -374,7 +374,7 @@ function AnnualVacations() {
     }
   }, [fetchCounts, fetchTabPage, activeTab]);
 
-  useEffect(() => { fetchCounts(); }, [fetchCounts]);
+  useEffect(() => { fetchCounts({ force: true }); }, [fetchCounts]);
 
   // Keep URL + sidebar path in sync when restoring tab from session
   useEffect(() => {
