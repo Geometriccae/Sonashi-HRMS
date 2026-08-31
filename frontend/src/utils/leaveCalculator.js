@@ -1,12 +1,11 @@
 /**
- * Sonashi leave entitlement (Master Tracker business rules).
+ * Sonashi leave: Excel master-tracker data + client month entitlement.
  *
- * Accrual: 30 days per year (2.5 per month), using Excel (TILL − CALCULATE LEAVE) / 365.
- * Active window: 1 Jan of (year − 5) through the calculation date, never before DOJ.
- * Active entitlement: min(windowYears × 30, 150).
- * Expired: total service accrued − active entitlement (never negative).
- * Available / LEAVE DUE: Excel (30 − Avrg) × yrs. Avrg = Taken / min(5, yrs).
- * Historical leave outside the window stays in history only.
+ * DATA: yearly taken from the employee’s own records / imported Excel map (by staff ID).
+ * ENTITLEMENT: completed months × 2.5, cap 150 (last 5 years).
+ * TAKEN: only years in the rolling window; Excel year totals are not mixed with other staff.
+ * AVAILABLE: entitlement − taken.
+ * EXPIRED: accrual before the active window (DOJ history minus window).
  */
 
 export const LEAVE_POLICY = Object.freeze({
@@ -427,6 +426,10 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
     const rangeTo = toLeaveCalendarDate(rangeEnd);
     if (!rangeFrom || !rangeTo) return byYear;
 
+    const hasExcelMap =
+        employee?.excelLeaveYearTaken != null && typeof employee.excelLeaveYearTaken === "object";
+    const currentYear = rangeTo.getFullYear();
+
     getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
         const start = toLeaveCalendarDate(req.startDate);
         if (!start) return;
@@ -434,6 +437,7 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
         const yearStart = new Date(year, 0, 1);
         const yearEnd = new Date(year, 11, 31);
         if (yearEnd < rangeFrom || yearStart > rangeTo) return;
+        if (year > currentYear) return;
         const days = leaveRequestDays(req);
         if (!days) return;
         if (!isExcelImportedLeave(req)) {
@@ -443,16 +447,19 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
     });
 
     const startYear = rangeFrom.getFullYear();
-    const endYear = rangeTo.getFullYear();
+    const endYear = Math.min(rangeTo.getFullYear(), currentYear);
     for (let year = startYear; year <= endYear; year += 1) {
         const excelVal = getExcelYearTaken(employee, year);
         const live = liveByYear[year] || 0;
-        if (excelVal != null) {
-            // Master-sheet yearly total is the historical source of truth.
-            // Live (non-imported) approved leave after the import is added on top.
-            byYear[year] = roundLeaveNumber(excelVal + live);
+        if (hasExcelMap) {
+            const excelDays = excelVal == null ? 0 : excelVal;
+            // Closed years in the imported map are complete (0 means no leave).
+            // Only the current year can add live, non-imported approved leave.
+            byYear[year] = roundLeaveNumber(year < currentYear ? excelDays : excelDays + live);
         } else if (byYear[year] != null) {
             byYear[year] = roundLeaveNumber(byYear[year]);
+        } else {
+            byYear[year] = 0;
         }
     }
     return byYear;
@@ -469,14 +476,23 @@ export function yearWiseLeaveTaken(employee, allLeaveRequests, rangeStart = null
 }
 
 /**
- * Central leave summary (Master Tracker + 150-day cap).
+ * Active entitlement from DOJ and the calculation date: completed months × 2.5, cap 150.
+ */
+export function calculateEntitlementDays(joiningDate, calculationDateInput = null) {
+    const calcDate = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
+    const join = toLeaveCalendarDate(joiningDate);
+    const { effectiveStart } = getActiveLeaveWindow(calcDate, join);
+    const months = Math.min(countCompletedMonths(effectiveStart, calcDate), MAX_ACTIVE_MONTHS);
+    return Math.min(accrueLeaveDays(months), MAX_ACTIVE_ENTITLEMENT_DAYS);
+}
+
+/**
+ * Central leave summary.
  *
- * Excel window length: (TILL − CALCULATE LEAVE) / 365 years.
- * Accrual: 30 days per year = 2.5 per month.
- * ACTIVE_ENTITLEMENT = min(windowYears × 30, 150)
- * EXPIRED            = max(serviceYears × 30 − ACTIVE_ENTITLEMENT, 0)
- * TAKEN              = approved / imported leave in the active year window
- * AVAILABLE / LEAVE DUE = (30 − Taken / min(5, yrs)) × yrs   [Excel column AA]
+ * Entitlement = min(completed months, 60) × 2.5
+ * Taken       = this employee’s leave in the rolling 5-year window (Excel year map by staff ID)
+ * Available   = entitlement − taken
+ * Expired     = months accrued before the active window
  */
 export function computeExcelLeaveCalculation(employee, allLeaveRequests, calculationDateInput = null) {
     const calcDate = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
@@ -490,13 +506,13 @@ export function computeExcelLeaveCalculation(employee, allLeaveRequests, calcula
 
     const workingDays = excelDateDiffDays(calcDate, effectiveStart);
     const totalWorkingDays = joiningDate ? excelDateDiffDays(calcDate, joiningDate) : workingDays;
+    // Excel yrs / LEAVE DUE use day-count years. Entitlement does not.
     const workingYearsExact = workingDays / DAYS_PER_YEAR;
-    const totalServiceYearsExact = totalWorkingDays / DAYS_PER_YEAR;
     const workingYears = roundLeaveNumber(workingYearsExact);
 
-    const totalAccruedDays = roundLeaveNumber(totalServiceYearsExact * ANNUAL_LEAVE_DAYS);
-    const windowAccruedUncapped = roundLeaveNumber(workingYearsExact * ANNUAL_LEAVE_DAYS);
-    const entitlement = Math.min(windowAccruedUncapped, MAX_ACTIVE_ENTITLEMENT_DAYS);
+    const totalAccruedDays = accrueLeaveDays(totalEligibleMonths);
+    const windowAccruedUncapped = accrueLeaveDays(activeEligibleMonthsRaw);
+    const entitlement = calculateEntitlementDays(joiningDate, calcDate);
     const expiredDays = roundLeaveNumber(Math.max(totalAccruedDays - windowAccruedUncapped, 0));
     const windowYearsForAverage = Math.min(Math.max(workingYearsExact, 0), MAX_ACTIVE_YEARS);
 
@@ -534,8 +550,7 @@ export function computeExcelLeaveCalculation(employee, allLeaveRequests, calcula
     const averageLeave = roundLeaveNumber(
         windowYearsForAverage > 0 ? totalTaken / windowYearsForAverage : 0
     );
-    // Excel LEAVE DUE = (30 − Avrg) × yrs. Avrg = last-5 taken / min(5, yrs).
-    const leaveDue = roundLeaveNumber((ANNUAL_LEAVE_DAYS - averageLeave) * workingYearsExact);
+    const availableDays = roundLeaveNumber(entitlement - totalTaken);
 
     return {
         tillDate: calcDate,
@@ -563,9 +578,9 @@ export function computeExcelLeaveCalculation(employee, allLeaveRequests, calcula
         historicalTakenOutsideWindow,
         expiredDays,
         entitlement,
-        balance: leaveDue,
-        leaveDue,
-        availableDays: leaveDue,
+        balance: availableDays,
+        leaveDue: availableDays,
+        availableDays,
     };
 }
 

@@ -159,7 +159,7 @@ export function buildLeaveMasterTrackerData({
       leavesByYear,
       last5Taken: calc.totalTaken,
       avrg: calc.averageLeave,
-      leaveDue: calc.leaveDue,
+      leaveDue: calc.availableDays,
       last5WindowDays: calc.workingDays,
       yrs: calc.workingYears,
       workingYrs: calc.workingYears,
