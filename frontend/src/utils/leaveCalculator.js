@@ -1,9 +1,11 @@
 /**
  * Sonashi leave: Excel master-tracker data + client month entitlement.
  *
- * DATA: yearly taken from the employee’s own records / imported Excel map (by staff ID).
+ * DATA: yearly taken from the employee’s own imported Excel map (by staff ID / name match).
  * ENTITLEMENT: completed months × 2.5, cap 150 (last 5 years).
- * TAKEN: only years in the rolling window; Excel year totals are not mixed with other staff.
+ * TAKEN: rolling window years — closed years from Excel map only; current year uses
+ *        Excel snapshot with live leave, without double-counting a trip that exists
+ *        both as an Excel year total and as a live approved request.
  * AVAILABLE: entitlement − taken.
  * EXPIRED: accrual before the active window (DOJ history minus window).
  */
@@ -421,7 +423,8 @@ export function getApprovedLeavesForEmployee(employee, allLeaveRequests) {
 /** Assign leave days to the start-date calendar year (Excel yearly-sheet convention). */
 export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStart, rangeEnd) {
     const byYear = {};
-    const liveByYear = {};
+    const liveBeforeImportByYear = {};
+    const liveAfterImportByYear = {};
     const rangeFrom = toLeaveCalendarDate(rangeStart);
     const rangeTo = toLeaveCalendarDate(rangeEnd);
     if (!rangeFrom || !rangeTo) return byYear;
@@ -429,6 +432,7 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
     const hasExcelMap =
         employee?.excelLeaveYearTaken != null && typeof employee.excelLeaveYearTaken === "object";
     const currentYear = rangeTo.getFullYear();
+    const importAt = toLeaveCalendarDate(employee?.excelLeaveImportedAt);
 
     getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
         const start = toLeaveCalendarDate(req.startDate);
@@ -441,7 +445,13 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
         const days = leaveRequestDays(req);
         if (!days) return;
         if (!isExcelImportedLeave(req)) {
-            liveByYear[year] = (liveByYear[year] || 0) + days;
+            // Split live leave around Excel import time so a vacation already
+            // reflected in the Excel year cell is not counted again.
+            if (importAt && start > importAt) {
+                liveAfterImportByYear[year] = (liveAfterImportByYear[year] || 0) + days;
+            } else {
+                liveBeforeImportByYear[year] = (liveBeforeImportByYear[year] || 0) + days;
+            }
         }
         byYear[year] = (byYear[year] || 0) + days;
     });
@@ -450,12 +460,21 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
     const endYear = Math.min(rangeTo.getFullYear(), currentYear);
     for (let year = startYear; year <= endYear; year += 1) {
         const excelVal = getExcelYearTaken(employee, year);
-        const live = liveByYear[year] || 0;
+        const before = liveBeforeImportByYear[year] || 0;
+        const after = liveAfterImportByYear[year] || 0;
         if (hasExcelMap) {
             const excelDays = excelVal == null ? 0 : excelVal;
-            // Closed years in the imported map are complete (0 means no leave).
-            // Only the current year can add live, non-imported approved leave.
-            byYear[year] = roundLeaveNumber(year < currentYear ? excelDays : excelDays + live);
+            if (year < currentYear) {
+                // Closed years in the imported map are complete (0 means no leave).
+                byYear[year] = roundLeaveNumber(excelDays);
+            } else {
+                // Current year: Excel cell is a snapshot through import.
+                // Live leave that started on/before import replaces that cell
+                // (max) instead of adding to it — otherwise 30+31=61 for one trip.
+                // Live leave that started after import is truly additional.
+                const excelOrReentry = before > 0 ? Math.max(excelDays, before) : excelDays;
+                byYear[year] = roundLeaveNumber(excelOrReentry + after);
+            }
         } else if (byYear[year] != null) {
             byYear[year] = roundLeaveNumber(byYear[year]);
         } else {

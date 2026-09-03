@@ -109,6 +109,68 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.totalTaken).toBe(70);
     });
 
+    test("does not double-count Excel current-year total with the same live leave", () => {
+        const emp = {
+            _id: "e198",
+            employeeId: "IDMO-198",
+            doj: "2025-01-14",
+            excelLeaveYearTaken: { 2026: 30 },
+            excelLeaveImportedAt: "2026-08-26",
+        };
+        const leaves = [
+            {
+                _id: "nainika-live",
+                status: "Approved",
+                employeeId: "IDMO-198",
+                startDate: "2026-08-18",
+                endDate: "2026-09-18",
+                leaveDays: 31,
+            },
+        ];
+        const calc = computeExcelLeaveCalculation(emp, leaves, "2026-09-03");
+        expect(calc.yearTotals[2026]).toBe(31);
+        expect(calc.totalTaken).toBe(31);
+        expect(calc.availableDays).toBe(calc.entitlement - 31);
+    });
+
+    test("post-import live leave still adds on top of Excel current-year snapshot", () => {
+        const emp = {
+            _id: "e2",
+            employeeId: "IDMM-002",
+            doj: "2023-01-01",
+            excelLeaveYearTaken: { 2026: 20 },
+            excelLeaveImportedAt: "2026-08-01",
+        };
+        const leaves = [
+            {
+                _id: "after-import",
+                status: "Approved",
+                employeeId: "IDMM-002",
+                startDate: "2026-08-10",
+                endDate: "2026-08-24",
+                leaveDays: 14,
+            },
+        ];
+        const calc = computeExcelLeaveCalculation(emp, leaves, "2026-08-31");
+        expect(calc.yearTotals[2026]).toBe(34);
+        expect(calc.totalTaken).toBe(34);
+    });
+
+    test("empty Excel year stays 0 and does not copy another year", () => {
+        const emp = {
+            _id: "e3",
+            employeeId: "IDMM-003",
+            doj: "2024-01-01",
+            excelLeaveYearTaken: { 2024: 0, 2025: 30, 2026: 0 },
+            excelLeaveImportedAt: "2026-08-01",
+        };
+        const calc = computeExcelLeaveCalculation(emp, [], "2026-08-31");
+        expect(calc.yearTotals[2024] ?? 0).toBe(0);
+        expect(calc.yearTotals[2025]).toBe(30);
+        expect(calc.yearTotals[2026] ?? 0).toBe(0);
+        expect(calc.totalTaken).toBe(30);
+    });
+
     test("rolling window years are not hardcoded", () => {
         expect(lastFiveLeaveYears("2026-08-31")).toEqual([2021, 2022, 2023, 2024, 2025, 2026]);
         expect(lastFiveLeaveYears("2027-03-01")).toEqual([2022, 2023, 2024, 2025, 2026, 2027]);
