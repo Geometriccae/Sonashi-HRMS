@@ -19,6 +19,7 @@ function setListCache(data) {
 
 function invalidateListCache() {
   _listCache = { data: null, ts: 0 };
+  _approvedLeavesCache = { data: null, ts: 0 };
   try {
     const { invalidateVacationDashboardStats } = require('./vacationDashboardStats');
     invalidateVacationDashboardStats();

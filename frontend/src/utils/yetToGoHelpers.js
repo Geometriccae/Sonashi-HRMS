@@ -154,21 +154,25 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
   if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
 
   const today = toDayStart(todayValue);
-  const empTravel = toDayStart(linkedEmployee?.travellingDate);
-  const empEnd = toDayStart(linkedEmployee?.leaveEndDate);
-  const travelDate = empTravel || getLeaveTravelDate(req, linkedEmployee);
-  const leaveEndDate = empEnd || toDayStart(req?.endDate);
+  // Applied On is never used. Vacation start is travellingDate/startDate.
+  const travelDate = toDayStart(req?.travellingDate || req?.startDate);
+  const leaveEndDate = toDayStart(req?.endDate);
+  if (!today || !travelDate) return null;
 
-  if (!today || !travelDate || !leaveEndDate) return null;
+  const empReturn =
+    linkedEmployee?.vacationStatus === "Onsite"
+      ? null
+      : toDayStart(linkedEmployee?.returnDate || linkedEmployee?.firstWorkingDay);
+  const actualReturn = toDayStart(req?.returnDate || req?.firstWorkingDay) || empReturn;
+  const tripReturn = actualReturn && actualReturn >= travelDate ? actualReturn : null;
 
-  const returnDay = toDayStart(linkedEmployee?.returnDate);
-  if (returnDay && today >= returnDay && travelDate <= returnDay && today < leaveEndDate) {
+  if (today < travelDate) return "Vacation Pending";
+  if (tripReturn && today >= tripReturn) return "Vacation Approved";
+  if (leaveEndDate) {
+    if (today <= leaveEndDate) return "On Vacation";
     return "Vacation Approved";
   }
-  if (today < travelDate) return "Vacation Pending";
-  if (today >= travelDate && today < leaveEndDate) return "On Vacation";
-  if (today >= leaveEndDate) return "Vacation Approved";
-  return null;
+  return "On Vacation";
 };
 
 export const mapLeaveRow = (req, empList, targetStatus) => {
@@ -186,10 +190,10 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     doj: linked?.doj || null,
     totalYearsExperience: linked?.totalYearsExperience ?? null,
     experienceYears: computeExperienceYears(linked?.doj, linked?.totalYearsExperience, req.startDate),
-    travellingDate: linked?.travellingDate || req.travellingDate || null,
+    travellingDate: req.travellingDate || req.startDate || linked?.travellingDate || null,
     lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
-    returnDate: linked?.returnDate || req.returnDate || null,
-    firstWorkingDay: linked?.firstWorkingDay || req.firstWorkingDay || null,
+    returnDate: req.returnDate || linked?.returnDate || null,
+    firstWorkingDay: req.firstWorkingDay || linked?.firstWorkingDay || null,
     vacationStatus: linked?.vacationStatus || targetStatus,
     linkedEmployeeId: linked?._id || null,
     _source: "leave",

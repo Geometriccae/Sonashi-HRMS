@@ -27,13 +27,14 @@ const {
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const APPROVED_LEAVE_SELECT =
-  'employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department';
+  'employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department adminApprovedAt hodApprovedAt createdAt updatedAt';
 
 const EMP_LEAN_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId',
   'role', 'department', 'doj', 'totalYearsExperience',
   'passportExpiryDate', 'visaExpiryDate',
   'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay', 'leaveEndDate',
+  'vacationStatusSource', 'vacationStatusUpdatedAt',
   'nationality', 'office', 'companyCode', 'createdAt',
 ].join(' ');
 

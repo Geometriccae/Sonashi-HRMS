@@ -1,20 +1,16 @@
 /**
  * Central vacation/leave status resolver.
- * Status is derived from approved leave dates + today, not a stale stored label.
+ * Status is derived from APPROVED leave/vacation dates + today.
+ * Applied On (request submitted date) is never used.
  *
- *   today < travel            → Vacation Pending (Yet to go)
- *   travel ≤ today < end      → On Vacation
- *   today ≥ end (last 6 mo.)  → Vacation Approved (Returned)
+ *   today < travel/start                         → Vacation Pending (Yet to go)
+ *   travel/start ≤ today ≤ end (not yet returned) → On Vacation
+ *   today > end  OR  today >= actual return       → Vacation Approved (Returned)
  *
- * HR-saved statuses persist everywhere and are not immediately overwritten by
- * still-open leave dates. The employee has one current status and appears in
- * only that category (On Vacation / Yet to Go / Returned Back / Onsite).
- *
- * Stored Vacation Pending, On Vacation, and Vacation Approved are kept as saved.
- * Vacation Pending still auto-advances to On Vacation on the travelling date.
- * Onsite + returnDate is kept unless a later trip has reached its travel date.
- *
- * Employment status (Active / Notice Period / Ex-employee) is separate.
+ * LeaveRequest.startDate / travellingDate = vacation start (not appliedOn).
+ * LeaveRequest.endDate = planned vacation end.
+ * Employee.returnDate / firstWorkingDay = actual return/entry when it belongs
+ * to this trip (on or after travel start).
  */
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
@@ -37,13 +33,6 @@ function normalizeName(value) {
   return String(value || '').toLowerCase().replace(/[\s_.-]+/g, '').trim();
 }
 
-function isWithinLastMonths(day, today, months) {
-  if (!day || !today) return false;
-  const from = new Date(today);
-  from.setMonth(from.getMonth() - months);
-  return day >= from && day <= today;
-}
-
 function isHrStaffCode(value) {
   return /^id[a-z]{2}-\d+/i.test(String(value || '').trim());
 }
@@ -57,6 +46,7 @@ function leaveBelongsToEmployee(leave, employee) {
   if (!leave || !employee) return false;
   const empId = String(employee._id || '').trim();
   const empCode = String(employee.employeeId || '').trim();
+  const normalizedEmpCode = empCode.toLowerCase();
   const empStaff = staffCode(employee.employeeId);
   const empEmail = String(employee.emailId || '').trim().toLowerCase();
   const empName = normalizeName(employee.employeeName);
@@ -75,7 +65,7 @@ function leaveBelongsToEmployee(leave, employee) {
   if (linked && empCode && linked === empCode) return true;
 
   const leaveCode = String(leave.employeeId || leave.linkedEmployeeCode || '').trim();
-  if (leaveCode && empCode && leaveCode === empCode) return true;
+  if (leaveCode && normalizedEmpCode && leaveCode.toLowerCase() === normalizedEmpCode) return true;
 
   const leaveEmail = String(leave.employee?.emailId || '').trim().toLowerCase();
   if (leaveEmail && empEmail && leaveEmail === empEmail) return true;
@@ -87,20 +77,38 @@ function leaveBelongsToEmployee(leave, employee) {
   return Boolean(leaveName && empName && leaveName === empName);
 }
 
+/** Vacation/travel start — never appliedOn. */
 function getLeaveTravelStartDate(leave, employee) {
   return toCalendarDate(leave?.travellingDate || leave?.startDate || employee?.travellingDate);
 }
 
-function statusFromTravelAndEnd(travel, end, employee, today) {
-  if (!today || !travel || !end) return null;
-  const returnDay = toCalendarDate(employee?.returnDate);
-  if (returnDay && today >= returnDay && travel <= returnDay && today < end) {
+/**
+ * Actual return/entry/first working day when it belongs to this trip.
+ * A previous trip's return (before this travel start) is ignored.
+ */
+function getTripReturnDate(leave, employee) {
+  const travel = getLeaveTravelStartDate(leave, employee);
+  const leaveReturn = toCalendarDate(leave?.returnDate || leave?.firstWorkingDay);
+  if (leaveReturn && travel && leaveReturn >= travel) return leaveReturn;
+
+  // HR Onsite writes returnDate as a persist stamp; it is not an actual
+  // vacation return and must not end a still-approved trip.
+  if (employee?.vacationStatus === 'Onsite') return null;
+
+  const empReturn = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
+  if (!empReturn || !travel || empReturn < travel) return null;
+  return empReturn;
+}
+
+function statusFromTravelEndAndReturn(travel, end, returnDay, today) {
+  if (!today || !travel) return null;
+  if (today < travel) return 'Vacation Pending';
+  if (returnDay && today >= returnDay) return 'Vacation Approved';
+  if (end) {
+    if (today <= end) return 'On Vacation';
     return 'Vacation Approved';
   }
-  if (today < travel) return 'Vacation Pending';
-  if (today >= travel && today < end) return 'On Vacation';
-  if (today >= end) return 'Vacation Approved';
-  return null;
+  return 'On Vacation';
 }
 
 function statusFromLeaveDates(leave, employee, todayValue) {
@@ -108,7 +116,8 @@ function statusFromLeaveDates(leave, employee, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
   const travel = getLeaveTravelStartDate(leave, employee);
   const end = toCalendarDate(leave.endDate);
-  return statusFromTravelAndEnd(travel, end, employee, today);
+  const returnDay = getTripReturnDate(leave, employee);
+  return statusFromTravelEndAndReturn(travel, end, returnDay, today);
 }
 
 /** Team Management vacation dates on the employee record (same date rules as leave). */
@@ -116,12 +125,14 @@ function statusFromEmployeeDates(employee, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
   const travel = toCalendarDate(employee?.travellingDate);
   const end = toCalendarDate(employee?.leaveEndDate);
+  const returnDay = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
+  const tripReturn = travel && returnDay && returnDay >= travel ? returnDay : null;
   if (!today || !travel) return null;
-  if (!end) {
+  if (!end && !tripReturn) {
     if (today < travel) return 'Vacation Pending';
     return null;
   }
-  return statusFromTravelAndEnd(travel, end, employee, today);
+  return statusFromTravelEndAndReturn(travel, end, tripReturn, today);
 }
 
 function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
@@ -129,13 +140,6 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
   const leaves = (Array.isArray(leaveRequests) ? leaveRequests : []).filter((leave) =>
     leaveBelongsToEmployee(leave, employee)
   );
-
-  const empTravel = toCalendarDate(employee?.travellingDate);
-  const empEnd = toCalendarDate(employee?.leaveEndDate);
-  const empStatus = statusFromEmployeeDates(employee, today);
-  const empInterval = empStatus
-    ? { status: empStatus, travel: empTravel, end: empEnd || empTravel }
-    : null;
 
   const fromLeaves = leaves
     .map((leave) => ({
@@ -145,62 +149,42 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
     }))
     .filter((row) => row.status);
 
-  // Employee travellingDate + leaveEndDate (Team Management) is the current trip.
-  // Leaves that start on/after that end date are a later trip and still count.
-  const ranked =
-    empInterval && empTravel && empEnd
-      ? [empInterval, ...fromLeaves.filter((row) => row.travel && row.travel >= empEnd)]
-      : empInterval
-        ? [...fromLeaves, empInterval]
-        : fromLeaves;
+  const fromLeaveStatus = fromLeaves.some((row) => row.status === 'On Vacation')
+    ? 'On Vacation'
+    : fromLeaves.some((row) => row.status === 'Vacation Pending')
+      ? 'Vacation Pending'
+      : fromLeaves.some((row) => row.status === 'Vacation Approved')
+        ? 'Vacation Approved'
+        : null;
 
-  const stored = employee?.vacationStatus;
-  const returnDay = toCalendarDate(employee?.returnDate);
+  // Current and future approved leave dates always win over a stored label.
+  if (fromLeaveStatus === 'On Vacation' || fromLeaveStatus === 'Vacation Pending') {
+    return fromLeaveStatus;
+  }
 
-  // Yet to Go is an explicit HR status (On Vacation → Yet to Go, etc.).
-  if (stored === 'Vacation Pending') {
-    const travel =
-      empTravel
-      || ranked.map((row) => row.travel).filter(Boolean).sort((a, b) => a - b)[0]
-      || null;
-    if (travel && today.getTime() === travel.getTime() && ranked.some((row) => row.status === 'On Vacation')) {
-      return 'On Vacation';
+  // Manual Yet to Go / On Vacation after a finished trip only when the
+  // employee travel date is after that trip ended (Returned Back → Yet to Go).
+  const employeeDateStatus = statusFromEmployeeDates(employee, today);
+  if (employeeDateStatus === 'On Vacation' || employeeDateStatus === 'Vacation Pending') {
+    if (!fromLeaveStatus) return employeeDateStatus;
+    const empTravel = toCalendarDate(employee?.travellingDate);
+    const latestLeaveEnd = fromLeaves.reduce((latest, row) => {
+      if (!row.end) return latest;
+      if (!latest || row.end > latest) return row.end;
+      return latest;
+    }, null);
+    if (empTravel && latestLeaveEnd && empTravel > latestLeaveEnd) {
+      return employeeDateStatus;
     }
-    return 'Vacation Pending';
   }
 
-  // Return/entry date that has been reached = Returned Back.
-  // Leave end may still be in the future; persist must not keep them On Vacation.
-  if (returnDay && today >= returnDay) {
-    if (stored === 'Onsite') {
-      const laterTrip = ranked.filter((row) => row.travel && row.travel > returnDay);
-      if (laterTrip.some((row) => row.status === 'On Vacation')) return 'On Vacation';
-      return 'Onsite';
-    }
-    return 'Vacation Approved';
-  }
-
-  if (stored === 'Vacation Approved') return 'Vacation Approved';
-  if (stored === 'On Vacation') return 'On Vacation';
-
-  if (ranked.some((row) => row.status === 'On Vacation')) return 'On Vacation';
-  if (ranked.some((row) => row.status === 'Vacation Pending')) return 'Vacation Pending';
-
-  const newerAfterReturn = ranked.some(
-    (row) => returnDay && row.travel && row.travel >= returnDay && row.status !== 'Vacation Approved'
-  );
-  if (returnDay && today >= returnDay && !newerAfterReturn && isWithinLastMonths(returnDay, today, 6)) {
-    return 'Vacation Approved';
-  }
-
-  const latestEnd = ranked
-    .filter((row) => row.status === 'Vacation Approved')
-    .map((row) => row.end)
-    .filter(Boolean)
-    .sort((a, b) => b - a)[0];
-  if (latestEnd && isWithinLastMonths(latestEnd, today, 6)) return 'Vacation Approved';
+  if (fromLeaveStatus) return fromLeaveStatus;
+  if (employeeDateStatus) return employeeDateStatus;
 
   if (employee?.vacationStatus === 'Onboarding') return 'Onboarding';
+  if (['Vacation Pending', 'On Vacation', 'Vacation Approved'].includes(employee?.vacationStatus)) {
+    return employee.vacationStatus;
+  }
   return 'Onsite';
 }
 
@@ -220,6 +204,7 @@ module.exports = {
   toCalendarDate,
   leaveBelongsToEmployee,
   getLeaveTravelStartDate,
+  getTripReturnDate,
   statusFromLeaveDates,
   resolveEmployeeVacationStatus,
   applyEffectiveVacationStatuses,

@@ -7,8 +7,17 @@ const Employee = require('../models/Employee');
 const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
-const { patchListCacheEmployee, invalidateApprovedLeavesCache } = require('../utils/employeeListCache');
-const { resolveEmployeeVacationStatus, APPROVED_LEAVE_STATUSES } = require('../utils/vacationStatusFromDates');
+const {
+    patchListCacheEmployee,
+    invalidateListCache,
+    invalidateApprovedLeavesCache,
+} = require('../utils/employeeListCache');
+const {
+    resolveEmployeeVacationStatus,
+    leaveBelongsToEmployee,
+    toCalendarDate,
+    APPROVED_LEAVE_STATUSES,
+} = require('../utils/vacationStatusFromDates');
 const {
     resolveLeaveOwnerIds,
     buildEmployeeLeaveMongoFilter,
@@ -210,16 +219,68 @@ async function syncEmployeeVacationStatus(leaveRequest) {
         const leaves = await LeaveRequest.find({
             status: { $in: APPROVED_LEAVE_STATUSES },
         })
-            .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate returnDate')
+            .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate returnDate firstWorkingDay adminApprovedAt hodApprovedAt createdAt updatedAt')
             .lean();
 
         const empPlain = typeof emp.toObject === 'function' ? emp.toObject() : emp;
-        const vacationStatus = resolveEmployeeVacationStatus(empPlain, leaves) || 'Onsite';
 
-        if (String(emp.vacationStatus) !== String(vacationStatus)) {
-            await Employee.findByIdAndUpdate(emp._id, { vacationStatus });
+        const approvedForEmployee = leaves
+            .filter((row) => leaveBelongsToEmployee(row, empPlain))
+            .filter((row) => row.startDate && row.endDate)
+            .sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+        const today = toCalendarDate(new Date());
+        const active = approvedForEmployee.find((row) => {
+            const start = toCalendarDate(row.travellingDate || row.startDate);
+            const end = toCalendarDate(row.endDate);
+            return start && end && start <= today && today <= end;
+        });
+        const future = [...approvedForEmployee]
+            .filter((row) => {
+                const start = toCalendarDate(row.travellingDate || row.startDate);
+                return start && start > today;
+            })
+            .sort((a, b) => toCalendarDate(a.travellingDate || a.startDate) - toCalendarDate(b.travellingDate || b.startDate))[0];
+        const controllingLeave = active || future || approvedForEmployee[0] || null;
+
+        // Resolve as leave-sourced with the controlling trip dates so a previous
+        // manual status cannot keep Applied-On-era or stale labels.
+        const patched = {
+            ...empPlain,
+            vacationStatusSource: 'leave',
+        };
+        if (controllingLeave) {
+            patched.travellingDate = controllingLeave.travellingDate || controllingLeave.startDate;
+            patched.leaveEndDate = controllingLeave.endDate;
+            const start = toCalendarDate(patched.travellingDate);
+            const end = toCalendarDate(controllingLeave.endDate);
+            const isCurrentOrFuture = Boolean(
+                start && ((end && start <= today && today <= end) || start > today)
+            );
+            if (isCurrentOrFuture) {
+                patched.returnDate = null;
+                patched.firstWorkingDay = null;
+            }
         }
-        patchListCacheEmployee(emp._id, { vacationStatus });
+        const vacationStatus = resolveEmployeeVacationStatus(patched, leaves) || 'Onsite';
+
+        const patch = {
+            vacationStatus,
+            vacationStatusSource: 'leave',
+            vacationStatusUpdatedAt: new Date(),
+        };
+        if (controllingLeave) {
+            patch.travellingDate = controllingLeave.travellingDate || controllingLeave.startDate;
+            patch.leaveEndDate = controllingLeave.endDate;
+            if (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') {
+                patch.returnDate = null;
+                patch.firstWorkingDay = null;
+            }
+        }
+        await Employee.findByIdAndUpdate(emp._id, { $set: patch });
+        patchListCacheEmployee(emp._id, patch);
+        // Approval/re-approval must not leave another route serving the old
+        // employee category from the shared list cache.
+        invalidateListCache();
     } catch (err) {
         console.error('[Leave] Vacation status sync error:', err.message || err);
     }

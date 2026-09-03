@@ -326,6 +326,7 @@ const EMPLOYEE_LIST_FIELDS = [
   'role', 'department', 'attendance', 'doj', 'totalYearsExperience', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
   'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay', 'leaveEndDate',
+  'vacationStatusSource', 'vacationStatusUpdatedAt',
   'noticePeriod', 'provisionPeriod', 'noticePeriodStartDate', 'noticePeriodEndDate',
   'provisionPeriodStartDate', 'provisionPeriodEndDate',
   'reportingManager', 'assignedProjects',
@@ -341,7 +342,7 @@ const EMPLOYEE_METRICS_FIELDS = [
 
 const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const APPROVED_LEAVE_SELECT =
-  'employee employeeRecordId employeeId employeeName leaveType startDate endDate leaveDays importSource status travellingDate lastWorkingDay returnDate firstWorkingDay department requestAirfare';
+  'employee employeeRecordId employeeId employeeName leaveType startDate endDate leaveDays importSource status travellingDate lastWorkingDay returnDate firstWorkingDay department requestAirfare adminApprovedAt hodApprovedAt createdAt updatedAt';
 
 async function getApprovedLeavesForVacation() {
   const cached = getApprovedLeavesCache();
@@ -372,10 +373,6 @@ async function persistLiveVacationStatus(employee) {
     withStatus &&
     String(plain.vacationStatus || '') !== String(withStatus.vacationStatus || '')
   ) {
-    const keepManual = ['Vacation Approved', 'Vacation Pending'];
-    if (keepManual.includes(String(plain.vacationStatus || ''))) {
-      return { ...withStatus, vacationStatus: plain.vacationStatus };
-    }
     await Employee.findByIdAndUpdate(plain._id, { vacationStatus: withStatus.vacationStatus });
     invalidateListCache();
   }
@@ -994,6 +991,11 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
     // Normalize legacy vacationStatus value -> remap old label to new
     if (updateData.vacationStatus === 'Not on Vacation') {
       updateData.vacationStatus = 'Onsite';
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'vacationStatus')) {
+      updateData.vacationStatusSource = 'manual';
+      updateData.vacationStatusUpdatedAt = new Date();
     }
 
     // HR Onsite must persist. If live dates still say On Vacation / Yet to Go /
@@ -2009,6 +2011,8 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
     }
 
     employee.vacationStatus = 'Vacation Approved';
+    employee.vacationStatusSource = 'manual';
+    employee.vacationStatusUpdatedAt = new Date();
     employee.returnDate = returnDt;
     employee.firstWorkingDay = firstWork;
     employee.attendance = 'Onsite';

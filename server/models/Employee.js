@@ -60,7 +60,13 @@ const employeeSchema = new mongoose.Schema({
     enum: ["Onsite", "On Vacation", "Vacation Approved", "Vacation Pending", "Onboarding"],
     default: "Onsite"
   },
-
+  /** Identifies whether the latest vacation state came from leave approval or an authorized manual update. */
+  vacationStatusSource: {
+    type: String,
+    enum: ["leave", "manual"],
+    default: null
+  },
+  vacationStatusUpdatedAt: { type: Date, default: null },
   attendance: {
     type: String,
     enum: ["Onsite", "Leave"],

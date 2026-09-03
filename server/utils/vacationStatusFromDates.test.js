@@ -37,22 +37,26 @@ describe('resolveEmployeeVacationStatus', () => {
     assert.equal(status, 'On Vacation');
   });
 
-  it('keeps HR Onsite when returnDate closes the current trip', () => {
+  it('uses approved active dates instead of a stale Onsite/returnDate', () => {
     const status = resolveEmployeeVacationStatus(
       employee({ vacationStatus: 'Onsite', returnDate: TODAY }),
       [leave()],
       TODAY
     );
-    assert.equal(status, 'Onsite');
+    assert.equal(status, 'On Vacation');
   });
 
-  it('keeps Returned Back when HR set Vacation Approved with returnDate', () => {
+  it('recalculates stale Returned Back from approved active dates', () => {
     const status = resolveEmployeeVacationStatus(
-      employee({ vacationStatus: 'Vacation Approved', returnDate: TODAY }),
+      employee({
+        vacationStatus: 'Vacation Approved',
+        vacationStatusSource: 'leave',
+        returnDate: new Date(2026, 6, 1),
+      }),
       [leave()],
       TODAY
     );
-    assert.equal(status, 'Vacation Approved');
+    assert.equal(status, 'On Vacation');
   });
 
   it('derives Yet to Go from a future travelling date', () => {
@@ -69,7 +73,21 @@ describe('resolveEmployeeVacationStatus', () => {
     assert.equal(status, 'Vacation Pending');
   });
 
-  it('keeps HR Onsite over a future Yet to Go trip after returnDate', () => {
+  it('matches legacy employee codes case-insensitively for Yet to Go', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({ employeeId: 'legacy-001', travellingDate: null, leaveEndDate: null }),
+      [leave({
+        employeeId: 'LEGACY-001',
+        travellingDate: new Date(2026, 8, 10),
+        startDate: new Date(2026, 8, 10),
+        endDate: new Date(2026, 8, 20),
+      })],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Pending');
+  });
+
+  it('recalculates stale Onsite as Yet to Go for a future approved trip', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Onsite',
@@ -80,7 +98,7 @@ describe('resolveEmployeeVacationStatus', () => {
       [leave({ travellingDate: new Date(2026, 8, 10), startDate: new Date(2026, 8, 10), endDate: new Date(2026, 8, 20) })],
       TODAY
     );
-    assert.equal(status, 'Onsite');
+    assert.equal(status, 'Vacation Pending');
   });
 
   it('auto-advances Onsite to On Vacation once a later trip travel date is reached', () => {
@@ -111,7 +129,7 @@ describe('resolveEmployeeVacationStatus', () => {
     assert.equal(status, 'Vacation Approved');
   });
 
-  it('keeps HR Onsite instead of Returned Back when returnDate is set', () => {
+  it('derives Returned Back from completed approved dates despite stale Onsite', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Onsite',
@@ -122,16 +140,16 @@ describe('resolveEmployeeVacationStatus', () => {
       [leave({ travellingDate: new Date(2026, 2, 1), startDate: new Date(2026, 2, 1), endDate: new Date(2026, 2, 20) })],
       TODAY
     );
-    assert.equal(status, 'Onsite');
+    assert.equal(status, 'Vacation Approved');
   });
 
-  it('keeps HR Yet to Go when stored Vacation Pending even if leave dates still say On Vacation', () => {
+  it('moves Yet to Go to On Vacation when approved dates are active', () => {
     const status = resolveEmployeeVacationStatus(
       employee({ vacationStatus: 'Vacation Pending', returnDate: null }),
       [leave()],
       TODAY
     );
-    assert.equal(status, 'Vacation Pending');
+    assert.equal(status, 'On Vacation');
   });
 
   it('auto-advances Yet to Go to On Vacation on the travelling date', () => {
@@ -148,7 +166,7 @@ describe('resolveEmployeeVacationStatus', () => {
     assert.equal(status, 'On Vacation');
   });
 
-  it('keeps Returned Back when HR set Vacation Approved even if leave is still open', () => {
+  it('moves Returned Back to On Vacation when re-approved dates are active', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Vacation Approved',
@@ -157,10 +175,10 @@ describe('resolveEmployeeVacationStatus', () => {
       [leave()],
       TODAY
     );
-    assert.equal(status, 'Vacation Approved');
+    assert.equal(status, 'On Vacation');
   });
 
-  it('keeps On Vacation when HR set it even if travelling date is still in the future', () => {
+  it('moves On Vacation to Yet to Go when re-approved dates are future', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'On Vacation',
@@ -171,7 +189,7 @@ describe('resolveEmployeeVacationStatus', () => {
       [leave({ travellingDate: new Date(2026, 8, 10), startDate: new Date(2026, 8, 10), endDate: new Date(2026, 8, 20) })],
       TODAY
     );
-    assert.equal(status, 'On Vacation');
+    assert.equal(status, 'Vacation Pending');
   });
 
   it('keeps On Vacation when HR moved the employee back from Returned Back', () => {
@@ -186,17 +204,17 @@ describe('resolveEmployeeVacationStatus', () => {
     assert.equal(status, 'On Vacation');
   });
 
-  it('moves On Vacation to Returned Back when returnDate has been reached even if stored label is still On Vacation', () => {
+  it('does not let a previous trip returnDate end a currently approved leave', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'On Vacation',
-        returnDate: new Date(2026, 7, 27),
+        returnDate: new Date(2026, 6, 20),
         leaveEndDate: new Date(2026, 8, 4),
       }),
       [leave({ endDate: new Date(2026, 8, 4) })],
       TODAY
     );
-    assert.equal(status, 'Vacation Approved');
+    assert.equal(status, 'On Vacation');
   });
 
   it('preserves Onboarding when there is no leave-derived status', () => {
@@ -212,33 +230,193 @@ describe('resolveEmployeeVacationStatus', () => {
     );
     assert.equal(status, 'Onboarding');
   });
+
+  it('preserves a manual vacation status when no approved dated leave exists', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'On Vacation',
+        travellingDate: null,
+        leaveEndDate: null,
+        returnDate: null,
+      }),
+      [],
+      TODAY
+    );
+    assert.equal(status, 'On Vacation');
+  });
+
+  it('honors a persisted actual return date for the current approved trip', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Approved',
+        returnDate: new Date(2026, 7, 27),
+      }),
+      [leave()],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Approved');
+  });
+
+  it('uses approved leave dates instead of a stale manual Yet to Go label', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Pending',
+        vacationStatusSource: 'manual',
+        travellingDate: new Date(2026, 8, 10),
+        leaveEndDate: new Date(2026, 8, 20),
+        returnDate: null,
+      }),
+      [leave()],
+      TODAY
+    );
+    assert.equal(status, 'On Vacation');
+  });
+
+  it('keeps Yet to Go when approved leave dates are still in the future', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Onsite',
+        vacationStatusSource: 'manual',
+        travellingDate: new Date(2026, 8, 10),
+        leaveEndDate: new Date(2026, 8, 20),
+        returnDate: null,
+      }),
+      [leave({ travellingDate: new Date(2026, 8, 10), startDate: new Date(2026, 8, 10), endDate: new Date(2026, 8, 20) })],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Pending');
+  });
 });
 
 describe('applyEffectiveVacationStatuses', () => {
-  it('overlays the same resolved status onto list rows', () => {
+  it('overlays the approved date-derived status onto list rows', () => {
     const [row] = applyEffectiveVacationStatuses(
       [employee({ vacationStatus: 'Onsite', returnDate: TODAY })],
       [leave()],
       TODAY
     );
-    assert.equal(row.vacationStatus, 'Onsite');
+    assert.equal(row.vacationStatus, 'On Vacation');
   });
 
-  it('keeps Yet to Go on list rows after HR saves Vacation Pending', () => {
+  it('moves stale Yet to Go list rows to On Vacation', () => {
     const [row] = applyEffectiveVacationStatuses(
       [employee({ vacationStatus: 'Vacation Pending', returnDate: null })],
       [leave()],
       TODAY
     );
-    assert.equal(row.vacationStatus, 'Vacation Pending');
+    assert.equal(row.vacationStatus, 'On Vacation');
   });
 
-  it('moves list rows to Returned Back after HR saves Vacation Approved', () => {
+  it('moves stale Returned Back list rows to On Vacation', () => {
     const [row] = applyEffectiveVacationStatuses(
       [employee({ vacationStatus: 'Vacation Approved', returnDate: new Date(2026, 8, 15) })],
       [leave()],
       TODAY
     );
-    assert.equal(row.vacationStatus, 'Vacation Approved');
+    assert.equal(row.vacationStatus, 'On Vacation');
+  });
+});
+
+describe('approval/re-approval transitions', () => {
+  it('treats the leave end date as On Vacation (inclusive)', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({ vacationStatus: 'Vacation Pending' }),
+      [leave({ startDate: new Date(2026, 7, 1), endDate: TODAY })],
+      TODAY
+    );
+    assert.equal(status, 'On Vacation');
+  });
+
+  it('moves On Vacation to Returned Back only after the approved end date', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({ vacationStatus: 'On Vacation' }),
+      [leave({ startDate: new Date(2026, 6, 1), endDate: new Date(2026, 7, 30) })],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Approved');
+  });
+
+  it('moves Returned Back to Yet to Go from re-approved future dates', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({ vacationStatus: 'Vacation Approved' }),
+      [leave({ travellingDate: new Date(2026, 8, 10), startDate: new Date(2026, 8, 10), endDate: new Date(2026, 8, 20) })],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Pending');
+  });
+
+  it('keeps one current category when past, active, and future leaves coexist', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({ vacationStatus: 'Vacation Approved' }),
+      [
+        leave({ travellingDate: new Date(2026, 5, 1), startDate: new Date(2026, 5, 1), endDate: new Date(2026, 5, 10) }),
+        leave({ travellingDate: new Date(2026, 7, 25), startDate: new Date(2026, 7, 25), endDate: new Date(2026, 8, 3) }),
+        leave({ travellingDate: new Date(2026, 9, 1), startDate: new Date(2026, 9, 1), endDate: new Date(2026, 9, 10) }),
+      ],
+      TODAY
+    );
+    assert.equal(status, 'On Vacation');
+  });
+
+  it('never uses Applied On as the vacation start date', () => {
+    const today = new Date(2026, 8, 3); // 03/09/2026
+    const status = resolveEmployeeVacationStatus(
+      employee({ vacationStatus: 'Onsite', travellingDate: null, leaveEndDate: null }),
+      [leave({
+        appliedOn: new Date(2026, 7, 1),
+        travellingDate: new Date(2026, 10, 10),
+        startDate: new Date(2026, 10, 10),
+        endDate: new Date(2027, 0, 10),
+      })],
+      today
+    );
+    assert.equal(status, 'Vacation Pending');
+  });
+
+  it('moves to On Vacation when today reaches the approved start date', () => {
+    const today = new Date(2026, 10, 15);
+    const status = resolveEmployeeVacationStatus(
+      employee({ vacationStatus: 'Vacation Pending' }),
+      [leave({
+        startDate: new Date(2026, 10, 10),
+        travellingDate: new Date(2026, 10, 10),
+        endDate: new Date(2027, 0, 10),
+      })],
+      today
+    );
+    assert.equal(status, 'On Vacation');
+  });
+
+  it('moves Returned Back to Yet to Go when employee travel dates are set in the future', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Approved',
+        vacationStatusSource: 'manual',
+        travellingDate: new Date(2026, 9, 1),
+        leaveEndDate: new Date(2026, 9, 15),
+        returnDate: null,
+      }),
+      [leave({ travellingDate: new Date(2026, 2, 1), startDate: new Date(2026, 2, 1), endDate: new Date(2026, 2, 20) })],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Pending');
+  });
+
+  it('moves to Returned Back when the actual return/entry date is reached', () => {
+    const today = new Date(2027, 0, 11);
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'On Vacation',
+        returnDate: new Date(2027, 0, 11),
+        firstWorkingDay: new Date(2027, 0, 11),
+      }),
+      [leave({
+        startDate: new Date(2026, 10, 10),
+        travellingDate: new Date(2026, 10, 10),
+        endDate: new Date(2027, 0, 10),
+      })],
+      today
+    );
+    assert.equal(status, 'Vacation Approved');
   });
 });
