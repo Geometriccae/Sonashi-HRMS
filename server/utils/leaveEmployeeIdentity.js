@@ -131,6 +131,11 @@ async function enrichLeaveRowsWithEmployeeIdentity(rows, { User, Employee }) {
     ),
   ];
 
+  // Same Employee master fields Admin/HR/Authorize User need in Leave Management review.
+  // Keep leave-row filters on stored department/reportingManager; attach live master separately.
+  const EMPLOYEE_MASTER_SELECT =
+    '_id employeeId employeeName emailId department reportingManager companyCode doj totalYearsExperience excelLeaveYearTaken excelLeaveImportedAt vacationStatus vacationStatusSource travellingDate returnDate firstWorkingDay leaveEndDate';
+
   const [users, employeesById] = await Promise.all([
     ownerIds.length
       ? User.find({ _id: { $in: ownerIds } })
@@ -141,7 +146,7 @@ async function enrichLeaveRowsWithEmployeeIdentity(rows, { User, Employee }) {
       const ids = [...new Set([...ownerIds, ...recordIdsFromRows])];
       return ids.length
         ? Employee.find({ _id: { $in: ids } })
-            .select('_id employeeId employeeName emailId department reportingManager companyCode')
+            .select(EMPLOYEE_MASTER_SELECT)
             .lean()
         : Promise.resolve([]);
     })(),
@@ -159,7 +164,7 @@ async function enrichLeaveRowsWithEmployeeIdentity(rows, { User, Employee }) {
   ];
   if (linkedEmpIds.length) {
     const more = await Employee.find({ _id: { $in: linkedEmpIds } })
-      .select('_id employeeId employeeName emailId department reportingManager companyCode')
+      .select(EMPLOYEE_MASTER_SELECT)
       .lean();
     more.forEach((e) => empById.set(String(e._id), e));
   }
@@ -173,7 +178,7 @@ async function enrichLeaveRowsWithEmployeeIdentity(rows, { User, Employee }) {
   ];
   if (codes.length) {
     const byCode = await Employee.find({ employeeId: { $in: codes } })
-      .select('_id employeeId employeeName emailId department reportingManager companyCode')
+      .select(EMPLOYEE_MASTER_SELECT)
       .lean();
     byCode.forEach((e) => empById.set(String(e._id), e));
   }
@@ -210,6 +215,8 @@ async function enrichLeaveRowsWithEmployeeIdentity(rows, { User, Employee }) {
       employeeId: employeeCode || row.employeeId || undefined,
       linkedEmployeeName: emp?.employeeName || undefined,
       linkedEmployeeCode: employeeCode || undefined,
+      // Live Employee master snapshot — same source for Admin / HR / Authorize User review UI
+      employeeMaster: emp || undefined,
       employee:
         row.employee && typeof row.employee === 'object'
           ? {

@@ -169,9 +169,9 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const role = localStorage.getItem("role") || "";
         setUserRole(role);
         if (isOpen) {
-            if (role.toLowerCase() === "admin" || role.toLowerCase() === "hr" || role.toLowerCase() === "hod") {
-                fetchEmployees();
-            }
+            // Same employee master source for Admin / HR / HOD / Authorize User / Viewer
+            // so DOJ, experience, and leave balance resolve consistently when reviewing.
+            fetchEmployees();
             fetchDepartmentOptions();
         } else {
             setEmployeeLeaveHistory([]);
@@ -295,7 +295,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const fetchEmployees = async () => {
         try {
             const data = await EmployeeService.getEmployeesList();
-            setEmployees(data);
+            setEmployees(Array.isArray(data) ? data : (data?.employees || []));
         } catch (error) {
             console.error("Error fetching employees:", error);
         }
@@ -447,6 +447,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                             const fName = String(formData.employeeName || "").toLowerCase().trim();
                             return eName === fName && fName !== "";
                         })) ||
+                        leaveRequest?.employeeMaster ||
+                        targetLeave?.employeeMaster ||
                         (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
                             ? targetLeave.employee
                             : null);

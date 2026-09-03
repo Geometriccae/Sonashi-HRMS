@@ -725,12 +725,17 @@ function LeaveRequestTable({ onUpdate }) {
                                         <div className={styles.employeeName}>
                                             {req.employeeName || req.employee?.username || 'Unknown'}
                                         </div>
+                                        {(req.employeeId || req.linkedEmployeeCode) && (
+                                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                                                {req.employeeId || req.linkedEmployeeCode}
+                                            </div>
+                                        )}
                                     </div>
                                 </td>
 
                                 <td>{req.company || 'N/A'}</td>
-                                <td>{req.department || 'N/A'}</td>
-                                <td>{req.reportingManager || 'N/A'}</td>
+                                <td>{req.employeeMaster?.department || req.department || 'N/A'}</td>
+                                <td>{req.employeeMaster?.reportingManager || req.reportingManager || 'N/A'}</td>
 
                                 <td>{req.leaveType}</td>
                                 {activeFilter === "History" ? (

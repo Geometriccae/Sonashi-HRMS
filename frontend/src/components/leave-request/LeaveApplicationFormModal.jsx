@@ -8,8 +8,20 @@ import {
 } from "../../utils/leaveCalculator";
 import { fetchEmployeeLeaveHistory } from "../../utils/fetchEmployeeLeaveHistory";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
+import {
+    formatExperienceLabel,
+    formatVacationStatusLabel,
+    getEffectiveVacationStatus,
+} from "../../utils/yetToGoHelpers";
 import { saveAs } from "file-saver";
 import "./LeaveForm.css"; // Reusing the shared clean modal styles
+
+const formatDisplayDate = (value) => {
+    if (!value) return "N/A";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "N/A";
+    return d.toLocaleDateString("en-GB");
+};
 
 function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequests, onEditLeave, canEdit = false }) {
     const [employeeDetails, setEmployeeDetails] = useState({});
@@ -26,7 +38,12 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
 
         const fetchEmployee = async () => {
             setIsLoading(true);
-            setEmployeeDetails({});
+            // Seed from leave-list enrichment so DOJ/manager show immediately for all roles
+            if (leaveRequest.employeeMaster && (leaveRequest.employeeMaster.doj || leaveRequest.employeeMaster.employeeId)) {
+                setEmployeeDetails(leaveRequest.employeeMaster);
+            } else {
+                setEmployeeDetails({});
+            }
             setEmployeeLeaveHistory([]);
             try {
                 const emp = leaveRequest.employee;
@@ -40,24 +57,34 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
 
                 let resolvedEmp = null;
                 if (empIdToFetch && /^[a-fA-F0-9]{24}$/.test(String(empIdToFetch))) {
-                    const data = await EmployeeService.getEmployee(empIdToFetch);
-                    if (data) {
-                        resolvedEmp = data;
-                        setEmployeeDetails(data);
+                    try {
+                        const data = await EmployeeService.getEmployee(empIdToFetch);
+                        if (data && (data.employeeName || data.employeeId || data.doj)) {
+                            resolvedEmp = data;
+                            setEmployeeDetails(data);
+                        }
+                    } catch (err) {
+                        // Fall through to list lookup — User._id is not always Employee._id
+                        console.warn("Employee by id lookup failed, trying list match:", err?.message || err);
                     }
                 }
-                if (!resolvedEmp && leaveRequest.employeeId) {
-                    const allEmps = await EmployeeService.getEmployeesList();
-                    const match = allEmps.find(
-                        (e) => String(e.employeeId) === String(leaveRequest.employeeId)
-                    );
+                if (!resolvedEmp) {
+                    const allEmps = await EmployeeService.getEmployeesList({ force: true });
+                    const list = Array.isArray(allEmps) ? allEmps : (allEmps?.employees || []);
+                    const code = String(leaveRequest.employeeId || leaveRequest.linkedEmployeeCode || "").trim();
+                    const name = String(leaveRequest.employeeName || emp?.username || "").toLowerCase().trim();
+                    const match =
+                        list.find((e) => recordId && String(e._id) === String(recordId)) ||
+                        (code && list.find((e) => String(e.employeeId).toLowerCase() === code.toLowerCase())) ||
+                        (name && list.find((e) => String(e.employeeName || "").toLowerCase().trim() === name)) ||
+                        null;
                     if (match) {
                         resolvedEmp = match;
                         setEmployeeDetails(match);
                     }
                 }
 
-                const historyId = resolvedEmp?._id || recordId;
+                const historyId = resolvedEmp?._id || (recordId && /^[a-fA-F0-9]{24}$/.test(String(recordId)) ? recordId : null);
                 if (historyId) {
                     const rows = await fetchEmployeeLeaveHistory(historyId);
                     setEmployeeLeaveHistory(rows);
@@ -70,11 +97,14 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         };
 
         fetchEmployee();
-    }, [isOpen, leaveRequest?._id, leaveRequest?.employee, leaveRequest?.employeeId, leaveRequest?.employeeRecordId]);
+    }, [isOpen, leaveRequest?._id, leaveRequest?.employee, leaveRequest?.employeeId, leaveRequest?.employeeRecordId, leaveRequest?.employeeMaster]);
 
     if (!isOpen || !leaveRequest) return null;
 
-    const employee = Object.keys(employeeDetails).length ? employeeDetails : (leaveRequest.employee || {});
+    // Prefer fetched Employee master; fall back to list enrichment (employeeMaster) so all roles share one source
+    const employee = Object.keys(employeeDetails).length
+        ? employeeDetails
+        : (leaveRequest.employeeMaster || leaveRequest.employee || {});
     const balanceLeaveSource =
         employeeLeaveHistory.length > 0
             ? employeeLeaveHistory
@@ -84,6 +114,18 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
     const employeeLeaveRecords = filterLeavesForEmployee(employee, balanceLeaveSource);
     const leaveStats = calculateLeaveBalance(employee, balanceLeaveSource, leaveRequest?.startDate || new Date());
     const employeeLeaves = getApprovedLeavesForEmployee(employee, balanceLeaveSource);
+    const experienceLabel =
+        formatExperienceLabel(employee.doj, employee.totalYearsExperience, leaveRequest?.startDate || new Date()) || "N/A";
+    const leaveDaysLabel = (() => {
+        const days = calculateLeaveDays(leaveRequest.startDate, leaveRequest.endDate, leaveRequest.leaveDays);
+        if (days == null || days <= 0) return "—";
+        return `${days} ${days === 1 ? "Day" : "Days"}`;
+    })();
+    const vacationStatus =
+        getEffectiveVacationStatus(leaveRequest, employee) ||
+        employee.vacationStatus ||
+        leaveRequest.status;
+    const vacationStatusLabel = formatVacationStatusLabel(vacationStatus) || vacationStatus || "—";
 
     const years = buildLeaveHistoryYears(employee.doj);
 
@@ -131,6 +173,17 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
         saveAs(new Blob([buffer]), `Leave_Report_${String(employee.employeeName || leaveRequest.employeeName || "employee").replace(/\s+/g, "_")}.xlsx`);
     };
 
+    const detailCell = (label, value) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                {label}
+            </span>
+            <span style={{ fontSize: "14px", fontWeight: 600, color: "#0f172a", wordBreak: "break-word" }}>
+                {value || "N/A"}
+            </span>
+        </div>
+    );
+
     return (
         <div className="modal-backdrop" onClick={handleBackdropClick} style={{ zIndex: 100000 }}>
             <div className="leave-modal-container" style={{ maxWidth: "800px" }}>
@@ -145,22 +198,85 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                 </div>
 
                 <div className="leave-modal-content" style={{ background: "#f8fafc" }}>
-                    {/* Summary Metrics */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "24px" }}>
+                    {isLoading && (
+                        <div style={{ marginBottom: "16px", fontSize: "13px", color: "#64748b" }}>Loading employee details…</div>
+                    )}
+
+                    {/* Employee + current leave request — same information Admin sees when reviewing */}
+                    <div style={{
+                        background: "#fff",
+                        padding: "20px",
+                        borderRadius: "12px",
+                        border: "1px solid #e2e8f0",
+                        marginBottom: "20px",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                    }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
+                            <div>
+                                <div style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a" }}>
+                                    {employee.employeeName || leaveRequest.employeeName || "Unknown"}
+                                </div>
+                                <div style={{ fontSize: "13px", color: "#64748b", marginTop: "2px" }}>
+                                    {employee.employeeId || leaveRequest.employeeId || leaveRequest.linkedEmployeeCode || "—"}
+                                </div>
+                            </div>
+                            <span style={{
+                                padding: "6px 12px",
+                                borderRadius: "8px",
+                                background: "#eff6ff",
+                                color: "#1d4ed8",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                            }}>
+                                {vacationStatusLabel}
+                            </span>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px" }}>
+                            {detailCell("Date of Joining", formatDisplayDate(employee.doj))}
+                            {detailCell("Total Experience", experienceLabel)}
+                            {detailCell(
+                                "Department",
+                                employee.department || leaveRequest.employeeMaster?.department || leaveRequest.department
+                            )}
+                            {detailCell(
+                                "Reporting Manager",
+                                employee.reportingManager ||
+                                    leaveRequest.employeeMaster?.reportingManager ||
+                                    leaveRequest.reportingManager
+                            )}
+                            {detailCell("Leave Type", leaveRequest.leaveType)}
+                            {detailCell("Leave Days", leaveDaysLabel)}
+                            {detailCell("Start Date", formatDisplayDate(leaveRequest.startDate))}
+                            {detailCell("End Date", formatDisplayDate(leaveRequest.endDate))}
+                            {detailCell("Ticket Type", leaveRequest.requestAirfare ? "Company Ticket" : "Personal Ticket")}
+                            {detailCell("Leave Status", leaveRequest.status === "Cancelled" ? "Reverted" : leaveRequest.status)}
+                            {detailCell("Applied On", formatDisplayDate(leaveRequest.appliedOn))}
+                            {detailCell("Reason", leaveRequest.reason)}
+                        </div>
+                    </div>
+
+                    {/* Summary Metrics — same centralized leaveCalculator as Admin */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "24px" }}>
                         <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
                             <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Total Entitlement</span>
                             <div style={{ fontSize: "24px", fontWeight: "700", color: "#0f172a", marginTop: "4px" }}>{leaveStats.entitlement} Days</div>
                             <span style={{ fontSize: "11px", color: "#94a3b8" }}>Last 5 years (Capped)</span>
                         </div>
                         <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Expired / Unavailable</span>
-                            <div style={{ fontSize: "24px", fontWeight: "700", color: "#9a3412", marginTop: "4px" }}>{leaveStats.expiredDays} Days</div>
-                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Older than 5 years</span>
-                        </div>
-                        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Total Taken</span>
+                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Leave Taken</span>
                             <div style={{ fontSize: "24px", fontWeight: "700", color: "#ef4444", marginTop: "4px" }}>{leaveStats.totalTaken} Days</div>
                             <span style={{ fontSize: "11px", color: "#94a3b8" }}>In last 5 years</span>
+                        </div>
+                        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
+                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Available</span>
+                            <div style={{ fontSize: "24px", fontWeight: "700", color: "#1d4ed8", marginTop: "4px" }}>{leaveStats.balance} Days</div>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Entitlement − Taken</span>
+                        </div>
+                        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
+                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Expired</span>
+                            <div style={{ fontSize: "24px", fontWeight: "700", color: "#9a3412", marginTop: "4px" }}>{leaveStats.expiredDays} Days</div>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Older than 5 years</span>
                         </div>
                     </div>
 
@@ -315,6 +431,9 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
 
                     <div style={{ marginTop: "20px", padding: "16px", background: "#fffbeb", borderRadius: "12px", border: "1px solid #fef3c7", fontSize: "13px", color: "#92400e" }}>
                         <strong>Note:</strong> Accrual is 2.5 days per completed month from DOJ (<strong>{employee.doj ? new Date(employee.doj).toLocaleDateString('en-GB') : 'N/A'}</strong>), capped at 150 days for the latest 5-year active window.
+                        {employeeLeaveRecords.length === 0 && !isLoading ? (
+                            <span> Leave history will appear once employee master records are linked.</span>
+                        ) : null}
                     </div>
                 </div>
 
