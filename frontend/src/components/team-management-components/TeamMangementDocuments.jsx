@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import styles from "./TeamManagementDocuments.module.css";
 import DataTable from "../DataTable";
 import DocumentsService from "../../services/EmployeeDocumentService";
+import { formatRoleLabel } from "../../utils/permissions";
 
 export const DOC_TYPE_OPTIONS = [
   "Passport", "Emirates ID", "Visa", "Labour Card", "Work Permit",
@@ -287,7 +288,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
         : (d.fileType || "").includes("video") ? "video" : "document",
       type: d.type || "Extra",
       uploadedBy: d.uploadedBy || "Unknown",
-      userRole: d.userRole || "",
+      userRole: formatRoleLabel(d.userRole) || d.userRole || "",
       filetype: d.fileType || "",
       uploadedDate: d.uploadedDate ? new Date(d.uploadedDate).toLocaleDateString() : "",
       filePath: DocumentsService.getFileUrl(d._id),
@@ -306,6 +307,8 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
                 : (updated.fileType || "").includes("video") ? "video" : "document",
               filetype: updated.fileType || "",
               type: updated.type || d.type,
+              uploadedBy: updated.uploadedBy || d.uploadedBy,
+              userRole: formatRoleLabel(updated.userRole) || updated.userRole || d.userRole,
               filePath: DocumentsService.getFileUrl(updated._id || docId),
               uploadedDate: updated.uploadedDate
                 ? new Date(updated.uploadedDate).toLocaleDateString() : d.uploadedDate,

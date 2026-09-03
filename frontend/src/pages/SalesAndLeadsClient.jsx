@@ -413,10 +413,8 @@ const handleTaskCreated = (newTask) => {
       if (!id || !files || files.length === 0) return;
       // Upload each file sequentially (could be parallel if desired)
       for (const file of files) {
-        await DocumentsService.uploadForClient(id, file, {
-          uploadedBy: "Current User",
-          userRole: "Sales Executive",
-        });
+        // Uploader name/role are taken from the authenticated session on the server.
+        await DocumentsService.uploadForClient(id, file);
       }
       // Refresh documents tab
       setDocumentsKey(prev => prev + 1);

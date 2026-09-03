@@ -94,3 +94,32 @@ export const canUpdateVacationReturn = (role = getUserRole()) =>
 
 export const canManageSlips = (role = getUserRole()) =>
   !isReadOnlyRole(role) && (role === ROLES.ADMIN || role === ROLES.HOD);
+
+/** Human-readable role for document "Uploaded by" and similar UI. */
+export const ROLE_LABELS = {
+  admin: "Admin",
+  hr: "HR",
+  hod: "Head of Department",
+  viewer: "Viewer",
+  authorize_user: "Authorize User",
+  sales_executive: "Sales Executive",
+  sales_lead: "Sales Lead",
+  managing_director: "Managing Director",
+  director: "Director",
+  accounts_manager: "Accounts Manager",
+  chartering_manager: "Chartering Manager",
+  business_development_manager: "Business Development Manager",
+  office_assistance: "Office Assistance",
+  executive_post_fixture: "Executive Post Fixture",
+  operations_pricing_manager: "Operations Pricing Manager",
+  operations_executive: "Operations Executive",
+};
+
+export const formatRoleLabel = (role) => {
+  const raw = String(role || "").trim();
+  if (!raw) return "";
+  const key = raw.toLowerCase().replace(/\s+/g, "_");
+  if (ROLE_LABELS[key]) return ROLE_LABELS[key];
+  if (/[A-Z\s]/.test(raw) && !raw.includes("_")) return raw;
+  return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};

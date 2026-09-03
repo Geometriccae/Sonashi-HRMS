@@ -3,6 +3,7 @@ import "./Documents.css";
 import DataTable from "../DataTable";
 import DocumentsService from "../../services/DocumentsService";
 import MobileBottomNavigation from "../../components/MobileBottomNavigation";
+import { formatRoleLabel } from "../../utils/permissions";
 
 
 
@@ -26,7 +27,7 @@ function Documents({ clientId, refreshKey }) {
           fileType: (d.fileType || '').includes('image') ? 'image' : (d.fileType || '').includes('video') ? 'video' : 'document',
           type: d.type || 'Extra',
           uploadedBy: d.uploadedBy || 'Unknown',
-          userRole: d.userRole || '',
+          userRole: formatRoleLabel(d.userRole) || d.userRole || '',
           filetype: d.fileType || '',
           uploadedDate: d.uploadedDate ? new Date(d.uploadedDate).toLocaleDateString() : '',
         }));

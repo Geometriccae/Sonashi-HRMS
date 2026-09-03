@@ -81,8 +81,6 @@ const CompanyDocument = () => {
         docNumber: formData.docNumber,
         issueDate: formData.issueDate,
         expiryDate: formData.expiryDate,
-        uploadedBy: localStorage.getItem("username") || "",
-        userRole: localStorage.getItem("role") || "",
       });
       showToast("Document added successfully.", "success");
     }

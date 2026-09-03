@@ -1,9 +1,14 @@
-// routes/documentRoutes.js
+// routes/documentRoutes.js — client (Sales & Leads) documents
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const Document = require("../models/Documents");
+const authMiddleware = require("../middleware/authMiddleware");
 const { ensureUploadSubdir } = require("../utils/uploadsPath");
+const {
+  buildUploaderFields,
+  resolveUploaderDisplay,
+} = require("../utils/uploaderIdentity");
 
 const router = express.Router();
 
@@ -14,35 +19,52 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+const normalizeDoc = (doc) => {
+  const { uploadedBy, userRole } = resolveUploaderDisplay(doc);
+  return { ...doc, uploadedBy, userRole };
+};
+
 // Get all documents for a client
 router.get("/:clientId", async (req, res) => {
   try {
-    const documents = await Document.find({ clientId: req.params.clientId });
-    res.json(documents);
+    const documents = await Document.find({ clientId: req.params.clientId })
+      .populate("uploaderId", "username role")
+      .lean();
+    res.json(documents.map(normalizeDoc));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Upload document for client
-router.post("/:clientId", upload.single("file"), async (req, res) => {
+// Upload document for client — uploader always from authenticated session
+router.post("/:clientId", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
+    const uploader = buildUploaderFields(req.user);
     const newDoc = new Document({
       clientId: req.params.clientId,
       fileName: req.file.originalname,
       filePath: `/uploads/clientdocuments/${path.basename(req.file.destination) === 'uploads' ? '' : path.basename(req.file.destination) + '/'}${req.file.filename}`.replace('//','/'),
       fileType: req.file.mimetype,
       fileSize: req.file.size,
-      uploadedBy: req.body.uploadedBy,
-      userRole: req.body.userRole,
+      uploaderId: uploader.uploaderId,
+      uploadedBy: uploader.uploadedBy,
+      userRole: uploader.userRole,
       type: req.body.type || "Extra",
       uploadedDate: new Date(),
     });
     await newDoc.save();
-    res.json(newDoc);
+    const plain = typeof newDoc.toObject === "function" ? newDoc.toObject() : newDoc;
+    res.json(normalizeDoc({
+      ...plain,
+      uploaderId: {
+        _id: uploader.uploaderId,
+        username: uploader.uploadedBy,
+        role: req.user.role,
+      },
+    }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
