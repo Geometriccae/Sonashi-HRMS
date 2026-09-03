@@ -316,11 +316,7 @@ function TeamManagementDocuments({ employeeId, refreshKey }) {
   };
 
   const handleAddFromEdit = async (file, type) => {
-    const newDoc = await DocumentsService.uploadForEmployee(employeeId, file, { 
-      type, 
-      uploadedBy: "Current User", 
-      userRole: "Sales Executive" 
-    });
+    const newDoc = await DocumentsService.uploadForEmployee(employeeId, file, { type });
     const mapped = mapDocs([newDoc]);
     setDocuments(prev => [...prev, ...mapped]);
   };

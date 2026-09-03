@@ -682,8 +682,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       await employeeService.updateEmployeeWithFile(empId, payload, profileImage);
       employeeService.invalidateCache?.();
 
-      const uploadedBy = localStorage.getItem("username") || "";
-      const userRole = localStorage.getItem("role") || "";
       const docUploads = [
         { file: employeeDocuments.passportPage1, type: "Passport Page 1" },
         { file: employeeDocuments.passportPage2, type: "Passport Page 2" },
@@ -705,8 +703,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             }
           }
           await DocumentsService.uploadForEmployee(empId, file, {
-            uploadedBy,
-            userRole,
             type,
           });
         } catch (docErr) {

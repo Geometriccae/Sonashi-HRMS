@@ -444,8 +444,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
       const empId = savedEmployee._id || savedEmployee.id || savedEmployee.employee?._id || savedEmployee.employee?.id;
       if (empId) {
-        const uploadedBy = localStorage.getItem("username") || "";
-        const userRole = localStorage.getItem("role") || "";
         const docUploads = [
           { file: employeeDocuments.passportPage1, type: "Passport Page 1" },
           { file: employeeDocuments.passportPage2, type: "Passport Page 2" },
@@ -458,8 +456,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           if (!file) continue;
           try {
             await DocumentsService.uploadForEmployee(empId, file, {
-              uploadedBy,
-              userRole,
               type,
             });
           } catch (docErr) {
@@ -1515,4 +1511,3 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 }
 
 export default AddEmployeeModal;
-

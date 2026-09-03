@@ -3,6 +3,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const Document = require("../models/EmployeeDocuments");
+const authMiddleware = require("../middleware/authMiddleware");
 const { resolveUploadDiskPath, ensureUploadSubdir } = require("../utils/uploadsPath");
 
 const router = express.Router();
@@ -44,7 +45,18 @@ const normalizeDoc = (doc) => {
       "/uploads/employeeDocuments/"
     )
     .replace(/\/uploads\/employeedocuments\//gi, "/uploads/employeeDocuments/");
-  return { ...doc, filePath: fixed };
+  const uploader = doc.uploaderId && typeof doc.uploaderId === "object"
+    ? doc.uploaderId
+    : null;
+
+  return {
+    ...doc,
+    filePath: fixed,
+    // New records resolve from the immutable uploader reference. Legacy records
+    // retain their saved display values when no user reference is available.
+    uploadedBy: uploader?.username || doc.uploadedBy,
+    userRole: uploader?.role || doc.userRole,
+  };
 };
 
 // IMPORTANT: /file/:docId must be registered BEFORE /:employeeId
@@ -83,7 +95,9 @@ router.get("/:employeeId", async (req, res) => {
     if (req.params.employeeId === "file") {
       return res.status(400).json({ error: "Invalid employee id" });
     }
-    const documents = await Document.find({ employeeId: req.params.employeeId }).lean();
+    const documents = await Document.find({ employeeId: req.params.employeeId })
+      .populate("uploaderId", "username role")
+      .lean();
     res.json(documents.map(normalizeDoc));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -91,7 +105,7 @@ router.get("/:employeeId", async (req, res) => {
 });
 
 // Upload document for employee and save to disk
-router.post("/:employeeId", upload.single("file"), async (req, res) => {
+router.post("/:employeeId", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -105,8 +119,9 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
       fileType: req.file.mimetype,
       fileSize: req.file.size,
       filePath: `/uploads/employeeDocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
-      uploadedBy: req.body.uploadedBy,
-      userRole: req.body.userRole,
+      uploaderId: req.user._id,
+      uploadedBy: req.user.username,
+      userRole: req.user.role,
       type: req.body.type || "Extra",
       uploadedDate: new Date(),
     });
@@ -119,7 +134,7 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
 });
 
 // Replace document file (re-upload)
-router.put("/:docId", memUpload.single("file"), async (req, res) => {
+router.put("/:docId", authMiddleware, memUpload.single("file"), async (req, res) => {
   try {
     const doc = await Document.findById(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
@@ -155,6 +170,9 @@ router.put("/:docId", memUpload.single("file"), async (req, res) => {
           fileSize: req.file.size,
           filePath: newFilePath,
           type: rawType,
+          uploaderId: req.user._id,
+          uploadedBy: req.user.username,
+          userRole: req.user.role,
           uploadedDate: new Date(),
         },
       },

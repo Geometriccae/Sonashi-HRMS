@@ -453,11 +453,7 @@ function TeamManagementSalesLeads() {
         const file = isFile ? fileObj : fileObj.rawFile;
         const type = isFile ? undefined : fileObj.type;
 
-        await DocumentsService.uploadForEmployee(employeeId, file, {
-          uploadedBy: "Current User",
-          userRole: "Sales Executive",
-          type: type
-        });
+        await DocumentsService.uploadForEmployee(employeeId, file, { type });
       }
       // Refresh documents tab
       setDocumentsKey(prev => prev + 1);
