@@ -643,7 +643,7 @@ function AnnualVacations() {
           showToast("Employee record not found for this leave.", "error");
           return;
         }
-        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
+        await employeeService.updateVacationStatus(empId, { vacationStatus: newStatus, ...extra });
         showToast("Status updated successfully.");
         employeeService.invalidateCache();
         leaveRequestService.invalidateCache();

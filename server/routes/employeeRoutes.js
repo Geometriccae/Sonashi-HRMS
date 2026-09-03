@@ -364,16 +364,26 @@ async function withLiveVacationStatus(employees) {
   return Array.isArray(employees) ? resolved : resolved[0];
 }
 
-/** Persist the resolved status so every route reads the same stored value. */
+/** Persist the resolved status so every route reads the same stored value.
+ * Never overwrite an authorized manual status — leave approval sync flips
+ * vacationStatusSource back to 'leave' when dates should drive again.
+ */
 async function persistLiveVacationStatus(employee) {
   if (!employee) return employee;
   const plain = typeof employee.toObject === 'function' ? employee.toObject() : { ...employee };
+  if (plain.vacationStatusSource === 'manual') {
+    return plain;
+  }
   const withStatus = await withLiveVacationStatus(plain);
   if (
     withStatus &&
     String(plain.vacationStatus || '') !== String(withStatus.vacationStatus || '')
   ) {
-    await Employee.findByIdAndUpdate(plain._id, { vacationStatus: withStatus.vacationStatus });
+    await Employee.findByIdAndUpdate(plain._id, {
+      vacationStatus: withStatus.vacationStatus,
+      vacationStatusSource: 'leave',
+      vacationStatusUpdatedAt: new Date(),
+    });
     invalidateListCache();
   }
   return withStatus;
@@ -917,6 +927,108 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
     });
   }
 });
+
+/**
+ * Authorized vacation / attendance status transitions (all valid status changes).
+ * Allowed: admin, hod, hr, authorize_user.
+ * Registered before PUT /:id so Authorize User does not hit read-only employee writes.
+ */
+router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user?.role || '').toLowerCase();
+    const allowed = ['admin', 'hod', 'hr', 'authorize_user'];
+    if (!allowed.includes(role)) {
+      return res.status(403).json({
+        message: 'You do not have permission to update vacation status.',
+      });
+    }
+
+    let vacationStatus = String(req.body?.vacationStatus || '').trim();
+    if (vacationStatus === 'Not on Vacation') vacationStatus = 'Onsite';
+    const allowedStatuses = ['Onsite', 'On Vacation', 'Vacation Approved', 'Vacation Pending', 'Onboarding'];
+    if (!allowedStatuses.includes(vacationStatus)) {
+      return res.status(400).json({
+        message: 'Invalid vacation status. Use Onsite, On Vacation, Vacation Approved, Vacation Pending, or Onboarding.',
+      });
+    }
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    const patch = {
+      vacationStatus,
+      vacationStatusSource: 'manual',
+      vacationStatusUpdatedAt: new Date(),
+    };
+
+    const dateFields = [
+      'travellingDate',
+      'leaveEndDate',
+      'returnDate',
+      'firstWorkingDay',
+      'lastWorkingDay',
+    ];
+    for (const key of dateFields) {
+      if (!Object.prototype.hasOwnProperty.call(req.body || {}, key)) continue;
+      const raw = req.body[key];
+      if (raw === null || raw === '') {
+        patch[key] = null;
+        continue;
+      }
+      const dt = new Date(raw);
+      if (Number.isNaN(dt.getTime())) {
+        return res.status(400).json({ message: `Invalid date for ${key}.` });
+      }
+      patch[key] = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    }
+
+    if (vacationStatus === 'Onsite' && patch.returnDate === undefined) {
+      const plain = typeof employee.toObject === 'function' ? employee.toObject() : employee;
+      const derived = await withLiveVacationStatus(plain);
+      const derivedVs = derived?.vacationStatus;
+      if (['On Vacation', 'Vacation Pending', 'Vacation Approved'].includes(derivedVs)) {
+        const now = new Date();
+        patch.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
+    }
+    if (vacationStatus === 'Vacation Pending' && patch.returnDate === undefined) {
+      patch.returnDate = null;
+    }
+    if (vacationStatus === 'On Vacation' && patch.returnDate === undefined) {
+      patch.returnDate = null;
+    }
+    if (vacationStatus === 'Vacation Approved' && !patch.returnDate) {
+      const now = new Date();
+      patch.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    if (vacationStatus === 'Vacation Approved' || vacationStatus === 'Onsite') {
+      patch.attendance = 'Onsite';
+    }
+
+    Object.assign(employee, patch);
+    await employee.save();
+    invalidateListCache();
+
+    const withStatus =
+      typeof employee.toObject === 'function'
+        ? { ...employee.toObject(), vacationStatus }
+        : { ...employee, vacationStatus };
+
+    res.json({
+      message: 'Vacation status updated successfully',
+      employee: withStatus,
+    });
+  } catch (error) {
+    console.error('Error updating vacation status:', error);
+    res.status(400).json({
+      message: 'Error updating vacation status',
+      error: error.message,
+    });
+  }
+});
+
 // Update employee
 router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
   try {

@@ -445,14 +445,14 @@ export const isDateWithinLastMonth = (value, now = new Date()) => {
 };
 
 /**
- * Returned Back (last 6 months): leave history end dates, not only
- * employees still marked Vacation Approved (many are set back to Onsite).
- * Exclude currently On Vacation / Yet to Go.
+ * Returned Back (last 6 months): leave history end/return dates.
+ * Exclude currently On Vacation / Yet to Go / Onsite — Onsite means HR moved
+ * them out of the Returned Back category (e.g. Return Back → Onsite).
  */
 export const isReturnedBackInLastMonth = (emp, leave, now = new Date()) => {
   if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
   const vs = emp?.vacationStatus || "Onsite";
-  if (vs === "On Vacation" || vs === "Vacation Pending") return false;
+  if (vs === "On Vacation" || vs === "Vacation Pending" || vs === "Onsite") return false;
 
   const leaveEnd = toDayStart(leave?.endDate);
   const returnDate = getVacationReturnDate(emp, leave);
@@ -476,7 +476,7 @@ export const filterReturnedBackEmployees = (empList, leaveList, now = new Date()
   return employees.filter((emp) => {
     if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
     const vs = emp?.vacationStatus || "Onsite";
-    if (vs === "On Vacation" || vs === "Vacation Pending") return false;
+    if (vs === "On Vacation" || vs === "Vacation Pending" || vs === "Onsite") return false;
 
     if (vs === "Vacation Approved") {
       const empReturn = toDayStart(

@@ -15,6 +15,15 @@
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 
+/** Persisted statuses an authorized user may set from Team Management / Annual Vacations. */
+const MANUAL_VACATION_STATUSES = [
+  'Onsite',
+  'On Vacation',
+  'Vacation Approved',
+  'Vacation Pending',
+  'Onboarding',
+];
+
 function toCalendarDate(value) {
   if (!value) return null;
   if (typeof value === 'string') {
@@ -136,6 +145,17 @@ function statusFromEmployeeDates(employee, todayValue) {
 }
 
 function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
+  // Authorized manual updates are the source of truth until leave approval
+  // re-syncs the employee (vacationStatusSource → 'leave'). Do not overlay
+  // date-derived categories on top of a freshly saved manual status — that is
+  // what caused Return Back → Onsite (and similar) to snap back on every GET.
+  if (
+    employee?.vacationStatusSource === 'manual' &&
+    MANUAL_VACATION_STATUSES.includes(employee?.vacationStatus)
+  ) {
+    return employee.vacationStatus;
+  }
+
   const today = toCalendarDate(todayValue || new Date());
   const leaves = (Array.isArray(leaveRequests) ? leaveRequests : []).filter((leave) =>
     leaveBelongsToEmployee(leave, employee)
@@ -157,7 +177,8 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
         ? 'Vacation Approved'
         : null;
 
-  // Current and future approved leave dates always win over a stored label.
+  // Current and future approved leave dates always win over a stored label
+  // when the status is leave-driven (or legacy / unset source).
   if (fromLeaveStatus === 'On Vacation' || fromLeaveStatus === 'Vacation Pending') {
     return fromLeaveStatus;
   }
@@ -201,6 +222,7 @@ function applyEffectiveVacationStatuses(employees, leaveRequests, todayValue) {
 
 module.exports = {
   APPROVED_LEAVE_STATUSES,
+  MANUAL_VACATION_STATUSES,
   toCalendarDate,
   leaveBelongsToEmployee,
   getLeaveTravelStartDate,

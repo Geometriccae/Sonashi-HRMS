@@ -181,7 +181,7 @@ function DashboardOverview() {
         });
         updated = result?.employee || result;
       } else {
-        updated = await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
+        updated = await employeeService.updateVacationStatus(empId, { vacationStatus: newStatus, ...extraFields });
       }
 
       const liveStatus = updated?.vacationStatus || newStatus;

@@ -1,8 +1,7 @@
 /**
  * Fast dashboard / annual-vacation aggregates and paginated tab rows.
- * Returned Back: working employees whose approved leave ended in the last 6 months
- * (leave history), excluding currently On Vacation / Yet to Go. Does not require
- * vacationStatus to still be "Vacation Approved".
+ * Categories use the shared effective vacationStatus (manual overrides honored;
+ * leave-sourced rows stay date-driven). Returned Back counts Vacation Approved.
  */
 
 const Employee = require('../models/Employee');
@@ -91,14 +90,13 @@ function isDateWithinLastMonth(value, now = new Date()) {
 
 /**
  * Returned Back (last 6 months): use leave history end/return dates.
- * Do not require vacationStatus to still be "Vacation Approved" (many staff
- * are set back to Onsite after return and would otherwise disappear).
- * Exclude people currently On Vacation / Yet to Go.
+ * Exclude On Vacation / Yet to Go / Onsite. Onsite means an authorized user
+ * moved them out of Returned Back — they must leave that category immediately.
  */
 function isReturnedBackInLastMonth(emp, leave, now = new Date()) {
   if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
   const vs = emp?.vacationStatus || 'Onsite';
-  if (vs === 'On Vacation' || vs === 'Vacation Pending') return false;
+  if (vs === 'On Vacation' || vs === 'Vacation Pending' || vs === 'Onsite') return false;
 
   const leaveEnd = toDayStart(leave?.endDate);
   const returnDate = getVacationReturnDate(emp, leave);
@@ -120,7 +118,7 @@ function filterReturnedBackEmployees(empList, leaveList, now = new Date()) {
   return employees.filter((emp) => {
     if (!isWorkingEmployeeStatus(emp?.employeeStatus)) return false;
     const vs = emp?.vacationStatus || 'Onsite';
-    if (vs === 'On Vacation' || vs === 'Vacation Pending') return false;
+    if (vs === 'On Vacation' || vs === 'Vacation Pending' || vs === 'Onsite') return false;
 
     if (vs === 'Vacation Approved') {
       const empReturn = toDayStart(
@@ -588,9 +586,8 @@ function applyRowFilters(rows, query = {}) {
 
 /**
  * Lightweight counts for Dashboard + Annual Vacations cards.
- * Returned Back = approved leave ended in last 6 months (leave history),
- * excluding people currently On Vacation / Yet to Go.
- * Yet to Go uses the same leave+employee builder as Annual Vacations.
+ * On Vacation / Yet to Go / Returned Back use the same resolved vacationStatus
+ * as Team Management (manual overrides stick; leave-sourced stay date-driven).
  */
 async function getDashboardSummary({ force = false } = {}) {
   if (!force && _summaryCache.data && Date.now() - _summaryCache.ts < SUMMARY_TTL_MS) {

@@ -906,6 +906,30 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
   }
 
   /**
+   * Authorized vacation status transitions (Onsite / On Vacation / Yet to Go / Returned).
+   * Uses dedicated endpoint so Authorize User can update status without full employee write access.
+   */
+  async updateVacationStatus(employeeId, payload = {}) {
+    try {
+      const response = await fetch(`${this.baseURL}/${employeeId}/vacation-status`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      this.invalidateCache();
+      const data = await response.json();
+      return data?.employee || data;
+    } catch (error) {
+      console.error('Error updating vacation status:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Early or extended return from vacation.
    * Updates leave end date, vacation status, return dates, attendance.
    */

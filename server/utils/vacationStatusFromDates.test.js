@@ -257,7 +257,7 @@ describe('resolveEmployeeVacationStatus', () => {
     assert.equal(status, 'Vacation Approved');
   });
 
-  it('uses approved leave dates instead of a stale manual Yet to Go label', () => {
+  it('honors manual Yet to Go even when approved leave dates are currently active', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Vacation Pending',
@@ -269,10 +269,10 @@ describe('resolveEmployeeVacationStatus', () => {
       [leave()],
       TODAY
     );
-    assert.equal(status, 'On Vacation');
+    assert.equal(status, 'Vacation Pending');
   });
 
-  it('keeps Yet to Go when approved leave dates are still in the future', () => {
+  it('honors manual Onsite even when a future approved leave exists', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Onsite',
@@ -284,7 +284,89 @@ describe('resolveEmployeeVacationStatus', () => {
       [leave({ travellingDate: new Date(2026, 8, 10), startDate: new Date(2026, 8, 10), endDate: new Date(2026, 8, 20) })],
       TODAY
     );
+    assert.equal(status, 'Onsite');
+  });
+
+  it('honors Return Back → Onsite and does not snap back to Returned Back', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Onsite',
+        vacationStatusSource: 'manual',
+        returnDate: TODAY,
+        travellingDate: new Date(2026, 6, 1),
+        leaveEndDate: new Date(2026, 7, 20),
+      }),
+      [leave({ travellingDate: new Date(2026, 6, 1), startDate: new Date(2026, 6, 1), endDate: new Date(2026, 7, 20) })],
+      TODAY
+    );
+    assert.equal(status, 'Onsite');
+  });
+
+  it('honors On Vacation → Yet to Go even while leave dates are still active', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Pending',
+        vacationStatusSource: 'manual',
+        returnDate: null,
+      }),
+      [leave()],
+      TODAY
+    );
     assert.equal(status, 'Vacation Pending');
+  });
+
+  it('honors On Vacation → Onsite while leave dates are still active', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Onsite',
+        vacationStatusSource: 'manual',
+        returnDate: TODAY,
+      }),
+      [leave()],
+      TODAY
+    );
+    assert.equal(status, 'Onsite');
+  });
+
+  it('honors Return Back → Yet to Go', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Pending',
+        vacationStatusSource: 'manual',
+        returnDate: null,
+        travellingDate: new Date(2026, 9, 1),
+        leaveEndDate: new Date(2026, 9, 15),
+      }),
+      [leave({ travellingDate: new Date(2026, 2, 1), startDate: new Date(2026, 2, 1), endDate: new Date(2026, 2, 20) })],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Pending');
+  });
+
+  it('honors Return Back → On Vacation', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'On Vacation',
+        vacationStatusSource: 'manual',
+        returnDate: null,
+      }),
+      [leave({ travellingDate: new Date(2026, 2, 1), startDate: new Date(2026, 2, 1), endDate: new Date(2026, 2, 20) })],
+      TODAY
+    );
+    assert.equal(status, 'On Vacation');
+  });
+
+  it('still date-derives leave-sourced Onsite into On Vacation for active trips', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Onsite',
+        vacationStatusSource: 'leave',
+        returnDate: null,
+      }),
+      [leave()],
+      TODAY
+    );
+    assert.equal(status, 'On Vacation');
   });
 });
 
@@ -314,6 +396,24 @@ describe('applyEffectiveVacationStatuses', () => {
       TODAY
     );
     assert.equal(row.vacationStatus, 'On Vacation');
+  });
+
+  it('keeps manual Onsite on list rows despite an active approved leave', () => {
+    const [row] = applyEffectiveVacationStatuses(
+      [employee({ vacationStatus: 'Onsite', vacationStatusSource: 'manual', returnDate: TODAY })],
+      [leave()],
+      TODAY
+    );
+    assert.equal(row.vacationStatus, 'Onsite');
+  });
+
+  it('keeps manual Returned Back on list rows despite an active approved leave', () => {
+    const [row] = applyEffectiveVacationStatuses(
+      [employee({ vacationStatus: 'Vacation Approved', vacationStatusSource: 'manual', returnDate: TODAY })],
+      [leave()],
+      TODAY
+    );
+    assert.equal(row.vacationStatus, 'Vacation Approved');
   });
 });
 
@@ -387,11 +487,26 @@ describe('approval/re-approval transitions', () => {
     assert.equal(status, 'On Vacation');
   });
 
-  it('moves Returned Back to Yet to Go when employee travel dates are set in the future', () => {
+  it('keeps manual Returned Back when employee travel dates are set in the future', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Vacation Approved',
         vacationStatusSource: 'manual',
+        travellingDate: new Date(2026, 9, 1),
+        leaveEndDate: new Date(2026, 9, 15),
+        returnDate: null,
+      }),
+      [leave({ travellingDate: new Date(2026, 2, 1), startDate: new Date(2026, 2, 1), endDate: new Date(2026, 2, 20) })],
+      TODAY
+    );
+    assert.equal(status, 'Vacation Approved');
+  });
+
+  it('date-derives leave-sourced Returned Back to Yet to Go from future employee travel dates', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Approved',
+        vacationStatusSource: 'leave',
         travellingDate: new Date(2026, 9, 1),
         leaveEndDate: new Date(2026, 9, 15),
         returnDate: null,
