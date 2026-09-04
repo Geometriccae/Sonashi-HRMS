@@ -10,17 +10,13 @@ const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
-const { workingStatusFilter } = require('../utils/employeeStatus');
 const { ensureUploadSubdir } = require('../utils/uploadsPath');
-const {
-    getPayrollPeriod,
-    computePayablePayrollDays,
-    scaleSalaryAmount,
-} = require('../utils/payrollPayableDays');
+const { getPayrollPeriod } = require('../utils/payrollPayableDays');
 const {
     isSalarySlipEligibleForMonth,
     FULL_MONTH_LEAVE_REASON,
 } = require('../utils/salarySlipEligibility');
+const { generateSalarySlipsForMonth } = require('../utils/generateSalarySlips');
 
 // One-time cleanup to remove stale database indexes that cause import failures
 SalarySlip.on('index', (err) => {
@@ -218,136 +214,21 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
             return res.status(400).json({ message: 'Month and Year are required' });
         }
 
-        const period = getPayrollPeriod(month, year);
-        if (!period) {
-            return res.status(400).json({ message: 'Invalid Month or Year' });
-        }
-
-        const monthEndInclusive = new Date(period.end);
-        monthEndInclusive.setHours(23, 59, 59, 999);
-
-        // Working staff plus anyone whose last working day falls in this month (mid-month exit).
-        const employees = await Employee.find({
-            $or: [
-                workingStatusFilter(),
-                { lastWorkingDay: { $gte: period.start, $lte: monthEndInclusive } },
-            ],
-        }).lean();
-
-        const [attendanceRecords, leaveRequests] = await Promise.all([
-            Attendance.find({
-                date: { $gte: period.start, $lte: monthEndInclusive },
-            }).lean(),
-            LeaveRequest.find({
-                status: { $in: ['Approved', 'HOD Approved'] },
-                startDate: { $lte: monthEndInclusive },
-                endDate: { $gte: period.start },
-            })
-                .populate('employee', 'employeeId username emailId')
-                .lean(),
-        ]);
-
-        const results = [];
-        const skipped = [];
-        const errors = [];
-
-        for (const emp of employees) {
-            try {
-                if (!emp.emailId) {
-                    skipped.push({ name: emp.employeeName, reason: "No email ID" });
-                    continue;
-                }
-
-                const eligibility = isSalarySlipEligibleForMonth({
-                    employee: emp,
-                    month,
-                    year,
-                    attendanceRecords,
-                    leaveRequests,
-                });
-                if (!eligibility.eligible) {
-                    skipped.push({
-                        name: emp.employeeName,
-                        reason: eligibility.reason || FULL_MONTH_LEAVE_REASON,
-                    });
-                    continue;
-                }
-
-                const days = computePayablePayrollDays({
-                    employee: emp,
-                    month,
-                    year,
-                    attendanceRecords,
-                    leaveRequests,
-                });
-
-                if (days.skip || days.payableDays <= 0) {
-                    skipped.push({
-                        name: emp.employeeName,
-                        reason: days.skipReason || "No payable working days",
-                    });
-                    continue;
-                }
-
-                const email = emp.emailId.trim().toLowerCase();
-                
-                // Prepare slip data from this employee's salaryDetails only (no invented defaults).
-                // Keep 0 as 0 — do not treat empty rent as basic/2.
-                const salary = emp.salaryDetails || {};
-                const toAmt = (v) => {
-                    const n = parseFloat(v);
-                    return Number.isFinite(n) ? n : 0;
-                };
-                const basic = scaleSalaryAmount(toAmt(salary.basicSalary), days.payableDays);
-                const houseRent = scaleSalaryAmount(toAmt(salary.houseRent), days.payableDays);
-                const travelExp = scaleSalaryAmount(toAmt(salary.travelExp), days.payableDays);
-                const other = scaleSalaryAmount(toAmt(salary.other), days.payableDays);
-                const deduction = toAmt(salary.deduction);
-
-                const grossSalary = basic + houseRent + travelExp + other;
-                const netSalary = grossSalary - deduction;
-
-                const slipData = {
-                    employeeName: emp.employeeName,
-                    emailId: email,
-                    department: emp.department || '',
-                    designation: emp.designation || emp.role || 'Employee',
-                    dateOfJoining: emp.doj ? new Date(emp.doj).toISOString().slice(0, 10) : '',
-                    month: month,
-                    year: year,
-                    totalWorkingDays: days.totalWorkingDays,
-                    presentDays: days.presentDays,
-                    payableDays: days.payableDays,
-                    basicPay: basic,
-                    hra: houseRent,
-                    conveyanceAllowance: travelExp,
-                    otherAllowance: other,
-                    grossSalary: grossSalary,
-                    totalDeduction: deduction,
-                    deductionsPFTax: deduction,
-                    netSalary: netSalary,
-                    uploadedBy: req.user._id
-                };
-
-                // Use findOneAndUpdate with upsert: true to overwrite/update existing slips
-                await SalarySlip.findOneAndUpdate(
-                    { emailId: email, month: { $regex: new RegExp(`^${month}$`, 'i') }, year: year },
-                    { $set: slipData },
-                    { upsert: true, new: true }
-                );
-                
-                results.push(email);
-            } catch (err) {
-                errors.push({ name: emp.employeeName, error: err.message });
-            }
+        const outcome = await generateSalarySlipsForMonth({
+            month,
+            year,
+            uploadedBy: req.user._id,
+        });
+        if (!outcome.ok) {
+            return res.status(400).json({ message: outcome.message });
         }
 
         res.json({
-            message: `Successfully generated/updated ${results.length} salary slips${skipped.length ? ` (${skipped.length} skipped)` : ''}.`,
-            count: results.length,
-            results,
-            skipped,
-            errors: errors.length > 0 ? errors : undefined
+            message: outcome.message,
+            count: outcome.count,
+            results: outcome.results.map((r) => r.email || r),
+            skipped: outcome.skipped,
+            errors: outcome.errors.length > 0 ? outcome.errors : undefined,
         });
     } catch (e) {
         res.status(500).json({ message: e.message });

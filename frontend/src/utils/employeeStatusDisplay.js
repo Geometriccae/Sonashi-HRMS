@@ -39,6 +39,16 @@ export function isNonWorkingEmployeeStatus(status) {
   return !isWorkingEmployeeStatus(status);
 }
 
+/**
+ * lastWorkingDay is also used as "last day before vacation" for working staff.
+ * Only separated employees and Notice Period use it as a true employment end date.
+ */
+export function lastWorkingDayIsEmploymentExit(status) {
+  const s = String(status || "").trim();
+  if (NON_WORKING_EMPLOYEE_STATUSES.includes(s)) return true;
+  return s === "Notice Period";
+}
+
 export function employeeMatchesSearch(employee, query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return true;

@@ -8,6 +8,7 @@
 
 const {
   getPayrollPeriod,
+  getEmploymentWindow,
   toDayStart,
   dateKey,
 } = require('./payrollPayableDays');
@@ -69,17 +70,6 @@ function leaveMatchesEmployeeForPayroll(leave, employee) {
 
 const attendanceEmployeeId = (record) =>
   String(record?.employee?._id || record?.employee || '');
-
-const getEmploymentWindow = (employee, monthStart, monthEnd) => {
-  const join = toDayStart(employee?.doj);
-  const last = toDayStart(employee?.lastWorkingDay);
-  if (join && join > monthEnd) return null;
-  if (last && last < monthStart) return null;
-  const start = laterDay(monthStart, join);
-  const end = earlierDay(monthEnd, last);
-  if (!start || !end || end < start) return null;
-  return { start, end };
-};
 
 /**
  * @returns {{

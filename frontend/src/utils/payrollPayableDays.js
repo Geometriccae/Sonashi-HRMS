@@ -6,6 +6,8 @@
  *   Payable Salary = Daily Salary × Payable Days
  */
 
+import { lastWorkingDayIsEmploymentExit } from "./employeeStatusDisplay";
+
 export const PAYROLL_MONTH_DAYS = 30;
 
 export const MONTH_NAMES = [
@@ -102,9 +104,14 @@ export const getPayrollPeriod = (monthValue, yearValue) => {
   };
 };
 
+const getPayrollExitDate = (employee) => {
+  if (!lastWorkingDayIsEmploymentExit(employee?.employeeStatus)) return null;
+  return toDayStart(employee?.lastWorkingDay) || toDayStart(employee?.noticePeriodEndDate);
+};
+
 const getEmploymentWindow = (employee, monthStart, monthEnd) => {
   const join = toDayStart(employee?.doj);
-  const last = toDayStart(employee?.lastWorkingDay);
+  const last = getPayrollExitDate(employee);
   if (join && join > monthEnd) return null;
   if (last && last < monthStart) return null;
   const start = laterDay(monthStart, join);

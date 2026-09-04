@@ -5,6 +5,7 @@ const {
   getPayrollPeriod,
   PAYROLL_MONTH_DAYS,
 } = require("../utils/payrollPayableDays");
+const { isSalarySlipEligibleForMonth } = require("../utils/salarySlipEligibility");
 
 const monthly = 30000;
 const empId = "emp1";
@@ -40,9 +41,9 @@ run("scaleSalaryAmount always divides by 30, never calendar days", () => {
   assert.strictEqual(scaleSalaryAmount(2500, 30), 2500);
 });
 
-run("last working day 17 Aug 2026 → 17 payable days and 2500/30×17", () => {
+run("employment exit on 17 Aug 2026 → 17 payable days and 2500/30×17", () => {
   const days = computePayablePayrollDays({
-    employee: employee({ lastWorkingDay: "2026-08-17" }),
+    employee: employee({ employeeStatus: "Relieved", lastWorkingDay: "2026-08-17" }),
     month: "August",
     year: 2026,
   });
@@ -50,6 +51,20 @@ run("last working day 17 Aug 2026 → 17 payable days and 2500/30×17", () => {
   assert.strictEqual(days.totalWorkingDays, 31);
   assert.strictEqual(scaleSalaryAmount(2500, days.payableDays), 1416.67);
   assert.notStrictEqual(scaleSalaryAmount(2500, days.payableDays), 1370.97);
+});
+
+run("Active vacation lastWorkingDay does not end employment", () => {
+  const days = computePayablePayrollDays({
+    employee: employee({
+      employeeStatus: "Active",
+      lastWorkingDay: "2026-07-31",
+      vacationStatus: "Onsite",
+    }),
+    month: "August",
+    year: 2026,
+  });
+  assert.strictEqual(days.skip, false);
+  assert.strictEqual(days.payableDays, 31);
 });
 
 run("full month July 2026 still counts 31 payable days, salary uses /30", () => {
@@ -86,9 +101,9 @@ run("joined mid-July (15th) prorates from joining date on /30", () => {
   assert.strictEqual(scaleSalaryAmount(monthly, days.payableDays), 17000);
 });
 
-run("left mid-July (10th) prorates until last working day on /30", () => {
+run("left mid-July (10th) prorates until employment exit on /30", () => {
   const days = computePayablePayrollDays({
-    employee: employee({ lastWorkingDay: "2026-07-10" }),
+    employee: employee({ employeeStatus: "Relieved", lastWorkingDay: "2026-07-10" }),
     month: "July",
     year: 2026,
   });
@@ -165,14 +180,174 @@ run("attendance Leave days are unpaid", () => {
   assert.strictEqual(days.payableDays, 29);
 });
 
-run("not employed in month is skipped", () => {
+run("separated employee with exit before the month is skipped", () => {
   const days = computePayablePayrollDays({
-    employee: employee({ lastWorkingDay: "2026-06-30" }),
+    employee: employee({ employeeStatus: "Relieved", lastWorkingDay: "2026-06-30" }),
     month: "July",
     year: 2026,
   });
   assert.strictEqual(days.skip, true);
   assert.strictEqual(days.payableDays, 0);
+});
+
+run("CASE 1: full July leave does not suppress August payroll", () => {
+  const emp = employee({
+    employeeStatus: "Active",
+    lastWorkingDay: "2026-06-30",
+    vacationStatus: "Onsite",
+  });
+  const julyLeave = [{
+    employeeName: "Test User",
+    status: "Approved",
+    startDate: "2026-07-01",
+    endDate: "2026-07-31",
+    leaveType: "Vacation",
+    reason: "Annual vacation",
+  }];
+  const july = computePayablePayrollDays({
+    employee: emp,
+    month: "July",
+    year: 2026,
+    leaveRequests: julyLeave,
+  });
+  const august = computePayablePayrollDays({
+    employee: emp,
+    month: "August",
+    year: 2026,
+    leaveRequests: julyLeave,
+  });
+  assert.strictEqual(july.payableDays, 0);
+  assert.strictEqual(july.skip, true);
+  assert.strictEqual(isSalarySlipEligibleForMonth({
+    employee: emp,
+    month: "July",
+    year: 2026,
+    leaveRequests: julyLeave,
+  }).eligible, false);
+  assert.strictEqual(august.skip, false);
+  assert.strictEqual(august.payableDays, 31);
+  assert.strictEqual(isSalarySlipEligibleForMonth({
+    employee: emp,
+    month: "August",
+    year: 2026,
+    leaveRequests: julyLeave,
+  }).eligible, true);
+  assert.strictEqual(scaleSalaryAmount(2500, august.payableDays), 2583.33);
+});
+
+run("CASE 2: full August leave skips August only", () => {
+  const emp = employee({ employeeStatus: "Active" });
+  const augustLeave = [{
+    employeeName: "Test User",
+    status: "Approved",
+    startDate: "2026-08-01",
+    endDate: "2026-08-31",
+    leaveType: "Vacation",
+    reason: "August vacation",
+  }];
+  assert.strictEqual(isSalarySlipEligibleForMonth({
+    employee: emp, month: "August", year: 2026, leaveRequests: augustLeave,
+  }).eligible, false);
+  assert.strictEqual(computePayablePayrollDays({
+    employee: emp, month: "August", year: 2026, leaveRequests: augustLeave,
+  }).payableDays, 0);
+});
+
+run("CASE 4: partial August leave still generates with prorated /30 salary", () => {
+  const days = computePayablePayrollDays({
+    employee: employee({ employeeStatus: "Active" }),
+    month: "August",
+    year: 2026,
+    leaveRequests: [{
+      employeeName: "Test User",
+      status: "Approved",
+      startDate: "2026-08-18",
+      endDate: "2026-08-31",
+      leaveType: "Vacation",
+      reason: "Leave from 18 Aug",
+    }],
+  });
+  assert.strictEqual(days.payableDays, 17);
+  assert.strictEqual(days.skip, false);
+  assert.strictEqual(scaleSalaryAmount(2500, days.payableDays), 1416.67);
+});
+
+run("CASE 5: leave Jul 20–Aug 10 only deducts August overlap", () => {
+  const leave = [{
+    employeeName: "Test User",
+    status: "Approved",
+    startDate: "2026-07-20",
+    endDate: "2026-08-10",
+    leaveType: "Vacation",
+    reason: "Crossing months",
+  }];
+  const august = computePayablePayrollDays({
+    employee: employee({ employeeStatus: "Active" }),
+    month: "August",
+    year: 2026,
+    leaveRequests: leave,
+  });
+  assert.strictEqual(august.payableDays, 21);
+  assert.strictEqual(august.skip, false);
+});
+
+run("CASE 6: leave Aug 25–Sep 10 only deducts August overlap", () => {
+  const days = computePayablePayrollDays({
+    employee: employee({ employeeStatus: "Active" }),
+    month: "August",
+    year: 2026,
+    leaveRequests: [{
+      employeeName: "Test User",
+      status: "Approved",
+      startDate: "2026-08-25",
+      endDate: "2026-09-10",
+      leaveType: "Vacation",
+      reason: "Into September",
+    }],
+  });
+  assert.strictEqual(days.payableDays, 24);
+});
+
+run("CASE 9: older May/June/July leave does not suppress August", () => {
+  const oldLeaves = [
+    { employeeName: "Test User", status: "Approved", startDate: "2026-05-01", endDate: "2026-05-31", leaveType: "Vacation", reason: "May" },
+    { employeeName: "Test User", status: "Approved", startDate: "2026-06-01", endDate: "2026-06-30", leaveType: "Vacation", reason: "June" },
+    { employeeName: "Test User", status: "Approved", startDate: "2026-07-01", endDate: "2026-07-31", leaveType: "Vacation", reason: "July" },
+  ];
+  const emp = employee({
+    employeeStatus: "Active",
+    lastWorkingDay: "2026-04-30",
+    vacationStatus: "On Vacation",
+  });
+  const august = computePayablePayrollDays({
+    employee: emp,
+    month: "August",
+    year: 2026,
+    leaveRequests: oldLeaves,
+  });
+  assert.strictEqual(august.skip, false);
+  assert.strictEqual(august.payableDays, 31);
+  assert.strictEqual(isSalarySlipEligibleForMonth({
+    employee: emp,
+    month: "August",
+    year: 2026,
+    leaveRequests: oldLeaves,
+  }).eligible, true);
+});
+
+run("Notice Period lastWorkingDay still caps payroll", () => {
+  const days = computePayablePayrollDays({
+    employee: employee({ employeeStatus: "Notice Period", lastWorkingDay: "2026-08-17" }),
+    month: "August",
+    year: 2026,
+  });
+  assert.strictEqual(days.payableDays, 17);
+  const september = computePayablePayrollDays({
+    employee: employee({ employeeStatus: "Notice Period", lastWorkingDay: "2026-08-17" }),
+    month: "September",
+    year: 2026,
+  });
+  assert.strictEqual(september.skip, true);
 });
 
 run("getPayrollPeriod still reports actual month length for day counting", () => {

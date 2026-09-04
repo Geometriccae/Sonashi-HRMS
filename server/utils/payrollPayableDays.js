@@ -6,6 +6,8 @@
  *   Payable Salary = Daily Salary × Payable Days
  */
 
+const { lastWorkingDayIsEmploymentExit } = require("./employeeStatus");
+
 const PAYROLL_MONTH_DAYS = 30;
 
 const MONTH_NAMES = [
@@ -128,9 +130,16 @@ const unpaidFractionForLeave = (leave) => {
   return 1;
 };
 
+const getPayrollExitDate = (employee) => {
+  // Vacation lastWorkingDay must not cut later payroll months.
+  // Only Relieved/Resigned/Terminated/InActive and Notice Period are employment exits.
+  if (!lastWorkingDayIsEmploymentExit(employee?.employeeStatus)) return null;
+  return toDayStart(employee?.lastWorkingDay) || toDayStart(employee?.noticePeriodEndDate);
+};
+
 const getEmploymentWindow = (employee, monthStart, monthEnd) => {
   const join = toDayStart(employee?.doj);
-  const last = toDayStart(employee?.lastWorkingDay);
+  const last = getPayrollExitDate(employee);
   if (join && join > monthEnd) return null;
   if (last && last < monthStart) return null;
   const start = laterDay(monthStart, join);
@@ -254,6 +263,7 @@ module.exports = {
   MONTH_NAMES,
   PAYROLL_MONTH_DAYS,
   getPayrollPeriod,
+  getEmploymentWindow,
   computePayablePayrollDays,
   scaleSalaryAmount,
   inclusiveDays,
