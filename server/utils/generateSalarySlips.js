@@ -3,11 +3,15 @@ const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const SalarySlip = require('../models/SalarySlip');
 require('../models/User');
-const { workingStatusFilter } = require('./employeeStatus');
+const {
+  isWorkingEmployeeStatus,
+  lastWorkingDayIsEmploymentExit,
+} = require('./employeeStatus');
 const {
   getPayrollPeriod,
   computePayablePayrollDays,
   scaleSalaryAmount,
+  toDayStart,
 } = require('./payrollPayableDays');
 const {
   isSalarySlipEligibleForMonth,
@@ -17,6 +21,33 @@ const {
 const toAmt = (v) => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : 0;
+};
+
+const payrollEmailForEmployee = (emp) => {
+  const email = String(emp?.emailId || '').trim().toLowerCase();
+  if (email) return email;
+  const code = String(emp?.employeeId || emp?._id || 'unknown')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `noemail+${code}@import.hrms.placeholder`;
+};
+
+const yearQueryValue = (yearStr) => {
+  const yearNum = Number(yearStr);
+  if (Number.isFinite(yearNum) && String(yearNum) === yearStr) {
+    return { $in: [yearStr, yearNum] };
+  }
+  return yearStr;
+};
+
+const isPayrollCandidateForPeriod = (emp, period) => {
+  if (isWorkingEmployeeStatus(emp?.employeeStatus)) return true;
+  if (!lastWorkingDayIsEmploymentExit(emp?.employeeStatus)) return false;
+  const last = toDayStart(emp?.lastWorkingDay) || toDayStart(emp?.noticePeriodEndDate);
+  if (!last) return false;
+  return last >= period.start && last <= period.end;
 };
 
 /**
@@ -33,12 +64,9 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
   const monthEndInclusive = new Date(period.end);
   monthEndInclusive.setHours(23, 59, 59, 999);
 
-  const employees = await Employee.find({
-    $or: [
-      workingStatusFilter(),
-      { lastWorkingDay: { $gte: period.start, $lte: monthEndInclusive } },
-    ],
-  }).lean();
+  const employees = (await Employee.find({}).lean()).filter((emp) =>
+    isPayrollCandidateForPeriod(emp, period)
+  );
 
   const [attendanceRecords, leaveRequests] = await Promise.all([
     Attendance.find({
@@ -59,11 +87,6 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
 
   for (const emp of employees) {
     try {
-      if (!emp.emailId) {
-        skipped.push({ name: emp.employeeName, reason: 'No email ID' });
-        continue;
-      }
-
       const eligibility = isSalarySlipEligibleForMonth({
         employee: emp,
         month,
@@ -95,7 +118,7 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
         continue;
       }
 
-      const email = emp.emailId.trim().toLowerCase();
+      const email = payrollEmailForEmployee(emp);
       const salary = emp.salaryDetails || {};
       const basic = scaleSalaryAmount(toAmt(salary.basicSalary), days.payableDays);
       const houseRent = scaleSalaryAmount(toAmt(salary.houseRent), days.payableDays);
@@ -128,7 +151,11 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
       if (uploadedBy) slipData.uploadedBy = uploadedBy;
 
       await SalarySlip.findOneAndUpdate(
-        { emailId: email, month: { $regex: new RegExp(`^${month}$`, 'i') }, year: yearStr },
+        {
+          emailId: email,
+          month: { $regex: new RegExp(`^${month}$`, 'i') },
+          year: yearQueryValue(yearStr),
+        },
         { $set: slipData },
         { upsert: true, new: true }
       );
@@ -141,6 +168,7 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
       });
     } catch (err) {
       errors.push({ name: emp.employeeName, error: err.message });
+      continue;
     }
   }
 
@@ -156,4 +184,7 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
 
 module.exports = {
   generateSalarySlipsForMonth,
+  payrollEmailForEmployee,
+  isPayrollCandidateForPeriod,
+  yearQueryValue,
 };

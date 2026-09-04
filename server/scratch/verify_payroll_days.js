@@ -4,8 +4,13 @@ const {
   scaleSalaryAmount,
   getPayrollPeriod,
   PAYROLL_MONTH_DAYS,
+  leaveMatchesEmployee,
 } = require("../utils/payrollPayableDays");
 const { isSalarySlipEligibleForMonth } = require("../utils/salarySlipEligibility");
+const {
+  payrollEmailForEmployee,
+  isPayrollCandidateForPeriod,
+} = require("../utils/generateSalarySlips");
 
 const monthly = 30000;
 const empId = "emp1";
@@ -378,6 +383,55 @@ run("salary components each prorate independently on /30", () => {
   assert.strictEqual(conveyance, 170);
   assert.strictEqual(other, 113.33);
   assert.strictEqual(Math.round(gross * 100) / 100, 1416.66);
+});
+
+run("leave.employee ObjectId matching the Employee still counts for that employee only", () => {
+  const emp = employee({ _id: "69e08bbea74d89f831ceb2f8", employeeId: "IDMO-178" });
+  assert.strictEqual(
+    leaveMatchesEmployee({
+      employee: "69e08bbea74d89f831ceb2f8",
+      employeeId: "IDMO-178",
+      status: "Approved",
+      startDate: "2026-06-20",
+      endDate: "2026-08-05",
+    }, emp),
+    true
+  );
+  assert.strictEqual(
+    leaveMatchesEmployee({
+      employee: "69e08bbea74d89f831ceb2f8",
+      employeeId: "IDMO-178",
+      status: "Approved",
+    }, employee({ _id: "other", employeeId: "IDMO-001" })),
+    false
+  );
+});
+
+run("employees without email still get a stable unique payroll identity", () => {
+  assert.strictEqual(
+    payrollEmailForEmployee({ employeeId: "IDMO-010", emailId: "" }),
+    "noemail+idmo-010@import.hrms.placeholder"
+  );
+  assert.strictEqual(
+    payrollEmailForEmployee({ employeeId: "IDMO-010", emailId: "  A@B.COM " }),
+    "a@b.com"
+  );
+});
+
+run("working staff remain payroll candidates despite a previous-month vacation LWD", () => {
+  const august = getPayrollPeriod("August", 2026);
+  assert.strictEqual(isPayrollCandidateForPeriod({
+    employeeStatus: "Active",
+    lastWorkingDay: "2026-07-30",
+  }, august), true);
+  assert.strictEqual(isPayrollCandidateForPeriod({
+    employeeStatus: "Relieved",
+    lastWorkingDay: "2026-07-30",
+  }, august), false);
+  assert.strictEqual(isPayrollCandidateForPeriod({
+    employeeStatus: "Relieved",
+    lastWorkingDay: "2026-08-17",
+  }, august), true);
 });
 
 if (!process.exitCode) console.log("All payroll payable-day scenarios passed.");

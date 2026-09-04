@@ -11,6 +11,7 @@ const {
   getEmploymentWindow,
   toDayStart,
   dateKey,
+  leaveMatchesEmployee,
 } = require('./payrollPayableDays');
 
 const APPROVED_LEAVE_STATUSES = new Set(['Approved', 'HOD Approved']);
@@ -18,54 +19,11 @@ const APPROVED_LEAVE_STATUSES = new Set(['Approved', 'HOD Approved']);
 const laterDay = (a, b) => (!a ? b : !b ? a : a > b ? a : b);
 const earlierDay = (a, b) => (!a ? b : !b ? a : a < b ? a : b);
 
-const normalizeName = (name) =>
-  String(name || '')
-    .toLowerCase()
-    .replace(/[\s_.-]+/g, '')
-    .trim();
-
 const FULL_MONTH_LEAVE_REASON =
   'Salary slip cannot be generated because the employee was on approved leave for the entire month.';
 
-/**
- * Match leave → Employee using canonical IDs first (never invent new leave math).
- */
 function leaveMatchesEmployeeForPayroll(leave, employee) {
-  if (!leave || !employee) return false;
-
-  const empMongo = String(employee._id || '');
-  const empCode = String(employee.employeeId || '').toLowerCase();
-  const empName = normalizeName(employee.employeeName);
-
-  const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || '');
-  if (empMongo && recordId && recordId === empMongo) return true;
-
-  const populated = leave.employee;
-  if (populated && typeof populated === 'object') {
-    const linkedEmp =
-      populated.employeeId?._id || populated.employeeId || null;
-    if (linkedEmp && String(linkedEmp) === empMongo) return true;
-    if (populated._id && String(populated._id) === empMongo) return true;
-  } else if (populated && String(populated) === empMongo) {
-    return true;
-  }
-
-  if (leave.employeeId) {
-    const rid = String(leave.employeeId).toLowerCase();
-    if (empMongo && rid === empMongo.toLowerCase()) return true;
-    if (empCode && rid === empCode) return true;
-  }
-
-  // Name only when leave has no employee identity fields
-  const hasRef = Boolean(
-    recordId ||
-      leave.employeeId ||
-      (populated && (populated._id || populated.employeeId || populated))
-  );
-  if (hasRef) return false;
-
-  const leaveName = normalizeName(leave.employeeName || '');
-  return Boolean(empName && leaveName && leaveName === empName);
+  return leaveMatchesEmployee(leave, employee);
 }
 
 const attendanceEmployeeId = (record) =>

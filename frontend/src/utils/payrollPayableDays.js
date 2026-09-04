@@ -52,11 +52,13 @@ const leaveMatchesEmployee = (leave, employee) => {
   const empName = normalizeName(employee.employeeName);
 
   const populated = leave.employee;
-  if (populated && typeof populated === "object") {
-    if (populated.employeeId && String(populated.employeeId) === empMongo) return true;
-    if (normalizeName(populated.username) && normalizeName(populated.username) === empName) return true;
-  } else if (populated && String(populated) === empMongo) {
-    return true;
+  if (populated) {
+    if (String(populated) === empMongo) return true;
+    if (typeof populated === "object") {
+      if (populated._id && String(populated._id) === empMongo) return true;
+      const linkedEmp = populated.employeeId?._id || populated.employeeId || null;
+      if (linkedEmp && String(linkedEmp) === empMongo) return true;
+    }
   }
 
   if (leave.employeeId && (String(leave.employeeId) === empCode || String(leave.employeeId) === empMongo)) {

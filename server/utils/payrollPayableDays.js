@@ -84,12 +84,15 @@ const leaveMatchesEmployee = (leave, employee) => {
   if (empMongo && recordId && recordId === empMongo) return true;
 
   const populated = leave.employee;
-  if (populated && typeof populated === "object") {
-    const linkedEmp = populated.employeeId?._id || populated.employeeId || null;
-    if (linkedEmp && String(linkedEmp) === empMongo) return true;
-    if (populated._id && String(populated._id) === empMongo) return true;
-  } else if (populated && String(populated) === empMongo) {
-    return true;
+  if (populated) {
+    // Bare ObjectId / string ref to the Employee record
+    if (String(populated) === empMongo) return true;
+    if (typeof populated === "object") {
+      if (populated._id && String(populated._id) === empMongo) return true;
+      const linkedEmp =
+        populated.employeeId?._id || populated.employeeId || null;
+      if (linkedEmp && String(linkedEmp) === empMongo) return true;
+    }
   }
 
   if (leave.employeeId) {
@@ -266,6 +269,7 @@ module.exports = {
   getEmploymentWindow,
   computePayablePayrollDays,
   scaleSalaryAmount,
+  leaveMatchesEmployee,
   inclusiveDays,
   dateKey,
   toDayStart,

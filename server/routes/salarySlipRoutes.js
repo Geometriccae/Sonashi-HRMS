@@ -355,8 +355,16 @@ router.get('/all', async (req, res) => {
 
         const { month, year } = req.query;
         const filter = {};
-        if (month && month !== 'All' && month !== '') filter.month = { $regex: new RegExp(`^${String(month).trim()}$`, 'i') };
-        if (year && year !== 'All' && year !== '') filter.year = String(year).trim();
+        if (month && month !== 'All' && month !== '') {
+            filter.month = { $regex: new RegExp(`^${String(month).trim()}$`, 'i') };
+        }
+        if (year && year !== 'All' && year !== '') {
+            const yearStr = String(year).trim();
+            const yearNum = Number(yearStr);
+            filter.year = Number.isFinite(yearNum) && String(yearNum) === yearStr
+                ? { $in: [yearStr, yearNum] }
+                : yearStr;
+        }
         const slips = await SalarySlip.find(filter).sort({ createdAt: -1 });
         res.json(slips);
     } catch (e) {
