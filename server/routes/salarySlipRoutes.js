@@ -298,10 +298,10 @@ router.post('/generate-bulk', requireStrictAdmin, async (req, res) => {
                     const n = parseFloat(v);
                     return Number.isFinite(n) ? n : 0;
                 };
-                const basic = scaleSalaryAmount(toAmt(salary.basicSalary), days.payableDays, days.totalWorkingDays);
-                const houseRent = scaleSalaryAmount(toAmt(salary.houseRent), days.payableDays, days.totalWorkingDays);
-                const travelExp = scaleSalaryAmount(toAmt(salary.travelExp), days.payableDays, days.totalWorkingDays);
-                const other = scaleSalaryAmount(toAmt(salary.other), days.payableDays, days.totalWorkingDays);
+                const basic = scaleSalaryAmount(toAmt(salary.basicSalary), days.payableDays);
+                const houseRent = scaleSalaryAmount(toAmt(salary.houseRent), days.payableDays);
+                const travelExp = scaleSalaryAmount(toAmt(salary.travelExp), days.payableDays);
+                const other = scaleSalaryAmount(toAmt(salary.other), days.payableDays);
                 const deduction = toAmt(salary.deduction);
 
                 const grossSalary = basic + houseRent + travelExp + other;

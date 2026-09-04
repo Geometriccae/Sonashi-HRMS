@@ -9,7 +9,7 @@ import Dropdown from '../DropDown';
 import DateInput from '../DateInput';
 import { formatAed } from '../../utils/currency';
 import leaveRequestService from '../../services/LeaveRequestService';
-import { computePayablePayrollDays, getPayrollPeriod } from '../../utils/payrollPayableDays';
+import { computePayablePayrollDays, getPayrollPeriod, PAYROLL_MONTH_DAYS, scaleSalaryAmount } from '../../utils/payrollPayableDays';
 import { isNonWorkingEmployeeStatus } from '../../utils/employeeStatusDisplay';
 
 const createInitialFormData = (month, year) => ({
@@ -57,13 +57,12 @@ const toIsoDate = (value) => {
 const recalculateSalaryFields = (draft, baseAmounts) => {
     const totalWorkingDays = Number(draft.totalWorkingDays);
     const fallbackPayable = draft.payableDays === '' ? totalWorkingDays : Number(draft.payableDays);
-    const normalizedPayable = Number.isFinite(fallbackPayable) ? fallbackPayable : 0;
-    const ratio = totalWorkingDays > 0 ? Math.max(0, normalizedPayable) / totalWorkingDays : 0;
+    const normalizedPayable = Number.isFinite(fallbackPayable) ? Math.max(0, fallbackPayable) : 0;
 
-    const basic = baseAmounts.basic * ratio;
-    const houseRent = baseAmounts.houseRent * ratio;
-    const travelExp = baseAmounts.travelExp * ratio;
-    const other = baseAmounts.other * ratio;
+    const basic = scaleSalaryAmount(baseAmounts.basic, normalizedPayable);
+    const houseRent = scaleSalaryAmount(baseAmounts.houseRent, normalizedPayable);
+    const travelExp = scaleSalaryAmount(baseAmounts.travelExp, normalizedPayable);
+    const other = scaleSalaryAmount(baseAmounts.other, normalizedPayable);
     const grossSalary = basic + houseRent + travelExp + other;
     const deduction = toAmount(draft.deduction);
     const netSalary = grossSalary - deduction;
@@ -265,9 +264,8 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
             }
 
             if (['basic', 'houseRent', 'travelExp', 'other'].includes(name)) {
-                const totalWorkingDays = Number(updated.totalWorkingDays);
                 const payableDays = Number(updated.payableDays);
-                const ratio = totalWorkingDays > 0 && payableDays >= 0 ? payableDays / totalWorkingDays : 0;
+                const ratio = payableDays >= 0 ? payableDays / PAYROLL_MONTH_DAYS : 0;
                 const normalizedValue = toAmount(value);
 
                 const nextBaseAmounts = {

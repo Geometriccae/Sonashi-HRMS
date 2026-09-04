@@ -1,8 +1,12 @@
 /**
  * Payable working days for a salary period.
- * Reuses existing salary-slip rules: month calendar days as the denominator
- * so a full-month employee gets full monthly salary; join/leave/leave days prorate.
+ * Calendar days are used only to count payable/present days.
+ * Salary amounts always prorate on a fixed 30-day month:
+ *   Daily Salary = Monthly Salary / 30
+ *   Payable Salary = Daily Salary × Payable Days
  */
+
+const PAYROLL_MONTH_DAYS = 30;
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -238,17 +242,17 @@ const computePayablePayrollDays = ({
   };
 };
 
-const scaleSalaryAmount = (amount, payableDays, totalWorkingDays) => {
+const scaleSalaryAmount = (amount, payableDays) => {
   const base = Number(amount);
   const payable = Number(payableDays);
-  const total = Number(totalWorkingDays);
   if (!Number.isFinite(base) || base === 0) return 0;
-  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(payable) || payable <= 0) return 0;
-  return Math.round(((base * payable) / total) * 100) / 100;
+  if (!Number.isFinite(payable) || payable <= 0) return 0;
+  return Math.round(((base * payable) / PAYROLL_MONTH_DAYS) * 100) / 100;
 };
 
 module.exports = {
   MONTH_NAMES,
+  PAYROLL_MONTH_DAYS,
   getPayrollPeriod,
   computePayablePayrollDays,
   scaleSalaryAmount,
