@@ -129,6 +129,24 @@ function isExcelImportedLeave(req) {
     return String(req?.importSource || "") === "excel-master-tracker";
 }
 
+/** Sum Excel yearly-sheet leave already imported into LeaveRequest (by start-date year). */
+function sumExcelImportedDaysByYear(employee, allLeaveRequests) {
+    const byYear = {};
+    getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
+        if (!isExcelImportedLeave(req)) return;
+        const start = toLeaveCalendarDate(req.startDate);
+        if (!start) return;
+        const days = leaveRequestDays(req);
+        if (!days) return;
+        const year = start.getFullYear();
+        byYear[year] = (byYear[year] || 0) + days;
+    });
+    Object.keys(byYear).forEach((year) => {
+        byYear[year] = roundLeaveNumber(byYear[year]);
+    });
+    return byYear;
+}
+
 export function toLeaveCalendarDate(value) {
     if (!value) return null;
     if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -393,15 +411,45 @@ export function matchesLeaveEmployee(req, emp) {
 }
 
 function dedupeLeaveRequests(rows) {
-    const seen = new Set();
+    const seenIds = new Set();
+    const seenSpans = new Set();
     return (rows || []).filter((req) => {
         const id = String(req?._id || "");
-        if (!id) return true;
-        if (seen.has(id)) {
-            warnLeaveCalc("skipped duplicate leave record", { leaveId: id });
-            return false;
+        if (id) {
+            if (seenIds.has(id)) {
+                warnLeaveCalc("skipped duplicate leave record", { leaveId: id });
+                return false;
+            }
+            seenIds.add(id);
         }
-        seen.add(id);
+
+        // Same employee + same dates + same import source must count once
+        // (Excel re-imports can create near-duplicate rows with different _ids).
+        const start = toLeaveCalendarDate(req.startDate);
+        const end = toLeaveCalendarDate(req.endDate) || start;
+        if (start) {
+            const owner =
+                refId(req.employeeRecordId) ||
+                hrStaffCode(req.linkedEmployeeCode) ||
+                hrStaffCode(req.employeeId) ||
+                refId(req.employee) ||
+                String(req.employeeName || "").toLowerCase().trim();
+            const spanKey = [
+                owner,
+                start.toISOString().slice(0, 10),
+                end ? end.toISOString().slice(0, 10) : "",
+                String(req.importSource || ""),
+                String(req.status || ""),
+            ].join("|");
+            if (seenSpans.has(spanKey)) {
+                warnLeaveCalc("skipped duplicate leave span", {
+                    leaveId: id || null,
+                    spanKey,
+                });
+                return false;
+            }
+            seenSpans.add(spanKey);
+        }
         return true;
     });
 }
@@ -431,6 +479,8 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
 
     const hasExcelMap =
         employee?.excelLeaveYearTaken != null && typeof employee.excelLeaveYearTaken === "object";
+    const importedByYear = sumExcelImportedDaysByYear(employee, allLeaveRequests);
+    const hasImportedExcelLeaves = Object.keys(importedByYear).length > 0;
     const currentYear = rangeTo.getFullYear();
     const importAt = toLeaveCalendarDate(employee?.excelLeaveImportedAt);
 
@@ -459,19 +509,25 @@ export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStar
     const startYear = rangeFrom.getFullYear();
     const endYear = Math.min(rangeTo.getFullYear(), currentYear);
     for (let year = startYear; year <= endYear; year += 1) {
-        const excelVal = getExcelYearTaken(employee, year);
         const before = liveBeforeImportByYear[year] || 0;
         const after = liveAfterImportByYear[year] || 0;
+
+        // Prefer the employee yearly map rebuilt from yearly sheets.
+        // Fall back to summing imported leave rows only when no map exists.
+        let excelDays = null;
         if (hasExcelMap) {
-            const excelDays = excelVal == null ? 0 : excelVal;
+            const excelVal = getExcelYearTaken(employee, year);
+            excelDays = excelVal == null ? 0 : excelVal;
+        } else if (hasImportedExcelLeaves) {
+            excelDays = importedByYear[year] || 0;
+        }
+
+        if (excelDays != null) {
             if (year < currentYear) {
-                // Closed years in the imported map are complete (0 means no leave).
+                // Closed years from Excel yearly sheets are complete (0 means no leave).
                 byYear[year] = roundLeaveNumber(excelDays);
             } else {
-                // Current year: Excel cell is a snapshot through import.
-                // Live leave that started on/before import replaces that cell
-                // (max) instead of adding to it — otherwise 30+31=61 for one trip.
-                // Live leave that started after import is truly additional.
+                // Current year: Excel snapshot through import + later live leave only.
                 const excelOrReentry = before > 0 ? Math.max(excelDays, before) : excelDays;
                 byYear[year] = roundLeaveNumber(excelOrReentry + after);
             }

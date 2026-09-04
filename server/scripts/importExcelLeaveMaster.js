@@ -26,6 +26,7 @@ const {
   compactName,
   ymd,
   namesLikelySame,
+  buildYearlyTakenFromLeaves,
 } = require("../utils/excelLeaveWorkbook");
 const {
   matchEmployeeFromExcel,
@@ -68,15 +69,10 @@ function utcDate(ymdStr) {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-function yearlyMapFromMaster(emp) {
-  const out = {};
-  Object.entries(emp.years || {}).forEach(([key, val]) => {
-    if (!/^\d{4}$/.test(String(key))) return;
-    if (val == null || val === "") return;
-    const n = Number(val);
-    if (Number.isFinite(n)) out[String(key)] = n;
-  });
-  return out;
+function yearlyMapFromYearSheets(excelEmp, leaves, yearList) {
+  // Yearly sheets / leave slots are the source of truth.
+  // Never import Master Sheet cached formula results (they go stale).
+  return buildYearlyTakenFromLeaves(leaves, excelEmp, yearList);
 }
 
 (async () => {
@@ -149,7 +145,9 @@ function yearlyMapFromMaster(emp) {
     }
     if (excelEmp.employeeId) excelIds.add(excelEmp.employeeId.toLowerCase());
 
-    const yearly = yearlyMapFromMaster(excelEmp);
+    const yearly =
+      excelEmp.yearsFromSheets ||
+      yearlyMapFromYearSheets(excelEmp, parsed.leaves, parsed.yearList || []);
     reconciliation.rows.push({
       status: statusParts.join(" + "),
       excelId: excelEmp.employeeId || "",
@@ -159,6 +157,11 @@ function yearlyMapFromMaster(emp) {
       softwareName: matched?.employeeName || "",
       softwareDoj,
       yearly,
+      masterCachedYears: Object.fromEntries(
+        Object.entries(excelEmp.years || {}).filter(
+          ([k, v]) => /^\d{4}$/.test(String(k)) && v != null && v !== ""
+        )
+      ),
       last5Taken: excelEmp.last5Taken,
       avrg: excelEmp.avrg,
       leaveDue: excelEmp.leaveDue,

@@ -272,41 +272,46 @@ function namesCompatible(excelName, softwareName) {
 function matchEmployeeFromExcel(employees, excelId, excelName) {
   const list = employees || [];
   const id = String(excelId || "").trim();
+
+  // 1) Employee ID — only when the software name is compatible (prevents
+  //    Excel ID typos from attaching leave to the wrong person).
   if (id && /^id[a-z]{2,4}-\d+/i.test(id)) {
     const hit = list.find((e) => String(e.employeeId || "").toLowerCase() === id.toLowerCase());
     if (hit && namesCompatible(excelName, hit.employeeName)) return hit;
   }
+
+  // 2) Exact normalized name (unique). No fuzzy / partial / first-name-only match.
   const compact = compactName(excelName);
   if (!compact) return null;
   const exact = list.filter((e) => compactName(e.employeeName) === compact);
   if (exact.length === 1) return exact[0];
-  const starts = list.filter((e) => {
-    const n = compactName(e.employeeName);
-    return n && compact && (n.startsWith(compact) || compact.startsWith(n)) && Math.min(n.length, compact.length) >= 10;
-  });
-  if (starts.length === 1) return starts[0];
-  const first = firstNameToken(excelName);
-  const second = String(excelName || "")
+
+  // 3) Unique ordered token containment (Excel short name ⊂ software full name),
+  //    e.g. "AMAL SID" → "AMAL SID SUPRASIDHAN". Requires ≥2 meaningful tokens.
+  const excelTokens = String(excelName || "")
     .toLowerCase()
     .replace(/[^a-z\s]/g, " ")
     .split(/\s+/)
-    .filter((t) => t.length >= 3)[1];
-  if (first && second) {
-    const two = list.filter((e) => {
-      const tokens = String(e.employeeName || "")
+    .filter((t) => t.length >= 2);
+  if (excelTokens.length >= 2) {
+    const contained = list.filter((e) => {
+      const softTokens = String(e.employeeName || "")
         .toLowerCase()
         .replace(/[^a-z\s]/g, " ")
         .split(/\s+/)
-        .filter((t) => t.length >= 3);
-      return tokens[0] === first && tokens[1] === second;
+        .filter((t) => t.length >= 2);
+      if (softTokens.length < excelTokens.length) return false;
+      let i = 0;
+      for (const tok of softTokens) {
+        if (tok === excelTokens[i]) i += 1;
+        if (i === excelTokens.length) return true;
+      }
+      return false;
     });
-    if (two.length === 1) return two[0];
+    if (contained.length === 1) return contained[0];
   }
-  if (first && first.length >= 7 && !COMMON_FIRST.has(first)) {
-    const byFirst = list.filter((e) => firstNameToken(e.employeeName) === first);
-    if (byFirst.length === 1) return byFirst[0];
-  }
-  return exact[0] || null;
+
+  return null;
 }
 
 module.exports = {

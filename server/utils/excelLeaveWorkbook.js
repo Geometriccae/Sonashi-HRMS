@@ -477,7 +477,57 @@ async function parseLeaveMasterWorkbook(workbook) {
     }
   });
 
-  return { master, yearSheets, leaves };
+  const yearList = [
+    ...new Set([
+      ...Object.keys(yearSheets).map(Number),
+      ...Object.keys(master.yearCols || {}).map(Number),
+    ]),
+  ]
+    .filter((y) => Number.isFinite(y))
+    .sort((a, b) => a - b);
+
+  // Authoritative yearly taken = sum of yearly-sheet leave slots (not Master cached formulas).
+  master.employees.forEach((emp) => {
+    emp.yearsFromSheets = buildYearlyTakenFromLeaves(leaves, emp, yearList);
+  });
+
+  return { master, yearSheets, leaves, yearList };
+}
+
+/**
+ * Build yearly leave-taken map from yearly-sheet leave slots.
+ * Empty years are explicitly 0. Does not use Master Sheet cached formula cells.
+ */
+function buildYearlyTakenFromLeaves(leaves, masterEmp, years) {
+  const out = {};
+  (years || []).forEach((year) => {
+    out[String(year)] = 0;
+  });
+
+  const empId = String(masterEmp?.employeeId || "")
+    .trim()
+    .toLowerCase();
+  const empName = compactName(masterEmp?.staffName || masterEmp?.employeeName || "");
+
+  (leaves || []).forEach((leave) => {
+    const leaveId = String(leave?.employeeId || "")
+      .trim()
+      .toLowerCase();
+    const leaveName = compactName(leave?.staffName || leave?.employeeName || "");
+    const idMatch = Boolean(empId && leaveId && empId === leaveId);
+    const nameMatch = Boolean(empName && leaveName && empName === leaveName);
+    if (!idMatch && !nameMatch) return;
+
+    const year = String(leave.year || "");
+    if (!/^\d{4}$/.test(year)) return;
+    if (!(year in out)) out[year] = 0;
+    const days = Number(leave.excelDays != null ? leave.excelDays : leave.days);
+    if (Number.isFinite(days) && days > 0) {
+      out[year] = Math.round((out[year] + days) * 100) / 100;
+    }
+  });
+
+  return out;
 }
 
 module.exports = {
@@ -493,4 +543,5 @@ module.exports = {
   parseMasterSheet,
   parseYearSheet,
   parseLeaveMasterWorkbook,
+  buildYearlyTakenFromLeaves,
 };

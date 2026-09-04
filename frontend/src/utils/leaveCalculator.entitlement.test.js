@@ -171,6 +171,155 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.totalTaken).toBe(30);
     });
 
+    test("stale Master cached year total is ignored when map has yearly-sheet zeros", () => {
+        const emp = {
+            _id: "e-mahesh",
+            employeeId: "IDMM-169",
+            doj: "2024-03-06",
+            // Correct map rebuilt from yearly sheets (not Master cached 55).
+            excelLeaveYearTaken: { 2024: 0, 2025: 0, 2026: 0 },
+            excelLeaveImportedAt: "2026-08-01",
+        };
+        const calc = computeExcelLeaveCalculation(emp, [], "2026-08-31");
+        expect(calc.yearTotals[2024] ?? 0).toBe(0);
+        expect(calc.yearTotals[2025] ?? 0).toBe(0);
+        expect(calc.yearTotals[2026] ?? 0).toBe(0);
+        expect(calc.totalTaken).toBe(0);
+    });
+
+    test("imported yearly-sheet leave is used when no Excel year map exists", () => {
+        const emp = {
+            _id: "e-kantesh",
+            employeeId: "IDFO-000",
+            doj: "2008-01-01",
+            excelLeaveImportedAt: "2026-08-01",
+        };
+        const leaves = [
+            {
+                _id: "k1",
+                status: "Approved",
+                employeeId: "IDFO-000",
+                startDate: "2026-02-03",
+                endDate: "2026-02-05",
+                leaveDays: 2,
+                importSource: "excel-master-tracker",
+            },
+            {
+                _id: "k2",
+                status: "Approved",
+                employeeId: "IDFO-000",
+                startDate: "2026-07-13",
+                endDate: "2026-07-15",
+                leaveDays: 2,
+                importSource: "excel-master-tracker",
+            },
+        ];
+        const calc = computeExcelLeaveCalculation(emp, leaves, "2026-08-31");
+        expect(calc.yearTotals[2026]).toBe(4);
+        expect(calc.totalTaken).toBe(4);
+    });
+
+    test("sheet-built year map wins over duplicate imported leave rows", () => {
+        const emp = {
+            _id: "e-amal",
+            employeeId: "IDMO-133",
+            doj: "2022-01-01",
+            excelLeaveYearTaken: { 2024: 52, 2025: 6, 2026: 30 },
+            excelLeaveImportedAt: "2026-08-01",
+        };
+        const leaves = [
+            {
+                _id: "a1",
+                status: "Approved",
+                employeeId: "IDMO-133",
+                startDate: "2024-02-12",
+                endDate: "2024-02-18",
+                leaveDays: 6,
+                importSource: "excel-master-tracker",
+            },
+            {
+                _id: "a1-dup",
+                status: "Approved",
+                employeeId: "IDMO-133",
+                startDate: "2024-02-12",
+                endDate: "2024-02-18",
+                leaveDays: 6,
+                importSource: "excel-master-tracker",
+            },
+            {
+                _id: "a2",
+                status: "Approved",
+                employeeId: "IDMO-133",
+                startDate: "2024-05-19",
+                endDate: "2024-05-28",
+                leaveDays: 9,
+                importSource: "excel-master-tracker",
+            },
+            {
+                _id: "a2-dup",
+                status: "Approved",
+                employeeId: "IDMO-133",
+                startDate: "2024-05-19",
+                endDate: "2024-05-28",
+                leaveDays: 9,
+                importSource: "excel-master-tracker",
+            },
+            {
+                _id: "a3",
+                status: "Approved",
+                employeeId: "IDMO-133",
+                startDate: "2024-08-12",
+                endDate: "2024-09-18",
+                leaveDays: 37,
+                importSource: "excel-master-tracker",
+            },
+            {
+                _id: "a3-dup",
+                status: "Approved",
+                employeeId: "IDMO-133",
+                startDate: "2024-08-12",
+                endDate: "2024-09-18",
+                leaveDays: 37,
+                importSource: "excel-master-tracker",
+            },
+        ];
+        const calc = computeExcelLeaveCalculation(emp, leaves, "2026-08-31");
+        expect(calc.yearTotals[2024]).toBe(52);
+        expect(calc.yearTotals[2026]).toBe(30);
+    });
+
+    test("rejected and cancelled leave are not counted", () => {
+        const emp = { _id: "e4", employeeId: "IDMM-004", doj: "2024-01-01" };
+        const leaves = [
+            {
+                _id: "r1",
+                status: "Rejected",
+                employeeId: "IDMM-004",
+                startDate: "2026-01-01",
+                endDate: "2026-01-20",
+                leaveDays: 19,
+            },
+            {
+                _id: "c1",
+                status: "Cancelled",
+                employeeId: "IDMM-004",
+                startDate: "2026-02-01",
+                endDate: "2026-02-20",
+                leaveDays: 19,
+            },
+            {
+                _id: "a1",
+                status: "Approved",
+                employeeId: "IDMM-004",
+                startDate: "2026-03-01",
+                endDate: "2026-03-11",
+                leaveDays: 10,
+            },
+        ];
+        const calc = computeExcelLeaveCalculation(emp, leaves, "2026-08-31");
+        expect(calc.totalTaken).toBe(10);
+    });
+
     test("rolling window years are not hardcoded", () => {
         expect(lastFiveLeaveYears("2026-08-31")).toEqual([2021, 2022, 2023, 2024, 2025, 2026]);
         expect(lastFiveLeaveYears("2027-03-01")).toEqual([2022, 2023, 2024, 2025, 2026, 2027]);
