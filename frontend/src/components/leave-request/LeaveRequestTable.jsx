@@ -59,6 +59,7 @@ function LeaveRequestTable({ onUpdate }) {
     const [leaveRequests, setLeaveRequests] = useState([]);
     const [totalLeaveCount, setTotalLeaveCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
     const [activeFilter, setActiveFilter] = useState("All");
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -181,6 +182,7 @@ function LeaveRequestTable({ onUpdate }) {
             showToast("Failed to fetch leave requests.", "error");
         } finally {
             setIsLoading(false);
+            setHasLoadedOnce(true);
         }
     }, [
         currentPage, itemsPerPage, activeFilter, debouncedSearch, selectedDept, selectedManager,
@@ -444,7 +446,10 @@ function LeaveRequestTable({ onUpdate }) {
         return `${days} ${days === 1 ? "Day" : "Days"}`;
     };
 
-    if (isLoading) return <div className={styles.loading}>Loading...</div>;
+    // Keep search/filters mounted while refetching so typing is not interrupted.
+    if (isLoading && !hasLoadedOnce) {
+        return <div className={styles.loading}>Loading...</div>;
+    }
 
     return (
         <div className={styles.container}>
@@ -708,6 +713,12 @@ function LeaveRequestTable({ onUpdate }) {
                         </tr>
                     </thead>
                     <tbody>
+                        {isLoading ? (
+                            <tr>
+                                <td colSpan="12" className={styles.noData}>Loading...</td>
+                            </tr>
+                        ) : (
+                            <>
                         {paginatedRequests.map(req => (
                             <tr key={req._id}>
                                 {canEditLeaveRequests && isHR && (
@@ -875,6 +886,8 @@ function LeaveRequestTable({ onUpdate }) {
                             <tr>
                                 <td colSpan="7" className={styles.noData}>No leave requests found.</td>
                             </tr>
+                        )}
+                            </>
                         )}
                     </tbody>
                 </table>
