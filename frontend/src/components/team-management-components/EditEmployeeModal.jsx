@@ -18,6 +18,7 @@ import {
   ATTENDANCE_OPTIONS,
   VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
+  ROLE_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
   EMERGENCY_RELATIONSHIP_OPTIONS,
   DEFAULT_COMPANY_CODE,
@@ -133,6 +134,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
   const [clients, setClients] = useState([]);
   const [companyDocuments, setCompanyDocuments] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState(DEPARTMENT_OPTIONS_DEFAULT);
+  // Same designation store as Add Employee: 'role' option type + built-in defaults.
+  const [designationOptions, setDesignationOptions] = useState(ROLE_OPTIONS_DEFAULT);
   const [toasts, setToasts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -207,15 +210,49 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
   const fetchEmployeeDropdownValues = async () => {
     try {
-      const [depts, excludedDepts] = await Promise.all([
+      const [depts, excludedDepts, designations, excludedDesignations] = await Promise.all([
         OptionService.getOptions('department'),
         OptionService.getExcludedDefaults('department'),
+        OptionService.getOptions('role'),
+        OptionService.getExcludedDefaults('role'),
       ]);
 
       setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts, excludedDepts));
+      setDesignationOptions(
+        OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, designations, excludedDesignations)
+      );
     } catch (err) {
       console.error("Failed to fetch dynamic options:", err);
       setDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
+      setDesignationOptions(ROLE_OPTIONS_DEFAULT);
+    }
+  };
+
+  const handleDesignationAdd = async (label) => {
+    try {
+      await OptionService.addOption('role', label);
+      await fetchEmployeeDropdownValues();
+      addToast(`Designation "${label}" added successfully`, "success");
+    } catch (err) {
+      console.error("Error adding designation:", err);
+      addToast(err.response?.data?.message || "Failed to add designation", "error");
+    }
+  };
+
+  const handleDesignationDelete = async (option) => {
+    if (!option?.label || option.label === "-Select-") return;
+    try {
+      const stored = await OptionService.getOptions('role');
+      const toDelete = stored.find((r) => r.label === option.label);
+      if (toDelete) {
+        await OptionService.deleteOption('role', toDelete._id);
+      } else {
+        await OptionService.excludeDefaultOption('role', option.label);
+      }
+      await fetchEmployeeDropdownValues();
+      addToast(`Designation "${option.label}" deleted`, "success");
+    } catch (err) {
+      addToast("Failed to delete designation", "error");
     }
   };
 
@@ -279,6 +316,9 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       if (!record || cancelled) return;
       loadedEmployeeRef.current = record;
       setDepartmentOptions((prev) => ensureOptionWithValue(prev, record.department));
+      setDesignationOptions((prev) =>
+        ensureOptionWithValue(prev, record.designation || record.role)
+      );
 
       setFormData({
         workPermitNo: record.workPermitNo || "",
@@ -304,7 +344,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         emergencyHomeAddress2: record.emergencyContact?.homeCountry2?.address || "",
         emergencyHomeContactNo2: record.emergencyContact?.homeCountry2?.contactNo || "",
         role: record.role || "",
-        designation: record.designation || "",
+        // Legacy records kept the job title only in role; show it as the designation.
+        designation: record.designation || record.role || "",
         department: record.department || "",
         doj: record.doj ? String(record.doj).slice(0, 10) : "",
         noticePeriod: record.noticePeriod || "",
@@ -670,9 +711,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       };
 
       const storedEmployee = loadedEmployeeRef.current || employee || {};
-      // Role is no longer edited in Employee Master — keep the stored DB value.
+      // Designation is the field users edit; role is schema-required and still read by
+      // reports / salary slips, so keep it equal to the chosen designation.
+      const designation = String(formData.designation || "").trim();
       const storedRole = String(storedEmployee.role || formData.role || "").trim();
-      if (storedRole) payload.role = storedRole;
+      payload.designation = designation;
+      if (designation) payload.role = designation;
+      else if (storedRole) payload.role = storedRole;
 
       // Preserve vacation dates so a master-data save does not clear return/travel.
       ["returnDate", "travellingDate", "leaveEndDate", "firstWorkingDay"].forEach((key) => {
@@ -903,13 +948,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 }
               />
 
-              <InputField
+              <Dropdown
+                id="edit-employee-designation"
                 label="Designation"
-                placeholder="Designation"
+                placeholder="Select designation"
+                options={designationOptions}
                 value={formData.designation}
-                onChange={(e) =>
-                  handleInputChange("designation", e.target.value)
-                }
+                onAdd={handleDesignationAdd}
+                onDelete={handleDesignationDelete}
+                onChange={(e) => handleInputChange("designation", e.target.value)}
               />
 
               <InputField

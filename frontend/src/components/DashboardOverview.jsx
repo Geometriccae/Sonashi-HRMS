@@ -14,63 +14,15 @@ import { useNavigate } from "react-router-dom";
 import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
 import { canUpdateVacationReturn } from "../utils/permissions";
-
-const toDateInputValue = (value) => {
-  if (!value) return "";
-  try {
-    return new Date(value).toISOString().split("T")[0];
-  } catch {
-    return "";
-  }
-};
-
-const getDateConfigForStatus = (status) => {
-  const configs = {
-    "On Vacation": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Pending": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Approved": {
-      label: "Return / Entry Date",
-      fieldKey: "returnDate",
-      secondaryLabel: "First Working Day",
-      secondaryFieldKey: "firstWorkingDay",
-    },
-  };
-  return configs[status] || null;
-};
-
-const buildVacationDatePrompt = (employeeItem, newStatus) => {
-  const cfg = getDateConfigForStatus(newStatus);
-  if (!cfg) return null;
-  return {
-    employeeItem,
-    newStatus,
-    label: cfg.label,
-    fieldKey: cfg.fieldKey,
-    dateValue: toDateInputValue(employeeItem[cfg.fieldKey]),
-    secondaryLabel: cfg.secondaryLabel,
-    secondaryFieldKey: cfg.secondaryFieldKey,
-    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(employeeItem[cfg.secondaryFieldKey]) : "",
-    tertiaryLabel: cfg.tertiaryLabel,
-    tertiaryFieldKey: cfg.tertiaryFieldKey,
-    tertiaryDateValue: cfg.tertiaryFieldKey
-      ? toDateInputValue(employeeItem.endDate || employeeItem.leaveEndDate)
-      : "",
-  };
-};
+import {
+  formatVacationStatus,
+  VACATION_STATUS_EDIT_OPTIONS,
+} from "../utils/vacationStatusDisplay";
+import {
+  applyVacationStatusChange,
+  buildVacationDatePrompt,
+  toDateInputValue,
+} from "../utils/vacationStatusUpdate";
 
 function DashboardOverview() {
   const navigate = useNavigate();
@@ -170,19 +122,12 @@ function DashboardOverview() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem.linkedEmployeeId || employeeItem._id || employeeItem.id;
     try {
-      let updated = null;
-      if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
-        const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
-        const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
-        const result = await employeeService.markVacationReturn(empId, {
-          returnDate,
-          firstWorkingDay,
-          leaveId: employeeItem.linkedLeaveId || null,
-        });
-        updated = result?.employee || result;
-      } else {
-        updated = await employeeService.updateVacationStatus(empId, { vacationStatus: newStatus, ...extraFields });
-      }
+      const updated = await applyVacationStatusChange({
+        employeeId: empId,
+        newStatus,
+        dates: extraFields,
+        leaveId: employeeItem.linkedLeaveId || null,
+      });
 
       const liveStatus = updated?.vacationStatus || newStatus;
 
@@ -194,7 +139,6 @@ function DashboardOverview() {
         )
       );
 
-      employeeService.invalidateCache();
       await refreshSummary({ force: true });
       if (selectedCategory) {
         await handleCardClick(selectedCategory);
@@ -465,7 +409,7 @@ function DashboardOverview() {
                                             boxShadow: `0 0 0 2px ${cfg.dot}30`,
                                           }} />
                                           <span style={{ fontSize: "11px" }}>{cfg.icon}</span>
-                                          {vs === "On Vacation" ? "On vacation" : vs === "Vacation Approved" ? "Returned back from vacation" : vs === "Vacation Pending" ? "Yet to go" : vs}
+                                          {formatVacationStatus(vs)}
                                         </span>
                                         {/* Right: chevron */}
                                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, marginLeft: "4px" }}>
@@ -485,10 +429,9 @@ function DashboardOverview() {
                                           handleStatusDropdownChange(item, newStatus);
                                         }}
                                       >
-                                        <option value="Onsite">Onsite</option>
-                                        <option value="On Vacation">On vacation</option>
-                                        <option value="Vacation Approved">Returned back from vacation</option>
-                                        <option value="Vacation Pending">Yet to go</option>
+                                        {VACATION_STATUS_EDIT_OPTIONS.map(opt => (
+                                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
                                       </select>
                                     </div>
                                   );
@@ -504,7 +447,7 @@ function DashboardOverview() {
                                         fontSize: "12px", fontWeight: "600", color: "#334155"
                                       }}>
                                         <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-                                        {vs === "On Vacation" ? "On vacation" : vs === "Vacation Approved" ? "Returned back from vacation" : vs === "Vacation Pending" ? "Yet to go" : vs}
+                                        {formatVacationStatus(vs)}
                                       </span>
                                     );
                                   })()
@@ -581,12 +524,12 @@ function DashboardOverview() {
           : "EE";
 
         const getStatusLabelAndStyle = (status) => {
-          const config = {
-            "On Vacation": { label: "On vacation", bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)", color: "#1e3a8a", dot: "#3b82f6" },
-            "Vacation Approved": { label: "Returned back from vacation", bg: "linear-gradient(135deg, #ede9fe, #ddd6fe)", color: "#4c1d95", dot: "#7c3aed" },
-            "Vacation Pending": { label: "Yet to go", bg: "linear-gradient(135deg, #fef9c3, #fde68a)", color: "#713f12", dot: "#f59e0b" }
-          };
-          return config[status] || { label: status, bg: "#f8fafc", color: "#334155", dot: "#64748b" };
+          const style = {
+            "On Vacation": { bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)", color: "#1e3a8a", dot: "#3b82f6" },
+            "Vacation Approved": { bg: "linear-gradient(135deg, #ede9fe, #ddd6fe)", color: "#4c1d95", dot: "#7c3aed" },
+            "Vacation Pending": { bg: "linear-gradient(135deg, #fef9c3, #fde68a)", color: "#713f12", dot: "#f59e0b" }
+          }[status] || { bg: "#f8fafc", color: "#334155", dot: "#64748b" };
+          return { label: formatVacationStatus(status) || status, ...style };
         };
 
         const statusCfg = getStatusLabelAndStyle(datePrompt.newStatus);

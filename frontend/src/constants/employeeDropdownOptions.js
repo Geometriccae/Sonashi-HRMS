@@ -1,3 +1,5 @@
+import { VACATION_STATUS_EDIT_OPTIONS } from "../utils/vacationStatusDisplay";
+
 export const ACTIVE_OPTIONS = [
   { value: "", label: "-Select-" },
   { value: "Active", label: "Active" },
@@ -47,10 +49,7 @@ export const ATTENDANCE_OPTIONS = [
 
 export const VACATION_STATUS_OPTIONS = [
   { value: "", label: "-Select-" },
-  { value: "Onsite", label: "Onsite" },
-  { value: "On Vacation", label: "On vacation" },
-  { value: "Vacation Approved", label: "Returned back from vacation" },
-  { value: "Vacation Pending", label: "Yet to go" },
+  ...VACATION_STATUS_EDIT_OPTIONS,
 ];
 
 export const GENDER_OPTIONS = [

@@ -121,7 +121,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
   const [clients, setClients] = useState([]);
   const [companyDocuments, setCompanyDocuments] = useState([]);
-  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS_DEFAULT);
+  // Designation reuses the existing 'role' option store (defaults + /api/options/role),
+  // which already holds the job titles used as designations.
+  const [designationOptions, setDesignationOptions] = useState(ROLE_OPTIONS_DEFAULT);
   const [departmentOptions, setDepartmentOptions] = useState(DEPARTMENT_OPTIONS_DEFAULT);
   const [toasts, setToasts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
@@ -185,40 +187,40 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         OptionService.getExcludedDefaults('department'),
       ]);
 
-      setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles, excludedRoles));
+      setDesignationOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles, excludedRoles));
       setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts, excludedDepts));
     } catch (err) {
       console.error("Failed to fetch dynamic options:", err);
-      setRoleOptions(ROLE_OPTIONS_DEFAULT);
+      setDesignationOptions(ROLE_OPTIONS_DEFAULT);
       setDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
     }
   };
 
-  const handleRoleAdd = async (label) => {
+  const handleDesignationAdd = async (label) => {
     try {
       await OptionService.addOption('role', label);
       await fetchEmployeeDropdownValues();
-      addToast(`Role "${label}" added successfully`, "success");
+      addToast(`Designation "${label}" added successfully`, "success");
     } catch (err) {
-      console.error("Error adding role:", err);
-      addToast(err.response?.data?.message || "Failed to add role", "error");
+      console.error("Error adding designation:", err);
+      addToast(err.response?.data?.message || "Failed to add designation", "error");
     }
   };
 
-  const handleRoleDelete = async (option) => {
+  const handleDesignationDelete = async (option) => {
     if (!option?.label || option.label === "-Select-") return;
     try {
-      const roles = await OptionService.getOptions('role');
-      const toDelete = roles.find((r) => r.label === option.label);
+      const stored = await OptionService.getOptions('role');
+      const toDelete = stored.find((r) => r.label === option.label);
       if (toDelete) {
         await OptionService.deleteOption('role', toDelete._id);
       } else {
         await OptionService.excludeDefaultOption('role', option.label);
       }
       await fetchEmployeeDropdownValues();
-      addToast(`Role "${option.label}" deleted`, "success");
+      addToast(`Designation "${option.label}" deleted`, "success");
     } catch (err) {
-      addToast("Failed to delete role", "error");
+      addToast("Failed to delete designation", "error");
     }
   };
 
@@ -308,9 +310,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         errors.employeeName = true;
         missingFields.push("Employee Name");
       }
-      if (!formData.role) {
-        errors.role = true;
-        missingFields.push("Role");
+      if (!formData.designation) {
+        errors.designation = true;
+        missingFields.push("Designation");
       }
     } else if (step === 2) {
 
@@ -361,9 +363,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       errors.employeeName = true;
       missingFields.push("Employee Name");
     }
-    if (!formData.role) {
-      errors.role = true;
-      missingFields.push("Role");
+    if (!formData.designation) {
+      errors.designation = true;
+      missingFields.push("Designation");
     }
     if (!formData.department) {
       errors.department = true;
@@ -393,6 +395,11 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
       // Extract salary details cleanly
       const payload = { ...filteredData };
+
+      // Employee.role is required by the schema and still read by reports / salary
+      // slips, so it stays in sync with the single designation the user picked.
+      payload.designation = String(formData.designation || "").trim();
+      payload.role = payload.designation;
 
       // Always persist bank / labour / company fields
       payload.labourCardNumber = formData.labourCardNumber || "";
@@ -713,24 +720,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               />
 
               <Dropdown
-                id="add-employee-role"
-                label="Role"
-                placeholder="Select role"
-                options={roleOptions}
-                value={formData.role}
-                onAdd={handleRoleAdd}
-                onDelete={handleRoleDelete}
-                onChange={(e) => handleInputChange("role", e.target.value)}
-                hasError={validationErrors.role}
-              />
-
-              <InputField
+                id="add-employee-designation"
                 label="Designation"
-                placeholder="Designation"
+                placeholder="Select designation"
+                options={designationOptions}
                 value={formData.designation}
-                onChange={(e) =>
-                  handleInputChange("designation", e.target.value)
-                }
+                onAdd={handleDesignationAdd}
+                onDelete={handleDesignationDelete}
+                onChange={(e) => handleInputChange("designation", e.target.value)}
+                hasError={validationErrors.designation}
               />
 
               <InputField
@@ -1290,17 +1288,16 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
             { label: "Email", value: formData.emailId || "Not provided" },
           ],
           [
-            { label: "Role", value: formData.role || "Not provided" },
             {
               label: "Designation",
               value: formData.designation || "Not provided",
             },
-          ],
-          [
             {
               label: "Department",
               value: formData.department || "Not provided",
             },
+          ],
+          [
             {
               label: "Employee Status",
               value: formatEmployeeStatusDisplay(formData) || "Not provided",

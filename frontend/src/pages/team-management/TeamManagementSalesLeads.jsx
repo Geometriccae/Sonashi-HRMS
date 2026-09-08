@@ -24,13 +24,25 @@ import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, ex
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance, calculateLeaveDays, filterLeavesForEmployee } from "../../utils/leaveCalculator";
-import { formatVacationStatusLabel, formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
 import { readPersistedPath } from "../../hooks/usePersistedListPage";
+import { canUpdateVacationReturn } from "../../utils/permissions";
+import {
+  employeeVacationStatus,
+  formatVacationStatus,
+  VACATION_STATUS,
+  VACATION_STATUS_EDIT_OPTIONS,
+} from "../../utils/vacationStatusDisplay";
+import {
+  applyVacationStatusChange,
+  buildVacationDatePrompt,
+  toDateInputValue,
+} from "../../utils/vacationStatusUpdate";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -238,6 +250,59 @@ function TeamManagementSalesLeads() {
       setEmployee(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const canEditVacationStatus = canUpdateVacationReturn(userRole);
+  const [statusSaving, setStatusSaving] = useState(false);
+
+  /**
+   * Status edit on the employee page. Goes through the shared update mechanism so
+   * Annual Vacations, the Team Management list and the dashboard counts all read
+   * the same persisted value. Dates already on the record are re-sent unchanged.
+   */
+  const handleVacationStatusSelect = async (newStatus) => {
+    const current = employeeVacationStatus(employee);
+    if (!newStatus || newStatus === current || statusSaving) return;
+
+    const dates = {};
+    const prompt = buildVacationDatePrompt(employee, newStatus);
+    if (prompt) {
+      const toIso = (value) => (value ? new Date(value).toISOString() : null);
+      const today = toDateInputValue(new Date());
+      const isReturn = newStatus === VACATION_STATUS.RETURNED_BACK;
+      const primary = prompt.dateValue || (isReturn ? today : "");
+      if (primary) dates[prompt.fieldKey] = toIso(primary);
+      if (prompt.secondaryFieldKey) {
+        const secondary = prompt.secondaryDateValue || (isReturn ? primary : "");
+        if (secondary) dates[prompt.secondaryFieldKey] = toIso(secondary);
+      }
+      if (prompt.tertiaryFieldKey && prompt.tertiaryDateValue) {
+        dates[prompt.tertiaryFieldKey] = toIso(prompt.tertiaryDateValue);
+      }
+    }
+
+    setStatusSaving(true);
+    try {
+      const updated = await applyVacationStatusChange({
+        employeeId: employee?._id || employeeId,
+        newStatus,
+        dates,
+      });
+      // Re-read the record so this page shows what every other screen will show.
+      const fresh = await employeeService
+        .getEmployee(employee?._id || employeeId)
+        .catch(() => null);
+      if (fresh) setEmployee(fresh);
+      else if (updated && typeof updated === "object") {
+        setEmployee((prev) => ({ ...(prev || {}), ...updated }));
+      }
+      showToast("Vacation status updated successfully.", "success");
+    } catch (err) {
+      console.error("Failed to update vacation status:", err);
+      showToast(err?.message || "Failed to update vacation status.", "error");
+    } finally {
+      setStatusSaving(false);
     }
   };
 
@@ -724,20 +789,51 @@ function TeamManagementSalesLeads() {
                           : employee?.employeeName || "Employee Name"}
                       </span>
                     </div>
-                    <button className={styles.button}>
-                      <span className={styles.text2}>
-                        {(() => {
-                          if (loading) return "...";
-                          const vs = employee?.vacationStatus || "Onsite";
-                          const labelMap = {
-                            "On Vacation": "On Vacation",
-                            "Vacation Approved": "Returned back from vacation",
-                            "Vacation Pending": "Yet to go",
-                          };
-                          return labelMap[vs] || formatVacationStatusLabel(vs) || vs;
-                        })()}
-                      </span>
-                    </button>
+                    {(() => {
+                      const vs = employeeVacationStatus(employee);
+                      const canEdit =
+                        canEditVacationStatus &&
+                        !loading &&
+                        !!employee &&
+                        isWorkingEmployeeStatus(employee?.employeeStatus);
+                      const options = VACATION_STATUS_EDIT_OPTIONS.some(
+                        (opt) => opt.value === vs
+                      )
+                        ? VACATION_STATUS_EDIT_OPTIONS
+                        : [...VACATION_STATUS_EDIT_OPTIONS, { value: vs, label: formatVacationStatus(vs) }];
+
+                      return (
+                        <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                          <button className={styles.button} type="button">
+                            <span className={styles.text2}>
+                              {loading ? "..." : statusSaving ? "Saving..." : formatVacationStatus(vs)}
+                            </span>
+                          </button>
+                          {canEdit && (
+                            <select
+                              aria-label="Vacation status"
+                              value={vs}
+                              disabled={statusSaving}
+                              onChange={(e) => handleVacationStatusSelect(e.target.value)}
+                              style={{
+                                position: "absolute",
+                                inset: 0,
+                                width: "100%",
+                                height: "100%",
+                                opacity: 0,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {options.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -938,12 +1034,7 @@ function TeamManagementSalesLeads() {
                                   "Onsite": { bg: "#f0fdf4", color: "#15803d" },
                                 };
                                 const style = colorMap[vs] || colorMap["Onsite"];
-                                const labelMap = {
-                                  "On Vacation": "On Vacation",
-                                  "Vacation Approved": "Returned back from vacation",
-                                  "Vacation Pending": "Yet to go",
-                                };
-                                const displayLabel = labelMap[vs] || formatVacationStatusLabel(vs) || vs;
+                                const displayLabel = formatVacationStatus(vs) || vs;
                                 return (
                                   <span style={{
                                     display: "inline-flex",

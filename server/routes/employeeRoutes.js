@@ -39,6 +39,12 @@ const {
   getDashboardCategoryPage,
 } = require('../utils/vacationDashboardStats');
 const { applyEffectiveVacationStatuses } = require('../utils/vacationStatusFromDates');
+const {
+  normalizeVacationStatusValue,
+  isAllowedVacationStatus,
+  isManualStatusChange,
+  vacationReturnDatePatch,
+} = require('../utils/vacationStatusWrite');
 
 // ========== SERVER-SIDE LIST CACHE ==========
 // Cached via employeeListCache; invalidated on employee writes and leave yet-to-go sync.
@@ -943,10 +949,8 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
       });
     }
 
-    let vacationStatus = String(req.body?.vacationStatus || '').trim();
-    if (vacationStatus === 'Not on Vacation') vacationStatus = 'Onsite';
-    const allowedStatuses = ['Onsite', 'On Vacation', 'Vacation Approved', 'Vacation Pending', 'Onboarding'];
-    if (!allowedStatuses.includes(vacationStatus)) {
+    const vacationStatus = normalizeVacationStatusValue(req.body?.vacationStatus);
+    if (!isAllowedVacationStatus(vacationStatus)) {
       return res.status(400).json({
         message: 'Invalid vacation status. Use Onsite, On Vacation, Vacation Approved, Vacation Pending, or Onboarding.',
       });
@@ -984,25 +988,19 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
       patch[key] = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
     }
 
-    if (vacationStatus === 'Onsite' && patch.returnDate === undefined) {
-      const plain = typeof employee.toObject === 'function' ? employee.toObject() : employee;
-      const derived = await withLiveVacationStatus(plain);
-      const derivedVs = derived?.vacationStatus;
-      if (['On Vacation', 'Vacation Pending', 'Vacation Approved'].includes(derivedVs)) {
-        const now = new Date();
-        patch.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      }
-    }
-    if (vacationStatus === 'Vacation Pending' && patch.returnDate === undefined) {
-      patch.returnDate = null;
-    }
-    if (vacationStatus === 'On Vacation' && patch.returnDate === undefined) {
-      patch.returnDate = null;
-    }
-    if (vacationStatus === 'Vacation Approved' && !patch.returnDate) {
-      const now = new Date();
-      patch.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    }
+    const plainEmployee =
+      typeof employee.toObject === 'function' ? employee.toObject() : employee;
+    const derivedForWrite = await withLiveVacationStatus(plainEmployee);
+    Object.assign(
+      patch,
+      vacationReturnDatePatch({
+        status: vacationStatus,
+        derivedStatus: derivedForWrite?.vacationStatus,
+        hasReturnDate: patch.returnDate !== undefined,
+        returnDate: patch.returnDate,
+      })
+    );
+
     if (vacationStatus === 'Vacation Approved' || vacationStatus === 'Onsite') {
       patch.attendance = 'Onsite';
     }
@@ -1100,41 +1098,31 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
     }
 
 
-    // Normalize legacy vacationStatus value -> remap old label to new
-    if (updateData.vacationStatus === 'Not on Vacation') {
-      updateData.vacationStatus = 'Onsite';
-    }
-
+    // A master-data save resubmits the status the form was loaded with. Only treat
+    // it as a manual override when it actually differs from the live (date-driven)
+    // status, otherwise every unrelated edit would freeze a leave-driven employee.
     if (Object.prototype.hasOwnProperty.call(updateData, 'vacationStatus')) {
-      updateData.vacationStatusSource = 'manual';
-      updateData.vacationStatusUpdatedAt = new Date();
-    }
+      updateData.vacationStatus = normalizeVacationStatusValue(updateData.vacationStatus);
 
-    // HR Onsite must persist. If live dates still say On Vacation / Yet to Go /
-    // Returned, stamp returnDate so the shared resolver will not overlay those back.
-    if (updateData.vacationStatus === 'Onsite' && !updateData.returnDate) {
       const current = await Employee.findById(req.params.id).lean();
-      if (current) {
-        const derived = await withLiveVacationStatus(current);
-        const derivedVs = derived?.vacationStatus;
-        if (['On Vacation', 'Vacation Pending', 'Vacation Approved'].includes(derivedVs)) {
-          const now = new Date();
-          updateData.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        }
-      }
-    }
+      const derived = current ? await withLiveVacationStatus(current) : null;
+      const derivedVacationStatus = derived?.vacationStatus || null;
 
-    // Yet to Go / On Vacation are HR overrides of the current trip. Clear
-    // returnDate so returned/onsite date rules cannot pull them back.
-    if (updateData.vacationStatus === 'Vacation Pending' && updateData.returnDate === undefined) {
-      updateData.returnDate = null;
-    }
-    if (updateData.vacationStatus === 'On Vacation' && updateData.returnDate === undefined) {
-      updateData.returnDate = null;
-    }
-    if (updateData.vacationStatus === 'Vacation Approved' && !updateData.returnDate) {
-      const now = new Date();
-      updateData.returnDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (!isManualStatusChange(updateData.vacationStatus, derivedVacationStatus)) {
+        delete updateData.vacationStatus;
+      } else {
+        updateData.vacationStatusSource = 'manual';
+        updateData.vacationStatusUpdatedAt = new Date();
+        Object.assign(
+          updateData,
+          vacationReturnDatePatch({
+            status: updateData.vacationStatus,
+            derivedStatus: derivedVacationStatus,
+            hasReturnDate: updateData.returnDate !== undefined,
+            returnDate: updateData.returnDate,
+          })
+        );
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'companyCode')

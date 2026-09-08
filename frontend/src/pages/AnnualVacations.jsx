@@ -6,7 +6,6 @@ import ModalPortal from "../components/ModalPortal";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import DateInput from "../components/DateInput";
 import employeeService from "../services/EmployeeService";
-import leaveRequestService from "../services/LeaveRequestService";
 import styles from "./AnnualVacations.module.css";
 import {
   FaSearch, FaTimes, FaEdit, FaUndoAlt,
@@ -20,6 +19,17 @@ import {
 } from "../utils/yetToGoHelpers";
 import { canUpdateVacationReturn } from "../utils/permissions";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
+import {
+  formatVacationStatus,
+  vacationStatusBadgeStyle,
+  VACATION_STATUS,
+  VACATION_STATUS_EDIT_OPTIONS,
+} from "../utils/vacationStatusDisplay";
+import {
+  applyVacationStatusChange,
+  buildVacationDatePrompt,
+  toDateInputValue,
+} from "../utils/vacationStatusUpdate";
 
 const PAGE_SIZE = 20;
 
@@ -50,25 +60,12 @@ const VACATION_TABS = [
   { key: "returned",  label: "Returned Back", icon: <MdFlightLand />,    color: "#10b981", bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", statusVal: "Vacation Approved", subLabel: "Last 6 months",            description: "Employees who returned from vacation in the last 6 months" },
 ];
 
-const STATUS_LABEL = {
-  "On Vacation": "On Vacation",
-  "Vacation Pending": "Yet to Go",
-  "Vacation Approved": "Returned Back",
-};
-
-const STATUS_CONFIG = {
-  "Onsite":            { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", label: "Onsite" },
-  "On Vacation":       { bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", color: "#1e3a8a", dot: "#3b82f6", label: "On Vacation" },
-  "Vacation Approved": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", label: "Returned Back" },
-  "Vacation Pending":  { bg: "linear-gradient(135deg,#fef9c3,#fde68a)", color: "#713f12", dot: "#f59e0b", label: "Yet to Go" },
-};
-
 function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["Onsite"];
+  const cfg = vacationStatusBadgeStyle(status);
   return (
     <span style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"4px 10px", borderRadius:999, background:cfg.bg, color:cfg.color, fontSize:12, fontWeight:700, border:`1px solid ${cfg.dot}30`, whiteSpace:"nowrap" }}>
       <span style={{ width:7, height:7, borderRadius:"50%", background:cfg.dot, flexShrink:0 }} />
-      {cfg.label}
+      {formatVacationStatus(status) || formatVacationStatus(VACATION_STATUS.ONSITE)}
     </span>
   );
 }
@@ -132,7 +129,7 @@ const buildVacationExportRows = (list, tabKey) =>
       Country: item.nationality || "",
       DOJ: fmt(item.doj),
       Experience: expLabel,
-      Status: STATUS_LABEL[vs] || vs || "",
+      Status: formatVacationStatus(vs) || "",
     };
 
     if (tabKey === "onVacation") {
@@ -158,62 +155,17 @@ const buildVacationExportRows = (list, tabKey) =>
     };
   });
 
-const getDateConfigForStatus = (status) => {
-  const configs = {
-    "On Vacation": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Pending": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Approved": {
-      label: "Return / Entry Date",
-      fieldKey: "returnDate",
-      secondaryLabel: "First Working Day",
-      secondaryFieldKey: "firstWorkingDay",
-    },
-  };
-  return configs[status] || { label: "Date", fieldKey: "date" };
-};
-
-const toDateInputValue = (value) => {
-  if (!value) return "";
-  try {
-    return new Date(value).toISOString().split("T")[0];
-  } catch {
-    return "";
-  }
-};
-
-const buildEditModalState = (item, status, mode = "date") => {
-  const cfg = getDateConfigForStatus(status);
-  return {
+const buildEditModalState = (item, status, mode = "date") =>
+  buildVacationDatePrompt(item, status, mode) || {
     item,
     newStatus: status,
-    label: cfg.label,
-    fieldKey: cfg.fieldKey,
-    dateValue: toDateInputValue(item[cfg.fieldKey]),
-    secondaryLabel: cfg.secondaryLabel,
-    secondaryFieldKey: cfg.secondaryFieldKey,
-    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(item[cfg.secondaryFieldKey]) : "",
-    tertiaryLabel: cfg.tertiaryLabel,
-    tertiaryFieldKey: cfg.tertiaryFieldKey,
-    tertiaryDateValue: cfg.tertiaryFieldKey
-      ? toDateInputValue(item.endDate || item.leaveEndDate)
-      : "",
+    label: "Date",
+    fieldKey: "date",
+    dateValue: "",
+    secondaryDateValue: "",
+    tertiaryDateValue: "",
     mode,
   };
-};
 
 const getEmployeeIdFromItem = (item) => {
   const navId = getNavEmployeeId(item);
@@ -590,14 +542,13 @@ function AnnualVacations() {
         showToast("Employee record not found for this leave.", "error");
         return;
       }
-      await employeeService.markVacationReturn(empId, {
-        returnDate,
-        firstWorkingDay: firstWorkingDay || returnDate,
+      await applyVacationStatusChange({
+        employeeId: empId,
+        newStatus: VACATION_STATUS.RETURNED_BACK,
+        dates: { returnDate, firstWorkingDay: firstWorkingDay || returnDate },
         leaveId: item.linkedLeaveId || null,
       });
       showToast(`${item.employeeName || item.name} return date updated.`);
-      employeeService.invalidateCache();
-      leaveRequestService.invalidateCache();
       await fetchCounts({ force: true });
       await fetchTabPage();
     } catch (err) {
@@ -643,10 +594,13 @@ function AnnualVacations() {
           showToast("Employee record not found for this leave.", "error");
           return;
         }
-        await employeeService.updateVacationStatus(empId, { vacationStatus: newStatus, ...extra });
+        await applyVacationStatusChange({
+          employeeId: empId,
+          newStatus,
+          dates: extra,
+          leaveId: item.linkedLeaveId || null,
+        });
         showToast("Status updated successfully.");
-        employeeService.invalidateCache();
-        leaveRequestService.invalidateCache();
         await fetchCounts({ force: true });
         await fetchTabPage();
       }
@@ -929,7 +883,7 @@ function AnnualVacations() {
                                       <div className={styles.empAvatar} style={{ background:getTabConfig(activeTab)?.bg, color:getTabConfig(activeTab)?.color }}>
                                         {(item.employeeName||item.name||"?")[0].toUpperCase()}
                                       </div>
-                                      <div>
+                                      <div className={styles.empNameWrap}>
                                         <div className={styles.empName}>{item.employeeName||item.name||"N/A"}</div>
                                         {item.role && <div className={styles.empRole}>{item.role}</div>}
                                       </div>
@@ -940,16 +894,16 @@ function AnnualVacations() {
                                   <td>{item.role||"—"}</td>
                                   <td>{item.office||"—"}</td>
                                   <td>{item.nationality||"—"}</td>
-                                  <td>{fmt(item.doj)}</td>
+                                  <td className={styles.tdDate}>{fmt(item.doj)}</td>
                                   <td className={styles.tdCenter}>
                                     {expLabel
                                       ? <span className={styles.expBadge}>{expLabel}</span>
                                       : "—"}
                                   </td>
 
-                                  {activeTab === "onVacation" && <><td>{fmt(item.endDate || item.leaveEndDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
-                                  {activeTab === "yetToGo"   && <><td>{displayLastWorkingDay(item)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.endDate || item.leaveEndDate)}</td></>}
-                                  {activeTab === "returned"  && <><td>{fmt(item.returnDate)}</td><td>{fmt(item.firstWorkingDay)}</td></>}
+                                  {activeTab === "onVacation" && <><td className={styles.tdDate}>{fmt(item.endDate || item.leaveEndDate)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.lastWorkingDay)}</td></>}
+                                  {activeTab === "yetToGo"   && <><td className={styles.tdDate}>{displayLastWorkingDay(item)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.endDate || item.leaveEndDate)}</td></>}
+                                  {activeTab === "returned"  && <><td className={styles.tdDate}>{fmt(item.returnDate)}</td><td className={styles.tdDate}>{fmt(item.firstWorkingDay)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
                                     {canReturn && item._source === "employee" ? (
@@ -957,10 +911,9 @@ function AnnualVacations() {
                                         <StatusBadge status={vs} />
                                         <select style={{ position:"absolute", inset:0, opacity:0, cursor:"pointer", width:"100%", height:"100%" }}
                                           value={vs} onChange={e => { e.stopPropagation(); handleStatusChange(item, e.target.value); }}>
-                                          <option value="Onsite">Onsite</option>
-                                          <option value="On Vacation">On Vacation</option>
-                                          <option value="Vacation Pending">Yet to Go</option>
-                                          <option value="Vacation Approved">Returned Back</option>
+                                          {VACATION_STATUS_EDIT_OPTIONS.map(opt => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                          ))}
                                         </select>
                                       </div>
                                     ) : <StatusBadge status={vs} />}
@@ -1057,10 +1010,9 @@ function AnnualVacations() {
                     ...buildEditModalState(prev.item, ns, prev.mode),
                   }));
                 }}>
-                <option value="Onsite">Onsite</option>
-                <option value="On Vacation">On Vacation</option>
-                <option value="Vacation Pending">Yet to Go</option>
-                <option value="Vacation Approved">Returned Back</option>
+                {VACATION_STATUS_EDIT_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
             {editModal.newStatus !== "Onsite" && (

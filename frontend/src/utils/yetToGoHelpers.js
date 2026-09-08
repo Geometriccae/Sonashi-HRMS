@@ -1,4 +1,5 @@
 import { isWorkingEmployeeStatus } from "./employeeStatusDisplay";
+import { formatVacationStatus } from "./vacationStatusDisplay";
 
 export const APPROVED_LEAVE_STATUSES = ["Approved", "HOD Approved"];
 export const YET_TO_GO_LEAVE_STATUSES = APPROVED_LEAVE_STATUSES;
@@ -386,14 +387,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
 };
 
 /** Display labels aligned with Annual Vacation / Team Management. */
-export const formatVacationStatusLabel = (vacationStatus) => {
-  const vs = String(vacationStatus || "").trim();
-  if (!vs) return "";
-  if (vs === "Vacation Pending") return "Yet to go";
-  if (vs === "On Vacation") return "On Vacation";
-  if (vs === "Vacation Approved") return "Vacation Approved";
-  return vs;
-};
+export const formatVacationStatusLabel = formatVacationStatus;
 
 /**
  * Overlay live vacationStatus from the same includeVacation list Annual Vacations uses.

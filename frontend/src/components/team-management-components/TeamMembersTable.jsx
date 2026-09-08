@@ -54,6 +54,16 @@ import {
 import { HR_METRICS_LIST_PARAM_KEYS } from "../../utils/hrMetricsFilters";
 
 import { employeeEmailDisplayState } from "../../utils/employeeEmailDisplay";
+import {
+  formatVacationStatus,
+  vacationStatusTagColor,
+  VACATION_STATUS_EDIT_OPTIONS,
+} from "../../utils/vacationStatusDisplay";
+import {
+  applyVacationStatusChange,
+  buildVacationDatePrompt,
+  toDateInputValue,
+} from "../../utils/vacationStatusUpdate";
 
 /** Stable string id for selection / delete (ObjectId vs string from API/socket). */
 function empRowId(memberOrId) {
@@ -71,28 +81,9 @@ function isRowSelected(selectedIds, member) {
   return selectedIds.some((s) => String(s) === rid);
 }
 
-const vacationTagColor = {
-  Onsite: "success",
-  "On Vacation": "processing",
-  "Vacation Approved": "purple",
-  "Vacation Pending": "warning",
-};
+const vacationTagColor = vacationStatusTagColor;
 
-const vacationLabel = (vs) => {
-  if (vs === "On Vacation") return "On vacation";
-  if (vs === "Vacation Approved") return "Returned back";
-  if (vs === "Vacation Pending") return "Yet to go";
-  return vs;
-};
-
-const toDateInputValue = (value) => {
-  if (!value) return "";
-  try {
-    return new Date(value).toISOString().split("T")[0];
-  } catch {
-    return "";
-  }
-};
+const vacationLabel = formatVacationStatus;
 
 const isNoticeOrProvisionStatus = (status) =>
   status === "Notice Period" || status === "Provision Period";
@@ -104,54 +95,6 @@ const getPeriodRestoreStatus = (employee) => {
     return prev;
   }
   return "Active";
-};
-
-const getDateConfigForStatus = (status) => {
-  const configs = {
-    "On Vacation": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Pending": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Approved": {
-      label: "Return / Entry Date",
-      fieldKey: "returnDate",
-      secondaryLabel: "First Working Day",
-      secondaryFieldKey: "firstWorkingDay",
-    },
-  };
-  return configs[status] || null;
-};
-
-const buildVacationDatePrompt = (employeeItem, newStatus) => {
-  const cfg = getDateConfigForStatus(newStatus);
-  if (!cfg) return null;
-  return {
-    employeeItem,
-    newStatus,
-    label: cfg.label,
-    fieldKey: cfg.fieldKey,
-    dateValue: toDateInputValue(employeeItem[cfg.fieldKey]),
-    secondaryLabel: cfg.secondaryLabel,
-    secondaryFieldKey: cfg.secondaryFieldKey,
-    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(employeeItem[cfg.secondaryFieldKey]) : "",
-    tertiaryLabel: cfg.tertiaryLabel,
-    tertiaryFieldKey: cfg.tertiaryFieldKey,
-    tertiaryDateValue: cfg.tertiaryFieldKey
-      ? toDateInputValue(employeeItem.endDate || employeeItem.leaveEndDate)
-      : "",
-  };
 };
 
 const formatVacationDates = (record, vs) => {
@@ -465,19 +408,12 @@ function TeamMembersTable() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem._id || employeeItem.id;
     try {
-      let updated = null;
-      if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
-        const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
-        const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
-        const result = await employeeService.markVacationReturn(empId, {
-          returnDate,
-          firstWorkingDay,
-          leaveId: employeeItem.linkedLeaveId || null,
-        });
-        updated = result?.employee || result;
-      } else {
-        updated = await employeeService.updateVacationStatus(empId, { vacationStatus: newStatus, ...extraFields });
-      }
+      const updated = await applyVacationStatusChange({
+        employeeId: empId,
+        newStatus,
+        dates: extraFields,
+        leaveId: employeeItem.linkedLeaveId || null,
+      });
 
       const liveStatus = updated?.vacationStatus || newStatus;
 
@@ -902,12 +838,7 @@ function TeamMembersTable() {
                   style={{ minWidth: 160 }}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(val) => handleStatusDropdownChange(record, val)}
-                  options={[
-                    { value: "Onsite", label: "Onsite" },
-                    { value: "On Vacation", label: "On vacation" },
-                    { value: "Vacation Approved", label: "Returned back from vacation" },
-                    { value: "Vacation Pending", label: "Yet to go" },
-                  ]}
+                  options={VACATION_STATUS_EDIT_OPTIONS}
                 />
                 {dateLines.map((line) => (
                   <Typography.Text key={line} type="secondary" style={{ fontSize: 11 }}>
@@ -1209,12 +1140,12 @@ function TeamMembersTable() {
           : "EE";
 
         const getStatusLabelAndStyle = (status) => {
-          const config = {
-            "On Vacation": { label: "On vacation", bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)", color: "#1e3a8a", dot: "#3b82f6" },
-            "Vacation Approved": { label: "Returned back from vacation", bg: "linear-gradient(135deg, #ede9fe, #ddd6fe)", color: "#4c1d95", dot: "#7c3aed" },
-            "Vacation Pending": { label: "Yet to go", bg: "linear-gradient(135deg, #fef9c3, #fde68a)", color: "#713f12", dot: "#f59e0b" }
-          };
-          return config[status] || { label: status, bg: "#f8fafc", color: "#334155", dot: "#64748b" };
+          const style = {
+            "On Vacation": { bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)", color: "#1e3a8a", dot: "#3b82f6" },
+            "Vacation Approved": { bg: "linear-gradient(135deg, #ede9fe, #ddd6fe)", color: "#4c1d95", dot: "#7c3aed" },
+            "Vacation Pending": { bg: "linear-gradient(135deg, #fef9c3, #fde68a)", color: "#713f12", dot: "#f59e0b" }
+          }[status] || { bg: "#f8fafc", color: "#334155", dot: "#64748b" };
+          return { label: formatVacationStatus(status) || status, ...style };
         };
 
         const statusCfg = getStatusLabelAndStyle(datePrompt.newStatus);
