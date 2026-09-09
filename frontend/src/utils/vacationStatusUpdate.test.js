@@ -14,6 +14,7 @@ import {
   buildStatusChangePrompt,
   datesFromPrompt,
   getVacationDateConfig,
+  toDateInputValue,
 } from "./vacationStatusUpdate";
 // eslint-disable-next-line import/first
 import { VACATION_STATUS } from "./vacationStatusDisplay";
@@ -56,6 +57,49 @@ describe("which dates each status asks for", () => {
   test("Onsite saves without asking for a date", () => {
     expect(buildStatusChangePrompt(employee, VACATION_STATUS.ONSITE)).toBeNull();
     expect(getVacationDateConfig(VACATION_STATUS.ONSITE)).toBeNull();
+  });
+});
+
+describe("prefilling a date input from a stored value", () => {
+  test("a date-only string stays the day it names", () => {
+    expect(toDateInputValue("2026-09-09")).toBe("2026-09-09");
+  });
+
+  /**
+   * Vacation dates reach the client as timestamps, and the tables render them
+   * with the local calendar day. The dialog has to prefill that same day,
+   * otherwise saving it back shifts the date.
+   */
+  test("a stored timestamp prefills the calendar day it is displayed as", () => {
+    const stored = new Date(2026, 8, 10);
+    expect(toDateInputValue(stored.toISOString())).toBe("2026-09-10");
+    expect(toDateInputValue(stored)).toBe("2026-09-10");
+  });
+
+  test("a prefilled date survives a save without moving", () => {
+    const stored = new Date(2026, 8, 10);
+    const { dates } = datesFromPrompt({
+      newStatus: VACATION_STATUS.YET_TO_GO,
+      fieldKey: "lastWorkingDay",
+      dateValue: "",
+      secondaryFieldKey: "travellingDate",
+      secondaryDateValue: toDateInputValue(stored.toISOString()),
+    });
+    expect(toDateInputValue(dates.travellingDate)).toBe("2026-09-10");
+  });
+
+  test("today is today, not yesterday", () => {
+    const now = new Date();
+    const pad = (part) => String(part).padStart(2, "0");
+    expect(toDateInputValue(now)).toBe(
+      `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+    );
+  });
+
+  test("missing and unparseable values prefill as empty", () => {
+    expect(toDateInputValue(null)).toBe("");
+    expect(toDateInputValue("")).toBe("");
+    expect(toDateInputValue("not a date")).toBe("");
   });
 });
 

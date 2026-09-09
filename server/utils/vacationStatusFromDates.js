@@ -156,6 +156,29 @@ const STATUS_PROGRESS = {
 };
 
 /**
+ * Which stage of their own trip the employee's dates put today in.
+ *
+ * Unlike statusFromEmployeeDates this still answers once the travel date has
+ * arrived and no leave end date was ever captured: a travel date in the past is
+ * on its own enough to know the trip is no longer pending. Leaving that case
+ * unanswered is what kept employees on 'Yet to Go' after they had travelled,
+ * because an unanswered timeline lets a stored status stand unchallenged.
+ */
+function employeeDateStage(employee, todayValue) {
+  const today = toCalendarDate(todayValue || new Date());
+  const travel = toCalendarDate(employee?.travellingDate);
+  if (!today || !travel) return null;
+  if (today < travel) return 'Vacation Pending';
+
+  const end = toCalendarDate(employee?.leaveEndDate);
+  const returnDay = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
+  const tripReturn = returnDay && returnDay >= travel ? returnDay : null;
+  if (tripReturn && today >= tripReturn) return 'Vacation Approved';
+  if (end && today > end) return 'Vacation Approved';
+  return 'On Vacation';
+}
+
+/**
  * An authorized manual status stays authoritative until the vacation timeline
  * moves past the stage it describes.
  *
@@ -208,7 +231,7 @@ function manualVacationStatusHolds(employee, leaveRequests, todayValue) {
   // The employee's own vacation dates are the ones edited alongside the manual
   // status, so they describe the manual intent best; leave dates are the fallback.
   const dateDriven =
-    statusFromEmployeeDates(employee, today) ||
+    employeeDateStage(employee, today) ||
     pickLeaveDrivenStatus(leaveDrivenRows(employee, leaveRequests, today));
   return manualStatusSurvives(employee.vacationStatus, dateDriven);
 }
@@ -225,6 +248,17 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
 
   const fromLeaves = leaveDrivenRows(employee, leaveRequests, today);
   const fromLeaveStatus = pickLeaveDrivenStatus(fromLeaves);
+  const employeeDateStatus = statusFromEmployeeDates(employee, today);
+
+  // An employee who is already away is never reported as still waiting to go.
+  // The dates HR typed on the employee record describe this employee's own
+  // trip, so once they are live they outrank a separate approved request that
+  // still lies ahead: ranking the leave rows first left employees on 'Yet to
+  // Go' for the whole of a trip they had already started, because a future
+  // request further down their leave history answered for them.
+  if (employeeDateStatus === 'On Vacation' && employee?.vacationStatusSource === 'manual') {
+    return employeeDateStatus;
+  }
 
   // Current and future approved leave dates always win over a stored label
   // when the status is leave-driven (or legacy / unset source).
@@ -234,7 +268,6 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
 
   // Manual Yet to Go / On Vacation after a finished trip only when the
   // employee travel date is after that trip ended (Returned Back → Yet to Go).
-  const employeeDateStatus = statusFromEmployeeDates(employee, today);
   if (employeeDateStatus === 'On Vacation' || employeeDateStatus === 'Vacation Pending') {
     if (!fromLeaveStatus) return employeeDateStatus;
     const empTravel = toCalendarDate(employee?.travellingDate);
@@ -252,7 +285,15 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
   if (employeeDateStatus) return employeeDateStatus;
 
   if (employee?.vacationStatus === 'Onboarding') return 'Onboarding';
-  if (['Vacation Pending', 'On Vacation', 'Vacation Approved'].includes(employee?.vacationStatus)) {
+  if (STATUS_PROGRESS[employee?.vacationStatus] !== undefined) {
+    // The stored label already claims a trip, so that trip's own dates decide
+    // which stage today falls in. Only a move further along the trip is applied:
+    // a leftover travel date can then never drag a finished trip back to an
+    // earlier stage, while a travel date that has arrived always ends 'Yet to Go'.
+    const stage = employeeDateStage(employee, today);
+    if (stage && STATUS_PROGRESS[stage] > STATUS_PROGRESS[employee.vacationStatus]) {
+      return stage;
+    }
     return employee.vacationStatus;
   }
   return 'Onsite';
@@ -278,6 +319,7 @@ module.exports = {
   getTripReturnDate,
   statusFromLeaveDates,
   statusFromEmployeeDates,
+  employeeDateStage,
   manualVacationStatusHolds,
   resolveEmployeeVacationStatus,
   applyEffectiveVacationStatuses,

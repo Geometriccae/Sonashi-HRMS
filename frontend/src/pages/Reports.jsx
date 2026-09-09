@@ -64,11 +64,25 @@ const formatYesNo = (value) => {
   return "";
 };
 
+/**
+ * Salary amount as a number so the cell stays summable in Excel. A stored zero
+ * is a real amount and is kept; an amount the employee has no value for at all
+ * stays blank rather than being reported as zero.
+ */
+const formatReportAmount = (value) => {
+  if (value == null || value === "") return "";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : "";
+};
+
 /** Map one Employee Master record to report columns (existing schema fields only). */
 const mapEmployeeMasterRow = (e) => {
   const emergency = e.emergencyContact || {};
   const uae = emergency.uae || {};
   const home = emergency.homeCountry || {};
+  // Employee Master salary details, exactly as stored against this employee.
+  // Payroll never writes back here, so Basic is the original master amount.
+  const salary = e.salaryDetails || {};
   return {
     "Employee ID": e.employeeId || "",
     "Employee Name": e.employeeName || "",
@@ -116,6 +130,17 @@ const mapEmployeeMasterRow = (e) => {
     "Emergency Contact (Home) Name": home.name || "",
     "Emergency Contact (Home) Phone": home.contactNo || "",
     Remarks: e.remarks || "",
+    Basic: formatReportAmount(salary.basicSalary),
+    "House Rent": formatReportAmount(salary.houseRent),
+    "Travel Exp": formatReportAmount(salary.travelExp),
+    Other: formatReportAmount(salary.other),
+    "Total Allowance": formatReportAmount(salary.totalAllowance),
+    Deduction: formatReportAmount(salary.deduction),
+    "Net Salary": formatReportAmount(salary.totalSalary),
+    "Bank Name": salary.bankName || "",
+    "Account Number": salary.accountNumber || "",
+    "IBAN Number": salary.ibanNumber || "",
+    "Bank Sort Code": salary.bankSortCode || "",
   };
 };
 

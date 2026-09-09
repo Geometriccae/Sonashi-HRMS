@@ -707,4 +707,141 @@ describe('date-driven status for every employee', () => {
     const someoneElse = [approved('other', on(2026, 9, 2), on(2026, 9, 20))];
     assert.equal(statusOn(record, someoneElse, today), 'Onsite');
   });
+
+  /**
+   * Team Management stores Yet to Go with the dates the user typed, and the
+   * Leave End Date is optional in that dialog. An employee set up that way has
+   * no approved leave row to fall back on, so the travel date is the only
+   * signal that the trip has begun.
+   */
+  describe('a trip recorded on the employee only, with no leave end date', () => {
+    const travelled = (source) =>
+      plain('t', {
+        vacationStatus: 'Vacation Pending',
+        vacationStatusSource: source,
+        travellingDate: on(2026, 9, 9),
+        leaveEndDate: null,
+        returnDate: null,
+      });
+
+    ['manual', 'leave', undefined].forEach((source) => {
+      it(`stays Yet to Go the day before travelling (source=${source})`, () => {
+        assert.equal(statusOn(travelled(source), [], on(2026, 9, 8)), 'Vacation Pending');
+      });
+
+      it(`becomes On Vacation on the travelling date (source=${source})`, () => {
+        assert.equal(statusOn(travelled(source), [], on(2026, 9, 9)), 'On Vacation');
+      });
+
+      it(`stays On Vacation after the travelling date (source=${source})`, () => {
+        assert.equal(statusOn(travelled(source), [], on(2026, 10, 4)), 'On Vacation');
+      });
+    });
+
+    it('reaches Returned Back once the recorded return date arrives', () => {
+      const record = plain('t', {
+        vacationStatus: 'On Vacation',
+        vacationStatusSource: 'manual',
+        travellingDate: on(2026, 9, 9),
+        leaveEndDate: null,
+        returnDate: on(2026, 10, 1),
+        firstWorkingDay: on(2026, 10, 2),
+      });
+      assert.equal(statusOn(record, [], on(2026, 9, 30)), 'On Vacation');
+      assert.equal(statusOn(record, [], on(2026, 10, 1)), 'Vacation Approved');
+    });
+
+    it('advances a stored On Vacation once the recorded leave end passes', () => {
+      const record = plain('u', {
+        vacationStatus: 'On Vacation',
+        vacationStatusSource: 'manual',
+        travellingDate: on(2026, 9, 1),
+        leaveEndDate: on(2026, 9, 20),
+        returnDate: null,
+      });
+      assert.equal(statusOn(record, [], on(2026, 9, 20)), 'On Vacation');
+      assert.equal(statusOn(record, [], on(2026, 9, 21)), 'Vacation Approved');
+    });
+
+    it('never drags a finished trip back with a leftover travel date', () => {
+      const record = plain('v', {
+        vacationStatus: 'Vacation Approved',
+        vacationStatusSource: 'manual',
+        travellingDate: on(2024, 3, 1),
+        leaveEndDate: null,
+        returnDate: null,
+      });
+      assert.equal(statusOn(record, [], today), 'Vacation Approved');
+    });
+
+    it('leaves an Onsite employee onsite despite a leftover travel date', () => {
+      const record = plain('w', {
+        vacationStatus: 'Onsite',
+        vacationStatusSource: 'manual',
+        travellingDate: on(2024, 3, 1),
+        leaveEndDate: null,
+        returnDate: null,
+      });
+      assert.equal(statusOn(record, [], today), 'Onsite');
+    });
+
+    it('crosses month and year boundaries on the employee dates alone', () => {
+      const record = plain('x', {
+        vacationStatus: 'Vacation Pending',
+        travellingDate: on(2027, 1, 1),
+        leaveEndDate: null,
+        returnDate: null,
+      });
+      assert.equal(statusOn(record, [], on(2026, 12, 31)), 'Vacation Pending');
+      assert.equal(statusOn(record, [], on(2027, 1, 1)), 'On Vacation');
+    });
+
+    /**
+     * A long-serving employee accumulates leave history, and the next trip is
+     * often already approved. The employee's own live dates must still win, or
+     * that future request answers for them all the way through the trip they
+     * are actually on.
+     */
+    it('is On Vacation on live employee dates despite a future approved leave', () => {
+      const record = plain('f1', {
+        vacationStatus: 'Vacation Pending',
+        vacationStatusSource: 'manual',
+        travellingDate: on(2026, 9, 2),
+        leaveEndDate: on(2026, 10, 30),
+        returnDate: null,
+      });
+      const leaves = [
+        approved('f1', on(2011, 9, 1), on(2011, 12, 31)),
+        approved('f1', on(2022, 10, 4), on(2022, 12, 11)),
+        approved('f1', on(2026, 10, 2), on(2026, 10, 30)),
+      ];
+      assert.equal(statusOn(record, leaves, on(2026, 9, 1)), 'Vacation Pending');
+      assert.equal(statusOn(record, leaves, on(2026, 9, 2)), 'On Vacation');
+      assert.equal(statusOn(record, leaves, today), 'On Vacation');
+      assert.equal(statusOn(record, leaves, on(2026, 10, 30)), 'On Vacation');
+      assert.equal(statusOn(record, leaves, on(2026, 10, 31)), 'Vacation Approved');
+    });
+
+    it('still follows re-approved leave dates when the record is not manual', () => {
+      const record = plain('f2', {
+        vacationStatus: 'Vacation Approved',
+        travellingDate: on(2026, 8, 1),
+        leaveEndDate: on(2026, 9, 15),
+        returnDate: null,
+      });
+      const leaves = [approved('f2', on(2026, 9, 20), on(2026, 9, 30))];
+      assert.equal(statusOn(record, leaves, today), 'Vacation Pending');
+    });
+
+    it('reads an ISO date string as the calendar day it names', () => {
+      const record = plain('z', {
+        vacationStatus: 'Vacation Pending',
+        travellingDate: '2026-09-09T00:00:00.000Z',
+        leaveEndDate: null,
+        returnDate: null,
+      });
+      assert.equal(statusOn(record, [], on(2026, 9, 8)), 'Vacation Pending');
+      assert.equal(statusOn(record, [], on(2026, 9, 9)), 'On Vacation');
+    });
+  });
 });

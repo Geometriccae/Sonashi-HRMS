@@ -37,13 +37,27 @@ const DATE_CONFIGS = {
 export const getVacationDateConfig = (status) =>
   DATE_CONFIGS[normalizeVacationStatus(status)] || null;
 
+/**
+ * `YYYY-MM-DD` for a date input, read as the same calendar day the vacation
+ * tables and the status resolver read for that value.
+ *
+ * Formatting through toISOString() reported the UTC day instead, so a date
+ * stored at local midnight prefilled one day earlier than the tables showed it
+ * and confirming the dialog unchanged silently moved the date back a day.
+ */
 export const toDateInputValue = (value) => {
   if (!value) return "";
-  try {
-    return new Date(value).toISOString().split("T")[0];
-  } catch {
-    return "";
+  if (typeof value === "string") {
+    const dateOnly = value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (dateOnly) {
+      const [, year, month, day] = dateOnly;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    }
   }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
 };
 
 /** Prefilled prompt state for the date modal each screen already renders. */
