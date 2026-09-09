@@ -371,7 +371,9 @@ run("April 30-day month: full month salary equals monthly on /30", () => {
   assert.strictEqual(scaleSalaryAmount(monthly, days.payableDays), 30000);
 });
 
-run("salary components each prorate independently on /30", () => {
+// Earnings themselves are no longer prorated on the payslip (see
+// verify_payslip_and_proration.js); this covers the /30 helper itself.
+run("the /30 helper scales each component independently", () => {
   const payable = 17;
   const basic = scaleSalaryAmount(1500, payable);
   const hra = scaleSalaryAmount(500, payable);

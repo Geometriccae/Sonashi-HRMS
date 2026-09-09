@@ -72,6 +72,57 @@ export const buildVacationDatePrompt = (item, status, mode = "date") => {
 };
 
 /**
+ * The prompt to open when a user picks a status, including the Returned Back
+ * prefill. Returns null for statuses saved without asking for dates (Onsite).
+ * Shared so Team Management and Employee Master open the identical dialog.
+ */
+export const buildStatusChangePrompt = (item, status) => {
+  const prompt = buildVacationDatePrompt(item, status);
+  if (!prompt) return null;
+  if (normalizeVacationStatus(status) === VACATION_STATUS.RETURNED_BACK) {
+    const planned =
+      toDateInputValue(item?.endDate || item?.returnDate) || toDateInputValue(new Date());
+    prompt.dateValue = prompt.dateValue || planned;
+    prompt.secondaryDateValue = prompt.secondaryDateValue || planned;
+  }
+  return prompt;
+};
+
+/**
+ * Validates a confirmed prompt and turns it into the date payload to persist.
+ * @returns {{ dates: object } | { error: string }}
+ */
+export const datesFromPrompt = (prompt) => {
+  const {
+    newStatus,
+    fieldKey,
+    dateValue,
+    secondaryFieldKey,
+    secondaryDateValue,
+    tertiaryFieldKey,
+    tertiaryDateValue,
+  } = prompt || {};
+  const isReturn = normalizeVacationStatus(newStatus) === VACATION_STATUS.RETURNED_BACK;
+
+  if (isReturn && !dateValue) {
+    return { error: "Please select the Return / Entry Date." };
+  }
+
+  const iso = (value) => new Date(value).toISOString();
+  const dates = {};
+  if (dateValue) dates[fieldKey] = iso(dateValue);
+  if (secondaryFieldKey && secondaryDateValue) {
+    dates[secondaryFieldKey] = iso(secondaryDateValue);
+  } else if (isReturn && dateValue) {
+    dates.firstWorkingDay = iso(dateValue);
+  }
+  if (tertiaryFieldKey && tertiaryDateValue) {
+    dates[tertiaryFieldKey] = iso(tertiaryDateValue);
+  }
+  return { dates };
+};
+
+/**
  * Persists a status change and clears the caches every other screen reads from.
  * Rejects when the backend rejects, so callers never report a false success.
  */

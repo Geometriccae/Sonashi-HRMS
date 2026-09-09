@@ -144,38 +144,87 @@ function statusFromEmployeeDates(employee, todayValue) {
   return statusFromTravelEndAndReturn(travel, end, tripReturn, today);
 }
 
-function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
-  // Authorized manual updates are the source of truth until leave approval
-  // re-syncs the employee (vacationStatusSource → 'leave'). Do not overlay
-  // date-derived categories on top of a freshly saved manual status — that is
-  // what caused Return Back → Onsite (and similar) to snap back on every GET.
-  if (
-    employee?.vacationStatusSource === 'manual' &&
-    MANUAL_VACATION_STATUSES.includes(employee?.vacationStatus)
-  ) {
-    return employee.vacationStatus;
-  }
+/**
+ * Progress order of the three date-driven stages of a trip.
+ * 'Onsite' is deliberately unranked: it means "no vacation data applies", not a
+ * later stage, so it must never make a manual status look overtaken.
+ */
+const STATUS_PROGRESS = {
+  'Vacation Pending': 0,
+  'On Vacation': 1,
+  'Vacation Approved': 2,
+};
 
-  const today = toCalendarDate(todayValue || new Date());
-  const leaves = (Array.isArray(leaveRequests) ? leaveRequests : []).filter((leave) =>
-    leaveBelongsToEmployee(leave, employee)
-  );
+/**
+ * An authorized manual status stays authoritative until the vacation timeline
+ * moves past the stage it describes.
+ *
+ * Holding it forever is what kept employees on "Yet to Go" after their travel
+ * date had already arrived; dropping it entirely is what made Returned Back →
+ * Onsite snap back on every read. So it is kept while the dates still agree or
+ * still sit earlier in the trip, and released as soon as the dates have reached
+ * a later stage (Yet to Go once travel starts, On Vacation once the trip ends).
+ */
+function manualStatusSurvives(manualStatus, dateDrivenStatus) {
+  if (!dateDrivenStatus || dateDrivenStatus === manualStatus) return true;
+  const pinned = STATUS_PROGRESS[manualStatus];
+  const live = STATUS_PROGRESS[dateDrivenStatus];
+  if (pinned === undefined || live === undefined) return true;
+  return live <= pinned;
+}
 
-  const fromLeaves = leaves
+/** Per-leave derived rows for one employee, newest data first is not required. */
+function leaveDrivenRows(employee, leaveRequests, today) {
+  return (Array.isArray(leaveRequests) ? leaveRequests : [])
+    .filter((leave) => leaveBelongsToEmployee(leave, employee))
     .map((leave) => ({
       status: statusFromLeaveDates(leave, employee, today),
       travel: getLeaveTravelStartDate(leave, employee),
       end: toCalendarDate(leave.endDate),
     }))
     .filter((row) => row.status);
+}
 
-  const fromLeaveStatus = fromLeaves.some((row) => row.status === 'On Vacation')
-    ? 'On Vacation'
-    : fromLeaves.some((row) => row.status === 'Vacation Pending')
-      ? 'Vacation Pending'
-      : fromLeaves.some((row) => row.status === 'Vacation Approved')
-        ? 'Vacation Approved'
-        : null;
+/** An active trip outranks a pending one, which outranks a finished one. */
+function pickLeaveDrivenStatus(rows) {
+  if (rows.some((row) => row.status === 'On Vacation')) return 'On Vacation';
+  if (rows.some((row) => row.status === 'Vacation Pending')) return 'Vacation Pending';
+  if (rows.some((row) => row.status === 'Vacation Approved')) return 'Vacation Approved';
+  return null;
+}
+
+/**
+ * Whether a stored manual status should still be shown as-is.
+ * Exported so the write/persist paths agree with what reads resolve.
+ */
+function manualVacationStatusHolds(employee, leaveRequests, todayValue) {
+  if (
+    employee?.vacationStatusSource !== 'manual' ||
+    !MANUAL_VACATION_STATUSES.includes(employee?.vacationStatus)
+  ) {
+    return false;
+  }
+  const today = toCalendarDate(todayValue || new Date());
+  // The employee's own vacation dates are the ones edited alongside the manual
+  // status, so they describe the manual intent best; leave dates are the fallback.
+  const dateDriven =
+    statusFromEmployeeDates(employee, today) ||
+    pickLeaveDrivenStatus(leaveDrivenRows(employee, leaveRequests, today));
+  return manualStatusSurvives(employee.vacationStatus, dateDriven);
+}
+
+function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
+  const today = toCalendarDate(todayValue || new Date());
+
+  // Authorized manual updates win until the dates overtake them; see
+  // manualStatusSurvives. Once overtaken we fall through to the date logic below,
+  // so an employee always advances through their trip on their own dates.
+  if (manualVacationStatusHolds(employee, leaveRequests, today)) {
+    return employee.vacationStatus;
+  }
+
+  const fromLeaves = leaveDrivenRows(employee, leaveRequests, today);
+  const fromLeaveStatus = pickLeaveDrivenStatus(fromLeaves);
 
   // Current and future approved leave dates always win over a stored label
   // when the status is leave-driven (or legacy / unset source).
@@ -228,6 +277,8 @@ module.exports = {
   getLeaveTravelStartDate,
   getTripReturnDate,
   statusFromLeaveDates,
+  statusFromEmployeeDates,
+  manualVacationStatusHolds,
   resolveEmployeeVacationStatus,
   applyEffectiveVacationStatuses,
 };

@@ -157,6 +157,30 @@ class SalarySlipService {
         }
     }
 
+    // Employee information block for a payslip, resolved from the employee
+    // record the slip was generated for.
+    async getPayslipEmployeeDetails(id) {
+        try {
+            const response = await fetch(`${this.baseURL}/${id}/employee-details`, {
+                method: 'GET',
+                headers: {
+                    ...this.getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching payslip employee details:', error);
+            throw error;
+        }
+    }
+
     async updateSalarySlip(id, slipData) {
         try {
             const response = await fetch(`${this.baseURL}/${id}`, {

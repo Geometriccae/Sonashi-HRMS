@@ -61,9 +61,11 @@ import {
 } from "../../utils/vacationStatusDisplay";
 import {
   applyVacationStatusChange,
-  buildVacationDatePrompt,
+  buildStatusChangePrompt,
+  datesFromPrompt,
   toDateInputValue,
 } from "../../utils/vacationStatusUpdate";
+import VacationDatePromptModal from "./VacationDatePromptModal";
 
 /** Stable string id for selection / delete (ObjectId vs string from API/socket). */
 function empRowId(memberOrId) {
@@ -412,8 +414,8 @@ function TeamMembersTable() {
         employeeId: empId,
         newStatus,
         dates: extraFields,
-        leaveId: employeeItem.linkedLeaveId || null,
-      });
+          leaveId: employeeItem.linkedLeaveId || null,
+        });
 
       const liveStatus = updated?.vacationStatus || newStatus;
 
@@ -442,14 +444,8 @@ function TeamMembersTable() {
   };
 
   const handleStatusDropdownChange = (employeeItem, newStatus) => {
-    const prompt = buildVacationDatePrompt(employeeItem, newStatus);
+    const prompt = buildStatusChangePrompt(employeeItem, newStatus);
     if (prompt) {
-      // Prefill return dates from planned leave end when marking returned
-      if (newStatus === "Vacation Approved") {
-        const planned = toDateInputValue(employeeItem.endDate || employeeItem.returnDate) || toDateInputValue(new Date());
-        prompt.dateValue = prompt.dateValue || planned;
-        prompt.secondaryDateValue = prompt.secondaryDateValue || planned;
-      }
       setDatePrompt(prompt);
     } else {
       handleVacationStatusChange(employeeItem, newStatus);
@@ -458,24 +454,15 @@ function TeamMembersTable() {
 
   const handleDatePromptConfirm = async () => {
     if (!datePrompt || datePromptSaving) return;
-    const { employeeItem, newStatus, fieldKey, dateValue, secondaryFieldKey, secondaryDateValue, tertiaryFieldKey, tertiaryDateValue } = datePrompt;
-    if (newStatus === "Vacation Approved" && !dateValue) {
-      showToast("Please select the Return / Entry Date.", "error");
+    const { employeeItem, newStatus } = datePrompt;
+    const { dates, error } = datesFromPrompt(datePrompt);
+    if (error) {
+      showToast(error, "error");
       return;
-    }
-    const extraFields = {};
-    if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
-    if (secondaryFieldKey && secondaryDateValue) {
-      extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
-    } else if (newStatus === "Vacation Approved" && dateValue) {
-      extraFields.firstWorkingDay = new Date(dateValue).toISOString();
-    }
-    if (tertiaryFieldKey && tertiaryDateValue) {
-      extraFields[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
     }
     setDatePromptSaving(true);
     try {
-      await handleVacationStatusChange(employeeItem, newStatus, extraFields);
+      await handleVacationStatusChange(employeeItem, newStatus, dates);
       setDatePrompt(null);
     } catch (err) {
       // handled
@@ -1133,306 +1120,14 @@ function TeamMembersTable() {
         employee={employeeToEdit}
       />
 
-      {/* Vacation Date Prompt Modal */}
-      {datePrompt && (() => {
-        const nameInitials = datePrompt.employeeItem.employeeName
-          ? datePrompt.employeeItem.employeeName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-          : "EE";
-
-        const getStatusLabelAndStyle = (status) => {
-          const style = {
-            "On Vacation": { bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)", color: "#1e3a8a", dot: "#3b82f6" },
-            "Vacation Approved": { bg: "linear-gradient(135deg, #ede9fe, #ddd6fe)", color: "#4c1d95", dot: "#7c3aed" },
-            "Vacation Pending": { bg: "linear-gradient(135deg, #fef9c3, #fde68a)", color: "#713f12", dot: "#f59e0b" }
-          }[status] || { bg: "#f8fafc", color: "#334155", dot: "#64748b" };
-          return { label: formatVacationStatus(status) || status, ...style };
-        };
-
-        const statusCfg = getStatusLabelAndStyle(datePrompt.newStatus);
-
-        return (
-          <div
-            style={{
-              position: "fixed", inset: 0, zIndex: 100001,
-              background: "rgba(15, 23, 42, 0.6)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "20px"
-            }}
-            onClick={handleDatePromptCancel}
-          >
-            <style>{`
-              @keyframes datePromptFadeIn {
-                from { opacity: 0; transform: scale(0.95) translateY(10px); }
-                to { opacity: 1; transform: scale(1) translateY(0); }
-              }
-              @keyframes datePromptSpin {
-                to { transform: rotate(360deg); }
-              }
-              .premium-input-date:focus {
-                border-color: #6366f1 !important;
-                box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15) !important;
-              }
-            `}</style>
-            <div
-              style={{
-                background: "#fff",
-                borderRadius: "24px",
-                padding: "36px",
-                width: "440px",
-                maxWidth: "100%",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 40px rgba(79, 70, 229, 0.05)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "24px",
-                position: "relative",
-                overflow: "hidden",
-                border: "1px solid #f1f5f9",
-                animation: "datePromptFadeIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
-                textAlign: "left"
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Top Accent Gradient Bar */}
-              <div style={{
-                position: "absolute",
-                top: 0, left: 0, right: 0,
-                height: "6px",
-                background: "linear-gradient(90deg, #4f46e5, #8b5cf6, #ec4899)"
-              }} />
-
-              {/* Close Button */}
-              <button
-                onClick={handleDatePromptCancel}
-                disabled={datePromptSaving}
-                style={{
-                  position: "absolute",
-                  top: "20px", right: "20px",
-                  background: "#f1f5f9", border: "none",
-                  width: "32px", height: "32px", borderRadius: "50%",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "18px", color: "#64748b",
-                  cursor: datePromptSaving ? "not-allowed" : "pointer",
-                  opacity: datePromptSaving ? 0.5 : 1,
-                  transition: "all 0.2s ease",
-                  lineHeight: 1
-                }}
-                onMouseEnter={e => { if (!datePromptSaving) { e.target.style.background = "#e2e8f0"; e.target.style.color = "#0f172a"; } }}
-                onMouseLeave={e => { if (!datePromptSaving) { e.target.style.background = "#f1f5f9"; e.target.style.color = "#64748b"; } }}
-              >&times;</button>
-
-              {/* Avatar & Header */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "8px", marginTop: "10px" }}>
-                <div style={{
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg, #ede9fe, #c7d2fe)",
-                  color: "#4f46e5",
-                  fontSize: "22px",
-                  fontWeight: "700",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 8px 16px rgba(79, 70, 229, 0.12)"
-                }}>
-                  {nameInitials}
-                </div>
-                <h3 style={{ margin: "10px 0 2px", fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
-                  {datePrompt.secondaryFieldKey ? "Set Vacation Dates" : `Set ${datePrompt.label}`}
-                </h3>
-                <p style={{ margin: 0, fontSize: "14px", color: "#64748b", lineHeight: "1.5" }}>
-                  Please select the vacation-related date{datePrompt.secondaryFieldKey ? "s" : ""} for <strong style={{ color: "#334155" }}>{datePrompt.employeeItem.employeeName}</strong>.
-                </p>
-              </div>
-
-              {/* Status Badge Visual Transition Indicator */}
-              <div style={{
-                background: "#f8fafc",
-                borderRadius: "16px",
-                padding: "14px 18px",
-                border: "1px solid #e2e8f0",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px"
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Updating Status to:
-                  </span>
-                </div>
-                <div style={{ display: "inline-flex", alignSelf: "flex-start" }}>
-                  <span style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "6px 14px",
-                    borderRadius: "999px",
-                    background: statusCfg.bg,
-                    color: statusCfg.color,
-                    fontSize: "13px",
-                    fontWeight: "800",
-                    boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
-                    border: `1px solid ${statusCfg.dot}25`
-                  }}>
-                    <span style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: statusCfg.dot,
-                      boxShadow: `0 0 0 2px ${statusCfg.dot}25`
-                    }} />
-                    {statusCfg.label}
-                  </span>
-                </div>
-              </div>
-
-              {/* Date Input Section */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Select {datePrompt.label}
-                  </label>
-                  <DateInput
-                    value={datePrompt.dateValue}
-                    className="premium-input-date"
-                    onChange={e => setDatePrompt(prev => ({ ...prev, dateValue: e.target.value }))}
-                    style={{
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "12px",
-                      padding: "12px 16px",
-                      fontSize: "15px",
-                      color: "#0f172a",
-                      fontWeight: "600",
-                      outline: "none",
-                      width: "100%",
-                      boxSizing: "border-box",
-                      transition: "all 0.2s ease",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
-                      cursor: "pointer"
-                    }}
-                  />
-                </div>
-                {datePrompt.secondaryFieldKey && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Select {datePrompt.secondaryLabel}
-                    </label>
-                    <DateInput
-                      value={datePrompt.secondaryDateValue}
-                      className="premium-input-date"
-                      onChange={e => setDatePrompt(prev => ({ ...prev, secondaryDateValue: e.target.value }))}
-                      style={{
-                        border: "2px solid #e2e8f0",
-                        borderRadius: "12px",
-                        padding: "12px 16px",
-                        fontSize: "15px",
-                        color: "#0f172a",
-                        fontWeight: "600",
-                        outline: "none",
-                        width: "100%",
-                        boxSizing: "border-box",
-                        transition: "all 0.2s ease",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
-                        cursor: "pointer"
-                      }}
-                    />
-                  </div>
-                )}
-                {datePrompt.tertiaryFieldKey && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Select {datePrompt.tertiaryLabel}
-                    </label>
-                    <DateInput
-                      value={datePrompt.tertiaryDateValue}
-                      className="premium-input-date"
-                      onChange={e => setDatePrompt(prev => ({ ...prev, tertiaryDateValue: e.target.value }))}
-                      style={{
-                        border: "2px solid #e2e8f0",
-                        borderRadius: "12px",
-                        padding: "12px 16px",
-                        fontSize: "15px",
-                        color: "#0f172a",
-                        fontWeight: "600",
-                        outline: "none",
-                        width: "100%",
-                        boxSizing: "border-box",
-                        transition: "all 0.2s ease",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
-                        cursor: "pointer"
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Footer Buttons */}
-              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px" }}>
-                <button
-                onClick={handleDatePromptCancel}
-                disabled={datePromptSaving}
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: "12px",
-                  border: "2px solid #e2e8f0",
-                  background: "#fff",
-                  color: "#64748b",
-                  fontWeight: "700",
-                  fontSize: "14px",
-                  cursor: datePromptSaving ? "not-allowed" : "pointer",
-                  opacity: datePromptSaving ? 0.6 : 1,
-                  transition: "all 0.2s ease"
-                }}
-                onMouseEnter={e => { if (!datePromptSaving) { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; } }}
-                onMouseLeave={e => { if (!datePromptSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; } }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDatePromptConfirm}
-                disabled={datePromptSaving}
-                style={{
-                  padding: "12px 28px",
-                  borderRadius: "12px",
-                  border: "none",
-                  background: datePromptSaving ? "#94a3b8" : "linear-gradient(135deg, #4f46e5, #6366f1)",
-                  color: "#fff",
-                  fontWeight: "700",
-                  fontSize: "14px",
-                  cursor: datePromptSaving ? "not-allowed" : "pointer",
-                  boxShadow: datePromptSaving ? "none" : "0 4px 12px rgba(79, 70, 229, 0.25)",
-                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  minWidth: "120px"
-                }}
-                onMouseEnter={e => { if (!datePromptSaving) { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(79, 70, 229, 0.35)"; } }}
-                onMouseLeave={e => { if (!datePromptSaving) { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(79, 70, 229, 0.25)"; } }}
-              >
-                {datePromptSaving && (
-                  <span
-                    style={{
-                      width: "14px",
-                      height: "14px",
-                      border: "2px solid rgba(255,255,255,0.35)",
-                      borderTopColor: "#fff",
-                      borderRadius: "50%",
-                      display: "inline-block",
-                      animation: "datePromptSpin 0.7s linear infinite"
-                    }}
-                  />
-                )}
-                {datePromptSaving ? "Saving..." : "Confirm"}
-              </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Vacation date selection, shared with Employee Master / Employee Profile */}
+      <VacationDatePromptModal
+        prompt={datePrompt}
+        saving={datePromptSaving}
+        onChange={(patch) => setDatePrompt((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onCancel={handleDatePromptCancel}
+        onConfirm={handleDatePromptConfirm}
+      />
 
       {/* Status date prompt modal (notice / provision / exit) */}
       {statusPrompt && (() => {

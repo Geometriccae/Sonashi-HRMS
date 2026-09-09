@@ -154,9 +154,23 @@ test('manual transitions persist against active approved leave', async (t) => {
     },
   ];
 
-  const transitions = ['Onsite', 'On Vacation', 'Vacation Pending', 'Vacation Approved'];
+  // The dates each status collects in the shared date prompt. Yet to Go describes
+  // a trip that has not started, so it carries a future travelling date.
+  const transitions = [
+    { target: 'Onsite', dates: {} },
+    { target: 'On Vacation', dates: {} },
+    {
+      target: 'Vacation Pending',
+      dates: {
+        lastWorkingDay: day(2026, 9, 9),
+        travellingDate: day(2026, 9, 10),
+        leaveEndDate: day(2026, 9, 30),
+      },
+    },
+    { target: 'Vacation Approved', dates: {} },
+  ];
 
-  for (const target of transitions) {
+  for (const { target, dates } of transitions) {
     await t.test(`saving ${target} is what the next read returns`, () => {
       const employee = employeeWithActiveLeave();
       const derived = resolveEmployeeVacationStatus(employee, activeLeave, TODAY);
@@ -166,6 +180,7 @@ test('manual transitions persist against active approved leave', async (t) => {
       const patch = {
         vacationStatus: target,
         vacationStatusSource: 'manual',
+        ...dates,
         ...vacationReturnDatePatch({
           status: target,
           derivedStatus: derived,
@@ -181,6 +196,17 @@ test('manual transitions persist against active approved leave', async (t) => {
       );
     });
   }
+
+  // The one manual choice the dates are allowed to override: claiming a trip has
+  // not started when its travelling date has already passed.
+  await t.test('Yet to Go does not stick once the travelling date has passed', () => {
+    const saved = {
+      ...employeeWithActiveLeave(),
+      vacationStatus: 'Vacation Pending',
+      vacationStatusSource: 'manual',
+    };
+    assert.equal(resolveEmployeeVacationStatus(saved, activeLeave, TODAY), 'On Vacation');
+  });
 });
 
 /** An unrelated master-data save must not freeze a date-driven employee. */

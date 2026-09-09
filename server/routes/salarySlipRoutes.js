@@ -16,7 +16,11 @@ const {
     isSalarySlipEligibleForMonth,
     FULL_MONTH_LEAVE_REASON,
 } = require('../utils/salarySlipEligibility');
-const { generateSalarySlipsForMonth } = require('../utils/generateSalarySlips');
+const { generateSalarySlipsForMonth, payrollEmailForEmployee } = require('../utils/generateSalarySlips');
+const {
+    PAYSLIP_EMPLOYEE_FIELDS,
+    buildPayslipEmployeeDetails,
+} = require('../utils/payslipEmployeeDetails');
 
 // One-time cleanup to remove stale database indexes that cause import failures
 SalarySlip.on('index', (err) => {
@@ -386,6 +390,62 @@ router.get('/my-slips', async (req, res) => {
 
         const slips = await SalarySlip.find({ emailId: String(userEmail).trim().toLowerCase() }).sort({ year: -1, month: -1 });
         res.json(slips);
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+/** Roles allowed to read any salary slip (same set as GET /all). */
+const SALARY_SLIP_READ_ROLES = new Set(['admin', 'hod', 'hr', 'viewer', 'authorize_user']);
+
+/**
+ * Resolve the employee a slip was generated for, using the same payroll
+ * identity as the generator so a payslip can never pick up another employee.
+ */
+const findEmployeeForSlip = async (slip) => {
+    const slipEmail = String(slip?.emailId || '').trim().toLowerCase();
+    if (!slipEmail) return null;
+
+    const direct = await Employee.findOne({ emailId: new RegExp(`^${slipEmail}$`, 'i') })
+        .select(PAYSLIP_EMPLOYEE_FIELDS)
+        .lean();
+    if (direct) return direct;
+
+    // Employees without an email get a generated payroll address; match on that.
+    const candidates = await Employee.find({
+        $or: [{ emailId: { $exists: false } }, { emailId: null }, { emailId: '' }],
+    })
+        .select(PAYSLIP_EMPLOYEE_FIELDS)
+        .lean();
+    return candidates.find((emp) => payrollEmailForEmployee(emp) === slipEmail) || null;
+};
+
+// Employee information block for a generated payslip (read-only)
+router.get('/:id/employee-details', async (req, res) => {
+    try {
+        const userData = getUserDataFromReq(req);
+        if (!userData || (!userData.userId && !userData.emailId)) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid salary slip id' });
+        }
+
+        const slip = await SalarySlip.findById(req.params.id).lean();
+        if (!slip) return res.status(404).json({ message: 'Salary slip not found' });
+
+        const user = userData.userId ? await User.findById(userData.userId).lean() : null;
+        const role = String(user?.role || userData.role || '').toLowerCase();
+        if (!SALARY_SLIP_READ_ROLES.has(role)) {
+            // Everyone else may only read their own payslip.
+            const userEmail = String(user?.emailId || userData.emailId || '').trim().toLowerCase();
+            if (!userEmail || userEmail !== String(slip.emailId || '').trim().toLowerCase()) {
+                return res.status(403).json({ message: 'Access denied' });
+            }
+        }
+
+        const employee = await findEmployeeForSlip(slip);
+        res.json(buildPayslipEmployeeDetails(employee, slip));
     } catch (e) {
         res.status(500).json({ message: e.message });
     }

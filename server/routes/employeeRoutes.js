@@ -38,7 +38,10 @@ const {
   getVacationTabPage,
   getDashboardCategoryPage,
 } = require('../utils/vacationDashboardStats');
-const { applyEffectiveVacationStatuses } = require('../utils/vacationStatusFromDates');
+const {
+  applyEffectiveVacationStatuses,
+  manualVacationStatusHolds,
+} = require('../utils/vacationStatusFromDates');
 const {
   normalizeVacationStatusValue,
   isAllowedVacationStatus,
@@ -371,14 +374,18 @@ async function withLiveVacationStatus(employees) {
 }
 
 /** Persist the resolved status so every route reads the same stored value.
- * Never overwrite an authorized manual status — leave approval sync flips
- * vacationStatusSource back to 'leave' when dates should drive again.
+ * An authorized manual status is left alone while it still holds; once the
+ * vacation dates have moved past it the stored value is rewritten as
+ * date-driven, so the database stops carrying a status reality has overtaken.
  */
 async function persistLiveVacationStatus(employee) {
   if (!employee) return employee;
   const plain = typeof employee.toObject === 'function' ? employee.toObject() : { ...employee };
   if (plain.vacationStatusSource === 'manual') {
-    return plain;
+    const approvedLeaves = await getApprovedLeavesForVacation();
+    if (manualVacationStatusHolds(plain, approvedLeaves)) {
+      return plain;
+    }
   }
   const withStatus = await withLiveVacationStatus(plain);
   if (

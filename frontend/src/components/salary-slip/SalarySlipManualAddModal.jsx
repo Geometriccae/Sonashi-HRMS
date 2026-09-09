@@ -9,7 +9,7 @@ import Dropdown from '../DropDown';
 import DateInput from '../DateInput';
 import { formatAed } from '../../utils/currency';
 import leaveRequestService from '../../services/LeaveRequestService';
-import { computePayablePayrollDays, getPayrollPeriod, PAYROLL_MONTH_DAYS, scaleSalaryAmount } from '../../utils/payrollPayableDays';
+import { computePayablePayrollDays, getPayrollPeriod, leaveDeductionAmount } from '../../utils/payrollPayableDays';
 import { isNonWorkingEmployeeStatus } from '../../utils/employeeStatusDisplay';
 
 const createInitialFormData = (month, year) => ({
@@ -27,6 +27,8 @@ const createInitialFormData = (month, year) => ({
     travelExp: '',
     other: '',
     deduction: '',
+    leaveDeduction: '',
+    totalDeduction: '',
     grossSalary: '',
     netSalary: '',
     month,
@@ -59,13 +61,18 @@ const recalculateSalaryFields = (draft, baseAmounts) => {
     const fallbackPayable = draft.payableDays === '' ? totalWorkingDays : Number(draft.payableDays);
     const normalizedPayable = Number.isFinite(fallbackPayable) ? Math.max(0, fallbackPayable) : 0;
 
-    const basic = scaleSalaryAmount(baseAmounts.basic, normalizedPayable);
-    const houseRent = scaleSalaryAmount(baseAmounts.houseRent, normalizedPayable);
-    const travelExp = scaleSalaryAmount(baseAmounts.travelExp, normalizedPayable);
-    const other = scaleSalaryAmount(baseAmounts.other, normalizedPayable);
+    // Earnings are paid exactly as held in Employee Master — never prorated.
+    const basic = toAmount(baseAmounts.basic);
+    const houseRent = toAmount(baseAmounts.houseRent);
+    const travelExp = toAmount(baseAmounts.travelExp);
+    const other = toAmount(baseAmounts.other);
     const grossSalary = basic + houseRent + travelExp + other;
-    const deduction = toAmount(draft.deduction);
-    const netSalary = grossSalary - deduction;
+
+    // Unpaid days are charged as a separate deduction instead.
+    const fixedDeduction = toAmount(draft.deduction);
+    const leaveDeduction = leaveDeductionAmount(grossSalary, normalizedPayable);
+    const totalDeduction = fixedDeduction + leaveDeduction;
+    const netSalary = grossSalary - totalDeduction;
 
     return {
         ...draft,
@@ -74,6 +81,8 @@ const recalculateSalaryFields = (draft, baseAmounts) => {
         travelExp: formatAmount(travelExp),
         other: formatAmount(other),
         grossSalary: formatAmount(grossSalary),
+        leaveDeduction: formatAmount(leaveDeduction),
+        totalDeduction: formatAmount(totalDeduction),
         netSalary: formatAmount(netSalary),
     };
 };
@@ -264,28 +273,18 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
             }
 
             if (['basic', 'houseRent', 'travelExp', 'other'].includes(name)) {
-                const payableDays = Number(updated.payableDays);
-                const ratio = payableDays >= 0 ? payableDays / PAYROLL_MONTH_DAYS : 0;
-                const normalizedValue = toAmount(value);
-
-                const nextBaseAmounts = {
-                    ...baseAmounts,
-                    [name]: ratio > 0 ? normalizedValue / ratio : normalizedValue,
-                };
+                // An edited earning is the amount payable, exactly as typed.
+                const nextBaseAmounts = { ...baseAmounts, [name]: toAmount(value) };
                 setBaseAmounts(nextBaseAmounts);
                 return recalculateSalaryFields(updated, nextBaseAmounts);
             }
 
-            const grossSalary =
-                toAmount(updated.basic) +
-                toAmount(updated.houseRent) +
-                toAmount(updated.travelExp) +
-                toAmount(updated.other);
-            const netSalary = grossSalary - toAmount(updated.deduction);
-
-            updated.grossSalary = formatAmount(grossSalary);
-            updated.netSalary = formatAmount(netSalary);
-            return updated;
+            return recalculateSalaryFields(updated, {
+                basic: toAmount(updated.basic),
+                houseRent: toAmount(updated.houseRent),
+                travelExp: toAmount(updated.travelExp),
+                other: toAmount(updated.other),
+            });
         });
 
         setErrors(validateFormData({
@@ -334,8 +333,10 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                 conveyanceAllowance: parseFloat(formData.travelExp) || 0,
                 otherAllowance: parseFloat(formData.other) || 0,
                 grossSalary: parseFloat(formData.grossSalary) || 0,
-                totalDeduction: parseFloat(formData.deduction) || 0,
-                deductionsPFTax: parseFloat(formData.deduction) || 0,
+                advance: parseFloat(formData.deduction) || 0,
+                leave: parseFloat(formData.leaveDeduction) || 0,
+                totalDeduction: parseFloat(formData.totalDeduction) || 0,
+                deductionsPFTax: parseFloat(formData.totalDeduction) || 0,
                 netSalary: parseFloat(formData.netSalary) || 0,
                 month: formData.month,
                 year: formData.year,
@@ -490,12 +491,23 @@ function SalarySlipManualAddModal({ isOpen, onClose, onSuccess, month, year, exi
                                             <input type="number" name="deduction" value={formData.deduction} onChange={handleChange} placeholder="0.00" step="0.01" min="0" />
                                         </td>
                                     </tr>
+                                    <tr>
+                                        <td>LEAVE</td>
+                                        <td>
+                                            <input
+                                                type="text"
+                                                value={formData.leaveDeduction ? formatAed(formData.leaveDeduction) : 'AED 0.00'}
+                                                readOnly
+                                                className={styles.readOnlyInput}
+                                            />
+                                        </td>
+                                    </tr>
                                 </tbody>
                                 <tfoot>
                                     <tr className={styles.totalRow}>
                                         <td><strong>Total Deduction</strong></td>
                                         <td>
-                                            <input type="text" value={formData.deduction ? formatAed(formData.deduction) : 'AED 0.00'} readOnly className={styles.readOnlyInput} />
+                                            <input type="text" value={formData.totalDeduction ? formatAed(formData.totalDeduction) : 'AED 0.00'} readOnly className={styles.readOnlyInput} />
                                         </td>
                                     </tr>
                                 </tfoot>

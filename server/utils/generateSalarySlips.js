@@ -10,9 +10,9 @@ const {
 const {
   getPayrollPeriod,
   computePayablePayrollDays,
-  scaleSalaryAmount,
   toDayStart,
 } = require('./payrollPayableDays');
+const { composeSalarySlipAmounts } = require('./salarySlipAmounts');
 const {
   isSalarySlipEligibleForMonth,
   FULL_MONTH_LEAVE_REASON,
@@ -119,14 +119,12 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
       }
 
       const email = payrollEmailForEmployee(emp);
-      const salary = emp.salaryDetails || {};
-      const basic = scaleSalaryAmount(toAmt(salary.basicSalary), days.payableDays);
-      const houseRent = scaleSalaryAmount(toAmt(salary.houseRent), days.payableDays);
-      const travelExp = scaleSalaryAmount(toAmt(salary.travelExp), days.payableDays);
-      const other = scaleSalaryAmount(toAmt(salary.other), days.payableDays);
-      const deduction = toAmt(salary.deduction);
-      const grossSalary = basic + houseRent + travelExp + other;
-      const netSalary = grossSalary - deduction;
+      // Original salary components stay untouched; unpaid days become a
+      // separate leave deduction. See utils/salarySlipAmounts.js.
+      const amounts = composeSalarySlipAmounts({
+        salaryDetails: emp.salaryDetails,
+        payableDays: days.payableDays,
+      });
 
       const slipData = {
         employeeName: emp.employeeName,
@@ -139,14 +137,7 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
         totalWorkingDays: days.totalWorkingDays,
         presentDays: days.presentDays,
         payableDays: days.payableDays,
-        basicPay: basic,
-        hra: houseRent,
-        conveyanceAllowance: travelExp,
-        otherAllowance: other,
-        grossSalary,
-        totalDeduction: deduction,
-        deductionsPFTax: deduction,
-        netSalary,
+        ...amounts,
       };
       if (uploadedBy) slipData.uploadedBy = uploadedBy;
 

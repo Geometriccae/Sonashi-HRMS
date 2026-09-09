@@ -1,9 +1,14 @@
 /**
  * Payable working days for a salary period.
  * Calendar days are used only to count payable/present days.
- * Salary amounts always prorate on a fixed 30-day month:
+ *
+ * Earnings are never prorated: Basic Pay and the allowances are paid at the
+ * exact values held in Employee Master. Unpaid days are charged as a separate
+ * deduction on a fixed 30-day month:
  *   Daily Salary = Monthly Salary / 30
- *   Payable Salary = Daily Salary × Payable Days
+ *   Unpaid Days = 30 - Payable Days (never below zero)
+ *   Leave Deduction = Daily Salary × Unpaid Days
+ *   Net Payable = Gross Salary - (Leave Deduction + other deductions)
  */
 
 const { lastWorkingDayIsEmploymentExit } = require("./employeeStatus");
@@ -262,6 +267,20 @@ const scaleSalaryAmount = (amount, payableDays) => {
   return Math.round(((base * payable) / PAYROLL_MONTH_DAYS) * 100) / 100;
 };
 
+/** Days of the 30-day payroll month that the employee is not paid for. */
+const unpaidPayrollDays = (payableDays) => {
+  const payable = Number(payableDays);
+  if (!Number.isFinite(payable) || payable < 0) return 0;
+  return Math.max(0, PAYROLL_MONTH_DAYS - payable);
+};
+
+/**
+ * Leave / absence deduction for the unpaid part of a payroll month.
+ * Earnings stay at their Employee Master values; this is what reduces net pay.
+ */
+const leaveDeductionAmount = (monthlyGross, payableDays) =>
+  scaleSalaryAmount(monthlyGross, unpaidPayrollDays(payableDays));
+
 module.exports = {
   MONTH_NAMES,
   PAYROLL_MONTH_DAYS,
@@ -269,6 +288,8 @@ module.exports = {
   getEmploymentWindow,
   computePayablePayrollDays,
   scaleSalaryAmount,
+  unpaidPayrollDays,
+  leaveDeductionAmount,
   leaveMatchesEmployee,
   inclusiveDays,
   dateKey,

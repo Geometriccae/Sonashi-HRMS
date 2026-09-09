@@ -12,6 +12,7 @@ import SalarySlipManualAddModal from "./SalarySlipManualAddModal";
 import SalarySlipEditModal from "./SalarySlipEditModal";
 import DateInput from "../DateInput";
 import { formatAed } from "../../utils/currency";
+import { isPlaceholderEmployeeEmail } from "../../utils/employeeEmailDisplay";
 import { buildYearList, yearsFromSalarySlips } from "../../utils/yearOptions";
 import {
     useUrlListPage,
@@ -25,6 +26,41 @@ const loadJsPdf = async () => {
     ]);
     return { jsPDF };
 };
+
+/** Payslip employee block: two fields per row, in the order printed on the slip. */
+const PAYSLIP_EMPLOYEE_ROWS = [
+    [["Emp ID", "empId"], ["Employee Name", "employeeName"]],
+    [["Payable Days", "payableDays"], ["Present Days", "presentDays"]],
+    [["Department", "department"], ["Designation", "designation"]],
+    [["Bank Acc No", "bankAccNo"], ["IBAN Number", "ibanNumber"]],
+    [["Person Code", "personCode"], ["Mode of Pay", "modeOfPay"]],
+    [["DOJ", "doj"], ["Email ID", "emailId"]],
+    [["Emirates ID", "emiratesId"], ["Unified ID", "unifiedId"]],
+];
+
+const dayCountText = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return "";
+    return String(Math.round(n * 100) / 100);
+};
+
+/** Used only if the employee record cannot be loaded; never borrows another employee's data. */
+const payslipEmployeeFallback = (slip) => ({
+    empId: "",
+    employeeName: slip.employeeName || "",
+    payableDays: dayCountText(slip.payableDays),
+    presentDays: dayCountText(slip.presentDays),
+    department: slip.department || "",
+    designation: slip.designation || "",
+    bankAccNo: "",
+    ibanNumber: "",
+    personCode: "",
+    modeOfPay: "",
+    doj: slip.dateOfJoining || "",
+    emailId: isPlaceholderEmployeeEmail(slip.emailId) ? "" : String(slip.emailId).trim(),
+    emiratesId: "",
+    unifiedId: "",
+});
 
 const DownloadIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -551,6 +587,15 @@ function SalarySlipTable({ userRole }) {
 
     const handleDownload = async (slip) => {
         try {
+            // Employee information for this slip only, from the employee record
+            // the slip belongs to.
+            let slipEmployeeDetails = null;
+            try {
+                slipEmployeeDetails = await salarySlipService.getPayslipEmployeeDetails(slip._id);
+            } catch (detailsError) {
+                console.error('Payslip employee details not loaded:', detailsError);
+            }
+
             const { jsPDF } = await loadJsPdf();
             const doc = new jsPDF();
             const pageWidth = doc.internal.pageSize.getWidth();
@@ -662,35 +707,59 @@ function SalarySlipTable({ userRole }) {
             doc.setTextColor(51, 65, 85);
             doc.text(`For the Month of: ${slip.month} ${slip.year}`, pageWidth / 2, currentY, { align: "center" });
 
-            // Employee Info Block
+            // Employee Info Block — values belong to the employee this slip was
+            // generated for, resolved on the server from that employee record.
             currentY += 12;
+            const employeeDetails = slipEmployeeDetails || payslipEmployeeFallback(slip);
+
+            const infoRowHeight = 5.4;
+            const infoBoxHeight = PAYSLIP_EMPLOYEE_ROWS.length * infoRowHeight + 3;
+            const photoStripWidth = 24; // right-hand strip reserved for the profile photo
+
             doc.setDrawColor(203, 213, 225);
             doc.setLineWidth(0.3);
             doc.setFillColor(248, 250, 252);
-            doc.rect(margin, currentY, pageWidth - margin * 2, 18, 'FD'); // Fill and border, compacted height
+            doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, 'FD');
+
+            const infoBoxTop = currentY;
+            const fieldsWidth = pageWidth - margin * 2 - photoStripWidth;
+            const columnWidth = fieldsWidth / 2;
+            const labelOffset = 32; // value column starts this far after the label
+
+            // Keep long values (IBAN, email) inside their cell without hiding data.
+            const drawFittedValue = (value, x, maxWidth, baseline) => {
+                doc.setFont("helvetica", "normal");
+                let size = 8;
+                doc.setFontSize(size);
+                while (size > 6 && doc.getTextWidth(value) > maxWidth) {
+                    size -= 0.5;
+                    doc.setFontSize(size);
+                }
+                doc.text(value, x, baseline);
+                doc.setFontSize(8);
+            };
+
+            doc.setTextColor(15, 23, 42);
+            PAYSLIP_EMPLOYEE_ROWS.forEach((row, rowIndex) => {
+                const baseline = infoBoxTop + 5 + rowIndex * infoRowHeight;
+                row.forEach(([label, key], columnIndex) => {
+                    const columnStart = margin + 4 + columnIndex * columnWidth;
+                    const valueX = columnStart + labelOffset;
+                    const columnEnd = columnIndex === 0
+                        ? margin + 4 + columnWidth
+                        : margin + 4 + fieldsWidth;
+
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(8);
+                    doc.text(`${label}:`, columnStart, baseline);
+
+                    const value = String(employeeDetails[key] ?? '').trim() || 'N/A';
+                    drawFittedValue(value, valueX, columnEnd - valueX, baseline);
+                });
+            });
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(10);
-            doc.setTextColor(15, 23, 42);
-            
-            // Row 1: Employee Name (left), Email ID (right)
-            doc.text("Employee Name:", margin + 5, currentY + 7);
-            doc.setFont("helvetica", "normal");
-            doc.text(slip.employeeName || 'N/A', margin + 35, currentY + 7);
-
-            doc.setFont("helvetica", "bold");
-            doc.text("Email ID:", pageWidth / 2, currentY + 7);
-            doc.setFont("helvetica", "normal");
-            const displayEmail = (slip.emailId && !slip.emailId.includes('import.hrms.placeholder')) 
-                ? slip.emailId 
-                : '-';
-            doc.text(displayEmail, pageWidth / 2 + 18, currentY + 7);
-
-            // Row 2: Designation (left)
-            doc.setFont("helvetica", "bold");
-            doc.text("Designation:", margin + 5, currentY + 14);
-            doc.setFont("helvetica", "normal");
-            doc.text(slip.designation || 'N/A', margin + 35, currentY + 14);
 
             // Fetch and embed profile photo if available (optional enhancement)
             const photoSize = 14; 
@@ -731,7 +800,7 @@ function SalarySlipTable({ userRole }) {
             }
 
             // Earnings & Deductions Tables
-            currentY += 32;
+            currentY = infoBoxTop + infoBoxHeight + 6;
             const halfWidth = (pageWidth - margin * 2) / 2;
 
             // Table Headers
@@ -835,8 +904,8 @@ function SalarySlipTable({ userRole }) {
             doc.text("Net Payable:", margin + halfWidth + 5, currentY + 8);
             doc.text(`AED ${netSalary.toFixed(2)}`, pageWidth - margin - 5, currentY + 8, { align: 'right' });
 
-            // Signatures Section
-            currentY += 45;
+            // Signatures Section (gap absorbs the taller employee information block)
+            currentY += 30;
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
             doc.setTextColor(71, 85, 105);

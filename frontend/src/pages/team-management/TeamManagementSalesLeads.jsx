@@ -35,14 +35,14 @@ import { canUpdateVacationReturn } from "../../utils/permissions";
 import {
   employeeVacationStatus,
   formatVacationStatus,
-  VACATION_STATUS,
   VACATION_STATUS_EDIT_OPTIONS,
 } from "../../utils/vacationStatusDisplay";
 import {
   applyVacationStatusChange,
-  buildVacationDatePrompt,
-  toDateInputValue,
+  buildStatusChangePrompt,
+  datesFromPrompt,
 } from "../../utils/vacationStatusUpdate";
+import VacationDatePromptModal from "../../components/team-management-components/VacationDatePromptModal";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -255,33 +255,10 @@ function TeamManagementSalesLeads() {
 
   const canEditVacationStatus = canUpdateVacationReturn(userRole);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [datePrompt, setDatePrompt] = useState(null);
 
-  /**
-   * Status edit on the employee page. Goes through the shared update mechanism so
-   * Annual Vacations, the Team Management list and the dashboard counts all read
-   * the same persisted value. Dates already on the record are re-sent unchanged.
-   */
-  const handleVacationStatusSelect = async (newStatus) => {
-    const current = employeeVacationStatus(employee);
-    if (!newStatus || newStatus === current || statusSaving) return;
-
-    const dates = {};
-    const prompt = buildVacationDatePrompt(employee, newStatus);
-    if (prompt) {
-      const toIso = (value) => (value ? new Date(value).toISOString() : null);
-      const today = toDateInputValue(new Date());
-      const isReturn = newStatus === VACATION_STATUS.RETURNED_BACK;
-      const primary = prompt.dateValue || (isReturn ? today : "");
-      if (primary) dates[prompt.fieldKey] = toIso(primary);
-      if (prompt.secondaryFieldKey) {
-        const secondary = prompt.secondaryDateValue || (isReturn ? primary : "");
-        if (secondary) dates[prompt.secondaryFieldKey] = toIso(secondary);
-      }
-      if (prompt.tertiaryFieldKey && prompt.tertiaryDateValue) {
-        dates[prompt.tertiaryFieldKey] = toIso(prompt.tertiaryDateValue);
-      }
-    }
-
+  /** Persist a status (+ its dates) through the one shared update mechanism. */
+  const saveVacationStatus = async (newStatus, dates = {}) => {
     setStatusSaving(true);
     try {
       const updated = await applyVacationStatusChange({
@@ -298,12 +275,38 @@ function TeamManagementSalesLeads() {
         setEmployee((prev) => ({ ...(prev || {}), ...updated }));
       }
       showToast("Vacation status updated successfully.", "success");
+      return true;
     } catch (err) {
       console.error("Failed to update vacation status:", err);
       showToast(err?.message || "Failed to update vacation status.", "error");
+      return false;
     } finally {
       setStatusSaving(false);
     }
+  };
+
+  /**
+   * Status edit on the employee page. Opens the same date-selection dialog as the
+   * Team Management status column, so Employee Master and the list share one flow.
+   */
+  const handleVacationStatusSelect = (newStatus) => {
+    const current = employeeVacationStatus(employee);
+    if (!newStatus || newStatus === current || statusSaving) return;
+
+    const prompt = buildStatusChangePrompt(employee, newStatus);
+    if (prompt) setDatePrompt(prompt);
+    else saveVacationStatus(newStatus);
+  };
+
+  const handleDatePromptConfirm = async () => {
+    if (!datePrompt || statusSaving) return;
+    const { dates, error } = datesFromPrompt(datePrompt);
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+    const saved = await saveVacationStatus(datePrompt.newStatus, dates);
+    if (saved) setDatePrompt(null);
   };
 
   const fetchRemarks = React.useCallback(async () => {
@@ -1402,6 +1405,17 @@ function TeamManagementSalesLeads() {
         onClose={handleEditEmployeeClose}
         onSubmit={handleEditEmployeeSubmit}
         employee={employee}
+      />
+
+      {/* Same vacation date selection the Team Management status column uses */}
+      <VacationDatePromptModal
+        prompt={datePrompt}
+        saving={statusSaving}
+        onChange={(patch) => setDatePrompt((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onCancel={() => {
+          if (!statusSaving) setDatePrompt(null);
+        }}
+        onConfirm={handleDatePromptConfirm}
       />
 
       <AddIncrementModal
