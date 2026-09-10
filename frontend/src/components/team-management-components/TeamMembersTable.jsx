@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+﻿import React, { useState, useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Card,
@@ -35,7 +35,6 @@ import styles from "./TeamMembersTable.module.css";
 import { buildImageUrl, getApiBaseUrl } from "../../config/config";
 import { io as ioClient } from "socket.io-client";
 import { useToast } from "../../context/ToastContext";
-import DateInput from "../DateInput";
 import { ACTIVE_OPTIONS } from "../../constants/employeeDropdownOptions";
 import { canUpdateVacationReturn } from "../../utils/permissions";
 import {
@@ -47,10 +46,19 @@ import {
   formatEmployeeStatusDisplay,
   employeeStatusTagColor,
   isWorkingEmployeeStatus,
-  isNonWorkingEmployeeStatus,
-  EMPLOYEE_STATUS_VALUES,
   apiStatusForEmployeeCategory,
 } from "../../utils/employeeStatusDisplay";
+import {
+  isNoticeOrProvisionStatus,
+  buildEmployeeStatusPrompt,
+  validateEmployeeStatusPrompt,
+  datesFromEmployeeStatusPrompt,
+  applyEmployeeStatusChange,
+  applyEmployeeStatusReset,
+  employeeStatusChangeSuccessMessage,
+  employeeStatusResetSuccessMessage,
+} from "../../utils/employeeStatusUpdate";
+import EmployeeStatusDatePromptModal from "./EmployeeStatusDatePromptModal";
 import { HR_METRICS_LIST_PARAM_KEYS } from "../../utils/hrMetricsFilters";
 
 import { employeeEmailDisplayState } from "../../utils/employeeEmailDisplay";
@@ -63,7 +71,6 @@ import {
   applyVacationStatusChange,
   buildStatusChangePrompt,
   datesFromPrompt,
-  toDateInputValue,
 } from "../../utils/vacationStatusUpdate";
 import VacationDatePromptModal from "./VacationDatePromptModal";
 
@@ -86,18 +93,6 @@ function isRowSelected(selectedIds, member) {
 const vacationTagColor = vacationStatusTagColor;
 
 const vacationLabel = formatVacationStatus;
-
-const isNoticeOrProvisionStatus = (status) =>
-  status === "Notice Period" || status === "Provision Period";
-
-const getPeriodRestoreStatus = (employee) => {
-  const current = employee?.employeeStatus;
-  const prev = String(employee?.previousEmployeeStatus || "").trim();
-  if (prev && EMPLOYEE_STATUS_VALUES.includes(prev) && prev !== current) {
-    return prev;
-  }
-  return "Active";
-};
 
 const formatVacationDates = (record, vs) => {
   const fmt = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : null);
@@ -373,7 +368,7 @@ function TeamMembersTable() {
       const first = res?.errors?.[0];
       const detail = first ? ` Row ${first.row}: ${first.message}` : "";
       showToast(
-        `Imported ${created} employee(s). ${failed} row(s) failed.${detail} Open “Bulk import” again to read the full list.`,
+        `Imported ${created} employee(s). ${failed} row(s) failed.${detail} Open â€œBulk importâ€ again to read the full list.`,
         "warning",
         14000
       );
@@ -477,107 +472,31 @@ function TeamMembersTable() {
   };
 
   const handleEmployeeStatusChange = (employeeItem, newStatus, options = {}) => {
-    const isEdit = Boolean(options.isEdit);
-    if (newStatus === "Notice Period") {
-      setStatusPrompt({
-        employeeItem,
-        newStatus,
-        mode: "notice",
-        isEdit,
-        noticePeriodStartDate: toDateInputValue(employeeItem.noticePeriodStartDate),
-        noticePeriodEndDate: toDateInputValue(
-          employeeItem.noticePeriodEndDate || employeeItem.lastWorkingDay
-        ),
-        lastWorkingDay: "",
-        provisionPeriodStartDate: "",
-        provisionPeriodEndDate: "",
-      });
+    const prompt = buildEmployeeStatusPrompt(employeeItem, newStatus, options);
+    if (prompt) {
+      setStatusPrompt(prompt);
       return;
     }
-    if (newStatus === "Provision Period") {
-      setStatusPrompt({
-        employeeItem,
-        newStatus,
-        mode: "provision",
-        isEdit,
-        provisionPeriodStartDate: toDateInputValue(employeeItem.provisionPeriodStartDate),
-        provisionPeriodEndDate: toDateInputValue(employeeItem.provisionPeriodEndDate),
-        lastWorkingDay: "",
-        noticePeriodStartDate: "",
-        noticePeriodEndDate: "",
-      });
-      return;
-    }
-    if (isNonWorkingEmployeeStatus(newStatus)) {
-      setStatusPrompt({
-        employeeItem,
-        newStatus,
-        mode: "exit",
-        lastWorkingDay: toDateInputValue(employeeItem.lastWorkingDay),
-        noticePeriodStartDate: "",
-        noticePeriodEndDate: "",
-        provisionPeriodStartDate: "",
-        provisionPeriodEndDate: "",
-      });
-      return;
-    }
-    confirmEmployeeStatusChange(employeeItem, newStatus, {});
+    confirmEmployeeStatusChange(employeeItem, newStatus, {}, options);
   };
 
   const confirmEmployeeStatusChange = async (employeeItem, newStatus, dates = {}, options = {}) => {
-    const empId = employeeItem._id || employeeItem.id;
     const isEdit = Boolean(options.isEdit);
     setStatusPromptSaving(true);
     try {
-      const payload = { employeeStatus: newStatus };
-      const currentStatus = employeeItem.employeeStatus || "Active";
-
-      if (
-        isNoticeOrProvisionStatus(newStatus) &&
-        currentStatus !== newStatus
-      ) {
-        payload.previousEmployeeStatus = currentStatus;
-      }
-
-      if (newStatus === "Notice Period") {
-        if (dates.noticePeriodStartDate) {
-          payload.noticePeriodStartDate = new Date(dates.noticePeriodStartDate).toISOString();
-        }
-        if (dates.noticePeriodEndDate) {
-          payload.noticePeriodEndDate = new Date(dates.noticePeriodEndDate).toISOString();
-          payload.lastWorkingDay = new Date(dates.noticePeriodEndDate).toISOString();
-        }
-      } else if (newStatus === "Provision Period") {
-        if (dates.provisionPeriodStartDate) {
-          payload.provisionPeriodStartDate = new Date(dates.provisionPeriodStartDate).toISOString();
-        }
-        if (dates.provisionPeriodEndDate) {
-          payload.provisionPeriodEndDate = new Date(dates.provisionPeriodEndDate).toISOString();
-        }
-      } else if (isNonWorkingEmployeeStatus(newStatus)) {
-        payload.lastWorkingDay = dates.lastWorkingDay
-          ? new Date(dates.lastWorkingDay).toISOString()
-          : null;
-        payload.vacationStatus = "Onsite";
-        payload.attendance = "Onsite";
-      }
-
-      const updated = await employeeService.updateEmployee(empId, payload);
-      setEmployees(prev =>
-        prev.map(e =>
+      const { payload, updated, empId } = await applyEmployeeStatusChange({
+        employeeItem,
+        newStatus,
+        dates,
+      });
+      setEmployees((prev) =>
+        prev.map((e) =>
           (e._id === empId || e.id === empId)
             ? { ...e, ...payload, ...(updated && typeof updated === "object" ? updated : {}) }
             : e
         )
       );
-      employeeService.invalidateCache?.();
-      if (isEdit && newStatus === "Notice Period") {
-        showToast("Notice Period updated successfully.", "success");
-      } else if (isEdit && newStatus === "Provision Period") {
-        showToast("Provision Period updated successfully.", "success");
-      } else {
-        showToast("Employee status updated successfully.", "success");
-      }
+      showToast(employeeStatusChangeSuccessMessage(newStatus, isEdit), "success");
       setStatusPrompt(null);
     } catch (err) {
       console.error("Failed to update employee status:", err);
@@ -589,33 +508,15 @@ function TeamMembersTable() {
 
   const handleStatusPromptConfirm = async () => {
     if (!statusPrompt || statusPromptSaving) return;
-    const mode = statusPrompt.mode || "exit";
-    if (mode === "notice") {
-      const start = statusPrompt.noticePeriodStartDate;
-      const end = statusPrompt.noticePeriodEndDate;
-      if (start && end && start > end) {
-        showToast("Start date cannot be after the end date.", "error");
-        return;
-      }
-    }
-    if (mode === "provision") {
-      const start = statusPrompt.provisionPeriodStartDate;
-      const end = statusPrompt.provisionPeriodEndDate;
-      if (start && end && start > end) {
-        showToast("Start date cannot be after the end date.", "error");
-        return;
-      }
+    const error = validateEmployeeStatusPrompt(statusPrompt);
+    if (error) {
+      showToast(error, "error");
+      return;
     }
     await confirmEmployeeStatusChange(
       statusPrompt.employeeItem,
       statusPrompt.newStatus,
-      {
-        lastWorkingDay: statusPrompt.lastWorkingDay,
-        noticePeriodStartDate: statusPrompt.noticePeriodStartDate,
-        noticePeriodEndDate: statusPrompt.noticePeriodEndDate,
-        provisionPeriodStartDate: statusPrompt.provisionPeriodStartDate,
-        provisionPeriodEndDate: statusPrompt.provisionPeriodEndDate,
-      },
+      datesFromEmployeeStatusPrompt(statusPrompt),
       { isEdit: Boolean(statusPrompt.isEdit) }
     );
   };
@@ -637,40 +538,17 @@ function TeamMembersTable() {
 
   const handlePeriodResetConfirm = async () => {
     if (!periodResetTarget || periodResetSaving) return;
-    const employeeItem = periodResetTarget;
-    const empId = employeeItem._id || employeeItem.id;
-    const currentStatus = employeeItem.employeeStatus;
-    const restoredStatus = getPeriodRestoreStatus(employeeItem);
-    const payload = {
-      employeeStatus: restoredStatus,
-      previousEmployeeStatus: null,
-    };
-    if (currentStatus === "Notice Period") {
-      payload.noticePeriodStartDate = null;
-      payload.noticePeriodEndDate = null;
-      payload.lastWorkingDay = null;
-    } else if (currentStatus === "Provision Period") {
-      payload.provisionPeriodStartDate = null;
-      payload.provisionPeriodEndDate = null;
-    }
-
     setPeriodResetSaving(true);
     try {
-      const updated = await employeeService.updateEmployee(empId, payload);
-      setEmployees(prev =>
-        prev.map(e =>
+      const { payload, updated, empId, currentStatus } = await applyEmployeeStatusReset(periodResetTarget);
+      setEmployees((prev) =>
+        prev.map((e) =>
           (e._id === empId || e.id === empId)
             ? { ...e, ...payload, ...(updated && typeof updated === "object" ? updated : {}) }
             : e
         )
       );
-      employeeService.invalidateCache?.();
-      showToast(
-        currentStatus === "Provision Period"
-          ? "Provision Period reset successfully."
-          : "Notice Period reset successfully.",
-        "success"
-      );
+      showToast(employeeStatusResetSuccessMessage(currentStatus), "success");
       setPeriodResetTarget(null);
       setStatusPrompt(null);
     } catch (err) {
@@ -811,7 +689,7 @@ function TeamMembersTable() {
         width: 200,
         render: (_, record) => {
           const isActive = isWorkingEmployeeStatus(record.employeeStatus);
-          if (!isActive) return <Typography.Text type="secondary">—</Typography.Text>;
+          if (!isActive) return <Typography.Text type="secondary">â€”</Typography.Text>;
 
           const vs = record.vacationStatus || "Onsite";
           const dateLines = formatVacationDates(record, vs);
@@ -856,7 +734,7 @@ function TeamMembersTable() {
         key: "emailId",
         sorter: (a, b) => (a.emailId || "").localeCompare(b.emailId || ""),
         render: (email) => {
-          const emailDisplay = employeeEmailDisplayState(email, "—");
+          const emailDisplay = employeeEmailDisplayState(email, "â€”");
           return (
             <Typography.Text type={emailDisplay.isEmpty ? "secondary" : undefined}>
               {emailDisplay.text}
@@ -871,7 +749,7 @@ function TeamMembersTable() {
         width: 140,
         render: (mobile) => (
           <Typography.Text type={mobile ? undefined : "secondary"}>
-            {mobile || "—"}
+            {mobile || "â€”"}
           </Typography.Text>
         ),
       },
@@ -1130,326 +1008,15 @@ function TeamMembersTable() {
       />
 
       {/* Status date prompt modal (notice / provision / exit) */}
-      {statusPrompt && (() => {
-        const nameInitials = statusPrompt.employeeItem.employeeName
-          ? statusPrompt.employeeItem.employeeName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-          : "EE";
-        const mode = statusPrompt.mode || "exit";
-        const isEdit = Boolean(statusPrompt.isEdit);
-        const statusLabel =
-          ACTIVE_OPTIONS.find((o) => o.value === statusPrompt.newStatus)?.label ||
-          statusPrompt.newStatus;
-        const title =
-          mode === "notice"
-            ? (isEdit ? "Edit Notice Period" : "Set Notice Period")
-            : mode === "provision"
-              ? (isEdit ? "Edit Provision Period" : "Set Provision Period")
-              : "Update Employee Status";
-        const description =
-          mode === "notice"
-            ? <>Please {isEdit ? "update" : "set"} notice period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
-            : mode === "provision"
-              ? <>Please {isEdit ? "update" : "set"} provision period dates for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>
-              : <>Please select the last working day for <strong style={{ color: "#334155" }}>{statusPrompt.employeeItem.employeeName}</strong>.</>;
-        const dateInputStyle = {
-          border: "2px solid #e2e8f0",
-          borderRadius: "12px",
-          padding: "12px 16px",
-          fontSize: "15px",
-          color: "#0f172a",
-          fontWeight: "600",
-          outline: "none",
-          width: "100%",
-          boxSizing: "border-box",
-          transition: "all 0.2s ease",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.01)",
-          cursor: "pointer",
-        };
-
-        return (
-          <div
-            style={{
-              position: "fixed", inset: 0, zIndex: 100001,
-              background: "rgba(15, 23, 42, 0.45)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "20px"
-            }}
-            onClick={handleStatusPromptCancel}
-          >
-            <style>{`
-              @keyframes statusPromptFadeIn {
-                from { opacity: 0; transform: scale(0.95) translateY(10px); }
-                to { opacity: 1; transform: scale(1) translateY(0); }
-              }
-              @keyframes statusPromptSpin {
-                to { transform: rotate(360deg); }
-              }
-              .status-prompt-date:focus {
-                border-color: #ef4444 !important;
-                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15) !important;
-              }
-            `}</style>
-            <div
-              style={{
-                background: "#fff",
-                borderRadius: "24px",
-                padding: "36px",
-                width: "440px",
-                maxWidth: "100%",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 40px rgba(239, 68, 68, 0.05)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "24px",
-                position: "relative",
-                overflow: "hidden",
-                border: "1px solid #f1f5f9",
-                animation: "statusPromptFadeIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
-                textAlign: "left"
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div style={{
-                position: "absolute",
-                top: 0, left: 0, right: 0,
-                height: "6px",
-                background: "linear-gradient(90deg, #ef4444, #f97316, #eab308)"
-              }} />
-
-              <button
-                onClick={handleStatusPromptCancel}
-                disabled={statusPromptSaving}
-                style={{
-                  position: "absolute",
-                  top: "20px", right: "20px",
-                  background: "#f1f5f9", border: "none",
-                  width: "32px", height: "32px", borderRadius: "50%",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "18px", color: "#64748b",
-                  cursor: statusPromptSaving ? "not-allowed" : "pointer",
-                  opacity: statusPromptSaving ? 0.5 : 1,
-                  transition: "all 0.2s ease",
-                  lineHeight: 1
-                }}
-                onMouseEnter={e => { if (!statusPromptSaving) { e.target.style.background = "#e2e8f0"; e.target.style.color = "#0f172a"; } }}
-                onMouseLeave={e => { if (!statusPromptSaving) { e.target.style.background = "#f1f5f9"; e.target.style.color = "#64748b"; } }}
-              >&times;</button>
-
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "8px", marginTop: "10px" }}>
-                <div style={{
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg, #fee2e2, #fecaca)",
-                  color: "#dc2626",
-                  fontSize: "22px",
-                  fontWeight: "700",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 8px 16px rgba(220, 38, 38, 0.12)"
-                }}>
-                  {nameInitials}
-                </div>
-                <h3 style={{ margin: "10px 0 2px", fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
-                  {title}
-                </h3>
-                <p style={{ margin: 0, fontSize: "14px", color: "#64748b", lineHeight: "1.5" }}>
-                  {description}
-                </p>
-              </div>
-
-              <div style={{
-                background: "#fef2f2",
-                borderRadius: "16px",
-                padding: "14px 18px",
-                border: "1px solid #fecaca",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px"
-              }}>
-                <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Changing Status to:
-                </span>
-                <div style={{ display: "inline-flex", alignSelf: "flex-start" }}>
-                  <span style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "6px 14px",
-                    borderRadius: "999px",
-                    background: "linear-gradient(135deg, #fee2e2, #fecaca)",
-                    color: "#991b1b",
-                    fontSize: "13px",
-                    fontWeight: "800",
-                    boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
-                    border: "1px solid #fca5a525"
-                  }}>
-                    <span style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: "#ef4444",
-                      boxShadow: "0 0 0 2px #ef444425"
-                    }} />
-                    {statusLabel}
-                  </span>
-                </div>
-              </div>
-
-              {mode === "notice" && (
-                <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Notice Period Start Date
-                    </label>
-                    <DateInput
-                      value={statusPrompt.noticePeriodStartDate || ""}
-                      className="status-prompt-date"
-                      onChange={e => setStatusPrompt(prev => ({ ...prev, noticePeriodStartDate: e.target.value }))}
-                      style={dateInputStyle}
-                    />
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Notice Period End Date / Last Working Day
-                    </label>
-                    <DateInput
-                      value={statusPrompt.noticePeriodEndDate || ""}
-                      className="status-prompt-date"
-                      onChange={e => setStatusPrompt(prev => ({ ...prev, noticePeriodEndDate: e.target.value }))}
-                      style={dateInputStyle}
-                    />
-                  </div>
-                </>
-              )}
-
-              {mode === "provision" && (
-                <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Provision Period Start Date
-                    </label>
-                    <DateInput
-                      value={statusPrompt.provisionPeriodStartDate || ""}
-                      className="status-prompt-date"
-                      onChange={e => setStatusPrompt(prev => ({ ...prev, provisionPeriodStartDate: e.target.value }))}
-                      style={dateInputStyle}
-                    />
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Provision Period End Date
-                    </label>
-                    <DateInput
-                      value={statusPrompt.provisionPeriodEndDate || ""}
-                      className="status-prompt-date"
-                      onChange={e => setStatusPrompt(prev => ({ ...prev, provisionPeriodEndDate: e.target.value }))}
-                      style={dateInputStyle}
-                    />
-                  </div>
-                </>
-              )}
-
-              {mode === "exit" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <label style={{ fontSize: "13px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Last Working Day
-                  </label>
-                  <DateInput
-                    value={statusPrompt.lastWorkingDay || ""}
-                    className="status-prompt-date"
-                    onChange={e => setStatusPrompt(prev => ({ ...prev, lastWorkingDay: e.target.value }))}
-                    style={dateInputStyle}
-                  />
-                </div>
-              )}
-
-              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px", flexWrap: "wrap" }}>
-                <button
-                  onClick={handleStatusPromptCancel}
-                  disabled={statusPromptSaving || periodResetSaving}
-                  style={{
-                    padding: "12px 24px",
-                    borderRadius: "12px",
-                    border: "2px solid #e2e8f0",
-                    background: "#fff",
-                    color: "#64748b",
-                    fontWeight: "700",
-                    fontSize: "14px",
-                    cursor: (statusPromptSaving || periodResetSaving) ? "not-allowed" : "pointer",
-                    opacity: (statusPromptSaving || periodResetSaving) ? 0.6 : 1,
-                    transition: "all 0.2s ease"
-                  }}
-                  onMouseEnter={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#f8fafc"; e.target.style.borderColor = "#cbd5e1"; e.target.style.color = "#475569"; } }}
-                  onMouseLeave={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#e2e8f0"; e.target.style.color = "#64748b"; } }}
-                >
-                  Cancel
-                </button>
-                {isEdit && (mode === "notice" || mode === "provision") && (
-                  <button
-                    onClick={() => requestPeriodReset(statusPrompt.employeeItem)}
-                    disabled={statusPromptSaving || periodResetSaving}
-                    style={{
-                      padding: "12px 24px",
-                      borderRadius: "12px",
-                      border: "2px solid #fecaca",
-                      background: "#fff",
-                      color: "#dc2626",
-                      fontWeight: "700",
-                      fontSize: "14px",
-                      cursor: (statusPromptSaving || periodResetSaving) ? "not-allowed" : "pointer",
-                      opacity: (statusPromptSaving || periodResetSaving) ? 0.6 : 1,
-                      transition: "all 0.2s ease"
-                    }}
-                    onMouseEnter={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#fef2f2"; e.target.style.borderColor = "#fca5a5"; } }}
-                    onMouseLeave={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.background = "#fff"; e.target.style.borderColor = "#fecaca"; } }}
-                  >
-                    Reset
-                  </button>
-                )}
-                <button
-                  onClick={handleStatusPromptConfirm}
-                  disabled={statusPromptSaving || periodResetSaving}
-                  style={{
-                    padding: "12px 28px",
-                    borderRadius: "12px",
-                    border: "none",
-                    background: (statusPromptSaving || periodResetSaving) ? "#94a3b8" : "linear-gradient(135deg, #dc2626, #ef4444)",
-                    color: "#fff",
-                    fontWeight: "700",
-                    fontSize: "14px",
-                    cursor: (statusPromptSaving || periodResetSaving) ? "not-allowed" : "pointer",
-                    boxShadow: (statusPromptSaving || periodResetSaving) ? "none" : "0 4px 12px rgba(220, 38, 38, 0.25)",
-                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    minWidth: "120px"
-                  }}
-                  onMouseEnter={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 16px rgba(220, 38, 38, 0.35)"; } }}
-                  onMouseLeave={e => { if (!statusPromptSaving && !periodResetSaving) { e.target.style.transform = "none"; e.target.style.boxShadow = "0 4px 12px rgba(220, 38, 38, 0.25)"; } }}
-                >
-                  {statusPromptSaving && (
-                    <span
-                      style={{
-                        width: "14px",
-                        height: "14px",
-                        border: "2px solid rgba(255,255,255,0.35)",
-                        borderTopColor: "#fff",
-                        borderRadius: "50%",
-                        display: "inline-block",
-                        animation: "statusPromptSpin 0.7s linear infinite"
-                      }}
-                    />
-                  )}
-                  {statusPromptSaving ? "Saving..." : (isEdit ? "Save Changes" : "Confirm")}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <EmployeeStatusDatePromptModal
+        prompt={statusPrompt}
+        saving={statusPromptSaving}
+        periodResetSaving={periodResetSaving}
+        onChange={(patch) => setStatusPrompt((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onCancel={handleStatusPromptCancel}
+        onConfirm={handleStatusPromptConfirm}
+        onReset={() => requestPeriodReset(statusPrompt.employeeItem)}
+      />
 
     </Card>
   );

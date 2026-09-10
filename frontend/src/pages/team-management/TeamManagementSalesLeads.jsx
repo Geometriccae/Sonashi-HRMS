@@ -30,8 +30,20 @@ import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
+import { ACTIVE_OPTIONS } from "../../constants/employeeDropdownOptions";
 import { readPersistedPath } from "../../hooks/usePersistedListPage";
-import { canUpdateVacationReturn } from "../../utils/permissions";
+import { canUpdateVacationReturn, canEdit } from "../../utils/permissions";
+import {
+  isNoticeOrProvisionStatus,
+  buildEmployeeStatusPrompt,
+  validateEmployeeStatusPrompt,
+  datesFromEmployeeStatusPrompt,
+  applyEmployeeStatusChange,
+  applyEmployeeStatusReset,
+  employeeStatusChangeSuccessMessage,
+  employeeStatusResetSuccessMessage,
+} from "../../utils/employeeStatusUpdate";
+import EmployeeStatusDatePromptModal from "../../components/team-management-components/EmployeeStatusDatePromptModal";
 import {
   employeeVacationStatus,
   formatVacationStatus,
@@ -254,8 +266,13 @@ function TeamManagementSalesLeads() {
   };
 
   const canEditVacationStatus = canUpdateVacationReturn(userRole);
+  const canEditEmployeeStatusRole = canEdit(userRole);
   const [statusSaving, setStatusSaving] = useState(false);
   const [datePrompt, setDatePrompt] = useState(null);
+  const [employeeStatusPrompt, setEmployeeStatusPrompt] = useState(null);
+  const [employeeStatusSaving, setEmployeeStatusSaving] = useState(false);
+  const [periodResetTarget, setPeriodResetTarget] = useState(null);
+  const [periodResetSaving, setPeriodResetSaving] = useState(false);
 
   /** Persist a status (+ its dates) through the one shared update mechanism. */
   const saveVacationStatus = async (newStatus, dates = {}) => {
@@ -296,6 +313,91 @@ function TeamManagementSalesLeads() {
     const prompt = buildStatusChangePrompt(employee, newStatus);
     if (prompt) setDatePrompt(prompt);
     else saveVacationStatus(newStatus);
+  };
+
+  const handleEmployeeStatusSelect = (newStatus, options = {}) => {
+    if (!employee || !newStatus || employeeStatusSaving || periodResetSaving) return;
+    const current = employee.employeeStatus || "Active";
+    const isEdit = Boolean(options.isEdit);
+    if (!isEdit && newStatus === current) return;
+
+    const prompt = buildEmployeeStatusPrompt(employee, newStatus, options);
+    if (prompt) {
+      setEmployeeStatusPrompt(prompt);
+      return;
+    }
+    confirmEmployeeStatusChange(employee, newStatus, {}, options);
+  };
+
+  const confirmEmployeeStatusChange = async (employeeItem, newStatus, dates = {}, options = {}) => {
+    const isEdit = Boolean(options.isEdit);
+    setEmployeeStatusSaving(true);
+    try {
+      const { payload, updated } = await applyEmployeeStatusChange({
+        employeeItem,
+        newStatus,
+        dates,
+      });
+      const empId = employeeItem?._id || employeeId;
+      const fresh = await employeeService.getEmployee(empId).catch(() => null);
+      if (fresh) setEmployee(fresh);
+      else if (updated && typeof updated === "object") {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload, ...updated }));
+      } else {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload }));
+      }
+      showToast(employeeStatusChangeSuccessMessage(newStatus, isEdit), "success");
+      setEmployeeStatusPrompt(null);
+    } catch (err) {
+      console.error("Failed to update employee status:", err);
+      showToast(err?.message || "Failed to update employee status.", "error");
+    } finally {
+      setEmployeeStatusSaving(false);
+    }
+  };
+
+  const handleEmployeeStatusPromptConfirm = async () => {
+    if (!employeeStatusPrompt || employeeStatusSaving) return;
+    const error = validateEmployeeStatusPrompt(employeeStatusPrompt);
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+    await confirmEmployeeStatusChange(
+      employeeStatusPrompt.employeeItem,
+      employeeStatusPrompt.newStatus,
+      datesFromEmployeeStatusPrompt(employeeStatusPrompt),
+      { isEdit: Boolean(employeeStatusPrompt.isEdit) }
+    );
+  };
+
+  const requestPeriodReset = (employeeItem = employee) => {
+    if (!employeeItem || !isNoticeOrProvisionStatus(employeeItem.employeeStatus)) return;
+    setPeriodResetTarget(employeeItem);
+  };
+
+  const handlePeriodResetConfirm = async () => {
+    if (!periodResetTarget || periodResetSaving) return;
+    setPeriodResetSaving(true);
+    try {
+      const { payload, updated, currentStatus } = await applyEmployeeStatusReset(periodResetTarget);
+      const empId = periodResetTarget?._id || employeeId;
+      const fresh = await employeeService.getEmployee(empId).catch(() => null);
+      if (fresh) setEmployee(fresh);
+      else if (updated && typeof updated === "object") {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload, ...updated }));
+      } else {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload }));
+      }
+      showToast(employeeStatusResetSuccessMessage(currentStatus), "success");
+      setPeriodResetTarget(null);
+      setEmployeeStatusPrompt(null);
+    } catch (err) {
+      console.error("Failed to reset employee status:", err);
+      showToast(err?.message || "Failed to reset status.", "error");
+    } finally {
+      setPeriodResetSaving(false);
+    }
   };
 
   const handleDatePromptConfirm = async () => {
@@ -792,9 +894,81 @@ function TeamManagementSalesLeads() {
                           : employee?.employeeName || "Employee Name"}
                       </span>
                     </div>
+                    <div className={styles.headerStatusRow}>
+                    {(() => {
+                      const currentStatus = employee?.employeeStatus || "Active";
+                      const canEditEmployeeStatus =
+                        canEditEmployeeStatusRole &&
+                        !loading &&
+                        !!employee;
+                      const statusOptions = ACTIVE_OPTIONS.filter((opt) => opt.value);
+                      const options = statusOptions.some((opt) => opt.value === currentStatus)
+                        ? statusOptions
+                        : [...statusOptions, { value: currentStatus, label: formatEmployeeStatusDisplay(employee) }];
+                      const showPeriodActions =
+                        canEditEmployeeStatus && isNoticeOrProvisionStatus(currentStatus);
+
+                      return (
+                        <div className={styles.headerStatusChip}>
+                          <span className={styles.headerStatusLabel}>Employee Status</span>
+                          <div className={styles.headerStatusControlRow}>
+                            <div className={styles.headerStatusControl}>
+                              <button className={styles.button} type="button">
+                                <span className={styles.text2}>
+                                  {loading ? "..." : employeeStatusSaving ? "Saving..." : formatEmployeeStatusDisplay(employee)}
+                                </span>
+                              </button>
+                              {canEditEmployeeStatus && (
+                                <select
+                                  aria-label="Employee status"
+                                  className={styles.employeeStatusSelect}
+                                  value={currentStatus}
+                                  disabled={employeeStatusSaving || periodResetSaving}
+                                  onChange={(e) => handleEmployeeStatusSelect(e.target.value)}
+                                >
+                                  {options.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            {showPeriodActions && (
+                              <div className={styles.headerStatusActions}>
+                                <button
+                                  type="button"
+                                  className={styles.headerStatusIconBtn}
+                                  title="Edit Status Dates"
+                                  disabled={employeeStatusSaving || periodResetSaving}
+                                  onClick={() => handleEmployeeStatusSelect(currentStatus, { isEdit: true })}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+                                    <path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.headerStatusIconBtn}
+                                  title="Reset Status"
+                                  disabled={employeeStatusSaving || periodResetSaving}
+                                  onClick={() => requestPeriodReset(employee)}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M4 12a8 8 0 1 1 2.3 5.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                    <path d="M4 7v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {(() => {
                       const vs = employeeVacationStatus(employee);
-                      const canEdit =
+                      const canEditVacation =
                         canEditVacationStatus &&
                         !loading &&
                         !!employee &&
@@ -806,37 +980,34 @@ function TeamManagementSalesLeads() {
                         : [...VACATION_STATUS_EDIT_OPTIONS, { value: vs, label: formatVacationStatus(vs) }];
 
                       return (
-                        <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-                          <button className={styles.button} type="button">
-                            <span className={styles.text2}>
-                              {loading ? "..." : statusSaving ? "Saving..." : formatVacationStatus(vs)}
-                            </span>
-                          </button>
-                          {canEdit && (
-                            <select
-                              aria-label="Vacation status"
-                              value={vs}
-                              disabled={statusSaving}
-                              onChange={(e) => handleVacationStatusSelect(e.target.value)}
-                              style={{
-                                position: "absolute",
-                                inset: 0,
-                                width: "100%",
-                                height: "100%",
-                                opacity: 0,
-                                cursor: "pointer",
-                              }}
-                            >
-                              {options.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          )}
+                        <div className={styles.headerStatusChip}>
+                          <span className={styles.headerStatusLabel}>Vacation Status</span>
+                          <div className={styles.headerStatusControl}>
+                            <button className={styles.button} type="button">
+                              <span className={styles.text2}>
+                                {loading ? "..." : statusSaving ? "Saving..." : formatVacationStatus(vs)}
+                              </span>
+                            </button>
+                            {canEditVacation && (
+                              <select
+                                aria-label="Vacation status"
+                                className={styles.employeeStatusSelect}
+                                value={vs}
+                                disabled={statusSaving}
+                                onChange={(e) => handleVacationStatusSelect(e.target.value)}
+                              >
+                                {options.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
                         </div>
                       );
                     })()}
+                    </div>
                   </div>
                 </div>
 
@@ -1407,6 +1578,20 @@ function TeamManagementSalesLeads() {
         employee={employee}
       />
 
+      <DeleteModal
+        isOpen={Boolean(periodResetTarget)}
+        onClose={() => { if (!periodResetSaving) setPeriodResetTarget(null); }}
+        onConfirm={handlePeriodResetConfirm}
+        confirmText="Reset"
+        zIndex={100010}
+        title={periodResetTarget?.employeeStatus === "Provision Period" ? "Reset Provision Period?" : "Reset Notice Period?"}
+        description={
+          periodResetTarget?.employeeStatus === "Provision Period"
+            ? "Are you sure you want to reset the Provision Period for this employee? This will clear the current Provision Period dates and restore the employee's previous status. This action cannot be undone automatically."
+            : "Are you sure you want to reset the Notice Period for this employee? This will clear the current Notice Period dates, clear the Last Working Day, and restore the employee's previous status. This action cannot be undone automatically."
+        }
+      />
+
       {/* Same vacation date selection the Team Management status column uses */}
       <VacationDatePromptModal
         prompt={datePrompt}
@@ -1416,6 +1601,18 @@ function TeamManagementSalesLeads() {
           if (!statusSaving) setDatePrompt(null);
         }}
         onConfirm={handleDatePromptConfirm}
+      />
+
+      <EmployeeStatusDatePromptModal
+        prompt={employeeStatusPrompt}
+        saving={employeeStatusSaving}
+        periodResetSaving={periodResetSaving}
+        onChange={(patch) => setEmployeeStatusPrompt((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onCancel={() => {
+          if (!employeeStatusSaving && !periodResetSaving) setEmployeeStatusPrompt(null);
+        }}
+        onConfirm={handleEmployeeStatusPromptConfirm}
+        onReset={() => requestPeriodReset(employeeStatusPrompt?.employeeItem)}
       />
 
       <AddIncrementModal
