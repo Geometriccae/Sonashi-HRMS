@@ -1201,7 +1201,7 @@ function SalarySlipTable({ userRole }) {
                 </div>
             )}
 
-            <div className={styles.tableWrapper}>
+            <div className={`${styles.tableWrapper} hrms-table-scroll`}>
                 {/* Salary Slips Table */}
                 {((isAdmin && reportType === 'salary') || (!isAdmin && (employeeTab === 'salary'))) && (
                     <table className={styles.table}>

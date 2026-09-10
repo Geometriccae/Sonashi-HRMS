@@ -41,7 +41,7 @@ function DataTable({ data, onDelete, onOpen, onEdit }) {
 
   return (
     <div className="data-table-container">
-      <div className="table-wrapper">
+      <div className="table-wrapper hrms-table-scroll">
         <div className="table-columns">
           {/* File Name Column */}
           <div className="table-column file-name-column">

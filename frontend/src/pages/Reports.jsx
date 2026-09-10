@@ -1854,7 +1854,7 @@ function Reports() {
                   <div className={styles["report-title"]}>Report Preview ({reportType})</div>
                   <div className={styles["preview-subtitle"]}>Showing {previewData.length} records</div>
                 </div>
-                <div className={styles["preview-table-container"]}>
+                <div className={`${styles["preview-table-container"]} hrms-table-scroll`}>
                   <table className={styles["preview-table"]}>
                     <thead>
                       <tr>
@@ -1980,7 +1980,7 @@ function Reports() {
               </div>
             ) : (
               <>
-                <div className={styles.sifPreviewTableWrap}>
+                <div className={`${styles.sifPreviewTableWrap} hrms-table-scroll`}>
                   <table className={styles.sifPreviewTable}>
                     <thead>
                       <tr>

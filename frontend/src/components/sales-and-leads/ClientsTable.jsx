@@ -571,7 +571,7 @@ function ClientsTable() {
         {importError && (
           <div className={styles.errorState} style={{ marginBottom: 8 }}>{importError}</div>
         )}
-        <div className={styles.tableWrapper}>
+        <div className={`${styles.tableWrapper} hrms-table-scroll`}>
           <div className={styles.tableColumns}>
             {/* Checkbox Column */}
             <div className={`${styles.tableColumn} ${styles.checkboxColumn}`}>

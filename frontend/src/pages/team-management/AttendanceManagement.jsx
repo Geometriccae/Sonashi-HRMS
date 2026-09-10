@@ -310,7 +310,7 @@ function AttendanceManagement() {
             <div className={styles["error"]}>{employeeError}</div>
           )}
 
-          <div className={styles["table-wrapper"]}>
+          <div className={`${styles["table-wrapper"]} hrms-table-scroll`}>
             <table className={styles["table"]}>
               <thead>
                 <tr>
@@ -463,7 +463,7 @@ function AttendanceManagement() {
             <span>Leave: <strong>{reportData.filter(x => x.status === 'Leave').length}</strong></span>
           </div>
 
-          <div className={styles["table-wrapper"]}>
+          <div className={`${styles["table-wrapper"]} hrms-table-scroll`}>
             <table className={styles["table"]}>
               <thead>
                 <tr>
@@ -550,7 +550,7 @@ function AttendanceManagement() {
               <button className={styles["action-btn"]} onClick={fetchSummary}>Refresh</button>
             </div>
           </div>
-          <div className={styles["table-wrapper"]}>
+          <div className={`${styles["table-wrapper"]} hrms-table-scroll`}>
             <table className={styles["table"]}>
               <thead>
                 <tr>

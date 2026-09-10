@@ -673,7 +673,7 @@ function LeaveRequestTable({ onUpdate }) {
                 </div>
             </div>
 
-            <div className={styles.tableWrapper}>
+            <div className={`${styles.tableWrapper} hrms-table-scroll`}>
                 <table className={styles.table}>
                     <thead>
                         <tr>

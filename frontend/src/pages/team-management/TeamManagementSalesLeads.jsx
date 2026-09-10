@@ -1170,7 +1170,7 @@ function TeamManagementSalesLeads() {
 
               {activeTab === "increments" && (
                 <div style={{ padding: "0 36px", width: "100%" }}>
-                  <div className={styles.increments_table_container}>
+                  <div className={`${styles.increments_table_container} hrms-table-scroll`}>
                     <table className={styles.increments_table}>
                       <thead>
                         <tr>
@@ -1275,7 +1275,7 @@ function TeamManagementSalesLeads() {
                       </div>
                     );
                   })()}
-                  <div className={styles.increments_table_container}>
+                  <div className={`${styles.increments_table_container} hrms-table-scroll`}>
                     <table className={styles.increments_table}>
                       <thead>
                         <tr>

@@ -300,7 +300,7 @@ function DashboardOverview() {
                     <p>Loading {selectedCategory}…</p>
                   </div>
                 ) : filteredList.length > 0 ? (
-                  <div className={styles.modalTableWrap}>
+                  <div className={`${styles.modalTableWrap} hrms-table-scroll`}>
                   <table className={styles.detailsTable}>
                     <thead>
                       <tr>
