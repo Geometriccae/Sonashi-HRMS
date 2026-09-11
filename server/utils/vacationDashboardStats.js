@@ -12,6 +12,7 @@ const {
   workingStatusFilter,
   nonWorkingStatusFilter,
   isWorkingEmployeeStatus,
+  isNonWorkingEmployeeStatus,
 } = require('./employeeStatus');
 const {
   getListCache,
@@ -323,6 +324,22 @@ function computeExperienceYears(doj, totalYearsExperience, asOf = new Date()) {
   return null;
 }
 
+/** Same as Employee Master: today for working staff; lastWorkingDay when exited. */
+function employeeMasterExperienceAsOf(employeeOrFields, now = new Date()) {
+  const status = employeeOrFields?.employeeStatus;
+  const lwd = employeeOrFields?.lastWorkingDay;
+  if (isNonWorkingEmployeeStatus(status) && lwd) return lwd;
+  return now;
+}
+
+function computeEmployeeMasterExperienceYears(employeeOrFields, now = new Date()) {
+  return computeExperienceYears(
+    employeeOrFields?.doj,
+    employeeOrFields?.totalYearsExperience,
+    employeeMasterExperienceAsOf(employeeOrFields, now)
+  );
+}
+
 function buildYetToGoFromLeaves(empList, leaveList) {
   const safeEmpList = Array.isArray(empList) ? empList : [];
   const safeLeaveList = Array.isArray(leaveList) ? leaveList : [];
@@ -367,7 +384,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         startDate: req.startDate,
         endDate: req.endDate,
         leaveStatus: req.status,
-        experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience, req.startDate),
+        experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: 'Vacation Pending',
       });
     } else {
@@ -400,7 +417,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         startDate: leave?.startDate || null,
         endDate: leave?.endDate || null,
         leaveStatus: leave?.status || null,
-        experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate),
+        experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: 'Vacation Pending',
       });
     });
@@ -421,7 +438,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
       startDate: leave?.startDate || e.travellingDate || null,
       endDate: leave?.endDate || e.leaveEndDate || null,
       leaveStatus: leave?.status || null,
-      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate || e.travellingDate),
+      experienceYears: computeEmployeeMasterExperienceYears(e),
       vacationStatus: 'Vacation Pending',
     });
   });
@@ -451,7 +468,7 @@ function enrichEmployeeRows(empList, leaveList, tabKey) {
       endDate: leaveEnd,
       // For Returned Back list: show leave end when returnDate was cleared after mark-onsite
       returnDate: e.returnDate || (tabKey === 'returned' ? leaveEnd : e.returnDate) || null,
-      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate),
+      experienceYears: computeEmployeeMasterExperienceYears(e),
     };
   });
 }
@@ -558,7 +575,7 @@ function applyRowFilters(rows, query = {}) {
       if (dojTo && !Number.isNaN(dojTo.getTime()) && doj > dojTo) return false;
     }
 
-    const exp = computeExperienceYears(item.doj, item.totalYearsExperience, item.startDate || item.travellingDate);
+    const exp = computeEmployeeMasterExperienceYears(item);
     if (expMin != null && !Number.isNaN(expMin) && (exp == null || exp < expMin)) return false;
     if (expMax != null && !Number.isNaN(expMax) && (exp == null || exp > expMax)) return false;
 

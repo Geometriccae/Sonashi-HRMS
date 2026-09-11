@@ -31,7 +31,7 @@ import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
-import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { formatEmployeeMasterExperienceLabel } from "../../utils/yetToGoHelpers";
 import CompanyDocumentService from "../../services/CompanyDocumentService";
 import {
   buildCompanyOptionsFromDocuments,
@@ -954,13 +954,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 label="Total Year of Experience"
                 placeholder="—"
                 value={
-                  formatExperienceLabel(
-                    formData.doj,
-                    formData.totalYearsExperience,
-                    (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
-                      ? formData.lastWorkingDay
-                      : new Date()
-                  ) || "—"
+                  formatEmployeeMasterExperienceLabel(formData) || "—"
                 }
                 readOnly
               />

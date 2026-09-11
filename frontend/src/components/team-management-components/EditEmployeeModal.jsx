@@ -36,7 +36,7 @@ import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
-import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { formatEmployeeMasterExperienceLabel } from "../../utils/yetToGoHelpers";
 import { savedRecordDateDefault } from "../../utils/dateFieldReset";
 import { isPlaceholderEmployeeEmail } from "../../utils/employeeEmailDisplay";
 
@@ -1190,13 +1190,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 label="Total Year of Experience"
                 placeholder="—"
                 value={
-                  formatExperienceLabel(
-                    formData.doj,
-                    formData.totalYearsExperience,
-                    (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
-                      ? formData.lastWorkingDay
-                      : new Date()
-                  ) || "—"
+                  formatEmployeeMasterExperienceLabel(formData) || "—"
                 }
                 readOnly
               />

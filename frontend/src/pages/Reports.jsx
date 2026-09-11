@@ -19,7 +19,7 @@ import {
   toSearchableEmployeeOption,
   filterReactSelectEmployeeOptionIncludingInactive,
 } from "../utils/employeeStatusDisplay";
-import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel, computeExperienceMonthsFromDoj } from "../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatEmployeeMasterExperienceLabel, employeeMasterExperienceAsOf, computeExperienceMonthsFromDoj } from "../utils/yetToGoHelpers";
 import { useUrlListView } from "../hooks/usePersistedListPage";
 
 const loadXlsx = async () => {
@@ -117,11 +117,7 @@ const mapEmployeeMasterRow = (e) => {
     "Labour Card Expiry": formatReportDate(e.labourCardExpiryDate),
     "Visa Expiry": formatReportDate(e.visaExpiryDate),
     "Person Code": e.workPermitNo || "",
-    "Total Years Experience": formatExperienceLabel(
-      e.doj,
-      e.totalYearsExperience,
-      (isNonWorkingEmployeeStatus(e.employeeStatus) && e.lastWorkingDay) ? e.lastWorkingDay : new Date()
-    ) || "",
+    "Total Years Experience": formatEmployeeMasterExperienceLabel(e) || "",
     "Life Insurance": formatYesNo(e.lifeInsurance),
     "Medical Insurance": formatYesNo(e.medicalInsurance),
     Airfare: formatYesNo(e.airFare),
@@ -665,10 +661,7 @@ function Reports() {
   };
 
   const getEmployeeExperienceMonths = (e) => {
-    const asOf = (isNonWorkingEmployeeStatus(e.employeeStatus) && e.lastWorkingDay)
-      ? e.lastWorkingDay
-      : new Date();
-    const fromDoj = computeExperienceMonthsFromDoj(e.doj, asOf);
+    const fromDoj = computeExperienceMonthsFromDoj(e.doj, employeeMasterExperienceAsOf(e));
     return fromDoj != null ? fromDoj : ((e.totalYearsExperience || 0) * 12);
   };
 

@@ -1,4 +1,4 @@
-import { isWorkingEmployeeStatus } from "./employeeStatusDisplay";
+import { isWorkingEmployeeStatus, isNonWorkingEmployeeStatus } from "./employeeStatusDisplay";
 import { formatVacationStatus } from "./vacationStatusDisplay";
 
 export const APPROVED_LEAVE_STATUSES = ["Approved", "HOD Approved"];
@@ -87,6 +87,25 @@ export const formatExperienceLabel = (doj, totalYearsExperience, asOf = new Date
   calculateExperience(doj, asOf, totalYearsExperience).formatted;
 
 /**
+ * Employee Master “as of” date for normal experience displays (not Leave Management).
+ * Working employees: today. Non-working with lastWorkingDay: freeze tenure at LWD.
+ */
+export const employeeMasterExperienceAsOf = (employeeOrFields, now = new Date()) => {
+  const status = employeeOrFields?.employeeStatus;
+  const lwd = employeeOrFields?.lastWorkingDay;
+  if (isNonWorkingEmployeeStatus(status) && lwd) return lwd;
+  return now;
+};
+
+/** Employee Master experience label — same source used by Team Management / Vacation / Reports. */
+export const formatEmployeeMasterExperienceLabel = (employeeOrFields, now = new Date()) =>
+  formatExperienceLabel(
+    employeeOrFields?.doj,
+    employeeOrFields?.totalYearsExperience,
+    employeeMasterExperienceAsOf(employeeOrFields, now)
+  );
+
+/**
  * Numeric years for filters — DOJ as of the given reference date (today when omitted).
  * Stored totalYearsExperience is only a fallback when DOJ is missing (it can be stale).
  */
@@ -98,6 +117,14 @@ export const computeExperienceYears = (doj, totalYearsExperience, asOf = new Dat
   }
   return null;
 };
+
+/** Numeric years using Employee Master asOf (not leave/travel date). */
+export const computeEmployeeMasterExperienceYears = (employeeOrFields, now = new Date()) =>
+  computeExperienceYears(
+    employeeOrFields?.doj,
+    employeeOrFields?.totalYearsExperience,
+    employeeMasterExperienceAsOf(employeeOrFields, now)
+  );
 
 export const findLinkedEmployee = (req, empList) => {
   if (!Array.isArray(empList) || empList.length === 0) return null;
@@ -190,7 +217,7 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     nationality: linked?.nationality || "",
     doj: linked?.doj || null,
     totalYearsExperience: linked?.totalYearsExperience ?? null,
-    experienceYears: computeExperienceYears(linked?.doj, linked?.totalYearsExperience, req.startDate),
+    experienceYears: computeEmployeeMasterExperienceYears(linked),
     travellingDate: req.travellingDate || req.startDate || linked?.travellingDate || null,
     lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
     returnDate: req.returnDate || linked?.returnDate || null,
@@ -325,7 +352,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         startDate: req.startDate,
         endDate: req.endDate,
         leaveStatus: req.status,
-        experienceYears: computeExperienceYears(linked.doj, linked.totalYearsExperience, req.startDate),
+        experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: "Vacation Pending",
       });
     } else {
@@ -349,7 +376,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         startDate: leave?.startDate || null,
         endDate: leave?.endDate || null,
         leaveStatus: leave?.status || null,
-        experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate),
+        experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: "Vacation Pending",
       });
     });
@@ -369,7 +396,7 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
       startDate: leave?.startDate || e.travellingDate || null,
       endDate: leave?.endDate || e.leaveEndDate || null,
       leaveStatus: leave?.status || null,
-      experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience, leave?.startDate || e.travellingDate),
+      experienceYears: computeEmployeeMasterExperienceYears(e),
       vacationStatus: "Vacation Pending",
     });
   });

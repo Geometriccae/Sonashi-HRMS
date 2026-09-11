@@ -24,7 +24,7 @@ import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, ex
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
 import { calculateLeaveBalance, calculateLeaveDays, filterLeavesForEmployee } from "../../utils/leaveCalculator";
-import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { formatEmployeeMasterExperienceLabel } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
@@ -1139,13 +1139,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4}>
                           <span className={styles.text9}>Total Experience</span>
                           <span className={styles.text10}>
-                            {formatExperienceLabel(
-                              employee.doj,
-                              employee.totalYearsExperience,
-                              (isNonWorkingEmployeeStatus(employee.employeeStatus) && employee.lastWorkingDay)
-                                ? employee.lastWorkingDay
-                                : new Date()
-                            ) || "Not provided"}
+                            {formatEmployeeMasterExperienceLabel(employee) || "Not provided"}
                           </span>
                         </div>
                         <div className={styles.column4}><span className={styles.text9}>Notice Period</span><span className={styles.text10}>{employee.noticePeriod || "Not provided"}</span></div>

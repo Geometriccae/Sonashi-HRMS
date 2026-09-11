@@ -16,6 +16,8 @@ import { MdFlightTakeoff, MdBeachAccess, MdFlightLand } from "react-icons/md";
 import { saveAs } from "file-saver";
 import {
   formatExperienceLabel,
+  formatEmployeeMasterExperienceLabel,
+  employeeMasterExperienceAsOf,
 } from "../utils/yetToGoHelpers";
 import { canUpdateVacationReturn } from "../utils/permissions";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
@@ -102,8 +104,6 @@ const getNavEmployeeId = (item) => {
 
 const displayLastWorkingDay = (item) => fmt(item.lastWorkingDay || item.startDate);
 
-const experienceAsOfForRow = (item) => item?.startDate || item?.travellingDate || new Date();
-
 const buildVacationExportRows = (list, tabKey) =>
   (list || []).map((item, idx) => {
     const vs =
@@ -114,9 +114,9 @@ const buildVacationExportRows = (list, tabKey) =>
           ? "Vacation Pending"
           : "Vacation Approved");
     const expLabel =
-      formatExperienceLabel(item.doj, item.totalYearsExperience, experienceAsOfForRow(item)) ||
+      formatEmployeeMasterExperienceLabel(item) ||
       (item.experienceYears != null && !Number.isNaN(Number(item.experienceYears))
-        ? formatExperienceLabel(null, item.experienceYears)
+        ? formatExperienceLabel(null, item.experienceYears, employeeMasterExperienceAsOf(item))
         : "");
 
     const base = {
@@ -873,7 +873,7 @@ function AnnualVacations() {
                             {filteredList.map((item, idx) => {
                               const empId = item._id || item.id;
                               const vs    = item.vacationStatus || (activeTab === "onVacation" ? "On Vacation" : activeTab === "yetToGo" ? "Vacation Pending" : "Vacation Approved");
-                              const expLabel = formatExperienceLabel(item.doj, item.totalYearsExperience, experienceAsOfForRow(item));
+                              const expLabel = formatEmployeeMasterExperienceLabel(item);
                               return (
                                 <tr key={item._source === "leave" ? `leave-${item._id}` : (empId || idx)} className={styles.tableRow}
                                   onClick={() => { const navId = getNavEmployeeId(item); if (navId) navigate(`/teammanagement_salesleads/${navId}`); }}>
