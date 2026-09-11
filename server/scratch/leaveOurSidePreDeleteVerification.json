@@ -1,0 +1,61 @@
+{
+  "verifiedDeletionCandidates": 479,
+  "auditDeleteListCount": 479,
+  "uniqueDeleteIds": 479,
+  "missingIds": [],
+  "unexpectedIds": [],
+  "provenanceFailures": [],
+  "clientAdminActivityFound": [],
+  "protectedIdsInDeletionSet": [],
+  "uncertainIdsInDeletionSet": [],
+  "keepIdsInDeletionSet": [],
+  "protectedLive": [
+    {
+      "id": "6a28031146c7ddf03d6da481",
+      "employeeName": "MELVIN ABRAHAM THOMAS",
+      "employeeId": "",
+      "leaveType": "Personal Leave",
+      "startDate": "2026-01-31",
+      "endDate": "2026-02-15",
+      "reason": "Personal",
+      "changedBy": "",
+      "inDeletionSet": false
+    },
+    {
+      "id": "6a28038146c7ddf03d6da490",
+      "employeeName": "MELVIN ABRAHAM THOMAS",
+      "employeeId": "IDMO-178",
+      "leaveType": "Annual Leave",
+      "startDate": "2026-06-20",
+      "endDate": "2026-08-05",
+      "reason": "Annual Vacation",
+      "changedBy": "Melvin",
+      "inDeletionSet": false
+    },
+    {
+      "id": "6a2a7a9c54828137fa01f3fc",
+      "employeeName": "MUHAMMAD MEHTAB MUHAMMAD IRSHAD",
+      "employeeId": "",
+      "leaveType": "Vacation",
+      "startDate": "2026-05-04",
+      "endDate": "2026-07-06",
+      "reason": "Annual Vacation",
+      "changedBy": "Melvin",
+      "inDeletionSet": false
+    }
+  ],
+  "uncertainCountInAudit": 69,
+  "uncertainStillInDb": 69,
+  "currentCount": 730,
+  "countAfterRead": 730,
+  "expectedRemainingAfterDeletion": 251,
+  "math": "730 - 479 = 251",
+  "backupPath": "C:\\Users\\Digi Ideacentre\\Documents\\sonashi\\Sonashi-HRMS\\server\\scratch\\leaveOurSideDeleteBackup-2026-09-11.json",
+  "backupRecordCount": 479,
+  "writesPerformed": 0,
+  "safeForExplicitApproval": true,
+  "scriptBreakdown": {
+    "syncLeaveFromExcel.js": 319,
+    "importExcelLeaveMaster.js": 160
+  }
+}
