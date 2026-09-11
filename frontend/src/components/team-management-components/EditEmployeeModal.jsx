@@ -67,6 +67,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     // 1. Basic Information
     workPermitNo: "",
     employeeId: "",
+    unifiedId: "",
     office: DEFAULT_COMPANY_NAME,
     employeeName: "",
     reportingManager: "",
@@ -129,6 +130,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     accountNumber: "",
     ibanNumber: "",
     bankSortCode: "",
+    modeOfPay: "",
   });
 
   const [clients, setClients] = useState([]);
@@ -323,6 +325,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setFormData({
         workPermitNo: record.workPermitNo || "",
         employeeId: record.employeeId || "",
+        unifiedId: record.unifiedId || "",
         office: record.office || DEFAULT_COMPANY_NAME,
         employeeName: record.employeeName || "",
         reportingManager: record.reportingManager || "",
@@ -394,6 +397,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         accountNumber: record.salaryDetails?.accountNumber || "",
         ibanNumber: record.salaryDetails?.ibanNumber || "",
         bankSortCode: record.salaryDetails?.bankSortCode || "",
+        modeOfPay: record.salaryDetails?.modeOfPay || "",
       });
 
       if (record.profilePhoto) {
@@ -436,6 +440,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setFormData({
         workPermitNo: "",
         employeeId: "",
+        unifiedId: "",
         office: DEFAULT_COMPANY_NAME,
         employeeName: "",
         reportingManager: "",
@@ -494,6 +499,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         accountNumber: "",
         ibanNumber: "",
         bankSortCode: "",
+        modeOfPay: "",
       });
     }
   }, [isOpen]);
@@ -640,6 +646,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       const payload = {
         workPermitNo: formData.workPermitNo || "",
         employeeId: formData.employeeId,
+        unifiedId: formData.unifiedId || "",
         office: String(formData.office || "").trim() || DEFAULT_COMPANY_NAME,
         employeeName: formData.employeeName,
         reportingManager: formData.reportingManager || "",
@@ -687,6 +694,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
           accountNumber: formData.accountNumber || "",
           ibanNumber: formData.ibanNumber || "",
           bankSortCode: formData.bankSortCode || "",
+          modeOfPay: formData.modeOfPay || "",
         },
         emergencyContact: {
           uae: {
@@ -850,6 +858,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   handleInputChange("employeeId", e.target.value)
                 }
                 hasError={validationErrors.employeeId}
+              />
+
+              <InputField
+                label="Unified ID"
+                placeholder="Enter Unified ID"
+                value={formData.unifiedId}
+                onChange={(e) =>
+                  handleInputChange("unifiedId", e.target.value)
+                }
               />
 
               <Dropdown
@@ -1388,6 +1405,12 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
           <div className="billing-content">
             <div className="form-fields-grid">
               <InputField
+                label="Mode of Pay"
+                placeholder="e.g. Bank Transfer / Cash / Cheque"
+                value={formData.modeOfPay}
+                onChange={(e) => handleInputChange("modeOfPay", e.target.value)}
+              />
+              <InputField
                 label="Basic Salary (BASIC)"
                 placeholder="0.00"
                 type="number"
@@ -1526,32 +1549,42 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               value: formData.employeeId || "Not provided",
             },
             {
-              label: "Employee Name",
-              value: formData.employeeName || "Not provided",
+              label: "Unified ID",
+              value: formData.unifiedId || "Not provided",
             },
           ],
           [
+            {
+              label: "Employee Name",
+              value: formData.employeeName || "Not provided",
+            },
             { label: "Mobile", value: formData.mobile || "Not provided" },
-            { label: "Email", value: formData.emailId || "Not provided" },
           ],
           [
+            { label: "Email", value: formData.emailId || "Not provided" },
             {
               label: "Designation",
               value: formData.designation || "Not provided",
             },
+          ],
+          [
             {
               label: "Department",
               value: formData.department || "Not provided",
             },
-          ],
-          [
             {
               label: "Employee Status",
               value: formatEmployeeStatusDisplay(formData) || "Not provided",
             },
+          ],
+          [
             {
               label: "Attendance",
               value: formData.attendance || "Not provided",
+            },
+            {
+              label: "Mode of Pay",
+              value: formData.modeOfPay || "Not provided",
             },
           ],
           [

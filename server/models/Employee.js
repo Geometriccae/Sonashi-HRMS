@@ -34,6 +34,7 @@ const employeeSchema = new mongoose.Schema({
   remarks: { type: String, default: "" },
 
   employeeId: { type: String, required: true, unique: true }, // unique employee code/ID
+  unifiedId: { type: String, default: "" },
   employeeName: { type: String, required: true },
 
   employeeStatus: {
@@ -118,7 +119,8 @@ const employeeSchema = new mongoose.Schema({
     bankName: { type: String, default: "" },
     accountNumber: { type: String, default: "" },
     ibanNumber: { type: String, default: "" },
-    bankSortCode: { type: String, default: "" }
+    bankSortCode: { type: String, default: "" },
+    modeOfPay: { type: String, default: "" }
   },
 
   lifeInsurance: { type: Boolean, default: false },

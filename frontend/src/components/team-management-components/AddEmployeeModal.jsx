@@ -55,6 +55,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     // 1. Basic Information
     workPermitNo: "",
     employeeId: "",
+    unifiedId: "",
     office: DEFAULT_COMPANY_NAME,
     employeeName: "",
     reportingManager: "",
@@ -117,6 +118,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     accountNumber: "",
     ibanNumber: "",
     bankSortCode: "",
+    modeOfPay: "",
   });
 
   const [clients, setClients] = useState([]);
@@ -405,6 +407,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       payload.labourCardNumber = formData.labourCardNumber || "";
       payload.companyCode = resolveDefaultCompanyCode(formData.companyCode);
       payload.office = resolveDefaultCompanyName(formData.office);
+      payload.unifiedId = formData.unifiedId || "";
       payload.salaryDetails = {
         basicSalary: parseFloat(formData.basicSalary) || 0,
         houseRent: parseFloat(formData.houseRent) || 0,
@@ -416,11 +419,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         bankName: formData.bankName || "",
         accountNumber: formData.accountNumber || "",
         ibanNumber: formData.ibanNumber || "",
-        bankSortCode: formData.bankSortCode || ""
+        bankSortCode: formData.bankSortCode || "",
+        modeOfPay: formData.modeOfPay || "",
       };
       [
         "basicSalary", "houseRent", "travelExp", "other", "totalAllowance",
-        "deduction", "totalSalary", "bankName", "accountNumber", "ibanNumber", "bankSortCode",
+        "deduction", "totalSalary", "bankName", "accountNumber", "ibanNumber", "bankSortCode", "modeOfPay",
       ].forEach((k) => delete payload[k]);
 
       payload.emergencyContact = {
@@ -483,6 +487,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       setFormData({
         workPermitNo: "",
         employeeId: "",
+        unifiedId: "",
         office: DEFAULT_COMPANY_NAME,
         employeeName: "",
         reportingManager: "",
@@ -540,6 +545,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         accountNumber: "",
         ibanNumber: "",
         bankSortCode: "",
+        modeOfPay: "",
       });
 
       setProfileImage(null);
@@ -621,6 +627,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   handleInputChange("employeeId", e.target.value)
                 }
                 hasError={validationErrors.employeeId}
+              />
+
+              <InputField
+                label="Unified ID"
+                placeholder="Enter Unified ID"
+                value={formData.unifiedId}
+                onChange={(e) =>
+                  handleInputChange("unifiedId", e.target.value)
+                }
               />
 
               <Dropdown
@@ -1135,6 +1150,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           <div className="billing-content">
             <div className="form-fields-grid">
               <InputField
+                label="Mode of Pay"
+                placeholder="e.g. Bank Transfer / Cash / Cheque"
+                value={formData.modeOfPay}
+                onChange={(e) => handleInputChange("modeOfPay", e.target.value)}
+              />
+              <InputField
                 label="Basic Salary (BASIC)"
                 placeholder="0.00"
                 type="number"
@@ -1273,25 +1294,29 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               value: formData.employeeId || "Not provided",
             },
             {
-              label: "Employee Name",
-              value: formData.employeeName || "Not provided",
+              label: "Unified ID",
+              value: formData.unifiedId || "Not provided",
             },
           ],
           [
+            {
+              label: "Employee Name",
+              value: formData.employeeName || "Not provided",
+            },
             { label: "Mobile", value: formData.mobile || "Not provided" },
-            { label: "Email", value: formData.emailId || "Not provided" },
           ],
           [
+            { label: "Email", value: formData.emailId || "Not provided" },
             {
               label: "Designation",
               value: formData.designation || "Not provided",
             },
+          ],
+          [
             {
               label: "Department",
               value: formData.department || "Not provided",
             },
-          ],
-          [
             {
               label: "Employee Status",
               value: formatEmployeeStatusDisplay(formData) || "Not provided",
@@ -1299,42 +1324,52 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           ],
           [
             {
+              label: "Attendance",
+              value: formData.attendance || "Not provided",
+            },
+            {
               label: "Notice Period",
               value: formData.noticePeriod || "Not provided",
             },
+          ],
+          [
             {
               label: "Provision Period",
               value: formData.provisionPeriod || "Not provided",
             },
-          ],
-          [
             {
               label: "Company",
               value: formData.office || "Not provided",
             },
+          ],
+          [
             {
               label: "Company Code",
               value: formData.companyCode || "Not provided",
             },
-          ],
-          [
             {
               label: "Labour Card Number",
               value: formData.labourCardNumber || "Not provided",
             },
+          ],
+          [
             {
               label: "Air Fare",
               value: formData.airFare ? "Yes" : "No",
             },
-          ],
-          [
             {
               label: "Life Insurance",
               value: formData.lifeInsurance ? "Yes" : "No",
             },
+          ],
+          [
             {
               label: "Medical Insurance",
               value: formData.medicalInsurance ? "Yes" : "No",
+            },
+            {
+              label: "Mode of Pay",
+              value: formData.modeOfPay || "Not provided",
             },
           ],
           [
