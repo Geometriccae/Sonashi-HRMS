@@ -100,7 +100,7 @@ const formatVacationDates = (record, vs) => {
     const lines = [];
     const lwd = fmt(record.lastWorkingDay);
     const travel = fmt(record.travellingDate);
-    const leaveEnd = fmt(record.endDate || record.leaveEndDate);
+    const leaveEnd = fmt(record.leaveEndDate || record.endDate);
     if (lwd) lines.push(`LWD: ${lwd}`);
     if (travel) lines.push(`Travel: ${travel}`);
     if (leaveEnd) lines.push(`Leave End: ${leaveEnd}`);

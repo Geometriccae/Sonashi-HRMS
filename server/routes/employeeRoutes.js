@@ -48,6 +48,7 @@ const {
   isManualStatusChange,
   vacationReturnDatePatch,
 } = require('../utils/vacationStatusWrite');
+const { syncLinkedLeaveDatesFromEmployee } = require('../utils/syncLeaveDatesFromEmployee');
 
 // ========== SERVER-SIDE LIST CACHE ==========
 // Cached via employeeListCache; invalidated on employee writes and leave yet-to-go sync.
@@ -1014,6 +1015,30 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
 
     Object.assign(employee, patch);
     await employee.save();
+
+    // Keep linked LeaveRequest trip dates aligned with Employee Master dates
+    // so Annual Vacations / On Vacation / status derivation read the same values.
+    if (
+      Object.prototype.hasOwnProperty.call(patch, 'travellingDate') ||
+      Object.prototype.hasOwnProperty.call(patch, 'leaveEndDate')
+    ) {
+      try {
+        await syncLinkedLeaveDatesFromEmployee(employee, {
+          travellingDate: Object.prototype.hasOwnProperty.call(patch, 'travellingDate')
+            ? patch.travellingDate
+            : undefined,
+          leaveEndDate: Object.prototype.hasOwnProperty.call(patch, 'leaveEndDate')
+            ? patch.leaveEndDate
+            : undefined,
+          actor: req.user?.username || req.user?.emailId || 'System',
+          actorUserId: req.user?.id || req.user?._id || null,
+          leaveId: req.body?.leaveId || null,
+        });
+      } catch (syncErr) {
+        console.error('Leave date sync after vacation-status failed:', syncErr);
+      }
+    }
+
     invalidateListCache();
 
     const withStatus =
@@ -1172,6 +1197,28 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
 
     if (!updatedEmployee) {
       return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // When Employee Master vacation trip dates change, sync the linked leave
+    // so vacation pages that enrich from LeaveRequest stay consistent.
+    if (
+      Object.prototype.hasOwnProperty.call(updateData, 'travellingDate') ||
+      Object.prototype.hasOwnProperty.call(updateData, 'leaveEndDate')
+    ) {
+      try {
+        await syncLinkedLeaveDatesFromEmployee(updatedEmployee, {
+          travellingDate: Object.prototype.hasOwnProperty.call(updateData, 'travellingDate')
+            ? updateData.travellingDate
+            : undefined,
+          leaveEndDate: Object.prototype.hasOwnProperty.call(updateData, 'leaveEndDate')
+            ? updateData.leaveEndDate
+            : undefined,
+          actor: req.user?.username || req.user?.emailId || 'System',
+          actorUserId: req.user?.id || req.user?._id || null,
+        });
+      } catch (syncErr) {
+        console.error('Leave date sync after employee update failed:', syncErr);
+      }
     }
 
     invalidateListCache();

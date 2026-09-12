@@ -183,8 +183,11 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
 
   const today = toDayStart(todayValue);
   // Applied On is never used. Vacation start is travellingDate/startDate.
-  const travelDate = toDayStart(req?.travellingDate || req?.startDate);
-  const leaveEndDate = toDayStart(req?.endDate);
+  // Employee Master dates win when HR updated the trip on the employee record.
+  const travelDate = toDayStart(
+    linkedEmployee?.travellingDate || req?.travellingDate || req?.startDate
+  );
+  const leaveEndDate = toDayStart(linkedEmployee?.leaveEndDate || req?.endDate);
   if (!today || !travelDate) return null;
 
   const empReturn =
@@ -218,10 +221,13 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     doj: linked?.doj || null,
     totalYearsExperience: linked?.totalYearsExperience ?? null,
     experienceYears: computeEmployeeMasterExperienceYears(linked),
-    travellingDate: req.travellingDate || req.startDate || linked?.travellingDate || null,
+    travellingDate: linked?.travellingDate || req.travellingDate || req.startDate || null,
     lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
     returnDate: req.returnDate || linked?.returnDate || null,
     firstWorkingDay: req.firstWorkingDay || linked?.firstWorkingDay || null,
+    leaveEndDate: linked?.leaveEndDate || null,
+    endDate: linked?.leaveEndDate || req.endDate || null,
+    startDate: linked?.travellingDate || req.startDate || null,
     vacationStatus: linked?.vacationStatus || targetStatus,
     linkedEmployeeId: linked?._id || null,
     _source: "leave",
@@ -349,8 +355,8 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         _source: "employee",
         linkedEmployeeId: linked._id,
         linkedLeaveId: req._id,
-        startDate: req.startDate,
-        endDate: req.endDate,
+        startDate: linked.travellingDate || req.startDate,
+        endDate: linked.leaveEndDate || req.endDate,
         leaveStatus: req.status,
         experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: "Vacation Pending",
@@ -373,8 +379,8 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
         _source: "employee",
         linkedEmployeeId: e._id,
         linkedLeaveId: leave?._id || null,
-        startDate: leave?.startDate || null,
-        endDate: leave?.endDate || null,
+        startDate: e.travellingDate || leave?.startDate || null,
+        endDate: e.leaveEndDate || leave?.endDate || null,
         leaveStatus: leave?.status || null,
         experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: "Vacation Pending",
@@ -393,8 +399,8 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
       _source: "employee",
       linkedEmployeeId: e._id,
       linkedLeaveId: leave?._id || null,
-      startDate: leave?.startDate || e.travellingDate || null,
-      endDate: leave?.endDate || e.leaveEndDate || null,
+      startDate: e.travellingDate || leave?.startDate || null,
+      endDate: e.leaveEndDate || leave?.endDate || null,
       leaveStatus: leave?.status || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
       vacationStatus: "Vacation Pending",

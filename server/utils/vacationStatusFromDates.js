@@ -124,7 +124,8 @@ function statusFromLeaveDates(leave, employee, todayValue) {
   if (!leave || !APPROVED_LEAVE_STATUSES.includes(leave.status)) return null;
   const today = toCalendarDate(todayValue || new Date());
   const travel = getLeaveTravelStartDate(leave, employee);
-  const end = toCalendarDate(leave.endDate);
+  // Employee Master leaveEndDate wins when HR updated the trip on the employee.
+  const end = toCalendarDate(employee?.leaveEndDate || leave.endDate);
   const returnDay = getTripReturnDate(leave, employee);
   return statusFromTravelEndAndReturn(travel, end, returnDay, today);
 }
@@ -203,7 +204,7 @@ function leaveDrivenRows(employee, leaveRequests, today) {
     .map((leave) => ({
       status: statusFromLeaveDates(leave, employee, today),
       travel: getLeaveTravelStartDate(leave, employee),
-      end: toCalendarDate(leave.endDate),
+      end: toCalendarDate(employee?.leaveEndDate || leave.endDate),
     }))
     .filter((row) => row.status);
 }

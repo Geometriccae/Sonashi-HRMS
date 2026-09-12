@@ -135,7 +135,7 @@ const buildVacationExportRows = (list, tabKey) =>
     if (tabKey === "onVacation") {
       return {
         ...base,
-        "Leave End Date": fmt(item.endDate || item.leaveEndDate),
+        "Leave End Date": fmt(item.leaveEndDate || item.endDate),
         "Travelling Date": fmt(item.travellingDate),
         "Last Working Day": fmt(item.lastWorkingDay),
       };
@@ -145,7 +145,7 @@ const buildVacationExportRows = (list, tabKey) =>
         ...base,
         "Last Working Day": displayLastWorkingDay(item),
         "Travelling Date": fmt(item.travellingDate),
-        "Leave End Date": fmt(item.endDate || item.leaveEndDate),
+        "Leave End Date": fmt(item.leaveEndDate || item.endDate),
       };
     }
     return {
@@ -901,8 +901,8 @@ function AnnualVacations() {
                                       : "—"}
                                   </td>
 
-                                  {activeTab === "onVacation" && <><td className={styles.tdDate}>{fmt(item.endDate || item.leaveEndDate)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.lastWorkingDay)}</td></>}
-                                  {activeTab === "yetToGo"   && <><td className={styles.tdDate}>{displayLastWorkingDay(item)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.endDate || item.leaveEndDate)}</td></>}
+                                  {activeTab === "onVacation" && <><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.lastWorkingDay)}</td></>}
+                                  {activeTab === "yetToGo"   && <><td className={styles.tdDate}>{displayLastWorkingDay(item)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td></>}
                                   {activeTab === "returned"  && <><td className={styles.tdDate}>{fmt(item.returnDate)}</td><td className={styles.tdDate}>{fmt(item.firstWorkingDay)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>

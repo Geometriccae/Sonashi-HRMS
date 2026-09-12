@@ -79,7 +79,7 @@ export const buildVacationDatePrompt = (item, status, mode = "date") => {
     tertiaryLabel: cfg.tertiaryLabel,
     tertiaryFieldKey: cfg.tertiaryFieldKey,
     tertiaryDateValue: cfg.tertiaryFieldKey
-      ? toDateInputValue(item?.endDate || item?.leaveEndDate)
+      ? toDateInputValue(item?.leaveEndDate || item?.endDate)
       : "",
     mode,
   };
@@ -95,7 +95,7 @@ export const buildStatusChangePrompt = (item, status) => {
   if (!prompt) return null;
   if (normalizeVacationStatus(status) === VACATION_STATUS.RETURNED_BACK) {
     const planned =
-      toDateInputValue(item?.endDate || item?.returnDate) || toDateInputValue(new Date());
+      toDateInputValue(item?.leaveEndDate || item?.endDate || item?.returnDate) || toDateInputValue(new Date());
     prompt.dateValue = prompt.dateValue || planned;
     prompt.secondaryDateValue = prompt.secondaryDateValue || planned;
   }

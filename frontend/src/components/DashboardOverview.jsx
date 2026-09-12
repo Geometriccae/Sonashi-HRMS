@@ -338,7 +338,7 @@ function DashboardOverview() {
                           {(selectedCategory === "On vacation" || selectedCategory === "Yet to go" || selectedCategory === "Returned back from vacation") ? (
                             <>
                               <td>{item.startDate ? new Date(item.startDate).toLocaleDateString('en-GB') : "—"}</td>
-                              <td>{(item.endDate || item.leaveEndDate) ? new Date(item.endDate || item.leaveEndDate).toLocaleDateString('en-GB') : "—"}</td>
+                              <td>{(item.leaveEndDate || item.endDate) ? new Date(item.leaveEndDate || item.endDate).toLocaleDateString('en-GB') : "—"}</td>
                               {selectedCategory === "On vacation" && canUpdateVacationReturn() && (
                                 <td>
                                   <button

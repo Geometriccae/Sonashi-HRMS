@@ -381,8 +381,8 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         _source: 'employee',
         linkedEmployeeId: linked._id,
         linkedLeaveId: req._id,
-        startDate: req.startDate,
-        endDate: req.endDate,
+        startDate: linked.travellingDate || req.startDate,
+        endDate: linked.leaveEndDate || req.endDate,
         leaveStatus: req.status,
         experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: 'Vacation Pending',
@@ -414,8 +414,8 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         _source: 'employee',
         linkedEmployeeId: e._id,
         linkedLeaveId: leave?._id || null,
-        startDate: leave?.startDate || null,
-        endDate: leave?.endDate || null,
+        startDate: e.travellingDate || leave?.startDate || null,
+        endDate: e.leaveEndDate || leave?.endDate || null,
         leaveStatus: leave?.status || null,
         experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: 'Vacation Pending',
@@ -435,8 +435,8 @@ function buildYetToGoFromLeaves(empList, leaveList) {
       _source: 'employee',
       linkedEmployeeId: e._id,
       linkedLeaveId: leave?._id || null,
-      startDate: leave?.startDate || e.travellingDate || null,
-      endDate: leave?.endDate || e.leaveEndDate || null,
+      startDate: e.travellingDate || leave?.startDate || null,
+      endDate: e.leaveEndDate || leave?.endDate || null,
       leaveStatus: leave?.status || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
       vacationStatus: 'Vacation Pending',
@@ -458,13 +458,14 @@ function buildYetToGoFromLeaves(empList, leaveList) {
 function enrichEmployeeRows(empList, leaveList, tabKey) {
   return empList.map((e) => {
     const leave = findLeaveForEmployee(e, leaveList, empList, tabKey);
-    const leaveEnd = leave?.endDate || e.leaveEndDate || null;
+    // Employee Master trip dates are authoritative after HR edits; leave is fallback.
+    const leaveEnd = e.leaveEndDate || leave?.endDate || null;
     return {
       ...e,
       _source: 'employee',
       linkedEmployeeId: e._id,
       linkedLeaveId: leave?._id || null,
-      startDate: leave?.startDate || null,
+      startDate: e.travellingDate || leave?.startDate || null,
       endDate: leaveEnd,
       // For Returned Back list: show leave end when returnDate was cleared after mark-onsite
       returnDate: e.returnDate || (tabKey === 'returned' ? leaveEnd : e.returnDate) || null,
