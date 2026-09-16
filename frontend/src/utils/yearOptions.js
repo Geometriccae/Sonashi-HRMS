@@ -30,15 +30,7 @@ export function buildYearList({
 /** Extract years from leave requests via startDate. */
 export function yearsFromLeaveRequests(leaveRequests = []) {
   return (leaveRequests || [])
-    .map((req) => {
-      const dateVal = req.startDate || req.appliedOn || req.createdAt;
-      if (!dateVal) return null;
-      if (typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
-        return Number(dateVal.slice(0, 4));
-      }
-      const d = new Date(dateVal);
-      return Number.isNaN(d.getTime()) ? null : d.getUTCFullYear();
-    })
+    .map((req) => toCalendarYear(req.startDate || req.appliedOn || req.createdAt))
     .filter((y) => y != null);
 }
 
@@ -52,7 +44,7 @@ export function yearsFromSalarySlips(slips = []) {
 function toCalendarYear(value) {
   if (!value) return null;
   if (typeof value === "string") {
-    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const match = String(value).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (match) return Number(match[1]);
   }
   const date = new Date(value);
@@ -63,7 +55,7 @@ function toCalendarYear(value) {
 function toCalendarDate(value) {
   if (!value) return null;
   if (typeof value === "string") {
-    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const match = String(value).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (match) {
       return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
     }

@@ -27,7 +27,7 @@ const MANUAL_VACATION_STATUSES = [
 function toCalendarDate(value) {
   if (!value) return null;
   if (typeof value === 'string') {
-    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const match = String(value).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (match) {
       const [, year, month, day] = match;
       return new Date(Number(year), Number(month) - 1, Number(day));
@@ -86,9 +86,35 @@ function leaveBelongsToEmployee(leave, employee) {
   return Boolean(leaveName && empName && leaveName === empName);
 }
 
+/**
+ * Employee Master trip dates (travellingDate / leaveEndDate / returnDate)
+ * describe the CURRENT trip. They must only overlay the matching leave.
+ * Applying leaveEndDate to every historical request makes a completed 2022
+ * leave look active until a 2026 end date, which falsely marks the employee
+ * On Vacation before the next trip starts.
+ */
+function employeeTripDatesApplyToLeave(leave, employee) {
+  if (!leave || !employee) return false;
+  const leaveStart = toCalendarDate(leave.startDate || leave.travellingDate);
+  if (!leaveStart) return false;
+  const leaveEnd = toCalendarDate(leave.endDate);
+  const empTravel = toCalendarDate(employee.travellingDate);
+  const empEnd = toCalendarDate(employee.leaveEndDate);
+  if (empTravel && empTravel.getTime() === leaveStart.getTime()) return true;
+  if (leaveEnd && empEnd && empEnd.getTime() === leaveEnd.getTime()) return true;
+  return false;
+}
+
+function employeeDatesForLeave(leave, employee) {
+  return employeeTripDatesApplyToLeave(leave, employee) ? employee : null;
+}
+
 /** Vacation/travel start — never appliedOn. */
 function getLeaveTravelStartDate(leave, employee) {
-  return toCalendarDate(leave?.travellingDate || leave?.startDate || employee?.travellingDate);
+  const emp = employeeDatesForLeave(leave, employee);
+  return toCalendarDate(
+    leave?.travellingDate || (emp && emp.travellingDate) || leave?.startDate
+  );
 }
 
 /**
@@ -96,15 +122,16 @@ function getLeaveTravelStartDate(leave, employee) {
  * A previous trip's return (before this travel start) is ignored.
  */
 function getTripReturnDate(leave, employee) {
+  const emp = employeeDatesForLeave(leave, employee);
   const travel = getLeaveTravelStartDate(leave, employee);
   const leaveReturn = toCalendarDate(leave?.returnDate || leave?.firstWorkingDay);
   if (leaveReturn && travel && leaveReturn >= travel) return leaveReturn;
 
   // HR Onsite writes returnDate as a persist stamp; it is not an actual
   // vacation return and must not end a still-approved trip.
-  if (employee?.vacationStatus === 'Onsite') return null;
+  if (emp?.vacationStatus === 'Onsite') return null;
 
-  const empReturn = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
+  const empReturn = toCalendarDate(emp?.returnDate || emp?.firstWorkingDay);
   if (!empReturn || !travel || empReturn < travel) return null;
   return empReturn;
 }
@@ -123,9 +150,10 @@ function statusFromTravelEndAndReturn(travel, end, returnDay, today) {
 function statusFromLeaveDates(leave, employee, todayValue) {
   if (!leave || !APPROVED_LEAVE_STATUSES.includes(leave.status)) return null;
   const today = toCalendarDate(todayValue || new Date());
+  const emp = employeeDatesForLeave(leave, employee);
   const travel = getLeaveTravelStartDate(leave, employee);
-  // Employee Master leaveEndDate wins when HR updated the trip on the employee.
-  const end = toCalendarDate(employee?.leaveEndDate || leave.endDate);
+  // Employee Master leaveEndDate wins only for the trip those dates belong to.
+  const end = toCalendarDate((emp && emp.leaveEndDate) || leave.endDate);
   const returnDay = getTripReturnDate(leave, employee);
   return statusFromTravelEndAndReturn(travel, end, returnDay, today);
 }
@@ -181,31 +209,38 @@ function employeeDateStage(employee, todayValue) {
 
 /**
  * An authorized manual status stays authoritative until the vacation timeline
- * moves past the stage it describes.
+ * disagrees with it.
  *
- * Holding it forever is what kept employees on "Yet to Go" after their travel
- * date had already arrived; dropping it entirely is what made Returned Back →
- * Onsite snap back on every read. So it is kept while the dates still agree or
- * still sit earlier in the trip, and released as soon as the dates have reached
- * a later stage (Yet to Go once travel starts, On Vacation once the trip ends).
+ * Dates that move further along the trip overtake an earlier label (Yet to Go
+ * once travel starts, On Vacation once the trip ends). A stored Returned Back
+ * with a return date still ahead is treated as planned, so the live stage is
+ * shown until that day. Onsite remains a true override and does not snap back.
  */
 function manualStatusSurvives(manualStatus, dateDrivenStatus) {
   if (!dateDrivenStatus || dateDrivenStatus === manualStatus) return true;
   const pinned = STATUS_PROGRESS[manualStatus];
   const live = STATUS_PROGRESS[dateDrivenStatus];
   if (pinned === undefined || live === undefined) return true;
-  return live <= pinned;
+  // Dates that have moved further along the trip overtake the stored label.
+  if (live > pinned) return false;
+  // Returned Back with a return date still ahead (or a new trip still pending)
+  // is a planned date, not an early return. Show the live stage until that day.
+  if (manualStatus === 'Vacation Approved' && live < pinned) return false;
+  return true;
 }
 
 /** Per-leave derived rows for one employee, newest data first is not required. */
 function leaveDrivenRows(employee, leaveRequests, today) {
   return (Array.isArray(leaveRequests) ? leaveRequests : [])
     .filter((leave) => leaveBelongsToEmployee(leave, employee))
-    .map((leave) => ({
-      status: statusFromLeaveDates(leave, employee, today),
-      travel: getLeaveTravelStartDate(leave, employee),
-      end: toCalendarDate(employee?.leaveEndDate || leave.endDate),
-    }))
+    .map((leave) => {
+      const emp = employeeDatesForLeave(leave, employee);
+      return {
+        status: statusFromLeaveDates(leave, employee, today),
+        travel: getLeaveTravelStartDate(leave, employee),
+        end: toCalendarDate((emp && emp.leaveEndDate) || leave.endDate),
+      };
+    })
     .filter((row) => row.status);
 }
 
@@ -237,19 +272,37 @@ function manualVacationStatusHolds(employee, leaveRequests, todayValue) {
   return manualStatusSurvives(employee.vacationStatus, dateDriven);
 }
 
+function ymd(d) {
+  if (!d) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
 
   // Authorized manual updates win until the dates overtake them; see
   // manualStatusSurvives. Once overtaken we fall through to the date logic below,
   // so an employee always advances through their trip on their own dates.
-  if (manualVacationStatusHolds(employee, leaveRequests, today)) {
+  const held = manualVacationStatusHolds(employee, leaveRequests, today);
+  const stage = employeeDateStage(employee, today);
+  if (held) {
+    // #region agent log
+    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolveEmployeeVacationStatus',message:'manual status held',data:{stored:employee?.vacationStatus||null,source:employee?.vacationStatusSource||null,stage,today:ymd(today),travel:ymd(toCalendarDate(employee?.travellingDate)),end:ymd(toCalendarDate(employee?.leaveEndDate)),returnDay:ymd(toCalendarDate(employee?.returnDate||employee?.firstWorkingDay))},timestamp:Date.now()})}).catch(()=>{});
+    try { require('fs').appendFileSync(require('path').join(__dirname, '../../.cursor/debug-cda47c.log'), `${JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolve',message:'manual status held',data:{stored:employee?.vacationStatus||null,source:employee?.vacationStatusSource||null,stage,today:ymd(today)},timestamp:Date.now()})}\n`); } catch (_) {}
+    // #endregion
     return employee.vacationStatus;
   }
 
   const fromLeaves = leaveDrivenRows(employee, leaveRequests, today);
   const fromLeaveStatus = pickLeaveDrivenStatus(fromLeaves);
   const employeeDateStatus = statusFromEmployeeDates(employee, today);
+  // #region agent log
+  if (employee?.vacationStatus === 'Vacation Approved' && stage && stage !== 'Vacation Approved') {
+    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolveEmployeeVacationStatus',message:'returned-back vs live dates',data:{stored:employee?.vacationStatus||null,source:employee?.vacationStatusSource||null,held:false,stage,fromLeaveStatus,employeeDateStatus,today:ymd(today),travel:ymd(toCalendarDate(employee?.travellingDate)),end:ymd(toCalendarDate(employee?.leaveEndDate)),returnDay:ymd(toCalendarDate(employee?.returnDate||employee?.firstWorkingDay))},timestamp:Date.now()})}).catch(()=>{});
+    try { require('fs').appendFileSync(require('path').join(__dirname, '../../.cursor/debug-cda47c.log'), `${JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolve',message:'returned-back vs live dates',data:{stored:employee?.vacationStatus||null,held:false,stage,fromLeaveStatus,employeeDateStatus,today:ymd(today),travel:ymd(toCalendarDate(employee?.travellingDate)),end:ymd(toCalendarDate(employee?.leaveEndDate)),returnDay:ymd(toCalendarDate(employee?.returnDate||employee?.firstWorkingDay))},timestamp:Date.now()})}\n`); } catch (_) {}
+  }
+  // #endregion
 
   // An employee who is already away is never reported as still waiting to go.
   // The dates HR typed on the employee record describe this employee's own
@@ -316,6 +369,7 @@ module.exports = {
   MANUAL_VACATION_STATUSES,
   toCalendarDate,
   leaveBelongsToEmployee,
+  employeeTripDatesApplyToLeave,
   getLeaveTravelStartDate,
   getTripReturnDate,
   statusFromLeaveDates,

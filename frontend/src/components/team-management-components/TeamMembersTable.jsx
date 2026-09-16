@@ -221,6 +221,12 @@ function TeamMembersTable() {
   }, [currentPage, itemsPerPage, activeFilter, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    return employeeService.onEmployeeDataChanged?.(() => {
+      fetchEmployees({ soft: true });
+    });
+  }, [currentPage, itemsPerPage, activeFilter, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     let socket;
     let cancelled = false;
     let idleHandle = null;
@@ -240,6 +246,9 @@ function TeamMembersTable() {
       };
 
       socket.on('employee-created', onEmployeeCreated);
+      socket.on('employee-updated', () => {
+        employeeService.invalidateCache?.();
+      });
     };
 
     // Defer socket until after first paint so list fetch isn't competing for bandwidth
@@ -274,6 +283,21 @@ function TeamMembersTable() {
       const rows = Array.isArray(result?.employees) ? result.employees : [];
       setEmployees(rows);
       setTotalEmployees(Number(result?.total) || rows.length);
+      // #region agent log
+      try {
+        const withEnd = rows.find((r) => r?.leaveEndDate || r?.endDate);
+        const sample = withEnd?.leaveEndDate || withEnd?.endDate || null;
+        let utcDay = null;
+        let localDay = null;
+        if (sample) {
+          const dt = new Date(sample);
+          const pad = (n) => String(n).padStart(2, '0');
+          utcDay = `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+          localDay = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+        }
+        fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'E',location:'TeamMembersTable.jsx:fetchEmployees',message:'TM list rows received',data:{count:rows.length,sampleLeaveEnd:sample,sampleTravel:withEnd?.travellingDate||null,sampleStatus:withEnd?.vacationStatus||null,soft,utcDay,localDay},timestamp:Date.now()})}).catch(()=>{});
+      } catch (_) { /* debug only */ }
+      // #endregion
 
       // Prefetch next page after first paint (never blocks UI)
       const totalPages = Math.max(1, Math.ceil((Number(result?.total) || 0) / itemsPerPage));

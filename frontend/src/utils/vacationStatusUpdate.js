@@ -122,7 +122,7 @@ export const datesFromPrompt = (prompt) => {
     return { error: "Please select the Return / Entry Date." };
   }
 
-  const iso = (value) => new Date(value).toISOString();
+  const iso = (value) => toDateInputValue(value);
   const dates = {};
   if (dateValue) dates[fieldKey] = iso(dateValue);
   if (secondaryFieldKey && secondaryDateValue) {
@@ -133,6 +133,9 @@ export const datesFromPrompt = (prompt) => {
   if (tertiaryFieldKey && tertiaryDateValue) {
     dates[tertiaryFieldKey] = iso(tertiaryDateValue);
   }
+  // #region agent log
+  fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'E',location:'vacationStatusUpdate.js:datesFromPrompt',message:'calendar dates to persist',data:{dates,newStatus},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   return { dates };
 };
 
@@ -171,6 +174,10 @@ export async function applyVacationStatusChange({
 
   employeeService.invalidateCache?.();
   leaveRequestService.invalidateCache?.();
+
+  // #region agent log
+  fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'E',location:'vacationStatusUpdate.js:applyVacationStatusChange',message:'vacation write + cache invalidate',data:{empIdLen:String(employeeId||'').length,status,dateKeys:Object.keys(dates||{}),sentLeaveEnd:dates?.leaveEndDate||null,hasLeaveId:Boolean(leaveId),savedLeaveEnd:updated?.leaveEndDate||null,savedTravel:updated?.travellingDate||null,savedStatus:updated?.vacationStatus||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   return updated;
 }

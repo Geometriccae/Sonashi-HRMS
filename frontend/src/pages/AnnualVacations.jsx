@@ -53,7 +53,20 @@ const VALID_TABS = new Set(["onVacation", "yetToGo", "returned"]);
 // ─── helpers ────────────────────────────────────────────────────────────────
 const fmt = (d) => {
   if (!d) return "—";
-  try { return new Date(d).toLocaleDateString("en-GB"); } catch { return "—"; }
+  try {
+    if (typeof d === "string") {
+      const dateOnly = d.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+    }
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return "—";
+    const day = String(dt.getDate()).padStart(2, "0");
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    const year = dt.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return "—";
+  }
 };
 
 const VACATION_TABS = [
@@ -328,6 +341,13 @@ function AnnualVacations() {
 
   useEffect(() => { fetchCounts({ force: true }); }, [fetchCounts]);
 
+  useEffect(() => {
+    return employeeService.onEmployeeDataChanged(() => {
+      fetchCounts({ force: true });
+      fetchTabPage();
+    });
+  }, [fetchCounts, fetchTabPage]);
+
   // Keep URL + sidebar path in sync when restoring tab from session
   useEffect(() => {
     if (!activeTab) {
@@ -573,20 +593,20 @@ function AnnualVacations() {
     setEditModalSaving(true);
     try {
       if (newStatus === "Vacation Approved" || mode === "markReturn") {
-        const returnDate = new Date(dateValue).toISOString();
+        const returnDate = toDateInputValue(dateValue);
         const firstWorkingDay = secondaryDateValue
-          ? new Date(secondaryDateValue).toISOString()
+          ? toDateInputValue(secondaryDateValue)
           : returnDate;
         await doMarkReturned(item, returnDate, firstWorkingDay);
       } else {
         const extra = {};
         if (newStatus !== "Onsite") {
-          if (dateValue) extra[fieldKey] = new Date(dateValue).toISOString();
+          if (dateValue) extra[fieldKey] = toDateInputValue(dateValue);
           if (secondaryFieldKey && secondaryDateValue) {
-            extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+            extra[secondaryFieldKey] = toDateInputValue(secondaryDateValue);
           }
           if (tertiaryFieldKey && tertiaryDateValue) {
-            extra[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
+            extra[tertiaryFieldKey] = toDateInputValue(tertiaryDateValue);
           }
         }
         const empId = getEmployeeIdFromItem(item);
@@ -594,6 +614,9 @@ function AnnualVacations() {
           showToast("Employee record not found for this leave.", "error");
           return;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'D',location:'AnnualVacations.jsx:handleEditDateConfirm',message:'AV date save',data:{newStatus,dateKeys:Object.keys(extra),linkedLeaveId:Boolean(item.linkedLeaveId),leaveEnd:extra.leaveEndDate||null,travel:extra.travellingDate||null,lwd:extra.lastWorkingDay||null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         await applyVacationStatusChange({
           employeeId: empId,
           newStatus,

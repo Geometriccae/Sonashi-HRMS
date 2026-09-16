@@ -23,6 +23,7 @@ const {
 const {
   applyEffectiveVacationStatuses,
   statusFromLeaveDates,
+  employeeTripDatesApplyToLeave,
 } = require('./vacationStatusFromDates');
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
@@ -48,7 +49,7 @@ function invalidateVacationDashboardStats() {
 function toDayStart(value) {
   if (!value) return null;
   if (typeof value === 'string') {
-    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const match = String(value).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (match) {
       const [, year, month, day] = match;
       return new Date(Number(year), Number(month) - 1, Number(day));
@@ -213,7 +214,10 @@ function findLinkedEmployee(req, empList) {
 }
 
 function getLeaveTravelDate(req, linkedEmployee) {
-  return toDayStart(req?.travellingDate || req?.startDate || linkedEmployee?.travellingDate);
+  const applies = employeeTripDatesApplyToLeave(req, linkedEmployee);
+  return toDayStart(
+    req?.travellingDate || (applies ? linkedEmployee?.travellingDate : null) || req?.startDate
+  );
 }
 
 function getEffectiveVacationStatus(req, linkedEmployee, todayValue = new Date()) {
@@ -376,13 +380,16 @@ function buildYetToGoFromLeaves(empList, leaveList) {
     seen.add(dedupeKey);
     const linked = findLinkedEmployee(req, safeEmpList);
     if (linked) {
+      const dates = tripDisplayDates(linked, req);
       rows.push({
         ...linked,
         _source: 'employee',
         linkedEmployeeId: linked._id,
         linkedLeaveId: req._id,
-        startDate: linked.travellingDate || req.startDate,
-        endDate: linked.leaveEndDate || req.endDate,
+        travellingDate: dates.travellingDate,
+        leaveEndDate: dates.leaveEndDate,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
         leaveStatus: req.status,
         experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: 'Vacation Pending',
@@ -409,13 +416,16 @@ function buildYetToGoFromLeaves(empList, leaveList) {
       if (seen.has(dedupeKey)) return;
       seen.add(dedupeKey);
       const leave = findLeaveForEmployee(e, safeLeaveList, safeEmpList, 'yetToGo');
+      const dates = tripDisplayDates(e, leave);
       rows.push({
         ...e,
         _source: 'employee',
         linkedEmployeeId: e._id,
         linkedLeaveId: leave?._id || null,
-        startDate: e.travellingDate || leave?.startDate || null,
-        endDate: e.leaveEndDate || leave?.endDate || null,
+        travellingDate: dates.travellingDate,
+        leaveEndDate: dates.leaveEndDate,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
         leaveStatus: leave?.status || null,
         experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: 'Vacation Pending',
@@ -430,13 +440,16 @@ function buildYetToGoFromLeaves(empList, leaveList) {
     if (seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
     const leave = findLeaveForEmployee(e, safeLeaveList, safeEmpList, 'yetToGo');
+    const dates = tripDisplayDates(e, leave);
     rows.push({
       ...e,
       _source: 'employee',
       linkedEmployeeId: e._id,
       linkedLeaveId: leave?._id || null,
-      startDate: e.travellingDate || leave?.startDate || null,
-      endDate: e.leaveEndDate || leave?.endDate || null,
+      travellingDate: dates.travellingDate,
+      leaveEndDate: dates.leaveEndDate,
+      startDate: dates.startDate,
+      endDate: dates.endDate,
       leaveStatus: leave?.status || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
       vacationStatus: 'Vacation Pending',
@@ -455,20 +468,53 @@ function buildYetToGoFromLeaves(empList, leaveList) {
   return rows;
 }
 
+function tripDisplayDates(emp, leave) {
+  const applies = Boolean(leave) && employeeTripDatesApplyToLeave(leave, emp);
+  if (leave) {
+    // Vacation views share Employee Master trip dates after any page saves them.
+    // LeaveRequest fills gaps only. Per-leave status derivation is unchanged.
+    const travel = emp?.travellingDate || leave.travellingDate || leave.startDate || null;
+    const end = emp?.leaveEndDate || leave.endDate || null;
+    // #region agent log
+    try {
+      const empEnd = emp?.leaveEndDate ? new Date(emp.leaveEndDate).toISOString().slice(0, 10) : null;
+      const leaveEnd = leave?.endDate ? new Date(leave.endDate).toISOString().slice(0, 10) : null;
+      const shownEnd = end ? new Date(end).toISOString().slice(0, 10) : null;
+      if (empEnd && leaveEnd && empEnd !== leaveEnd) {
+        fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'A',location:'vacationDashboardStats.js:tripDisplayDates',message:'emp vs leave end mismatch',data:{applies,empEnd,leaveEnd,shownEnd},timestamp:Date.now()})}).catch(()=>{});
+      }
+    } catch (_) { /* debug only */ }
+    // #endregion
+    return {
+      travellingDate: travel,
+      leaveEndDate: end,
+      startDate: travel,
+      endDate: end,
+    };
+  }
+  return {
+    travellingDate: emp?.travellingDate || null,
+    leaveEndDate: emp?.leaveEndDate || null,
+    startDate: emp?.travellingDate || null,
+    endDate: emp?.leaveEndDate || null,
+  };
+}
+
 function enrichEmployeeRows(empList, leaveList, tabKey) {
   return empList.map((e) => {
     const leave = findLeaveForEmployee(e, leaveList, empList, tabKey);
-    // Employee Master trip dates are authoritative after HR edits; leave is fallback.
-    const leaveEnd = e.leaveEndDate || leave?.endDate || null;
+    const dates = tripDisplayDates(e, leave);
     return {
       ...e,
       _source: 'employee',
       linkedEmployeeId: e._id,
       linkedLeaveId: leave?._id || null,
-      startDate: e.travellingDate || leave?.startDate || null,
-      endDate: leaveEnd,
+      travellingDate: dates.travellingDate,
+      leaveEndDate: dates.leaveEndDate,
+      startDate: dates.startDate,
+      endDate: dates.endDate,
       // For Returned Back list: show leave end when returnDate was cleared after mark-onsite
-      returnDate: e.returnDate || (tabKey === 'returned' ? leaveEnd : e.returnDate) || null,
+      returnDate: e.returnDate || (tabKey === 'returned' ? dates.endDate : e.returnDate) || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
     };
   });

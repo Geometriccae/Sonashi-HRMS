@@ -153,7 +153,7 @@ export function toLeaveCalendarDate(value) {
         return new Date(value.getFullYear(), value.getMonth(), value.getDate());
     }
     if (typeof value === "string") {
-        const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        const match = value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
         if (match) {
             return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
         }

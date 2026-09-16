@@ -175,6 +175,13 @@ function TeamManagementSalesLeads() {
     fetchEmployeeData();
   }, [employeeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!employeeId) return;
+    return employeeService.onEmployeeDataChanged?.(() => {
+      fetchEmployeeData();
+    });
+  }, [employeeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchEmployeeLeaves = async (currentEmployee) => {
     const gen = ++leaveFetchGenRef.current;
     const emp = currentEmployee || employee;
@@ -1220,7 +1227,7 @@ function TeamManagementSalesLeads() {
                               })()}
                             </span>
                           </div>
-                          {(employee.vacationStatus === "On Vacation" || employee.vacationStatus === "Vacation Pending") && (
+                          {(employee.lastWorkingDay || employee.travellingDate || employee.leaveEndDate || employee.endDate) && (
                             <>
                               <div className={styles.column4}>
                                 <span className={styles.text9}>Last Working Day</span>
@@ -1242,7 +1249,7 @@ function TeamManagementSalesLeads() {
                               </div>
                             </>
                           )}
-                          {employee.vacationStatus === "Vacation Approved" && (
+                          {(employee.returnDate || employee.firstWorkingDay) && (
                             <>
                               <div className={styles.column4}>
                                 <span className={styles.text9}>Return / Entry Date</span>

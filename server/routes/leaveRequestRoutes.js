@@ -120,6 +120,57 @@ function excelLeaveDays(start, end) {
     return days === 0 ? 1 : days;
 }
 
+function leaveTakenDaysForYearMap(leave) {
+    const stored = leave?.leaveDays != null && leave.leaveDays !== '' ? Number(leave.leaveDays) : NaN;
+    if (Number.isFinite(stored) && stored >= 0) return stored;
+    return excelLeaveDays(leave?.startDate, leave?.endDate) || 0;
+}
+
+function leaveCountedInExcelYearMap(leave, emp) {
+    if (String(leave?.importSource || '') !== 'excel-master-tracker') return false;
+    const map = emp?.excelLeaveYearTaken;
+    if (!map || typeof map !== 'object') return false;
+    const importedAt = emp.excelLeaveImportedAt ? new Date(emp.excelLeaveImportedAt).getTime() : null;
+    if (!importedAt || Number.isNaN(importedAt)) return true;
+    const created = leave.createdAt ? new Date(leave.createdAt).getTime() : 0;
+    if (!created) return true;
+    return created <= importedAt + 86400000;
+}
+
+/**
+ * excelLeaveYearTaken is a snapshot of imported yearly totals. Deleting the
+ * LeaveRequest row does not remove those days unless the map is reduced too.
+ */
+async function subtractDeletedImportedLeaveFromYearMap(leaveRequest) {
+    try {
+        if (!leaveRequest) return;
+        const emp = await resolveEmployeeForLeave(leaveRequest);
+        if (!emp || !leaveCountedInExcelYearMap(leaveRequest, emp)) return;
+
+        const start = toCalendarDate(leaveRequest.startDate);
+        if (!start) return;
+        const year = start.getFullYear();
+        const days = leaveTakenDaysForYearMap(leaveRequest);
+        if (!days) return;
+
+        const map = { ...(typeof emp.excelLeaveYearTaken === 'object' ? emp.excelLeaveYearTaken : {}) };
+        const key = Object.prototype.hasOwnProperty.call(map, year)
+            ? year
+            : Object.prototype.hasOwnProperty.call(map, String(year))
+                ? String(year)
+                : year;
+        const current = Number(map[key] ?? 0);
+        if (!Number.isFinite(current) || current <= 0) return;
+
+        const next = Math.max(0, Math.round((current - days) * 100) / 100);
+        map[key] = next;
+        await Employee.findByIdAndUpdate(emp._id, { $set: { excelLeaveYearTaken: map } });
+        patchListCacheEmployee(emp._id, { excelLeaveYearTaken: map });
+    } catch (err) {
+        console.error('[Leave] Year-map subtract error:', err.message || err);
+    }
+}
+
 /**
  * Map form employeeId (Employee._id or User._id) to the leave.employee owner ref.
  * Prefer linked User; if the Employee has no login User, store Employee._id
@@ -260,6 +311,13 @@ async function syncEmployeeVacationStatus(leaveRequest) {
                 patched.returnDate = null;
                 patched.firstWorkingDay = null;
             }
+        } else {
+            // Last approved leave was removed — leftover trip dates would keep
+            // Annual Vacation / status showing a deleted leave.
+            patched.travellingDate = null;
+            patched.leaveEndDate = null;
+            patched.returnDate = null;
+            patched.firstWorkingDay = null;
         }
         const vacationStatus = resolveEmployeeVacationStatus(patched, leaves) || 'Onsite';
 
@@ -275,6 +333,11 @@ async function syncEmployeeVacationStatus(leaveRequest) {
                 patch.returnDate = null;
                 patch.firstWorkingDay = null;
             }
+        } else {
+            patch.travellingDate = null;
+            patch.leaveEndDate = null;
+            patch.returnDate = null;
+            patch.firstWorkingDay = null;
         }
         await Employee.findByIdAndUpdate(emp._id, { $set: patch });
         patchListCacheEmployee(emp._id, patch);
@@ -430,7 +493,7 @@ function hasHolidayInRange(startDate, endDate) {
 function parseLocalDate(dateStr) {
     if (!dateStr) return null;
     const s = String(dateStr).trim();
-    const match = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const match = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (match) {
         const y = parseInt(match[1], 10), m = parseInt(match[2], 10) - 1, d = parseInt(match[3], 10);
         const date = new Date(y, m, d);
@@ -1310,6 +1373,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Leave request not found' });
         }
         invalidateLeaveListCache();
+        await subtractDeletedImportedLeaveFromYearMap(deletedRequest);
         await syncEmployeeVacationStatus(deletedRequest);
         res.json({ message: 'Leave request deleted successfully' });
     } catch (error) {
@@ -1333,6 +1397,9 @@ router.post('/bulk-delete', authMiddleware, async (req, res) => {
         const toDelete = await LeaveRequest.find({ _id: { $in: ids } }).lean();
         const result = await LeaveRequest.deleteMany({ _id: { $in: ids } });
         invalidateLeaveListCache();
+        for (const row of toDelete) {
+            await subtractDeletedImportedLeaveFromYearMap(row);
+        }
         const seen = new Set();
         for (const row of toDelete) {
             const key = String(row.employeeRecordId || row.employee || row.employeeId || row.employeeName || '');

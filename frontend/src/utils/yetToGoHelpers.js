@@ -7,7 +7,7 @@ export const YET_TO_GO_LEAVE_STATUSES = APPROVED_LEAVE_STATUSES;
 export const toDayStart = (value) => {
   if (!value) return null;
   if (typeof value === "string") {
-    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const match = String(value).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (match) {
       const [, year, month, day] = match;
       return new Date(Number(year), Number(month) - 1, Number(day));
@@ -175,25 +175,65 @@ export const findLinkedEmployee = (req, empList) => {
   );
 };
 
-export const getLeaveTravelDate = (req, linkedEmployee) =>
-  toDayStart(req?.travellingDate || req?.startDate || linkedEmployee?.travellingDate);
+export const getLeaveTravelDate = (req, linkedEmployee) => {
+  const applies = employeeTripDatesApplyToLeave(req, linkedEmployee);
+  return toDayStart(
+    req?.travellingDate || (applies ? linkedEmployee?.travellingDate : null) || req?.startDate
+  );
+};
+
+function employeeTripDatesApplyToLeave(leave, employee) {
+  if (!leave || !employee) return false;
+  const leaveStart = toDayStart(leave.startDate || leave.travellingDate);
+  if (!leaveStart) return false;
+  const leaveEnd = toDayStart(leave.endDate);
+  const empTravel = toDayStart(employee.travellingDate);
+  const empEnd = toDayStart(employee.leaveEndDate);
+  if (empTravel && empTravel.getTime() === leaveStart.getTime()) return true;
+  if (leaveEnd && empEnd && empEnd.getTime() === leaveEnd.getTime()) return true;
+  return false;
+}
+
+function tripDisplayDates(emp, leave) {
+  if (leave) {
+    const travel = emp?.travellingDate || leave.travellingDate || leave.startDate || null;
+    const end = emp?.leaveEndDate || leave.endDate || null;
+    return {
+      travellingDate: travel,
+      leaveEndDate: end,
+      startDate: travel,
+      endDate: end,
+    };
+  }
+  return {
+    travellingDate: emp?.travellingDate || null,
+    leaveEndDate: emp?.leaveEndDate || null,
+    startDate: emp?.travellingDate || null,
+    endDate: emp?.leaveEndDate || null,
+  };
+}
 
 export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new Date()) => {
   if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
 
   const today = toDayStart(todayValue);
+  const applies = employeeTripDatesApplyToLeave(req, linkedEmployee);
   // Applied On is never used. Vacation start is travellingDate/startDate.
-  // Employee Master dates win when HR updated the trip on the employee record.
+  // Employee Master dates overlay only the matching trip, not historical leaves.
   const travelDate = toDayStart(
-    linkedEmployee?.travellingDate || req?.travellingDate || req?.startDate
+    req?.travellingDate || (applies ? linkedEmployee?.travellingDate : null) || req?.startDate
   );
-  const leaveEndDate = toDayStart(linkedEmployee?.leaveEndDate || req?.endDate);
+  const leaveEndDate = toDayStart(
+    (applies ? linkedEmployee?.leaveEndDate : null) || req?.endDate
+  );
   if (!today || !travelDate) return null;
 
   const empReturn =
-    linkedEmployee?.vacationStatus === "Onsite"
+    applies && linkedEmployee?.vacationStatus === "Onsite"
       ? null
-      : toDayStart(linkedEmployee?.returnDate || linkedEmployee?.firstWorkingDay);
+      : applies
+        ? toDayStart(linkedEmployee?.returnDate || linkedEmployee?.firstWorkingDay)
+        : null;
   const actualReturn = toDayStart(req?.returnDate || req?.firstWorkingDay) || empReturn;
   const tripReturn = actualReturn && actualReturn >= travelDate ? actualReturn : null;
 
@@ -209,6 +249,7 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
 export const mapLeaveRow = (req, empList, targetStatus) => {
   const linked = findLinkedEmployee(req, empList);
   const empName = req.employeeName || linked?.employeeName || req.employee?.username || "Unknown";
+  const dates = tripDisplayDates(linked, req);
 
   return {
     ...req,
@@ -221,13 +262,13 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     doj: linked?.doj || null,
     totalYearsExperience: linked?.totalYearsExperience ?? null,
     experienceYears: computeEmployeeMasterExperienceYears(linked),
-    travellingDate: linked?.travellingDate || req.travellingDate || req.startDate || null,
+    travellingDate: dates.travellingDate,
     lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
-    returnDate: req.returnDate || linked?.returnDate || null,
-    firstWorkingDay: req.firstWorkingDay || linked?.firstWorkingDay || null,
-    leaveEndDate: linked?.leaveEndDate || null,
-    endDate: linked?.leaveEndDate || req.endDate || null,
-    startDate: linked?.travellingDate || req.startDate || null,
+    returnDate: req.returnDate || (employeeTripDatesApplyToLeave(req, linked) ? linked?.returnDate : null) || null,
+    firstWorkingDay: req.firstWorkingDay || (employeeTripDatesApplyToLeave(req, linked) ? linked?.firstWorkingDay : null) || null,
+    leaveEndDate: dates.leaveEndDate,
+    endDate: dates.endDate,
+    startDate: dates.startDate,
     vacationStatus: linked?.vacationStatus || targetStatus,
     linkedEmployeeId: linked?._id || null,
     _source: "leave",
@@ -350,13 +391,16 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
 
     const linked = findLinkedEmployee(req, safeEmpList);
     if (linked) {
+      const dates = tripDisplayDates(linked, req);
       rows.push({
         ...linked,
         _source: "employee",
         linkedEmployeeId: linked._id,
         linkedLeaveId: req._id,
-        startDate: linked.travellingDate || req.startDate,
-        endDate: linked.leaveEndDate || req.endDate,
+        travellingDate: dates.travellingDate,
+        leaveEndDate: dates.leaveEndDate,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
         leaveStatus: req.status,
         experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: "Vacation Pending",
@@ -374,13 +418,16 @@ export const buildYetToGoFromLeaves = (empList, leaveList) => {
       seen.add(dedupeKey);
 
       const leave = findLeaveForEmployee(e, safeLeaveList, safeEmpList, "yetToGo");
+      const dates = tripDisplayDates(e, leave);
       rows.push({
         ...e,
         _source: "employee",
         linkedEmployeeId: e._id,
         linkedLeaveId: leave?._id || null,
-        startDate: e.travellingDate || leave?.startDate || null,
-        endDate: e.leaveEndDate || leave?.endDate || null,
+        travellingDate: dates.travellingDate,
+        leaveEndDate: dates.leaveEndDate,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
         leaveStatus: leave?.status || null,
         experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: "Vacation Pending",

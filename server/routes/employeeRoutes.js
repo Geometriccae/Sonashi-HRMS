@@ -38,10 +38,11 @@ const {
   getVacationTabPage,
   getDashboardCategoryPage,
 } = require('../utils/vacationDashboardStats');
-const {
-  applyEffectiveVacationStatuses,
-  manualVacationStatusHolds,
-} = require('../utils/vacationStatusFromDates');
+  const {
+    applyEffectiveVacationStatuses,
+    manualVacationStatusHolds,
+    toCalendarDate,
+  } = require('../utils/vacationStatusFromDates');
 const {
   normalizeVacationStatusValue,
   isAllowedVacationStatus,
@@ -331,6 +332,14 @@ async function sendTaskEmailsInBackground(employee, eventData, assignedBy, actio
 
 // ====== STATIC ROUTES (No parameters) ======
 
+function emitEmployeeUpdated(req, employee) {
+  try {
+    const io = req.app?.get?.('io');
+    if (!io || !employee?._id) return;
+    io.emit('employee-updated', { _id: String(employee._id) });
+  } catch (_) { /* ignore */ }
+}
+
 const EMPLOYEE_LIST_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'previousEmployeeStatus', 'vacationStatus', 'emailId', 'mobile',
   'role', 'department', 'attendance', 'doj', 'totalYearsExperience', 'passportExpiryDate',
@@ -399,6 +408,12 @@ async function persistLiveVacationStatus(employee) {
       vacationStatusUpdatedAt: new Date(),
     });
     invalidateListCache();
+    // #region agent log
+    try {
+      require('fs').appendFileSync(require('path').join(__dirname, '../../.cursor/debug-cda47c.log'), `${JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'employeeRoutes.js:persistLiveVacationStatus',message:'persisted live vacation status',data:{from:plain.vacationStatus||null,to:withStatus.vacationStatus||null,source:plain.vacationStatusSource||null},timestamp:Date.now()})}\n`);
+    } catch (_) { /* debug only */ }
+    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'employeeRoutes.js:persistLiveVacationStatus',message:'persisted live vacation status',data:{from:plain.vacationStatus||null,to:withStatus.vacationStatus||null,source:plain.vacationStatusSource||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }
   return withStatus;
 }
@@ -989,11 +1004,11 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
         patch[key] = null;
         continue;
       }
-      const dt = new Date(raw);
-      if (Number.isNaN(dt.getTime())) {
+      const calendar = toCalendarDate(raw);
+      if (!calendar) {
         return res.status(400).json({ message: `Invalid date for ${key}.` });
       }
-      patch[key] = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+      patch[key] = calendar;
     }
 
     const plainEmployee =
@@ -1015,6 +1030,10 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
 
     Object.assign(employee, patch);
     await employee.save();
+
+    // #region agent log
+    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'E',location:'employeeRoutes.js:POST vacation-status',message:'employee vacation persisted',data:{patchKeys:Object.keys(patch),leaveEnd:patch.leaveEndDate||null,travel:patch.travellingDate||null,lwd:patch.lastWorkingDay||null,status:patch.vacationStatus||null,source:patch.vacationStatusSource||null,hasBodyLeaveId:Boolean(req.body?.leaveId),leaveEndLocal:patch.leaveEndDate?`${patch.leaveEndDate.getFullYear()}-${String(patch.leaveEndDate.getMonth()+1).padStart(2,'0')}-${String(patch.leaveEndDate.getDate()).padStart(2,'0')}`:null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     // Keep linked LeaveRequest trip dates aligned with Employee Master dates
     // so Annual Vacations / On Vacation / status derivation read the same values.
@@ -1040,11 +1059,11 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
     }
 
     invalidateListCache();
+    emitEmployeeUpdated(req, employee);
 
-    const withStatus =
-      typeof employee.toObject === 'function'
-        ? { ...employee.toObject(), vacationStatus }
-        : { ...employee, vacationStatus };
+    const withStatus = await persistLiveVacationStatus(
+      typeof employee.toObject === 'function' ? employee.toObject() : employee
+    );
 
     res.json({
       message: 'Vacation status updated successfully',
@@ -1183,6 +1202,26 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
       delete updateData.role;
     }
 
+    const vacationDateKeys = [
+      'travellingDate',
+      'leaveEndDate',
+      'returnDate',
+      'firstWorkingDay',
+      'lastWorkingDay',
+    ];
+    for (const key of vacationDateKeys) {
+      if (!Object.prototype.hasOwnProperty.call(updateData, key)) continue;
+      if (updateData[key] === null || updateData[key] === '') {
+        updateData[key] = null;
+        continue;
+      }
+      const calendar = toCalendarDate(updateData[key]);
+      if (!calendar) {
+        return res.status(400).json({ message: `Invalid date for ${key}.` });
+      }
+      updateData[key] = calendar;
+    }
+
     // Use $set so nested salaryDetails / bank fields merge correctly on update.
     // $unset emailId when the user cleared Email ID so sparse unique stays valid.
     const updateOps = { $set: updateData };
@@ -1222,6 +1261,7 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
     }
 
     invalidateListCache();
+    emitEmployeeUpdated(req, updatedEmployee);
     const withStatus = await persistLiveVacationStatus(updatedEmployee);
     console.log('✅ Employee updated successfully:', updatedEmployee._id);
     res.json({
@@ -1504,7 +1544,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     }
     const codeMap = await getCompanyCodeMap();
     const [enriched] = applyLiveCompanyCodes([employee], codeMap);
-    const withStatus = await withLiveVacationStatus(enriched);
+    const withStatus = await persistLiveVacationStatus(enriched);
     res.json(withStatus);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee', error: error.message });
@@ -2083,17 +2123,15 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Return / Entry Date is required.' });
     }
 
-    const returnDt = new Date(returnRaw);
-    if (Number.isNaN(returnDt.getTime())) {
+    const returnDt = toCalendarDate(returnRaw);
+    if (!returnDt) {
       return res.status(400).json({ message: 'Invalid return date.' });
     }
-    returnDt.setHours(0, 0, 0, 0);
 
     let firstWork = req.body?.firstWorkingDay
-      ? new Date(req.body.firstWorkingDay)
+      ? toCalendarDate(req.body.firstWorkingDay)
       : new Date(returnDt);
-    if (Number.isNaN(firstWork.getTime())) firstWork = new Date(returnDt);
-    firstWork.setHours(0, 0, 0, 0);
+    if (!firstWork) firstWork = new Date(returnDt);
 
     const employee = await Employee.findById(req.params.id);
     if (!employee) {
@@ -2173,6 +2211,7 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
     await employee.save();
     invalidateListCache();
     invalidateApprovedLeavesCache();
+    emitEmployeeUpdated(req, employee);
     // Do not re-derive from leave dates — that snaps Returned Back back to On Vacation
     // while leave.endDate is still in the future.
     const withStatus = typeof employee.toObject === 'function'

@@ -25,9 +25,17 @@ function cellDate(cell) {
   if (v instanceof Date) d = v;
   else if (typeof v === "object" && v.result instanceof Date) d = v.result;
   else if (typeof v === "number" && v > 20000 && v < 80000) {
-    d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    const date1904 = Boolean(cell?.worksheet?.workbook?.properties?.date1904);
+    if (date1904) {
+      d = new Date(Date.UTC(1904, 0, 1) + v * 86400000);
+    } else {
+      d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    }
   }
   if (!d || Number.isNaN(d.getTime())) return null;
+  if (typeof v === "number") {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }
   return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 

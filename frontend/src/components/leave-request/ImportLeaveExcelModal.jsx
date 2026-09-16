@@ -17,6 +17,7 @@ function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
     const [sheets, setSheets] = useState([]);
     const [selectedSheets, setSelectedSheets] = useState({});
     const [errors, setErrors] = useState([]);
+    const [date1904, setDate1904] = useState(false);
     const fileInputRef = useRef(null);
 
     if (!isOpen) return null;
@@ -36,6 +37,7 @@ function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
                 const XLSX = await loadXlsx();
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: "array" });
+                setDate1904(Boolean(workbook.Workbook?.WBProps?.date1904));
                 
                 const sheetNames = workbook.SheetNames;
                 setSheets(sheetNames);
@@ -88,27 +90,40 @@ function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
         return null;
     };
 
-    const parseExcelDate = (val) => {
+    const parseExcelDate = (val, date1904 = false) => {
         let dateObj;
         if (!val) return new Date(NaN);
         if (typeof val === 'number') {
-            // Excel epoch is Dec 30, 1899. This math returns exactly Midnight UTC on the calendar day.
-            dateObj = new Date(Date.UTC(1899, 11, 30) + val * 86400000);
+            // 1900 system: serial 1 ≈ 1899-12-31 (with Excel leap-year bug).
+            // 1904 system (Mac Excel): serial 0 = 1904-01-01 — 1462 days later.
+            // Treating a 1904 serial as 1900 shifts 11-09-2026 to 2022.
+            const epoch = date1904
+                ? Date.UTC(1904, 0, 1)
+                : Date.UTC(1899, 11, 30);
+            dateObj = new Date(epoch + val * 86400000);
         } else if (typeof val === 'string') {
-            const parts = val.trim().split(/[-/]/);
-            if (parts.length === 3) {
-                // assume DD-MM-YYYY
-                const d = parseInt(parts[0], 10);
-                const m = parseInt(parts[1], 10) - 1;
-                let y = parseInt(parts[2], 10);
-                if (y < 100) y += 2000;
-                if (m > 11) dateObj = new Date(val); // Fallback to JS parse if MM > 12
-                else dateObj = new Date(Date.UTC(y, m, d)); // Force strictly into Midnight UTC
+            const trimmed = val.trim();
+            const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (iso) {
+                dateObj = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
             } else {
-                dateObj = new Date(val);
+                const parts = trimmed.split(/[-/]/);
+                if (parts.length === 3) {
+                    // assume DD-MM-YYYY (HR locale)
+                    const d = parseInt(parts[0], 10);
+                    const m = parseInt(parts[1], 10) - 1;
+                    let y = parseInt(parts[2], 10);
+                    if (y < 100) y += 2000;
+                    if (m > 11 || m < 0) dateObj = new Date(val);
+                    else dateObj = new Date(Date.UTC(y, m, d));
+                } else {
+                    dateObj = new Date(val);
+                }
             }
+        } else if (val instanceof Date) {
+            dateObj = new Date(Date.UTC(val.getFullYear(), val.getMonth(), val.getDate()));
         } else {
-            dateObj = new Date(val.getTime());
+            dateObj = new Date(val.getTime ? val.getTime() : val);
         }
         
         return dateObj;
@@ -186,10 +201,10 @@ function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
                         const val1 = row[c];
                         if (!val1) continue;
                         
-                        let startDate = parseExcelDate(val1);
+                        let startDate = parseExcelDate(val1, date1904);
                         if (isNaN(startDate.getTime())) continue; // Not a date
                         
-                        const y = startDate.getFullYear();
+                        const y = startDate.getUTCFullYear();
                         if (y < 2000 || y > 2100) continue; // Filter out bad years
                         if (!isNaN(expectedYear) && y !== expectedYear) continue; // Must match sheet year to avoid picking up "Joining Date"
                         
@@ -199,9 +214,9 @@ function ImportLeaveExcelModal({ isOpen, onClose, onSuccess }) {
                         // Check if the adjacent cell is an end date
                         const val2 = row[c + 1];
                         if (val2) {
-                            let nextDate = parseExcelDate(val2);
+                            let nextDate = parseExcelDate(val2, date1904);
                             if (!isNaN(nextDate.getTime())) {
-                                const y2 = nextDate.getFullYear();
+                                const y2 = nextDate.getUTCFullYear();
                                 if (y2 >= 2000 && y2 <= 2100 && nextDate >= startDate) {
                                     endDate = nextDate;
                                     skipNext = true; // Skip parsing this adjacent cell in the next loop iteration

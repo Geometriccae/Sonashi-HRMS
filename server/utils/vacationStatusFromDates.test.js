@@ -502,7 +502,7 @@ describe('approval/re-approval transitions', () => {
     assert.equal(status, 'On Vacation');
   });
 
-  it('keeps manual Returned Back when employee travel dates are set in the future', () => {
+  it('moves manual Returned Back to Yet to Go when the next travel date is still ahead', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Vacation Approved',
@@ -514,7 +514,23 @@ describe('approval/re-approval transitions', () => {
       [leave({ travellingDate: new Date(2026, 2, 1), startDate: new Date(2026, 2, 1), endDate: new Date(2026, 2, 20) })],
       TODAY
     );
-    assert.equal(status, 'Vacation Approved');
+    assert.equal(status, 'Vacation Pending');
+  });
+
+  it('stays On Vacation when Returned Back was saved with a future return date', () => {
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Approved',
+        vacationStatusSource: 'manual',
+        travellingDate: new Date(2026, 8, 1),
+        leaveEndDate: new Date(2026, 10, 3),
+        returnDate: new Date(2026, 10, 3),
+        firstWorkingDay: new Date(2026, 10, 3),
+      }),
+      [],
+      new Date(2026, 8, 16)
+    );
+    assert.equal(status, 'On Vacation');
   });
 
   it('date-derives leave-sourced Returned Back to Yet to Go from future employee travel dates', () => {
@@ -843,5 +859,68 @@ describe('date-driven status for every employee', () => {
       assert.equal(statusOn(record, [], on(2026, 9, 8)), 'Vacation Pending');
       assert.equal(statusOn(record, [], on(2026, 9, 9)), 'On Vacation');
     });
+  });
+});
+
+describe('leave data consistency: one valid leave, one status', () => {
+  it('does not mark On Vacation for a future 2026 trip because of a 2022 history row', () => {
+    const emp = employee({
+      vacationStatus: 'Vacation Pending',
+      vacationStatusSource: 'leave',
+      travellingDate: new Date(2026, 8, 11),
+      leaveEndDate: new Date(2026, 8, 11),
+      returnDate: null,
+    });
+    const leaves = [
+      leave({
+        startDate: new Date(2022, 9, 4),
+        travellingDate: new Date(2022, 9, 4),
+        endDate: new Date(2022, 11, 11),
+      }),
+      leave({
+        startDate: new Date(2026, 8, 11),
+        travellingDate: new Date(2026, 8, 11),
+        endDate: new Date(2026, 8, 11),
+      }),
+    ];
+    assert.equal(
+      resolveEmployeeVacationStatus(emp, leaves, new Date(2026, 8, 10)),
+      'Vacation Pending'
+    );
+    assert.equal(
+      resolveEmployeeVacationStatus(emp, leaves, new Date(2026, 8, 11)),
+      'On Vacation'
+    );
+  });
+
+  it('keeps 11-09-2026 as calendar year 2026', () => {
+    const { toCalendarDate } = require('./vacationStatusFromDates');
+    const stored = '2026-09-11T00:00:00.000Z';
+    const cal = toCalendarDate(stored);
+    assert.equal(cal.getFullYear(), 2026);
+    assert.equal(cal.getMonth(), 8);
+    assert.equal(cal.getDate(), 11);
+  });
+
+  it('uses each leave\'s own end date so a finished trip cannot cover a future one', () => {
+    const emp = employee({
+      vacationStatusSource: 'leave',
+      travellingDate: new Date(2026, 9, 1),
+      leaveEndDate: new Date(2026, 9, 20),
+      returnDate: null,
+    });
+    const leaves = [
+      leave({
+        startDate: new Date(2026, 0, 1),
+        travellingDate: new Date(2026, 0, 1),
+        endDate: new Date(2026, 0, 15),
+      }),
+      leave({
+        startDate: new Date(2026, 9, 1),
+        travellingDate: new Date(2026, 9, 1),
+        endDate: new Date(2026, 9, 20),
+      }),
+    ];
+    assert.equal(resolveEmployeeVacationStatus(emp, leaves, TODAY), 'Vacation Pending');
   });
 });

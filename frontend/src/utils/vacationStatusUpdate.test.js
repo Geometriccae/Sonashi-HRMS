@@ -25,9 +25,6 @@ const employee = {
   endDate: "2026-09-20",
 };
 
-/** What the date inputs send: the picked day, serialized the same way. */
-const iso = (day) => new Date(day).toISOString();
-
 describe("which dates each status asks for", () => {
   test("On Vacation and Yet to Go collect last working day, travel and leave end", () => {
     [VACATION_STATUS.ON_VACATION, VACATION_STATUS.YET_TO_GO].forEach((status) => {
@@ -117,9 +114,9 @@ describe("dates submitted from a confirmed prompt", () => {
 
     expect(error).toBeUndefined();
     expect(dates).toEqual({
-      lastWorkingDay: iso("2026-09-01"),
-      travellingDate: iso("2026-09-02"),
-      leaveEndDate: iso("2026-09-20"),
+      lastWorkingDay: "2026-09-01",
+      travellingDate: "2026-09-02",
+      leaveEndDate: "2026-09-20",
     });
   });
 
@@ -146,8 +143,8 @@ describe("dates submitted from a confirmed prompt", () => {
     });
 
     expect(dates).toEqual({
-      returnDate: iso("2026-09-21"),
-      firstWorkingDay: iso("2026-09-21"),
+      returnDate: "2026-09-21",
+      firstWorkingDay: "2026-09-21",
     });
   });
 
@@ -162,6 +159,6 @@ describe("dates submitted from a confirmed prompt", () => {
       tertiaryDateValue: "",
     });
 
-    expect(dates).toEqual({ travellingDate: iso("2026-10-01") });
+    expect(dates).toEqual({ travellingDate: "2026-10-01" });
   });
 });

@@ -332,4 +332,33 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.activeEligibleMonths).toBe(60);
         expect(calc.expiredDays).toBeGreaterThan(0);
     });
+
+    test("deleted imported leave is not in Taken once the year map is reduced", () => {
+        const emp = {
+            _id: "e-del",
+            employeeId: "IDMM-900",
+            doj: "2023-01-01",
+            excelLeaveYearTaken: { 2024: 20, 2025: 10, 2026: 15 },
+        };
+        const imported = {
+            _id: "imp-1",
+            status: "Approved",
+            employeeId: "IDMM-900",
+            importSource: "excel-master-tracker",
+            startDate: "2025-06-01",
+            endDate: "2025-06-11",
+            leaveDays: 10,
+        };
+        const before = computeExcelLeaveCalculation(emp, [imported], "2026-08-31");
+        expect(before.yearTotals[2025]).toBe(10);
+
+        const afterDelete = computeExcelLeaveCalculation(
+            { ...emp, excelLeaveYearTaken: { 2024: 20, 2025: 0, 2026: 15 } },
+            [],
+            "2026-08-31"
+        );
+        expect(afterDelete.yearTotals[2025]).toBe(0);
+        expect(afterDelete.totalTaken).toBe(before.totalTaken - 10);
+        expect(afterDelete.entitlement).toBe(before.entitlement);
+    });
 });

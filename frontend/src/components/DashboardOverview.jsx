@@ -94,7 +94,13 @@ function DashboardOverview() {
     };
 
     fetchData();
-    return () => { isMounted = false; };
+    const unsubscribe = employeeService.onEmployeeDataChanged?.(() => {
+      refreshSummary({ force: true });
+    });
+    return () => {
+      isMounted = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const handleMarkAsReturned = (item) => {
@@ -172,14 +178,14 @@ function DashboardOverview() {
       return;
     }
     const extraFields = {};
-    if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
+    if (dateValue) extraFields[fieldKey] = toDateInputValue(dateValue);
     if (secondaryFieldKey && secondaryDateValue) {
-      extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+      extraFields[secondaryFieldKey] = toDateInputValue(secondaryDateValue);
     } else if (newStatus === "Vacation Approved" && dateValue) {
-      extraFields.firstWorkingDay = new Date(dateValue).toISOString();
+      extraFields.firstWorkingDay = toDateInputValue(dateValue);
     }
     if (tertiaryFieldKey && tertiaryDateValue) {
-      extraFields[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
+      extraFields[tertiaryFieldKey] = toDateInputValue(tertiaryDateValue);
     }
     setDatePromptSaving(true);
     try {
