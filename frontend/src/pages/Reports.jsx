@@ -20,6 +20,7 @@ import {
   filterReactSelectEmployeeOptionIncludingInactive,
 } from "../utils/employeeStatusDisplay";
 import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatEmployeeMasterExperienceLabel, employeeMasterExperienceAsOf, computeExperienceMonthsFromDoj } from "../utils/yetToGoHelpers";
+import { displayEmployeeEmail } from "../utils/employeeEmailDisplay";
 import { useUrlListView } from "../hooks/usePersistedListPage";
 
 const loadXlsx = async () => {
@@ -96,8 +97,7 @@ const mapEmployeeMasterRow = (e) => {
     "Office Location": e.office || "",
     "Joining Date": formatReportDate(e.doj),
     "Employment Status": formatEmployeeStatusDisplay(e),
-    "Employee Status (Raw)": e.employeeStatus || "",
-    Email: e.emailId || "",
+    Email: displayEmployeeEmail(e.emailId, ""),
     "Contact Number": e.mobile || "",
     "Reporting Manager": e.reportingManager || "",
     "Notice Period": e.noticePeriod || "",
