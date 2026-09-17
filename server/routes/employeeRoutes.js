@@ -408,12 +408,6 @@ async function persistLiveVacationStatus(employee) {
       vacationStatusUpdatedAt: new Date(),
     });
     invalidateListCache();
-    // #region agent log
-    try {
-      require('fs').appendFileSync(require('path').join(__dirname, '../../.cursor/debug-cda47c.log'), `${JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'employeeRoutes.js:persistLiveVacationStatus',message:'persisted live vacation status',data:{from:plain.vacationStatus||null,to:withStatus.vacationStatus||null,source:plain.vacationStatusSource||null},timestamp:Date.now()})}\n`);
-    } catch (_) { /* debug only */ }
-    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'employeeRoutes.js:persistLiveVacationStatus',message:'persisted live vacation status',data:{from:plain.vacationStatus||null,to:withStatus.vacationStatus||null,source:plain.vacationStatusSource||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }
   return withStatus;
 }
@@ -1030,10 +1024,6 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
 
     Object.assign(employee, patch);
     await employee.save();
-
-    // #region agent log
-    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'E',location:'employeeRoutes.js:POST vacation-status',message:'employee vacation persisted',data:{patchKeys:Object.keys(patch),leaveEnd:patch.leaveEndDate||null,travel:patch.travellingDate||null,lwd:patch.lastWorkingDay||null,status:patch.vacationStatus||null,source:patch.vacationStatusSource||null,hasBodyLeaveId:Boolean(req.body?.leaveId),leaveEndLocal:patch.leaveEndDate?`${patch.leaveEndDate.getFullYear()}-${String(patch.leaveEndDate.getMonth()+1).padStart(2,'0')}-${String(patch.leaveEndDate.getDate()).padStart(2,'0')}`:null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     // Keep linked LeaveRequest trip dates aligned with Employee Master dates
     // so Annual Vacations / On Vacation / status derivation read the same values.

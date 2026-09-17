@@ -1,11 +1,11 @@
 /**
- * Sonashi leave: Excel master-tracker data + client month entitlement.
+ * Sonashi leave entitlement + taken.
  *
- * DATA: yearly taken from the employee’s own imported Excel map (by staff ID / name match).
- * ENTITLEMENT: completed months × 2.5, cap 150 (last 5 years).
- * TAKEN: rolling window years — closed years from Excel map only; current year uses
- *        Excel snapshot with live leave, without double-counting a trip that exists
- *        both as an Excel year total and as a live approved request.
+ * ENTITLEMENT: completed months × 2.5, cap 150 (last 5 years). Unchanged policy.
+ * TAKEN: approved LeaveRequest records only (Approved / HOD Approved).
+ *        Pending, rejected, cancelled, and deleted rows never count.
+ *        A stale Employee.excelLeaveYearTaken snapshot is not added on top —
+ *        that is what made Leave Management and Employee Master disagree.
  * AVAILABLE: entitlement − taken.
  * EXPIRED: accrual before the active window (DOJ history minus window).
  */
@@ -116,35 +116,54 @@ export function leaveRequestDays(req) {
     return span;
 }
 
-function getExcelYearTaken(employee, year) {
-    const map = employee?.excelLeaveYearTaken;
-    if (!map || typeof map !== "object") return null;
-    const v = map[year] ?? map[String(year)];
-    if (v == null || v === "") return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-}
+/**
+ * Split one leave's taken days across calendar years using END−START duration.
+ * A same-year trip stays in that year. A span such as 20/12/2026 → 10/01/2027
+ * is split so the total still equals leaveRequestDays(req).
+ */
+export function allocateLeaveDaysByYear(req) {
+    const total = leaveRequestDays(req);
+    if (!total) return {};
+    const start = toLeaveCalendarDate(req.startDate);
+    const end = toLeaveCalendarDate(req.endDate) || start;
+    if (!start || !end) return {};
 
-function isExcelImportedLeave(req) {
-    return String(req?.importSource || "") === "excel-master-tracker";
-}
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+    if (startYear === endYear) {
+        return { [startYear]: total };
+    }
 
-/** Sum Excel yearly-sheet leave already imported into LeaveRequest (by start-date year). */
-function sumExcelImportedDaysByYear(employee, allLeaveRequests) {
-    const byYear = {};
-    getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
-        if (!isExcelImportedLeave(req)) return;
-        const start = toLeaveCalendarDate(req.startDate);
-        if (!start) return;
-        const days = leaveRequestDays(req);
-        if (!days) return;
-        const year = start.getFullYear();
-        byYear[year] = (byYear[year] || 0) + days;
+    const buckets = {};
+    let allocated = 0;
+    for (let year = startYear; year <= endYear; year += 1) {
+        const yearStart = new Date(year, 0, 1);
+        const yearEnd = new Date(year, 11, 31);
+        const from = start > yearStart ? start : yearStart;
+        const to = end < yearEnd ? end : yearEnd;
+        if (from > to) continue;
+
+        let part;
+        if (from.getTime() === start.getTime()) {
+            part = calculateLeaveDays(from, to) || 0;
+        } else {
+            const dayBefore = new Date(from);
+            dayBefore.setDate(dayBefore.getDate() - 1);
+            part = calculateLeaveDays(dayBefore, to) || 0;
+        }
+        if (!part) continue;
+        buckets[year] = part;
+        allocated += part;
+    }
+
+    if (!allocated) return { [startYear]: total };
+    if (allocated === total) return buckets;
+
+    const scaled = {};
+    Object.keys(buckets).forEach((year) => {
+        scaled[year] = roundLeaveNumber((buckets[year] / allocated) * total);
     });
-    Object.keys(byYear).forEach((year) => {
-        byYear[year] = roundLeaveNumber(byYear[year]);
-    });
-    return byYear;
+    return scaled;
 }
 
 export function toLeaveCalendarDate(value) {
@@ -468,74 +487,33 @@ export function getApprovedLeavesForEmployee(employee, allLeaveRequests) {
     );
 }
 
-/** Assign leave days to the start-date calendar year (Excel yearly-sheet convention). */
+/** Assign approved leave days to each calendar year they overlap. */
 export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStart, rangeEnd) {
     const byYear = {};
-    const liveBeforeImportByYear = {};
-    const liveAfterImportByYear = {};
     const rangeFrom = toLeaveCalendarDate(rangeStart);
     const rangeTo = toLeaveCalendarDate(rangeEnd);
     if (!rangeFrom || !rangeTo) return byYear;
 
-    const hasExcelMap =
-        employee?.excelLeaveYearTaken != null && typeof employee.excelLeaveYearTaken === "object";
-    const importedByYear = sumExcelImportedDaysByYear(employee, allLeaveRequests);
-    const hasImportedExcelLeaves = Object.keys(importedByYear).length > 0;
     const currentYear = rangeTo.getFullYear();
-    const importAt = toLeaveCalendarDate(employee?.excelLeaveImportedAt);
-
-    getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
-        const start = toLeaveCalendarDate(req.startDate);
-        if (!start) return;
-        const year = start.getFullYear();
-        const yearStart = new Date(year, 0, 1);
-        const yearEnd = new Date(year, 11, 31);
-        if (yearEnd < rangeFrom || yearStart > rangeTo) return;
-        if (year > currentYear) return;
-        const days = leaveRequestDays(req);
-        if (!days) return;
-        if (!isExcelImportedLeave(req)) {
-            // Split live leave around Excel import time so a vacation already
-            // reflected in the Excel year cell is not counted again.
-            if (importAt && start > importAt) {
-                liveAfterImportByYear[year] = (liveAfterImportByYear[year] || 0) + days;
-            } else {
-                liveBeforeImportByYear[year] = (liveBeforeImportByYear[year] || 0) + days;
-            }
-        }
-        byYear[year] = (byYear[year] || 0) + days;
-    });
-
     const startYear = rangeFrom.getFullYear();
     const endYear = Math.min(rangeTo.getFullYear(), currentYear);
+
+    getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
+        const buckets = allocateLeaveDaysByYear(req);
+        Object.keys(buckets).forEach((yearKey) => {
+            const year = Number(yearKey);
+            if (!Number.isFinite(year) || year > currentYear) return;
+            const yearStart = new Date(year, 0, 1);
+            const yearEnd = new Date(year, 11, 31);
+            if (yearEnd < rangeFrom || yearStart > rangeTo) return;
+            const days = Number(buckets[year]) || 0;
+            if (!days) return;
+            byYear[year] = (byYear[year] || 0) + days;
+        });
+    });
+
     for (let year = startYear; year <= endYear; year += 1) {
-        const before = liveBeforeImportByYear[year] || 0;
-        const after = liveAfterImportByYear[year] || 0;
-
-        // Prefer the employee yearly map rebuilt from yearly sheets.
-        // Fall back to summing imported leave rows only when no map exists.
-        let excelDays = null;
-        if (hasExcelMap) {
-            const excelVal = getExcelYearTaken(employee, year);
-            excelDays = excelVal == null ? 0 : excelVal;
-        } else if (hasImportedExcelLeaves) {
-            excelDays = importedByYear[year] || 0;
-        }
-
-        if (excelDays != null) {
-            if (year < currentYear) {
-                // Closed years from Excel yearly sheets are complete (0 means no leave).
-                byYear[year] = roundLeaveNumber(excelDays);
-            } else {
-                // Current year: Excel snapshot through import + later live leave only.
-                const excelOrReentry = before > 0 ? Math.max(excelDays, before) : excelDays;
-                byYear[year] = roundLeaveNumber(excelOrReentry + after);
-            }
-        } else if (byYear[year] != null) {
-            byYear[year] = roundLeaveNumber(byYear[year]);
-        } else {
-            byYear[year] = 0;
-        }
+        byYear[year] = roundLeaveNumber(byYear[year] || 0);
     }
     return byYear;
 }
@@ -565,7 +543,7 @@ export function calculateEntitlementDays(joiningDate, calculationDateInput = nul
  * Central leave summary.
  *
  * Entitlement = min(completed months, 60) × 2.5
- * Taken       = this employee’s leave in the rolling 5-year window (Excel year map by staff ID)
+ * Taken       = this employee’s approved LeaveRequest days in the rolling window
  * Available   = entitlement − taken
  * Expired     = months accrued before the active window
  */

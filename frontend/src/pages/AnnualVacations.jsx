@@ -614,9 +614,6 @@ function AnnualVacations() {
           showToast("Employee record not found for this leave.", "error");
           return;
         }
-        // #region agent log
-        fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'D',location:'AnnualVacations.jsx:handleEditDateConfirm',message:'AV date save',data:{newStatus,dateKeys:Object.keys(extra),linkedLeaveId:Boolean(item.linkedLeaveId),leaveEnd:extra.leaveEndDate||null,travel:extra.travellingDate||null,lwd:extra.lastWorkingDay||null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         await applyVacationStatusChange({
           employeeId: empId,
           newStatus,

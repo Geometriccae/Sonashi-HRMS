@@ -101,6 +101,7 @@ function buildEmployeeLeaveMongoFilter(resolved) {
   }
   if (resolved.employeeCode) {
     clauses.push({ employeeId: resolved.employeeCode });
+    clauses.push({ linkedEmployeeCode: resolved.employeeCode });
     clauses.push({ employeeId: String(resolved.employeeRecordId) });
   }
   if (!clauses.length) return null;

@@ -107,9 +107,6 @@ async function syncLinkedLeaveDatesFromEmployee(employee, {
   if (!hasTravel && !hasEnd) return null;
 
   const leave = await findControllingVacationLeave(employee, leaveId);
-  // #region agent log
-  fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'B',location:'syncLeaveDatesFromEmployee.js:sync',message:'controlling leave lookup',data:{found:Boolean(leave),preferredLeaveId:Boolean(leaveId),hasTravel,hasEnd,requestedEnd:leaveEndDate||null,leavePrevEnd:leave?.endDate||null,leavePrevStart:leave?.startDate||null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!leave) return null;
 
   const nextStart = hasTravel ? calendarDateOnly(travellingDate) : null;
@@ -137,9 +134,6 @@ async function syncLinkedLeaveDatesFromEmployee(employee, {
     // Keep leave.endDate — approved leave period should not be wiped by a null patch.
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'B',location:'syncLeaveDatesFromEmployee.js:save',message:'leave date sync result',data:{changed,nextStart:nextStart||null,nextEnd:nextEnd||null,leaveId:leave?._id||null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!changed) return leave;
 
   const remark = 'Vacation dates updated from Employee Master';

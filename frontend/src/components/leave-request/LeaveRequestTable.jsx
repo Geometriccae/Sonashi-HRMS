@@ -141,7 +141,7 @@ function LeaveRequestTable({ onUpdate }) {
         return () => clearTimeout(t);
     }, [searchQuery]);
 
-    const fetchLeaveRequests = useCallback(async () => {
+    const fetchLeaveRequests = useCallback(async (opts = {}) => {
         setIsLoading(true);
         try {
             const params = {
@@ -156,6 +156,7 @@ function LeaveRequestTable({ onUpdate }) {
                 startDate,
                 endDate,
                 leaveType: selectedLeaveType,
+                ...(opts.force ? { force: true } : {}),
             };
             const data = await leaveRequestService.getLeaveRequests(params);
             const rows = Array.isArray(data) ? data : (data?.data || []);
@@ -195,6 +196,12 @@ function LeaveRequestTable({ onUpdate }) {
 
     useEffect(() => {
         fetchLeaveRequests();
+    }, [fetchLeaveRequests]);
+
+    useEffect(() => {
+        return employeeService.onEmployeeDataChanged?.(() => {
+            fetchLeaveRequests({ force: true });
+        });
     }, [fetchLeaveRequests]);
 
     const handleEdit = (request) => {

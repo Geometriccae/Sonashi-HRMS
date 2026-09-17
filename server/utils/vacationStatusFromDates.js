@@ -272,37 +272,19 @@ function manualVacationStatusHolds(employee, leaveRequests, todayValue) {
   return manualStatusSurvives(employee.vacationStatus, dateDriven);
 }
 
-function ymd(d) {
-  if (!d) return null;
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
 
   // Authorized manual updates win until the dates overtake them; see
   // manualStatusSurvives. Once overtaken we fall through to the date logic below,
   // so an employee always advances through their trip on their own dates.
-  const held = manualVacationStatusHolds(employee, leaveRequests, today);
-  const stage = employeeDateStage(employee, today);
-  if (held) {
-    // #region agent log
-    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolveEmployeeVacationStatus',message:'manual status held',data:{stored:employee?.vacationStatus||null,source:employee?.vacationStatusSource||null,stage,today:ymd(today),travel:ymd(toCalendarDate(employee?.travellingDate)),end:ymd(toCalendarDate(employee?.leaveEndDate)),returnDay:ymd(toCalendarDate(employee?.returnDate||employee?.firstWorkingDay))},timestamp:Date.now()})}).catch(()=>{});
-    try { require('fs').appendFileSync(require('path').join(__dirname, '../../.cursor/debug-cda47c.log'), `${JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolve',message:'manual status held',data:{stored:employee?.vacationStatus||null,source:employee?.vacationStatusSource||null,stage,today:ymd(today)},timestamp:Date.now()})}\n`); } catch (_) {}
-    // #endregion
+  if (manualVacationStatusHolds(employee, leaveRequests, today)) {
     return employee.vacationStatus;
   }
 
   const fromLeaves = leaveDrivenRows(employee, leaveRequests, today);
   const fromLeaveStatus = pickLeaveDrivenStatus(fromLeaves);
   const employeeDateStatus = statusFromEmployeeDates(employee, today);
-  // #region agent log
-  if (employee?.vacationStatus === 'Vacation Approved' && stage && stage !== 'Vacation Approved') {
-    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolveEmployeeVacationStatus',message:'returned-back vs live dates',data:{stored:employee?.vacationStatus||null,source:employee?.vacationStatusSource||null,held:false,stage,fromLeaveStatus,employeeDateStatus,today:ymd(today),travel:ymd(toCalendarDate(employee?.travellingDate)),end:ymd(toCalendarDate(employee?.leaveEndDate)),returnDay:ymd(toCalendarDate(employee?.returnDate||employee?.firstWorkingDay))},timestamp:Date.now()})}).catch(()=>{});
-    try { require('fs').appendFileSync(require('path').join(__dirname, '../../.cursor/debug-cda47c.log'), `${JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'F',location:'vacationStatusFromDates.js:resolve',message:'returned-back vs live dates',data:{stored:employee?.vacationStatus||null,held:false,stage,fromLeaveStatus,employeeDateStatus,today:ymd(today),travel:ymd(toCalendarDate(employee?.travellingDate)),end:ymd(toCalendarDate(employee?.leaveEndDate)),returnDay:ymd(toCalendarDate(employee?.returnDate||employee?.firstWorkingDay))},timestamp:Date.now()})}\n`); } catch (_) {}
-  }
-  // #endregion
 
   // An employee who is already away is never reported as still waiting to go.
   // The dates HR typed on the employee record describe this employee's own

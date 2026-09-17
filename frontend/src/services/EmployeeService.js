@@ -29,9 +29,6 @@ class EmployeeService {
   invalidateCache() {
     this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, ts: 0 };
     this._inflight = {};
-    // #region agent log
-    fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'C',location:'EmployeeService.js:invalidateCache',message:'frontend employee cache cleared',data:{ts:Date.now()},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       window.dispatchEvent(new CustomEvent('hrms:employee-data-changed', { detail: { ts: Date.now() } }));
     }
@@ -63,9 +60,6 @@ class EmployeeService {
   async getEmployeesList({ force = false, includeVacation = false } = {}) {
     const cacheKey = includeVacation ? 'listWithVacation' : 'list';
     if (!force && this._isCacheValid() && this._cache[cacheKey]) {
-      // #region agent log
-      fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'C',location:'EmployeeService.js:getEmployeesList',message:'frontend list cache HIT',data:{cacheKey,includeVacation,ageMs:Date.now()-(this._cache.ts||0)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return this._cache[cacheKey];
     }
     const inflightKey = `list:${includeVacation ? '1' : '0'}`;
@@ -242,21 +236,6 @@ class EmployeeService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const tabData = await response.json();
-      // #region agent log
-      try {
-        const row = Array.isArray(tabData?.employees) ? tabData.employees[0] : null;
-        const sample = row?.leaveEndDate || row?.endDate || null;
-        let utcDay = null;
-        let localDay = null;
-        if (sample) {
-          const dt = new Date(sample);
-          const pad = (n) => String(n).padStart(2, '0');
-          utcDay = `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
-          localDay = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
-        }
-        fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',runId:'post-fix',hypothesisId:'E',location:'EmployeeService.js:getVacationTab',message:'AV tab rows received',data:{tab,count:Array.isArray(tabData?.employees)?tabData.employees.length:0,sampleLeaveEnd:sample,sampleTravel:row?.travellingDate||null,sampleStatus:row?.vacationStatus||null,utcDay,localDay},timestamp:Date.now()})}).catch(()=>{});
-      } catch (_) { /* debug only */ }
-      // #endregion
       return tabData;
     } catch (error) {
       console.error('Error fetching vacation tab:', error);

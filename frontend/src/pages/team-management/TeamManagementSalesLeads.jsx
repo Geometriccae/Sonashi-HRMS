@@ -219,7 +219,7 @@ function TeamManagementSalesLeads() {
 
   // Keep Leave Entitlement in sync whenever the tab is opened or employee record loads
   useEffect(() => {
-    if (activeTab === "leave" && employee?._id && String(employee._id) === String(employeeId)) {
+    if (activeTab === "leave" && employee?._id) {
       fetchEmployeeLeaves(employee);
     }
   }, [activeTab, employeeId, employee?._id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -262,6 +262,7 @@ function TeamManagementSalesLeads() {
         setEmployee(null);
       } else {
         setEmployee(employeeData);
+        await fetchEmployeeLeaves(employeeData);
       }
     } catch (err) {
       console.error("Error fetching employee:", err);
@@ -1402,12 +1403,7 @@ function TeamManagementSalesLeads() {
               {activeTab === "leave" && (
                 <div style={{ padding: "0 36px", width: "100%" }}>
                   {(() => {
-                    const isCurrentEmployee =
-                      employee?._id && String(employee._id) === String(employeeId);
-                    const employeeLeaveRecords = isCurrentEmployee
-                      ? filterLeavesForEmployee(employee, allLeaveRequests)
-                      : [];
-                    const leaveStats = isCurrentEmployee
+                    const leaveStats = employee
                       ? calculateLeaveBalance(employee, allLeaveRequests)
                       : null;
                     const latest = employeeLeaves[0];

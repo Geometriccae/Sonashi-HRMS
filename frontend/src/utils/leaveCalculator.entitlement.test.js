@@ -86,7 +86,48 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.expiredDays).toBe(0);
     });
 
-    test("Excel year 0 stays 0; live leave of another year is not copied", () => {
+    test("stale excelLeaveYearTaken is not added on top of approved LeaveRequests", () => {
+        const emp = {
+            _id: "e-pramod",
+            employeeId: "IDMM-101",
+            doj: "2018-01-01",
+            excelLeaveYearTaken: { 2024: 26, 2025: 1, 2026: 8 },
+        };
+        const leaves = [
+            {
+                _id: "a1",
+                status: "Approved",
+                employeeId: "IDMM-101",
+                startDate: "2026-07-15",
+                endDate: "2026-07-22",
+                leaveDays: 7,
+            },
+            {
+                _id: "a2",
+                status: "Approved",
+                employeeId: "IDMM-101",
+                startDate: "2026-02-15",
+                endDate: "2026-02-16",
+                leaveDays: 1,
+            },
+            {
+                _id: "a3",
+                status: "Approved",
+                employeeId: "IDMM-101",
+                startDate: "2024-07-05",
+                endDate: "2024-07-31",
+                leaveDays: 26,
+            },
+        ];
+        const calc = computeExcelLeaveCalculation(emp, leaves, "2026-09-16");
+        expect(calc.historicalYearTotals[2024]).toBe(26);
+        expect(calc.historicalYearTotals[2025] ?? 0).toBe(0);
+        expect(calc.historicalYearTotals[2026]).toBe(8);
+        expect(calc.historicalTakenDays).toBe(34);
+        expect(calc.totalTaken).toBe(34);
+    });
+
+    test("implausible stored leaveDays are excluded; map cannot invent taken", () => {
         const emp = {
             _id: "e1",
             employeeId: "IDMM-151",
@@ -105,11 +146,11 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         ];
         const calc = computeExcelLeaveCalculation(emp, leaves, "2026-08-31");
         expect(calc.yearTotals[2023] ?? 0).toBe(0);
-        expect(calc.yearTotals[2026]).toBe(70);
-        expect(calc.totalTaken).toBe(70);
+        expect(calc.yearTotals[2026] ?? 0).toBe(0);
+        expect(calc.totalTaken).toBe(0);
     });
 
-    test("does not double-count Excel current-year total with the same live leave", () => {
+    test("the same approved leave is counted once even if also stored on the excel map", () => {
         const emp = {
             _id: "e198",
             employeeId: "IDMO-198",
@@ -133,7 +174,7 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.availableDays).toBe(calc.entitlement - 31);
     });
 
-    test("post-import live leave still adds on top of Excel current-year snapshot", () => {
+    test("post-import live leave is taken from the LeaveRequest only", () => {
         const emp = {
             _id: "e2",
             employeeId: "IDMM-002",
@@ -152,11 +193,11 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
             },
         ];
         const calc = computeExcelLeaveCalculation(emp, leaves, "2026-08-31");
-        expect(calc.yearTotals[2026]).toBe(34);
-        expect(calc.totalTaken).toBe(34);
+        expect(calc.yearTotals[2026]).toBe(14);
+        expect(calc.totalTaken).toBe(14);
     });
 
-    test("empty Excel year stays 0 and does not copy another year", () => {
+    test("excel map leftover days are ignored when there are no approved rows", () => {
         const emp = {
             _id: "e3",
             employeeId: "IDMM-003",
@@ -166,17 +207,16 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         };
         const calc = computeExcelLeaveCalculation(emp, [], "2026-08-31");
         expect(calc.yearTotals[2024] ?? 0).toBe(0);
-        expect(calc.yearTotals[2025]).toBe(30);
+        expect(calc.yearTotals[2025] ?? 0).toBe(0);
         expect(calc.yearTotals[2026] ?? 0).toBe(0);
-        expect(calc.totalTaken).toBe(30);
+        expect(calc.totalTaken).toBe(0);
     });
 
-    test("stale Master cached year total is ignored when map has yearly-sheet zeros", () => {
+    test("stale Master cached year total is ignored without matching LeaveRequests", () => {
         const emp = {
             _id: "e-mahesh",
             employeeId: "IDMM-169",
             doj: "2024-03-06",
-            // Correct map rebuilt from yearly sheets (not Master cached 55).
             excelLeaveYearTaken: { 2024: 0, 2025: 0, 2026: 0 },
             excelLeaveImportedAt: "2026-08-01",
         };
@@ -219,7 +259,7 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.totalTaken).toBe(4);
     });
 
-    test("sheet-built year map wins over duplicate imported leave rows", () => {
+    test("duplicate imported rows with the same span count once", () => {
         const emp = {
             _id: "e-amal",
             employeeId: "IDMO-133",
@@ -285,10 +325,11 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         ];
         const calc = computeExcelLeaveCalculation(emp, leaves, "2026-08-31");
         expect(calc.yearTotals[2024]).toBe(52);
-        expect(calc.yearTotals[2026]).toBe(30);
+        expect(calc.yearTotals[2026] ?? 0).toBe(0);
+        expect(calc.totalTaken).toBe(52);
     });
 
-    test("rejected and cancelled leave are not counted", () => {
+    test("rejected, cancelled, and pending leave are not counted", () => {
         const emp = { _id: "e4", employeeId: "IDMM-004", doj: "2024-01-01" };
         const leaves = [
             {
@@ -306,6 +347,14 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
                 startDate: "2026-02-01",
                 endDate: "2026-02-20",
                 leaveDays: 19,
+            },
+            {
+                _id: "p1",
+                status: "Pending",
+                employeeId: "IDMM-004",
+                startDate: "2026-04-01",
+                endDate: "2026-04-10",
+                leaveDays: 9,
             },
             {
                 _id: "a1",
@@ -333,7 +382,7 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.expiredDays).toBeGreaterThan(0);
     });
 
-    test("deleted imported leave is not in Taken once the year map is reduced", () => {
+    test("deleted leave is not in Taken even if the year map still has those days", () => {
         const emp = {
             _id: "e-del",
             employeeId: "IDMM-900",
@@ -352,13 +401,26 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         const before = computeExcelLeaveCalculation(emp, [imported], "2026-08-31");
         expect(before.yearTotals[2025]).toBe(10);
 
-        const afterDelete = computeExcelLeaveCalculation(
-            { ...emp, excelLeaveYearTaken: { 2024: 20, 2025: 0, 2026: 15 } },
-            [],
-            "2026-08-31"
-        );
+        const afterDelete = computeExcelLeaveCalculation(emp, [], "2026-08-31");
         expect(afterDelete.yearTotals[2025]).toBe(0);
-        expect(afterDelete.totalTaken).toBe(before.totalTaken - 10);
+        expect(afterDelete.totalTaken).toBe(0);
         expect(afterDelete.entitlement).toBe(before.entitlement);
+    });
+
+    test("a leave spanning two calendar years is split across both years", () => {
+        const emp = { _id: "e-span", employeeId: "IDMM-010", doj: "2024-01-01" };
+        const leaves = [
+            {
+                _id: "span",
+                status: "Approved",
+                employeeId: "IDMM-010",
+                startDate: "2026-12-20",
+                endDate: "2027-01-10",
+            },
+        ];
+        const calc = computeExcelLeaveCalculation(emp, leaves, "2027-02-01");
+        expect(calc.historicalYearTotals[2026]).toBe(11);
+        expect(calc.historicalYearTotals[2027]).toBe(10);
+        expect(calc.historicalTakenDays).toBe(21);
     });
 });

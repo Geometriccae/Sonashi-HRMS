@@ -469,22 +469,11 @@ function buildYetToGoFromLeaves(empList, leaveList) {
 }
 
 function tripDisplayDates(emp, leave) {
-  const applies = Boolean(leave) && employeeTripDatesApplyToLeave(leave, emp);
   if (leave) {
     // Vacation views share Employee Master trip dates after any page saves them.
     // LeaveRequest fills gaps only. Per-leave status derivation is unchanged.
     const travel = emp?.travellingDate || leave.travellingDate || leave.startDate || null;
     const end = emp?.leaveEndDate || leave.endDate || null;
-    // #region agent log
-    try {
-      const empEnd = emp?.leaveEndDate ? new Date(emp.leaveEndDate).toISOString().slice(0, 10) : null;
-      const leaveEnd = leave?.endDate ? new Date(leave.endDate).toISOString().slice(0, 10) : null;
-      const shownEnd = end ? new Date(end).toISOString().slice(0, 10) : null;
-      if (empEnd && leaveEnd && empEnd !== leaveEnd) {
-        fetch('http://127.0.0.1:7876/ingest/39a980ca-c572-4a37-ae28-bc521160a4b4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cda47c'},body:JSON.stringify({sessionId:'cda47c',hypothesisId:'A',location:'vacationDashboardStats.js:tripDisplayDates',message:'emp vs leave end mismatch',data:{applies,empEnd,leaveEnd,shownEnd},timestamp:Date.now()})}).catch(()=>{});
-      }
-    } catch (_) { /* debug only */ }
-    // #endregion
     return {
       travellingDate: travel,
       leaveEndDate: end,

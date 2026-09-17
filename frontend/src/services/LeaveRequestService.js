@@ -11,6 +11,7 @@ const API_URL = `${baseURL}/leave-requests`;
 const CACHE_TTL_MS = 180000; // 3 minutes — invalidate on writes
 let _cache = { data: null, key: "", ts: 0 };
 let _inflight = {};
+let _cacheGen = 0;
 
 const getAuthHeader = () => {
     const token = localStorage.getItem("token");
@@ -26,6 +27,7 @@ const cacheKeyFor = (params = {}) => {
 };
 
 const invalidateLeaveCache = () => {
+    _cacheGen += 1;
     _cache = { data: null, key: "", ts: 0 };
     _inflight = {};
 };
@@ -46,6 +48,7 @@ const getLeaveRequests = async (params = {}) => {
     if (_inflight[key]) {
         return _inflight[key];
     }
+    const gen = _cacheGen;
     _inflight[key] = (async () => {
         try {
             const requestParams = { ...query };
@@ -54,7 +57,9 @@ const getLeaveRequests = async (params = {}) => {
                 headers: getAuthHeader(),
                 params: requestParams,
             });
-            _cache = { data: response.data, key, ts: Date.now() };
+            if (gen === _cacheGen) {
+                _cache = { data: response.data, key, ts: Date.now() };
+            }
             return response.data;
         } finally {
             delete _inflight[key];
