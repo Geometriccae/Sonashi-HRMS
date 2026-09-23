@@ -341,6 +341,19 @@ async function syncEmployeeVacationStatus(leaveRequest) {
         }
         await Employee.findByIdAndUpdate(emp._id, { $set: patch });
         patchListCacheEmployee(emp._id, patch);
+        // When leave dates put the employee back On Vacation / Yet to Go, clear a
+        // leftover early-return stamp on the LeaveRequest too (Annual Vacations
+        // mark-return may have set it).
+        if (
+          controllingLeave &&
+          (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') &&
+          (controllingLeave.returnDate || controllingLeave.firstWorkingDay)
+        ) {
+          await LeaveRequest.findByIdAndUpdate(controllingLeave._id, {
+            $set: { returnDate: null, firstWorkingDay: null },
+          });
+          invalidateApprovedLeavesCache();
+        }
         // Approval/re-approval must not leave another route serving the old
         // employee category from the shared list cache.
         invalidateListCache();

@@ -10,7 +10,9 @@
  * LeaveRequest.startDate / travellingDate = vacation start (not appliedOn).
  * LeaveRequest.endDate = planned vacation end.
  * Employee.returnDate / firstWorkingDay = actual return/entry when it belongs
- * to this trip (on or after travel start).
+ * to this trip (on or after travel start). A leftover return dated before the
+ * current Leave Management end date is ignored so extending the leave cannot
+ * keep the employee on Returned Back.
  */
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
@@ -124,6 +126,8 @@ function getLeaveTravelStartDate(leave, employee) {
 function getTripReturnDate(leave, employee) {
   const emp = employeeDatesForLeave(leave, employee);
   const travel = getLeaveTravelStartDate(leave, employee);
+  const leaveEnd = toCalendarDate(leave?.endDate || (emp && emp.leaveEndDate));
+  // Early return recorded on the LeaveRequest itself (Leave Management).
   const leaveReturn = toCalendarDate(leave?.returnDate || leave?.firstWorkingDay);
   if (leaveReturn && travel && leaveReturn >= travel) return leaveReturn;
 
@@ -133,7 +137,21 @@ function getTripReturnDate(leave, employee) {
 
   const empReturn = toCalendarDate(emp?.returnDate || emp?.firstWorkingDay);
   if (!empReturn || !travel || empReturn < travel) return null;
+  // Leave Management end date is the approved trip. A Master / Annual Vacations
+  // return dated before that end is leftover (or stale after the leave was
+  // extended) and must not keep Returned Back while the leave is still open.
+  if (leaveEnd && empReturn < leaveEnd) return null;
   return empReturn;
+}
+
+/**
+ * Return date only ends the trip when it is on/after travel and not earlier
+ * than the current approved leave end (Leave Management source of truth).
+ */
+function effectiveReturnForStatus(travel, end, returnDay) {
+  if (!returnDay || !travel || returnDay < travel) return null;
+  if (end && returnDay < end) return null;
+  return returnDay;
 }
 
 function statusFromTravelEndAndReturn(travel, end, returnDay, today) {
@@ -152,10 +170,17 @@ function statusFromLeaveDates(leave, employee, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
   const emp = employeeDatesForLeave(leave, employee);
   const travel = getLeaveTravelStartDate(leave, employee);
-  // Employee Master leaveEndDate wins only for the trip those dates belong to.
-  const end = toCalendarDate((emp && emp.leaveEndDate) || leave.endDate);
+  // Approved Leave Management dates are the trip. Employee Master fills gaps.
+  const end = toCalendarDate(leave.endDate || (emp && emp.leaveEndDate));
   const returnDay = getTripReturnDate(leave, employee);
   return statusFromTravelEndAndReturn(travel, end, returnDay, today);
+}
+
+function tripReturnForEmployee(employee, travel, end) {
+  const returnDay = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
+  // Same rule as getTripReturnDate: a return before the current leave end is
+  // ignored so status follows Leave Management / leaveEndDate.
+  return effectiveReturnForStatus(travel, end, returnDay);
 }
 
 /** Team Management vacation dates on the employee record (same date rules as leave). */
@@ -163,8 +188,7 @@ function statusFromEmployeeDates(employee, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
   const travel = toCalendarDate(employee?.travellingDate);
   const end = toCalendarDate(employee?.leaveEndDate);
-  const returnDay = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
-  const tripReturn = travel && returnDay && returnDay >= travel ? returnDay : null;
+  const tripReturn = tripReturnForEmployee(employee, travel, end);
   if (!today || !travel) return null;
   if (!end && !tripReturn) {
     if (today < travel) return 'Vacation Pending';
@@ -200,8 +224,7 @@ function employeeDateStage(employee, todayValue) {
   if (today < travel) return 'Vacation Pending';
 
   const end = toCalendarDate(employee?.leaveEndDate);
-  const returnDay = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
-  const tripReturn = returnDay && returnDay >= travel ? returnDay : null;
+  const tripReturn = tripReturnForEmployee(employee, travel, end);
   if (tripReturn && today >= tripReturn) return 'Vacation Approved';
   if (end && today > end) return 'Vacation Approved';
   return 'On Vacation';
@@ -238,7 +261,7 @@ function leaveDrivenRows(employee, leaveRequests, today) {
       return {
         status: statusFromLeaveDates(leave, employee, today),
         travel: getLeaveTravelStartDate(leave, employee),
-        end: toCalendarDate((emp && emp.leaveEndDate) || leave.endDate),
+        end: toCalendarDate(leave.endDate || (emp && emp.leaveEndDate)),
       };
     })
     .filter((row) => row.status);
@@ -264,11 +287,17 @@ function manualVacationStatusHolds(employee, leaveRequests, todayValue) {
     return false;
   }
   const today = toCalendarDate(todayValue || new Date());
-  // The employee's own vacation dates are the ones edited alongside the manual
-  // status, so they describe the manual intent best; leave dates are the fallback.
-  const dateDriven =
-    employeeDateStage(employee, today) ||
-    pickLeaveDrivenStatus(leaveDrivenRows(employee, leaveRequests, today));
+  const leaveRows = leaveDrivenRows(employee, leaveRequests, today);
+  const fromLeave = pickLeaveDrivenStatus(leaveRows);
+  // Approved Leave Management dates outrank a stale manual Returned Back once
+  // the leave still covers today (or is still pending).
+  if (
+    employee.vacationStatus === 'Vacation Approved' &&
+    (fromLeave === 'On Vacation' || fromLeave === 'Vacation Pending')
+  ) {
+    return false;
+  }
+  const dateDriven = employeeDateStage(employee, today) || fromLeave;
   return manualStatusSurvives(employee.vacationStatus, dateDriven);
 }
 
@@ -286,38 +315,46 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
   const fromLeaveStatus = pickLeaveDrivenStatus(fromLeaves);
   const employeeDateStatus = statusFromEmployeeDates(employee, today);
 
-  // An employee who is already away is never reported as still waiting to go.
-  // The dates HR typed on the employee record describe this employee's own
-  // trip, so once they are live they outrank a separate approved request that
-  // still lies ahead: ranking the leave rows first left employees on 'Yet to
-  // Go' for the whole of a trip they had already started, because a future
-  // request further down their leave history answered for them.
-  if (employeeDateStatus === 'On Vacation' && employee?.vacationStatusSource === 'manual') {
-    return employeeDateStatus;
-  }
-
-  // Current and future approved leave dates always win over a stored label
-  // when the status is leave-driven (or legacy / unset source).
-  if (fromLeaveStatus === 'On Vacation' || fromLeaveStatus === 'Vacation Pending') {
+  // Active approved leave (including after Master return was cleared) wins.
+  if (fromLeaveStatus === 'On Vacation') {
     return fromLeaveStatus;
   }
 
-  // Manual Yet to Go / On Vacation after a finished trip only when the
-  // employee travel date is after that trip ended (Returned Back → Yet to Go).
-  if (employeeDateStatus === 'On Vacation' || employeeDateStatus === 'Vacation Pending') {
-    if (!fromLeaveStatus) return employeeDateStatus;
-    const empTravel = toCalendarDate(employee?.travellingDate);
-    const latestLeaveEnd = fromLeaves.reduce((latest, row) => {
-      if (!row.end) return latest;
-      if (!latest || row.end > latest) return row.end;
-      return latest;
-    }, null);
-    if (empTravel && latestLeaveEnd && empTravel > latestLeaveEnd) {
-      return employeeDateStatus;
+  // Finished / early-returned leave (leave.returnDate). A newer employee trip
+  // that starts after that leave ended can still move to Yet to Go / On Vacation.
+  if (fromLeaveStatus === 'Vacation Approved') {
+    if (employeeDateStatus === 'On Vacation' || employeeDateStatus === 'Vacation Pending') {
+      const empTravel = toCalendarDate(employee?.travellingDate);
+      const latestLeaveEnd = fromLeaves.reduce((latest, row) => {
+        if (!row.end) return latest;
+        if (!latest || row.end > latest) return row.end;
+        return latest;
+      }, null);
+      if (empTravel && latestLeaveEnd && empTravel > latestLeaveEnd) {
+        return employeeDateStatus;
+      }
     }
+    return fromLeaveStatus;
   }
 
-  if (fromLeaveStatus) return fromLeaveStatus;
+  // Future approved leave. Prefer it unless Employee Master trip dates already
+  // cover that same upcoming leave (travel started early).
+  if (fromLeaveStatus === 'Vacation Pending') {
+    if (employeeDateStatus === 'On Vacation') {
+      const pendingLeaves = (Array.isArray(leaveRequests) ? leaveRequests : []).filter((leave) => {
+        if (!APPROVED_LEAVE_STATUSES.includes(leave.status)) return false;
+        if (!leaveBelongsToEmployee(leave, employee)) return false;
+        const travel = getLeaveTravelStartDate(leave, employee);
+        return travel && travel > today;
+      });
+      if (pendingLeaves.some((leave) => employeeTripDatesApplyToLeave(leave, employee))) {
+        return employeeDateStatus;
+      }
+    }
+    return fromLeaveStatus;
+  }
+
+  if (employeeDateStatus) return employeeDateStatus;
   if (employeeDateStatus) return employeeDateStatus;
 
   if (employee?.vacationStatus === 'Onboarding') return 'Onboarding';

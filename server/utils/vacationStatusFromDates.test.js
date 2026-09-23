@@ -245,13 +245,36 @@ describe('resolveEmployeeVacationStatus', () => {
     assert.equal(status, 'On Vacation');
   });
 
+  it('an extended Leave Management end date outranks a leftover Master return date', () => {
+    const today = new Date(2026, 8, 23); // 23 Sep 2026
+    const status = resolveEmployeeVacationStatus(
+      employee({
+        vacationStatus: 'Vacation Approved',
+        vacationStatusSource: 'leave',
+        travellingDate: new Date(2026, 4, 1),
+        leaveEndDate: new Date(2026, 11, 31),
+        returnDate: new Date(2026, 8, 16),
+        firstWorkingDay: new Date(2026, 8, 17),
+      }),
+      [leave({
+        startDate: new Date(2026, 4, 1),
+        travellingDate: new Date(2026, 4, 1),
+        endDate: new Date(2026, 11, 31),
+      })],
+      today
+    );
+    assert.equal(status, 'On Vacation');
+  });
+
   it('honors a persisted actual return date for the current approved trip', () => {
     const status = resolveEmployeeVacationStatus(
       employee({
         vacationStatus: 'Vacation Approved',
-        returnDate: new Date(2026, 7, 27),
+        vacationStatusSource: 'manual',
+        returnDate: TODAY,
+        leaveEndDate: TODAY,
       }),
-      [leave()],
+      [leave({ endDate: TODAY, returnDate: TODAY })],
       TODAY
     );
     assert.equal(status, 'Vacation Approved');
@@ -422,13 +445,17 @@ describe('applyEffectiveVacationStatuses', () => {
     assert.equal(row.vacationStatus, 'Onsite');
   });
 
-  it('keeps manual Returned Back on list rows despite an active approved leave', () => {
+  it('does not keep Returned Back when the Leave Management end date is still ahead', () => {
     const [row] = applyEffectiveVacationStatuses(
-      [employee({ vacationStatus: 'Vacation Approved', vacationStatusSource: 'manual', returnDate: TODAY })],
+      [employee({
+        vacationStatus: 'Vacation Approved',
+        vacationStatusSource: 'leave',
+        returnDate: TODAY,
+      })],
       [leave()],
       TODAY
     );
-    assert.equal(row.vacationStatus, 'Vacation Approved');
+    assert.equal(row.vacationStatus, 'On Vacation');
   });
 });
 

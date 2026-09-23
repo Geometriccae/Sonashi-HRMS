@@ -41,6 +41,8 @@ const {
   const {
     applyEffectiveVacationStatuses,
     manualVacationStatusHolds,
+    leaveBelongsToEmployee,
+    statusFromLeaveDates,
     toCalendarDate,
   } = require('../utils/vacationStatusFromDates');
 const {
@@ -391,23 +393,48 @@ async function withLiveVacationStatus(employees) {
 async function persistLiveVacationStatus(employee) {
   if (!employee) return employee;
   const plain = typeof employee.toObject === 'function' ? employee.toObject() : { ...employee };
+  const approvedLeaves = await getApprovedLeavesForVacation();
   if (plain.vacationStatusSource === 'manual') {
-    const approvedLeaves = await getApprovedLeavesForVacation();
     if (manualVacationStatusHolds(plain, approvedLeaves)) {
       return plain;
     }
   }
   const withStatus = await withLiveVacationStatus(plain);
-  if (
-    withStatus &&
-    String(plain.vacationStatus || '') !== String(withStatus.vacationStatus || '')
-  ) {
-    await Employee.findByIdAndUpdate(plain._id, {
-      vacationStatus: withStatus.vacationStatus,
-      vacationStatusSource: 'leave',
-      vacationStatusUpdatedAt: new Date(),
-    });
+  const liveStatus = withStatus?.vacationStatus;
+  const patch = {};
+  if (withStatus && String(plain.vacationStatus || '') !== String(liveStatus || '')) {
+    patch.vacationStatus = liveStatus;
+    patch.vacationStatusSource = 'leave';
+    patch.vacationStatusUpdatedAt = new Date();
+  }
+  // Leave Management end date is source of truth for an open trip. Sync it onto
+  // the employee and drop a leftover Master return dated before that end so
+  // Annual Vacations / Master stop showing Returned Back while leave is open.
+  if (liveStatus === 'On Vacation' || liveStatus === 'Vacation Pending') {
+    let leaveEnd = toCalendarDate(plain.leaveEndDate);
+    for (const leave of approvedLeaves) {
+      if (!leaveBelongsToEmployee(leave, plain)) continue;
+      const leaveStatus = statusFromLeaveDates(leave, plain);
+      if (leaveStatus !== 'On Vacation' && leaveStatus !== 'Vacation Pending') continue;
+      const end = toCalendarDate(leave.endDate);
+      if (end && (!leaveEnd || end > leaveEnd)) leaveEnd = end;
+    }
+    if (leaveEnd) {
+      const storedEnd = toCalendarDate(plain.leaveEndDate);
+      if (!storedEnd || storedEnd.getTime() !== leaveEnd.getTime()) {
+        patch.leaveEndDate = leaveEnd;
+      }
+      const ret = toCalendarDate(plain.returnDate || plain.firstWorkingDay);
+      if (ret && ret < leaveEnd) {
+        patch.returnDate = null;
+        patch.firstWorkingDay = null;
+      }
+    }
+  }
+  if (Object.keys(patch).length > 0 && plain._id) {
+    await Employee.findByIdAndUpdate(plain._id, patch);
     invalidateListCache();
+    return { ...withStatus, ...patch };
   }
   return withStatus;
 }
@@ -1173,9 +1200,12 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
 
     // Only persist real Employee schema paths. Drop UI leftovers so a master-data
     // save cannot create duplicates, wipe increments, or fail role validation.
-    const schemaPaths = new Set(
-      Object.keys(Employee.schema.paths).filter((p) => !p.includes('.'))
-    );
+    // Nested objects (emergencyContact, salaryDetails, …) only appear as dotted
+    // leaf paths in Mongoose — include their parent keys so $set still updates them.
+    const schemaPaths = new Set();
+    for (const p of Object.keys(Employee.schema.paths)) {
+      schemaPaths.add(p.includes('.') ? p.split('.')[0] : p);
+    }
     for (const key of Object.keys(updateData)) {
       if (
         !schemaPaths.has(key) ||
@@ -2175,6 +2205,10 @@ router.post('/:id/vacation-return', authMiddleware, async (req, res) => {
           leave.leaveDays = days === 0 ? 1 : days;
         }
       }
+      // Persist the actual return on the LeaveRequest so status derivation can
+      // honor an intentional early return. Extending leave end later clears it.
+      leave.returnDate = returnDt;
+      leave.firstWorkingDay = firstWork;
       leave.changeStatus = 'Modified';
       leave.changedBy = actor;
       leave.changedByUser = req.user._id || req.user.id || null;

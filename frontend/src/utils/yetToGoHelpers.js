@@ -196,8 +196,11 @@ function employeeTripDatesApplyToLeave(leave, employee) {
 
 function tripDisplayDates(emp, leave) {
   if (leave) {
-    const travel = emp?.travellingDate || leave.travellingDate || leave.startDate || null;
-    const end = emp?.leaveEndDate || leave.endDate || null;
+    const applies = employeeTripDatesApplyToLeave(leave, emp);
+    // Leave Management dates are the trip; Master overlays only when same trip.
+    const travel =
+      leave.travellingDate || leave.startDate || (applies ? emp?.travellingDate : null) || null;
+    const end = leave.endDate || (applies ? emp?.leaveEndDate : null) || null;
     return {
       travellingDate: travel,
       leaveEndDate: end,
@@ -224,17 +227,24 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
     req?.travellingDate || (applies ? linkedEmployee?.travellingDate : null) || req?.startDate
   );
   const leaveEndDate = toDayStart(
-    (applies ? linkedEmployee?.leaveEndDate : null) || req?.endDate
+    req?.endDate || (applies ? linkedEmployee?.leaveEndDate : null)
   );
   if (!today || !travelDate) return null;
 
+  const leaveReturn = toDayStart(req?.returnDate || req?.firstWorkingDay);
   const empReturn =
     applies && linkedEmployee?.vacationStatus === "Onsite"
       ? null
       : applies
         ? toDayStart(linkedEmployee?.returnDate || linkedEmployee?.firstWorkingDay)
         : null;
-  const actualReturn = toDayStart(req?.returnDate || req?.firstWorkingDay) || empReturn;
+  // Leave Management return on the request is the intentional early return.
+  // A Master return before the current approved end is leftover / stale.
+  let masterReturn = null;
+  if (empReturn && (!leaveEndDate || empReturn >= leaveEndDate)) {
+    masterReturn = empReturn;
+  }
+  const actualReturn = leaveReturn || masterReturn;
   const tripReturn = actualReturn && actualReturn >= travelDate ? actualReturn : null;
 
   if (today < travelDate) return "Vacation Pending";
@@ -264,7 +274,17 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     experienceYears: computeEmployeeMasterExperienceYears(linked),
     travellingDate: dates.travellingDate,
     lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
-    returnDate: req.returnDate || (employeeTripDatesApplyToLeave(req, linked) ? linked?.returnDate : null) || null,
+    returnDate: (() => {
+      const leaveReturn = req.returnDate || req.firstWorkingDay || null;
+      if (leaveReturn) return leaveReturn;
+      if (!employeeTripDatesApplyToLeave(req, linked)) return null;
+      const empReturn = linked?.returnDate || linked?.firstWorkingDay || null;
+      const leaveEnd = toDayStart(req.endDate || linked?.leaveEndDate);
+      const empRetDay = toDayStart(empReturn);
+      // Stale Master return before Leave Management end must not display.
+      if (empRetDay && leaveEnd && empRetDay < leaveEnd) return null;
+      return empReturn;
+    })(),
     firstWorkingDay: req.firstWorkingDay || (employeeTripDatesApplyToLeave(req, linked) ? linked?.firstWorkingDay : null) || null,
     leaveEndDate: dates.leaveEndDate,
     endDate: dates.endDate,

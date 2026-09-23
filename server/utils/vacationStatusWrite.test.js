@@ -189,8 +189,16 @@ test('manual transitions persist against active approved leave', async (t) => {
       };
 
       const saved = { ...employee, ...patch };
+      const leavesForRead =
+        target === 'Vacation Approved'
+          ? activeLeave.map((row) => ({
+              ...row,
+              returnDate: patch.returnDate || TODAY,
+              firstWorkingDay: patch.returnDate || TODAY,
+            }))
+          : activeLeave;
       assert.equal(
-        resolveEmployeeVacationStatus(saved, activeLeave, TODAY),
+        resolveEmployeeVacationStatus(saved, leavesForRead, TODAY),
         target,
         `${derived} -> ${target}`
       );

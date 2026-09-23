@@ -677,7 +677,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         emiratesIdExpiryDate: formData.emiratesIdExpiryDate || null,
         remarks: formData.remarks || "",
         employeeStatus: formData.employeeStatus || "Active",
-        vacationStatus: formData.vacationStatus || "Onsite",
         attendance: formData.attendance || "Onsite",
         lifeInsurance: Boolean(formData.lifeInsurance),
         medicalInsurance: Boolean(formData.medicalInsurance),
@@ -727,10 +726,16 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       if (designation) payload.role = designation;
       else if (storedRole) payload.role = storedRole;
 
-      // Preserve vacation dates so a master-data save does not clear return/travel.
-      ["returnDate", "travellingDate", "leaveEndDate", "firstWorkingDay"].forEach((key) => {
-        if (storedEmployee[key]) payload[key] = storedEmployee[key];
-      });
+      // Only send vacationStatus when the user actually changed the dropdown.
+      // Echoing a stale Returned Back label on an emergency-contact (or other
+      // master-data) save re-pins vacationStatusSource=manual and blocks
+      // Leave Management date-driven On Vacation. Trip dates are left untouched
+      // so this save cannot revive a leftover returnDate.
+      const loadedVacation = String(storedEmployee.vacationStatus || "Onsite").trim();
+      const submittedVacation = String(formData.vacationStatus || "Onsite").trim();
+      if (submittedVacation && submittedVacation !== loadedVacation) {
+        payload.vacationStatus = submittedVacation;
+      }
 
       await employeeService.updateEmployeeWithFile(empId, payload, profileImage);
       employeeService.invalidateCache?.();
