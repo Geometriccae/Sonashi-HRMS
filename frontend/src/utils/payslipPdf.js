@@ -376,23 +376,15 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   });
 
   currentY += 30;
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(71, 85, 105);
-
-  doc.line(margin + 5, currentY, margin + 65, currentY);
-  doc.text("Employee Signature", margin + 35, currentY + 6, { align: "center" });
-
-  doc.line(pageWidth - margin - 65, currentY, pageWidth - margin - 5, currentY);
-  doc.text("Employer / Authorized Signature", pageWidth - margin - 35, currentY + 6, {
-    align: "center",
-  });
-
   doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
   doc.setTextColor(148, 163, 184);
-  doc.text("System Generated Payslip", pageWidth / 2, pageHeight - 30, {
-    align: "center",
-  });
+  doc.text(
+    "This is a system generated payslip, Signature not required",
+    pageWidth / 2,
+    pageHeight - 30,
+    { align: "center" }
+  );
 
   const fileName = `Payslip_${String(slip.employeeName || "Unknown").replace(/[^a-zA-Z0-9]/g, "_")}_${slip.month}_${slip.year}.pdf`;
   return { doc, fileName };
