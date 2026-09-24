@@ -1,9 +1,11 @@
 import {
     accrueLeaveDays,
     calculateEntitlementDays,
+    calculateLeaveBalance,
     computeExcelLeaveCalculation,
     countCompletedMonths,
     lastFiveLeaveYears,
+    totalLeaveTakenFromDoj,
 } from "./leaveCalculator";
 
 /** Use the 1st of the month so JS date overflow cannot shorten February/September. */
@@ -422,5 +424,63 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.historicalYearTotals[2026]).toBe(11);
         expect(calc.historicalYearTotals[2027]).toBe(10);
         expect(calc.historicalTakenDays).toBe(21);
+    });
+});
+
+describe("Total Leave Taken (DOJ → today)", () => {
+    const emp = { _id: "e-doj", employeeId: "IDMM-200", doj: "2021-01-01" };
+
+    test("returns 0 when there is no approved leave", () => {
+        expect(totalLeaveTakenFromDoj(emp, [], "2026-09-23")).toBe(0);
+        expect(calculateLeaveBalance(emp, [], "2026-09-23").totalLeaveTakenFromDoj).toBe(0);
+    });
+
+    test("sums approved leave from DOJ through as-of date across years", () => {
+        const leaves = [
+            { _id: "a", status: "Approved", employeeId: "IDMM-200", startDate: "2021-06-01", endDate: "2021-06-21" }, // 20
+            { _id: "b", status: "Approved", employeeId: "IDMM-200", startDate: "2023-03-01", endDate: "2023-03-11" }, // 10
+            { _id: "c", status: "Approved", employeeId: "IDMM-200", startDate: "2025-01-01", endDate: "2025-01-16" }, // 15
+        ];
+        // END−START: 20, 10, 15 → 45
+        expect(totalLeaveTakenFromDoj(emp, leaves, "2026-09-23")).toBe(45);
+    });
+
+    test("ignores pending, rejected, and future leave", () => {
+        const leaves = [
+            { _id: "ok", status: "Approved", employeeId: "IDMM-200", startDate: "2024-01-01", endDate: "2024-01-11" }, // 10
+            { _id: "pend", status: "Pending", employeeId: "IDMM-200", startDate: "2024-02-01", endDate: "2024-02-20" },
+            { _id: "rej", status: "Rejected", employeeId: "IDMM-200", startDate: "2024-03-01", endDate: "2024-03-20" },
+            { _id: "fut", status: "Approved", employeeId: "IDMM-200", startDate: "2026-12-01", endDate: "2026-12-31" },
+        ];
+        expect(totalLeaveTakenFromDoj(emp, leaves, "2026-09-23")).toBe(10);
+    });
+
+    test("clips an active leave to days taken up to today", () => {
+        const leaves = [
+            {
+                _id: "active",
+                status: "Approved",
+                employeeId: "IDMM-200",
+                startDate: "2026-09-18",
+                endDate: "2026-09-30",
+            },
+        ];
+        // 18 → 23 = 5 days (END−START)
+        expect(totalLeaveTakenFromDoj(emp, leaves, "2026-09-23")).toBe(5);
+    });
+
+    test("does not change the existing 5-year Leave Taken field", () => {
+        const longService = { _id: "e-doj", employeeId: "IDMM-200", doj: "2018-01-01" };
+        const leaves = [
+            { _id: "old", status: "Approved", employeeId: "IDMM-200", startDate: "2019-06-01", endDate: "2019-06-21" }, // 20 — outside 5yr window
+            { _id: "new", status: "Approved", employeeId: "IDMM-200", startDate: "2025-06-01", endDate: "2025-06-11" }, // 10 — inside window
+        ];
+        const balance = calculateLeaveBalance(longService, leaves, "2026-09-23");
+        expect(balance.totalLeaveTakenFromDoj).toBe(30);
+        // Existing totalTaken stays the rolling-window value (unchanged API).
+        expect(typeof balance.totalTaken).toBe("number");
+        expect(balance.totalTaken).toBe(balance.activeTakenDays);
+        expect(balance.totalTaken).toBe(10);
+        expect(balance.totalLeaveTakenFromDoj).toBeGreaterThan(balance.totalTaken);
     });
 });

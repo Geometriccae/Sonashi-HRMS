@@ -105,12 +105,8 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
     const employee = Object.keys(employeeDetails).length
         ? employeeDetails
         : (leaveRequest.employeeMaster || leaveRequest.employee || {});
-    const balanceLeaveSource =
-        employeeLeaveHistory.length > 0
-            ? employeeLeaveHistory
-            : Array.isArray(allLeaveRequests)
-              ? allLeaveRequests
-              : [];
+    // Full history for this employee only — never the year-filtered Leave Management table.
+    const balanceLeaveSource = Array.isArray(employeeLeaveHistory) ? employeeLeaveHistory : [];
     const employeeLeaveRecords = filterLeavesForEmployee(employee, balanceLeaveSource);
     const leaveStats = calculateLeaveBalance(employee, balanceLeaveSource, leaveRequest?.startDate || new Date());
     const employeeLeaves = getApprovedLeavesForEmployee(employee, balanceLeaveSource);
@@ -264,14 +260,18 @@ function LeaveApplicationFormModal({ isOpen, onClose, leaveRequest, allLeaveRequ
                             <span style={{ fontSize: "11px", color: "#94a3b8" }}>Last 5 years (Capped)</span>
                         </div>
                         <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Leave Taken</span>
+                            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Total Leave Taken</span>
                             <div style={{ fontSize: "24px", fontWeight: "700", color: "#ef4444", marginTop: "4px" }}>{leaveStats.totalTaken} Days</div>
-                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>In last 5 years</span>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                                {employee?.doj
+                                    ? `${new Date(employee.doj).toLocaleDateString("en-GB")} → today`
+                                    : "From DOJ to today"}
+                            </span>
                         </div>
                         <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
                             <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Available</span>
                             <div style={{ fontSize: "24px", fontWeight: "700", color: "#1d4ed8", marginTop: "4px" }}>{leaveStats.balance} Days</div>
-                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Entitlement − Taken</span>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Entitlement − last 5 years taken</span>
                         </div>
                         <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
                             <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Expired</span>

@@ -350,6 +350,28 @@ export function sumApprovedLeaveInWindow(employee, allLeaveRequests, rangeStart,
     );
 }
 
+/**
+ * Total approved leave taken from employee DOJ through `asOf` (default: today).
+ * Uses the same day-overlap rules as Leave Management; future days are excluded.
+ * Independent of the rolling 5-year entitlement / Leave Taken window.
+ */
+export function totalLeaveTakenFromDoj(employee, allLeaveRequests, asOf = null) {
+    const calcDate = toLeaveCalendarDate(asOf) || toLeaveCalendarDate(new Date());
+    const joiningDate = toLeaveCalendarDate(employee?.doj);
+    if (!calcDate) return 0;
+    if (!joiningDate) {
+        // No DOJ: still count approved leave already taken up to asOf (no invented start).
+        return sumApprovedLeaveInWindow(
+            employee,
+            allLeaveRequests,
+            new Date(1900, 0, 1),
+            calcDate
+        );
+    }
+    if (joiningDate > calcDate) return 0;
+    return sumApprovedLeaveInWindow(employee, allLeaveRequests, joiningDate, calcDate);
+}
+
 /** Historical leave taken strictly before the active window (informational). */
 export function sumApprovedLeaveBeforeDate(employee, allLeaveRequests, beforeDate) {
     const before = toLeaveCalendarDate(beforeDate);
@@ -664,6 +686,7 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
             workingYears: 0,
             entitlement: 0,
             totalTaken: 0,
+            totalLeaveTakenFromDoj: 0,
             balance: 0,
             expiredDays: 0,
             airfareStatus: "N/A",
@@ -678,6 +701,11 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
     const calc = computeExcelLeaveCalculation(employee, allLeaveRequests, calcDate);
 
     const today = calcDate;
+    const totalLeaveTakenFromDojDays = totalLeaveTakenFromDoj(
+        employee,
+        allLeaveRequests,
+        calcDate
+    );
 
     let lastAirfareDate = null;
     let airfareUsedRecently = false;
@@ -710,6 +738,8 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
         totalTaken: calc.totalTaken,
         activeTakenDays: calc.activeTakenDays,
         historicalTakenDays: calc.historicalTakenDays,
+        /** DOJ → as-of (today): all approved leave taken; not limited to 5-year window. */
+        totalLeaveTakenFromDoj: totalLeaveTakenFromDojDays,
         balance: calc.balance,
         leaveDue: calc.leaveDue,
         availableDays: calc.availableDays,

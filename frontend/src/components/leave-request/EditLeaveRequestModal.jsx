@@ -461,13 +461,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         ) || "N/A")
         : "N/A";
 
-    // Full leave history for this employee (not the year-filtered Leave Management page)
-    const balanceLeaveSource =
-        employeeLeaveHistory.length > 0
-            ? employeeLeaveHistory
-            : Array.isArray(allLeaveRequests)
-              ? allLeaveRequests
-              : [];
+    // Full leave history for this employee only — never the year-filtered Leave Management table.
+    const balanceLeaveSource = Array.isArray(employeeLeaveHistory) ? employeeLeaveHistory : [];
 
     const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, balanceLeaveSource, formData.startDate || new Date()) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     // Same employee-ID + approved filter as leaveCalculator (not name / Imported).
@@ -856,8 +851,13 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#14532d" }}>{leaveStats.entitlement} Days</div>
                                 </div>
                                 <div style={{ padding: "12px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecaca", textAlign: "center" }}>
-                                    <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Taken</div>
+                                    <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Leave Taken</div>
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
+                                    <div style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>
+                                        {selectedEmp?.doj
+                                            ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
+                                            : "From DOJ to today"}
+                                    </div>
                                 </div>
                                 <div style={{ padding: "12px", background: "#fff7ed", borderRadius: "12px", border: "1px solid #fed7aa", textAlign: "center" }}>
                                     <div style={{ fontSize: "10px", color: "#9a3412", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Expired</div>

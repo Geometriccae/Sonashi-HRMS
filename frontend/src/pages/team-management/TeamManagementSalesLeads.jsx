@@ -1423,9 +1423,20 @@ function TeamManagementSalesLeads() {
                           </div>
                         </div>
                         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
-                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Leave Days Taken</div>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            Leave Taken{" "}
+                            <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>(5 Years)</span>
+                          </div>
                           <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
-                            {leaveStats ? leaveStats.totalTaken : 0}
+                            {leaveStats ? `${leaveStats.totalTaken} Days` : "0 Days"}
+                          </div>
+                        </div>
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            Total Leave Taken
+                          </div>
+                          <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                            {leaveStats ? `${leaveStats.totalLeaveTakenFromDoj ?? 0} Days` : "0 Days"}
                           </div>
                         </div>
                         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>

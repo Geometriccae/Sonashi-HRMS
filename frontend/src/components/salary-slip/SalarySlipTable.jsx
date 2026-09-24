@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import styles from "./SalarySlipTable.module.css";
 import plus from "../../assets/dashboard/plus.svg";
@@ -6,7 +6,6 @@ import { useToast } from "../../context/ToastContext";
 import salarySlipService from "../../services/SalarySlipService";
 import expenseService from "../../services/ExpenseService";
 import employeeService from "../../services/EmployeeService";
-import config from "../../config/config";
 import SalarySlipBulkImportModal from "./SalarySlipBulkImportModal";
 import SalarySlipManualAddModal from "./SalarySlipManualAddModal";
 import SalarySlipEditModal from "./SalarySlipEditModal";
@@ -18,49 +17,16 @@ import {
     useUrlListPage,
     useResetPageOnFilterChange,
 } from "../../hooks/usePersistedListPage";
-
-const loadJsPdf = async () => {
-    const [{ default: jsPDF }] = await Promise.all([
-        import("jspdf"),
-        import("jspdf-autotable"),
-    ]);
-    return { jsPDF };
-};
-
-/** Payslip employee block: two fields per row, in the order printed on the slip. */
-const PAYSLIP_EMPLOYEE_ROWS = [
-    [["Emp ID", "empId"], ["Employee Name", "employeeName"]],
-    [["Payable Days", "payableDays"], ["Present Days", "presentDays"]],
-    [["Department", "department"], ["Designation", "designation"]],
-    [["Bank Acc No", "bankAccNo"], ["IBAN Number", "ibanNumber"]],
-    [["Person Code", "personCode"], ["Mode of Pay", "modeOfPay"]],
-    [["DOJ", "doj"], ["Email ID", "emailId"]],
-    [["Emirates ID", "emiratesId"], ["Unified ID", "unifiedId"]],
-];
-
-const dayCountText = (value) => {
-    const n = Number(value);
-    if (!Number.isFinite(n) || n < 0) return "";
-    return String(Math.round(n * 100) / 100);
-};
-
-/** Used only if the employee record cannot be loaded; never borrows another employee's data. */
-const payslipEmployeeFallback = (slip) => ({
-    empId: "",
-    employeeName: slip.employeeName || "",
-    payableDays: dayCountText(slip.payableDays),
-    presentDays: dayCountText(slip.presentDays),
-    department: slip.department || "",
-    designation: slip.designation || "",
-    bankAccNo: "",
-    ibanNumber: "",
-    personCode: "",
-    modeOfPay: "",
-    doj: slip.dateOfJoining || "",
-    emailId: isPlaceholderEmployeeEmail(slip.emailId) ? "" : String(slip.emailId).trim(),
-    emiratesId: "",
-    unifiedId: "",
-});
+import { downloadPayslipPdf } from "../../utils/payslipPdf";
+import { downloadSalarySlipsZip } from "../../utils/salarySlipBulkDownload";
+import { exportSalarySlipsToExcel } from "../../utils/salarySlipExcelExport";
+import {
+    PERIOD_PRESETS,
+    MONTH_NAMES,
+    fetchParamsForPeriod,
+    filterSlipsByPeriod,
+    periodZipLabel,
+} from "../../utils/salarySlipPeriodFilter";
 
 const DownloadIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -422,11 +388,25 @@ function SalarySlipTable({ userRole }) {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [slipToDelete, setSlipToDelete] = useState(null);
 
-    // Default to 'All' for admin to display all imported data immediately
-    const [selectedMonth, setSelectedMonth] = useState(
-        monthFromUrl || (isAdmin ? "All" : new Date().toLocaleString("default", { month: "long" }))
+    // Default period: This Month (URL month/year still supported as manual)
+    const [selectedMonth, setSelectedMonth] = useState(() => {
+        if (monthFromUrl) return monthFromUrl;
+        if (!isAdmin) return new Date().toLocaleString("default", { month: "long" });
+        return MONTH_NAMES[new Date().getMonth()];
+    });
+    const [selectedYear, setSelectedYear] = useState(() => {
+        if (yearFromUrl) return yearFromUrl;
+        return String(new Date().getFullYear());
+    });
+    const [periodPreset, setPeriodPreset] = useState(
+        monthFromUrl || yearFromUrl ? "manual" : "this_month"
     );
-    const [selectedYear, setSelectedYear] = useState(yearFromUrl || "All");
+    const [customFrom, setCustomFrom] = useState("");
+    const [customTo, setCustomTo] = useState("");
+    const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+    const [isExcelExporting, setIsExcelExporting] = useState(false);
+    const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+    const bulkDownloadLockRef = useRef(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isManualAddModalOpen, setIsManualAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -510,7 +490,14 @@ function SalarySlipTable({ userRole }) {
         try {
             if (isAdmin) {
                 if (reportType === 'salary') {
-                    const data = await salarySlipService.getAllSalarySlips(selectedMonth.trim(), selectedYear.trim());
+                    const params =
+                        periodPreset === "manual"
+                            ? { month: selectedMonth.trim(), year: selectedYear.trim() }
+                            : fetchParamsForPeriod(periodPreset, customFrom, customTo);
+                    const data = await salarySlipService.getAllSalarySlips(
+                        params.month,
+                        params.year
+                    );
                     setSalarySlips(data || []);
                 } else {
                     const data = await expenseService.getAllExpenses();
@@ -532,7 +519,7 @@ function SalarySlipTable({ userRole }) {
         } finally {
             setIsLoading(false);
         }
-    }, [isAdmin, selectedMonth, selectedYear, reportType, employeeTab, showToast]);
+    }, [isAdmin, selectedMonth, selectedYear, periodPreset, customFrom, customTo, reportType, employeeTab, showToast]);
 
     useEffect(() => {
         fetchData();
@@ -542,6 +529,9 @@ function SalarySlipTable({ userRole }) {
     useResetPageOnFilterChange(resetToFirstPage, {
         selectedMonth,
         selectedYear,
+        periodPreset,
+        customFrom,
+        customTo,
         reportType,
         employeeTab,
         searchQuery,
@@ -549,7 +539,12 @@ function SalarySlipTable({ userRole }) {
     });
 
     // Pagination calculations - works for both salary slips and expenses
-    const filteredSalarySlips = salarySlips.filter(slip => {
+    const periodFilteredSlips =
+        isAdmin && reportType === "salary" && periodPreset !== "manual"
+            ? filterSlipsByPeriod(salarySlips, periodPreset, customFrom, customTo)
+            : salarySlips;
+
+    const filteredSalarySlips = periodFilteredSlips.filter(slip => {
         const matchesSearch = slip.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                              slip.emailId?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesDept = selectedDepartment === "All" || slip.department === selectedDepartment;
@@ -587,346 +582,103 @@ function SalarySlipTable({ userRole }) {
 
     const handleDownload = async (slip) => {
         try {
-            // Employee information for this slip only, from the employee record
-            // the slip belongs to.
-            let slipEmployeeDetails = null;
-            try {
-                slipEmployeeDetails = await salarySlipService.getPayslipEmployeeDetails(slip._id);
-            } catch (detailsError) {
-                console.error('Payslip employee details not loaded:', detailsError);
-            }
-
-            const { jsPDF } = await loadJsPdf();
-            const doc = new jsPDF();
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 15;
-
-            // Calculate values with fallbacks for legacy data
-            const basicPay = slip.basicPay || 0;
-            const hra = slip.hra || 0;
-            const conveyanceAllowance = slip.conveyanceAllowance || 0;
-            const otherAllowance = slip.otherAllowance || 0;
-            let advance = slip.advance || 0;
-            const leave = slip.leave || 0;
-            const staffLoan = slip.staffLoan || 0;
-            const profTax = slip.profTax || 0;
-            const incomeTaxTDS = slip.incomeTaxTDS || 0;
-
-            // If we have a total/legacy deduction but no breakdown, put it in 'advance' so it's visible in PDF
-            const hasBreakdown = (advance + leave + staffLoan + profTax + incomeTaxTDS) > 0;
-            const legacyDeduction = slip.deductionsPFTax || slip.totalDeduction || 0;
-            if (!hasBreakdown && legacyDeduction > 0) {
-                advance = legacyDeduction;
-            }
-
-            // Calculate gross salary and total deduction (amounts shown as AED, no conversion)
-            const grossSalary = slip.grossSalary || (basicPay + hra + conveyanceAllowance + otherAllowance);
-            const totalDeduction = slip.totalDeduction || (advance + leave + staffLoan + profTax + incomeTaxTDS) || slip.deductionsPFTax || 0;
-            const netSalary = slip.netSalary || (grossSalary - totalDeduction);
-
-            const basicPayAed = Number(basicPay) || 0;
-            const hraAed = Number(hra) || 0;
-            const conveyanceAllowanceAed = Number(conveyanceAllowance) || 0;
-            const otherAllowanceAed = Number(otherAllowance) || 0;
-            const advanceAed = Number(advance) || 0;
-            const leaveAed = Number(leave) || 0;
-            const staffLoanAed = Number(staffLoan) || 0;
-            const profTaxAed = Number(profTax) || 0;
-            const incomeTaxTDSAed = Number(incomeTaxTDS) || 0;
-
-            // ==========================================
-            // 1. LETTERHEAD BACKGROUND & BRANDING
-            // ==========================================
-            
-            // Try to load letterhead header image
-            try {
-                const letterheadImg = new Image();
-                letterheadImg.src = '/letterhead_header.png';
-                await new Promise((resolve, reject) => {
-                    letterheadImg.onload = () => resolve();
-                    letterheadImg.onerror = () => reject();
-                });
-                
-                // Calculate correct aspect ratio to prevent stretching
-                const imgProps = doc.getImageProperties(letterheadImg);
-                
-                // Keep it snugly inside the green border with a comfortable margin
-                let imgWidth = pageWidth - 20;
-                let imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                
-                // Draw the unmodified header image anchored at the top
-                doc.addImage(letterheadImg, 'PNG', 10, 8, imgWidth, imgHeight);
-            } catch (error) {
-                console.error("Strict Mode Error: Failed to load letterhead header image.");
-            }
-
-            // Full Page Green Border
-            doc.setDrawColor(76, 175, 80); // Professional green shade matching the design
-            doc.setLineWidth(0.8);
-            // Apply 5mm margin to ensure it prints reliably without cutoffs
-            doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
-
-            // Footer Logo (Bottom Right)
-            try {
-                const logoImg = new Image();
-                logoImg.src = '/sonashi_logo_updated.png';
-                await new Promise((resolve, reject) => {
-                    logoImg.onload = () => resolve();
-                    logoImg.onerror = () => reject();
-                });
-                
-                // Calculate proportional size for the logo
-                const logoProps = doc.getImageProperties(logoImg);
-                // Assume desired width is around 45mm
-                const desiredLogoWidth = 45;
-                const desiredLogoHeight = (logoProps.height * desiredLogoWidth) / logoProps.width;
-                
-                // Place at bottom right corner exactly, keeping proportional aspect ratio
-                // Margin of 15mm from right, and exactly at bottom aligning with letterhead bounds
-                doc.addImage(logoImg, 'PNG', pageWidth - desiredLogoWidth - 15, pageHeight - desiredLogoHeight - 15, desiredLogoWidth, desiredLogoHeight);
-            } catch (error) {
-                console.error("Strict Mode Error: Failed to load SONASHI logo image.");
-            }
-
-            // ==========================================
-            // 2. SALARY SLIP OVERLAY CONTENT
-            // ==========================================
-            
-            // Salary Slip Title (Shifted down to avoid overlapping the header)
-            let currentY = 75;
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.setTextColor(15, 23, 42);
-            doc.text("SALARY SLIP", pageWidth / 2, currentY, { align: "center" });
-
-            // Month and Year
-            currentY += 8;
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(11);
-            doc.setTextColor(51, 65, 85);
-            doc.text(`For the Month of: ${slip.month} ${slip.year}`, pageWidth / 2, currentY, { align: "center" });
-
-            // Employee Info Block — values belong to the employee this slip was
-            // generated for, resolved on the server from that employee record.
-            currentY += 12;
-            const employeeDetails = slipEmployeeDetails || payslipEmployeeFallback(slip);
-
-            const infoRowHeight = 5.4;
-            const infoBoxHeight = PAYSLIP_EMPLOYEE_ROWS.length * infoRowHeight + 3;
-            const photoStripWidth = 24; // right-hand strip reserved for the profile photo
-
-            doc.setDrawColor(203, 213, 225);
-            doc.setLineWidth(0.3);
-            doc.setFillColor(248, 250, 252);
-            doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, 'FD');
-
-            const infoBoxTop = currentY;
-            const fieldsWidth = pageWidth - margin * 2 - photoStripWidth;
-            const columnWidth = fieldsWidth / 2;
-            const labelOffset = 32; // value column starts this far after the label
-
-            // Keep long values (IBAN, email) inside their cell without hiding data.
-            const drawFittedValue = (value, x, maxWidth, baseline) => {
-                doc.setFont("helvetica", "normal");
-                let size = 8;
-                doc.setFontSize(size);
-                while (size > 6 && doc.getTextWidth(value) > maxWidth) {
-                    size -= 0.5;
-                    doc.setFontSize(size);
-                }
-                doc.text(value, x, baseline);
-                doc.setFontSize(8);
-            };
-
-            doc.setTextColor(15, 23, 42);
-            PAYSLIP_EMPLOYEE_ROWS.forEach((row, rowIndex) => {
-                const baseline = infoBoxTop + 5 + rowIndex * infoRowHeight;
-                row.forEach(([label, key], columnIndex) => {
-                    const columnStart = margin + 4 + columnIndex * columnWidth;
-                    const valueX = columnStart + labelOffset;
-                    const columnEnd = columnIndex === 0
-                        ? margin + 4 + columnWidth
-                        : margin + 4 + fieldsWidth;
-
-                    doc.setFont("helvetica", "bold");
-                    doc.setFontSize(8);
-                    doc.text(`${label}:`, columnStart, baseline);
-
-                    const value = String(employeeDetails[key] ?? '').trim() || 'N/A';
-                    drawFittedValue(value, valueX, columnEnd - valueX, baseline);
-                });
-            });
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-
-            // Fetch and embed profile photo if available (optional enhancement)
-            const photoSize = 14; 
-            const photoX = pageWidth - margin - photoSize - 5;
-            const photoY = currentY + 2;
-            if (slip.emailId) {
-                try {
-                    let apiBase = config.API_BASE_URL || '';
-                    if (!apiBase.endsWith('/api')) {
-                        apiBase = apiBase.endsWith('/') ? apiBase + 'api' : apiBase + '/api';
-                    }
-                    const imageUrl = `${apiBase}/employees/profile-photo-image?email=${encodeURIComponent(slip.emailId)}`;
-                    const token = employeeService.getAuthToken();
-                    const resp = await fetch(imageUrl, {
-                        method: 'GET',
-                        credentials: 'include',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Accept': 'image/*'
-                        }
-                    });
-                    if (resp.ok && resp.status === 200) {
-                        const blob = await resp.blob();
-                        if (blob && blob.size > 0) {
-                            const dataUrl = await new Promise((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = () => resolve(reader.result);
-                                reader.onerror = (e) => reject(e);
-                                reader.readAsDataURL(blob);
-                            });
-                            const imgFormat = (blob.type || '').includes('png') ? 'PNG' : (blob.type || '').includes('gif') ? 'GIF' : 'JPEG';
-                            doc.addImage(dataUrl, imgFormat, photoX, photoY, photoSize, photoSize);
-                        }
-                    }
-                } catch (err) {
-                    console.error('Profile photo not loaded for payslip:', err);
-                }
-            }
-
-            // Earnings & Deductions Tables
-            currentY = infoBoxTop + infoBoxHeight + 6;
-            const halfWidth = (pageWidth - margin * 2) / 2;
-
-            // Table Headers
-            doc.setFillColor(226, 232, 240); // Slate-200
-            doc.rect(margin, currentY, halfWidth, 10, 'FD');
-            doc.rect(margin + halfWidth, currentY, halfWidth, 10, 'FD');
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-            doc.setTextColor(15, 23, 42);
-            doc.text("Earnings", margin + 5, currentY + 7);
-            doc.text("Deductions", margin + halfWidth + 5, currentY + 7);
-
-            // Sub-Headers
-            currentY += 10;
-            doc.setFillColor(248, 250, 252);
-            doc.rect(margin, currentY, halfWidth / 2 + 10, 8, 'FD');
-            doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 8, 'FD');
-            doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 8, 'FD');
-            doc.rect(margin + halfWidth + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 8, 'FD');
-
-            doc.setFontSize(9);
-            doc.text("Description", margin + 5, currentY + 5.5);
-            doc.text("Amount (AED)", margin + halfWidth - 5, currentY + 5.5, { align: "right" });
-            doc.text("Description", margin + halfWidth + 5, currentY + 5.5);
-            doc.text("Amount (AED)", margin + halfWidth * 2 - 5, currentY + 5.5, { align: "right" });
-
-            // Data Rows (AED labels — same stored amounts, no conversion)
-            const earningsData = [
-                ['Basic Pay', basicPayAed.toFixed(2)],
-                ['HRA', hraAed.toFixed(2)],
-                ['Conveyance Allowance', conveyanceAllowanceAed.toFixed(2)],
-                ['Other Allowance', otherAllowanceAed.toFixed(2)]
-            ];
-
-            const deductionsData = [
-                ['Advance', advanceAed.toFixed(2)],
-                ['Leave', leaveAed.toFixed(2)],
-                ['Staff Loan', staffLoanAed.toFixed(2)],
-                ['Prof. Tax', profTaxAed.toFixed(2)],
-                ['Income Tax / TDS', incomeTaxTDSAed.toFixed(2)]
-            ];
-
-            const maxRows = Math.max(earningsData.length, deductionsData.length);
-            const rowHeight = 8;
-            currentY += 8;
-
-            doc.setFont("helvetica", "normal");
-            for (let i = 0; i < maxRows; i++) {
-                // Background & borders
-                doc.setDrawColor(203, 213, 225);
-                
-                // Earnings cells
-                doc.rect(margin, currentY, halfWidth / 2 + 10, rowHeight);
-                doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, rowHeight);
-                
-                // Deductions cells
-                doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, rowHeight);
-                doc.rect(margin + halfWidth + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, rowHeight);
-
-                // Text
-                if (earningsData[i]) {
-                    doc.text(earningsData[i][0], margin + 2, currentY + 5.5);
-                    doc.text(earningsData[i][1], margin + halfWidth - 3, currentY + 5.5, { align: 'right' });
-                }
-
-                if (deductionsData[i]) {
-                    doc.text(deductionsData[i][0], margin + halfWidth + 2, currentY + 5.5);
-                    doc.text(deductionsData[i][1], margin + halfWidth * 2 - 3, currentY + 5.5, { align: 'right' });
-                }
-
-                currentY += rowHeight;
-            }
-
-            // Totals Row
-            doc.setLineWidth(0.5);
-            doc.setFillColor(241, 245, 249);
-            
-            // Gross Salary
-            doc.rect(margin, currentY, halfWidth / 2 + 10, 10, 'FD');
-            doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 10, 'FD');
-            // Total Deduction
-            doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 10, 'FD');
-            doc.rect(margin + halfWidth + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 10, 'FD');
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-            doc.text("Gross Salary", margin + 5, currentY + 7);
-            doc.text(grossSalary.toFixed(2), margin + halfWidth - 3, currentY + 7, { align: 'right' });
-            
-            doc.text("Total Deductions", margin + halfWidth + 5, currentY + 7);
-            doc.text(totalDeduction.toFixed(2), margin + halfWidth * 2 - 3, currentY + 7, { align: 'right' });
-
-            // Net Payable Row (Highlight)
-            currentY += 14;
-            doc.setFillColor(226, 232, 240);
-            doc.setDrawColor(148, 163, 184);
-            doc.rect(margin, currentY, pageWidth - margin * 2, 12, 'FD');
-
-            doc.setFontSize(12);
-            doc.text("Net Payable:", margin + halfWidth + 5, currentY + 8);
-            doc.text(`AED ${netSalary.toFixed(2)}`, pageWidth - margin - 5, currentY + 8, { align: 'right' });
-
-            // Signatures Section (gap absorbs the taller employee information block)
-            currentY += 30;
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(71, 85, 105);
-
-            doc.line(margin + 5, currentY, margin + 65, currentY);
-            doc.text("Employee Signature", margin + 35, currentY + 6, { align: "center" });
-
-            doc.line(pageWidth - margin - 65, currentY, pageWidth - margin - 5, currentY);
-            doc.text("Employer / Authorized Signature", pageWidth - margin - 35, currentY + 6, { align: "center" });
-
-            // System Generated Note
-            doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184);
-            doc.text("System Generated Payslip", pageWidth / 2, pageHeight - 30, { align: "center" });
-
-            // Output
-            doc.save(`Payslip_${(slip.employeeName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_')}_${slip.month}_${slip.year}.pdf`);
+            await downloadPayslipPdf(slip);
             showToast("Payslip downloaded successfully.", "success");
         } catch (error) {
             console.error("PDF generation failed:", error);
             showToast("Failed to generate premium payslip.", "error");
+        }
+    };
+
+    const handlePeriodChange = (value) => {
+        setPeriodPreset(value);
+        if (value === "this_month") {
+            const now = new Date();
+            setSelectedMonth(MONTH_NAMES[now.getMonth()]);
+            setSelectedYear(String(now.getFullYear()));
+        } else if (value === "this_year") {
+            setSelectedMonth("All");
+            setSelectedYear(String(new Date().getFullYear()));
+        } else if (value === "today") {
+            setSelectedMonth("All");
+            setSelectedYear(String(new Date().getFullYear()));
+        }
+    };
+
+    const handleMonthChange = (value) => {
+        setSelectedMonth(value);
+        setPeriodPreset("manual");
+    };
+
+    const handleYearChange = (value) => {
+        setSelectedYear(value);
+        setPeriodPreset("manual");
+    };
+
+    const handleBulkDownload = async () => {
+        if (bulkDownloadLockRef.current || isBulkDownloading) return;
+        if (periodPreset === "custom" && (!customFrom || !customTo)) {
+            showToast("Please select From Date and To Date for Custom Range.", "error");
+            return;
+        }
+        if (!filteredSalarySlips.length) {
+            showToast("No salary slips found for the selected period.", "error");
+            return;
+        }
+        bulkDownloadLockRef.current = true;
+        setIsBulkDownloading(true);
+        setBulkProgress({ done: 0, total: filteredSalarySlips.length });
+        try {
+            const result = await downloadSalarySlipsZip(filteredSalarySlips, {
+                period: periodPreset === "manual" ? "this_month" : periodPreset,
+                customFrom,
+                customTo,
+                onProgress: (done, total) => setBulkProgress({ done, total }),
+            });
+            showToast(
+                `Downloaded ${result.count} salary slip(s) as ${result.zipName}.`,
+                "success"
+            );
+        } catch (error) {
+            console.error("Bulk download failed:", error);
+            showToast(
+                error.message || "No salary slips found for the selected period.",
+                "error"
+            );
+        } finally {
+            setIsBulkDownloading(false);
+            setBulkProgress({ done: 0, total: 0 });
+            bulkDownloadLockRef.current = false;
+        }
+    };
+
+    const handleExcelExport = async () => {
+        if (isExcelExporting) return;
+        if (periodPreset === "custom" && (!customFrom || !customTo)) {
+            showToast("Please select From Date and To Date for Custom Range.", "error");
+            return;
+        }
+        if (!filteredSalarySlips.length) {
+            showToast("No salary slips found for the selected period.", "error");
+            return;
+        }
+        setIsExcelExporting(true);
+        try {
+            const label = periodZipLabel(
+                periodPreset === "manual" ? "this_month" : periodPreset,
+                customFrom,
+                customTo
+            );
+            await exportSalarySlipsToExcel(filteredSalarySlips, `Salary_Slips_${label}`);
+            showToast("Excel export downloaded successfully.", "success");
+        } catch (error) {
+            console.error("Excel export failed:", error);
+            showToast(
+                error.message || "No salary slips found for the selected period.",
+                "error"
+            );
+        } finally {
+            setIsExcelExporting(false);
         }
     };
 
@@ -1096,12 +848,58 @@ function SalarySlipTable({ userRole }) {
                             </select>
                             {reportType === 'salary' && (
                                 <>
-                                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className={styles.select}>
-                                        {months.map(m => <option key={m} value={m}>{m}</option>)}
+                                    <select
+                                        value={periodPreset === "manual" ? "manual" : periodPreset}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            if (value === "manual") {
+                                                setPeriodPreset("manual");
+                                                return;
+                                            }
+                                            handlePeriodChange(value);
+                                        }}
+                                        className={styles.select}
+                                        title="Period filter"
+                                    >
+                                        {PERIOD_PRESETS.map((p) => (
+                                            <option key={p.value} value={p.value}>{p.label}</option>
+                                        ))}
+                                        <option value="manual">Month / Year</option>
                                     </select>
-                                    <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className={styles.select}>
-                                        {years.map(y => <option key={y} value={y}>{y}</option>)}
-                                    </select>
+                                    {periodPreset === "custom" && (
+                                        <>
+                                            <input
+                                                type="date"
+                                                value={customFrom}
+                                                onChange={(e) => setCustomFrom(e.target.value)}
+                                                className={styles.select}
+                                                title="From Date"
+                                            />
+                                            <input
+                                                type="date"
+                                                value={customTo}
+                                                onChange={(e) => setCustomTo(e.target.value)}
+                                                className={styles.select}
+                                                title="To Date"
+                                            />
+                                        </>
+                                    )}
+                                    {(periodPreset === "manual" || periodPreset === "this_month") && (
+                                        <>
+                                            <select value={selectedMonth} onChange={(e) => handleMonthChange(e.target.value)} className={styles.select}>
+                                                {months.map(m => <option key={m} value={m}>{m}</option>)}
+                                            </select>
+                                            <select value={selectedYear} onChange={(e) => handleYearChange(e.target.value)} className={styles.select}>
+                                                {years.map(y => <option key={y} value={y}>{y}</option>)}
+                                            </select>
+                                        </>
+                                    )}
+                                    {periodPreset !== "manual" && periodPreset !== "this_month" && periodPreset !== "custom" && (
+                                        <span className={styles.periodHint}>
+                                            {periodPreset === "today" && "Created today"}
+                                            {periodPreset === "this_year" && `Year ${new Date().getFullYear()}`}
+                                        </span>
+                                    )}
                                     <select value={selectedDepartment} onChange={(e) => setSelectedDepartment(e.target.value)} className={styles.select}>
                                         <option value="All">All Departments</option>
                                         {departments.map(d => <option key={d} value={d}>{d}</option>)}
@@ -1116,6 +914,42 @@ function SalarySlipTable({ userRole }) {
                                         />
                                         <svg className={styles.searchIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleExcelExport}
+                                        className={styles.excelBtn}
+                                        disabled={isExcelExporting || isBulkDownloading}
+                                    >
+                                        {isExcelExporting ? (
+                                            <div className={styles.spinner}></div>
+                                        ) : (
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                <polyline points="14 2 14 8 20 8"></polyline>
+                                                <line x1="8" y1="13" x2="16" y2="13"></line>
+                                                <line x1="8" y1="17" x2="16" y2="17"></line>
+                                                <line x1="10" y1="9" x2="10" y2="9"></line>
+                                            </svg>
+                                        )}
+                                        <span>{isExcelExporting ? "Exporting..." : "Excel Export"}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleBulkDownload}
+                                        className={styles.bulkDownloadBtn}
+                                        disabled={isBulkDownloading || isExcelExporting}
+                                    >
+                                        {isBulkDownloading ? (
+                                            <div className={styles.spinner}></div>
+                                        ) : (
+                                            <DownloadIcon />
+                                        )}
+                                        <span>
+                                            {isBulkDownloading
+                                                ? `Preparing ${bulkProgress.done}/${bulkProgress.total || "…"}…`
+                                                : "Bulk Download"}
+                                        </span>
+                                    </button>
                                 </>
                             )}
                             {reportType === 'expense' && (
@@ -1302,7 +1136,7 @@ function SalarySlipTable({ userRole }) {
                             ) : (
                                 <tr>
                                     <td colSpan={isAdmin ? 14 : 9} className={styles.noData}>
-                                        No salary slips found {selectedMonth !== 'All' || selectedYear !== 'All' ? `for ${selectedMonth} ${selectedYear}` : 'in the system'}.
+                                        No salary slips found for the selected period.
                                     </td>
                                 </tr>
                             )}
