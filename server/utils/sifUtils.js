@@ -76,6 +76,7 @@ const validateBankAccount = (account) => {
 
 /**
  * Build EDR rows + skip list from employees for a pay period.
+ * Only employees with Emirates ID (14–15), AGENTCODE (9), and bank account are included.
  */
 const buildEdrPayload = (employees, year, month) => {
   const { start, end, days } = periodDates(year, month);
@@ -87,18 +88,34 @@ const buildEdrPayload = (employees, year, month) => {
 
   employees.forEach((emp) => {
     const empid = normalizeEmiratesId(emp.emiratesId);
-    let agent = digitsOnly(emp.salaryDetails?.bankSortCode);
+    const agent = digitsOnly(emp.salaryDetails?.bankSortCode);
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
+    const staffId = emp.employeeId || "";
+    const empName = emp.employeeName || "";
 
-    // Include all employees; pad missing agent code rather than blocking export
-    if (agent.length !== 9) {
-      agent = pad(agent || "0", 9).slice(-9);
+    const reasons = [];
+    if (!empid) reasons.push("Missing Emirates ID");
+    else if (validateEmpId(empid)) reasons.push("Invalid Emirates ID (must be 14–15 digits)");
+    if (!agent) reasons.push("Missing AGENTCODE");
+    else if (validateAgentCode(agent)) reasons.push("Invalid AGENTCODE (must be 9 digits)");
+    if (!bank) reasons.push("Missing IBAN / Bank Account");
+    else if (validateBankAccount(bank)) reasons.push(validateBankAccount(bank));
+
+    if (reasons.length) {
+      skipped.push({
+        staffId,
+        empId: empid || "",
+        empName,
+        missing: reasons,
+        reason: reasons.join("; "),
+      });
+      return;
     }
 
     const line = [
       "EDR",
-      empid || "",
+      empid,
       agent,
       bank,
       start,
@@ -111,9 +128,9 @@ const buildEdrPayload = (employees, year, month) => {
 
     edrLines.push(line);
     edrRecords.push({
-      staffId: emp.employeeId || "",
+      staffId,
       empId: empid,
-      empName: emp.employeeName || "",
+      empName,
       agentCode: agent,
       bankAccount: bank,
       fixedIncome: fixed,
@@ -169,8 +186,17 @@ const generateSifContent = ({
   month,
   now = new Date(),
 }) => {
-  // Allow empty Employer ID / Agent Code — pad with zeros for a valid file shape
-  const safeEmployerId = pad(digitsOnly(employerId) || "0", 13).slice(-13);
+  const employerErr = validateEmployerId(employerId);
+  if (employerErr) {
+    return {
+      error: employerErr + ". Save EMPLOYERID in Company SIF settings before export.",
+      skipped: [],
+      edrCount: 0,
+      totalSalary: 0,
+    };
+  }
+
+  const safeEmployerId = digitsOnly(employerId);
 
   const { edrLines, edrRecords, skipped, totalSalary } = buildEdrPayload(
     employees,
@@ -180,8 +206,10 @@ const generateSifContent = ({
 
   if (edrLines.length === 0) {
     return {
-      error: "No employees found for SIF export.",
+      error: "No employees with complete WPS data (Emirates ID, AGENTCODE, bank account) for SIF export.",
       skipped,
+      edrCount: 0,
+      totalSalary: 0,
     };
   }
 
@@ -194,11 +222,13 @@ const generateSifContent = ({
   const fileRef = buildFileReference(safeEmployerId, now);
 
   let scrAgent = digitsOnly(defaultAgentRoutingCode);
-  if (scrAgent.length !== 9 && edrRecords[0]) {
-    scrAgent = digitsOnly(edrRecords[0].agentCode);
-  }
   if (scrAgent.length !== 9) {
-    scrAgent = pad(scrAgent || "0", 9).slice(-9);
+    return {
+      error: "Default agent routing must be exactly 9 digits. Save it in Company SIF settings before export.",
+      skipped,
+      edrCount: 0,
+      totalSalary: 0,
+    };
   }
 
   const scr = buildScrLine({
@@ -338,7 +368,11 @@ const HEADER_ALIASES = {
   EMPLOYERID: "EMPLOYERID",
   AGENTCODE: "AGENTCODE",
   AGENTCODI: "AGENTCODE",
+  BANKSORTCODE: "AGENTCODE",
+  BANKSORT: "AGENTCODE",
   BANKACCOUNT: "BANKACCOUNT",
+  IBAN: "BANKACCOUNT",
+  IBANBANKACCOUNT: "BANKACCOUNT",
   STATUS: "STATUS",
   BASIC: "BASIC",
   HRA: "HRA",
@@ -350,6 +384,8 @@ const HEADER_ALIASES = {
   DEDUCTION: "DEDUCTIO",
   TOTA: "TOTA",
   TOTAL: "TOTA",
+  TOTALSALARY: "TOTA",
+  SALARY: "TOTA",
 };
 
 module.exports = {

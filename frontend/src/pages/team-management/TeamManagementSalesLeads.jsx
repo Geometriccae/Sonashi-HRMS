@@ -20,6 +20,7 @@ import AddIncrementModal from "../../components/team-management-components/AddIn
 import AddLeaveRequestModal from "../../components/leave-request/AddLeaveRequestModal";
 import { displayEmployeeEmail } from "../../utils/employeeEmailDisplay";
 import EditLeaveRequestModal from "../../components/leave-request/EditLeaveRequestModal";
+import EmployeeSifPanel from "../../components/team-management-components/EmployeeSifPanel";
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
@@ -113,6 +114,7 @@ function TeamManagementSalesLeads() {
   const salaryRef = useRef(null);
   const incrementsRef = useRef(null);
   const leaveTabRef = useRef(null);
+  const sifTabRef = useRef(null);
   const documentsRef = useRef(null);
 
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
@@ -480,6 +482,9 @@ function TeamManagementSalesLeads() {
           break;
         case "leave":
           activeElement = leaveTabRef.current;
+          break;
+        case "sif":
+          activeElement = sifTabRef.current;
           break;
 
         default:
@@ -1097,6 +1102,14 @@ function TeamManagementSalesLeads() {
                   >
                     <span className={styles.text8}>{"Leave Entitlement"}</span>
                   </div>
+                  <div
+                    ref={sifTabRef}
+                    className={`${styles.view2} ${activeTab === "sif" ? styles.active : ""
+                      }`}
+                    onClick={() => setActiveTab("sif")}
+                  >
+                    <span className={styles.text8}>{"SIF"}</span>
+                  </div>
 
                   <div
                     className={styles.box}
@@ -1535,6 +1548,14 @@ function TeamManagementSalesLeads() {
                     <Documents employeeId={employeeId} refreshKey={documentsKey} />
                   </section>
                 </div>
+              )}
+
+              {activeTab === "sif" && (
+                <EmployeeSifPanel
+                  employee={employee}
+                  canManage={isAdmin}
+                  showToast={showToast}
+                />
               )}
 
             </div>

@@ -74,13 +74,56 @@ export const payslipEmployeeFallback = (slip) => ({
 const loadImage = (src) =>
   new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`Failed to load ${src}`));
     img.src = src;
   });
 
 /**
+ * Embed an image at high fidelity for PDF (avoids jsPDF re-compressing a low-res asset).
+ * Upscales via canvas when the source is below ~150 DPI for the target print size.
+ */
+async function addHighQualityImage(doc, src, x, y, destW, destH, formatHint = "JPEG") {
+  const img = await loadImage(src);
+  const natW = img.naturalWidth || img.width;
+  const natH = img.naturalHeight || img.height;
+  // Target ~200 DPI at the printed size (mm → inches → pixels).
+  const needW = Math.ceil((destW / 25.4) * 200);
+  const needH = Math.ceil((destH / 25.4) * 200);
+  const scale = Math.max(1, Math.min(3, Math.max(needW / natW, needH / natH)));
+
+  let dataUrl;
+  let format = formatHint;
+  if (scale > 1.05 && typeof document !== "undefined") {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(natW * scale);
+    canvas.height = Math.round(natH * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    format = "JPEG";
+  } else {
+    // Prefer original bytes when already large enough
+    const canvas = document.createElement("canvas");
+    canvas.width = natW;
+    canvas.height = natH;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    format = "JPEG";
+  }
+
+  doc.addImage(dataUrl, format, x, y, destW, destH, undefined, "NONE");
+}
+
+/**
  * Build a payslip PDF document from a stored salary slip (+ optional employee details).
+ * Uses the Joint Ven full letterhead template (header + watermark + footer logo).
  * @returns {{ doc: import('jspdf').jsPDF, fileName: string }}
  */
 export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
@@ -125,38 +168,28 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   const profTaxAed = Number(profTax) || 0;
   const incomeTaxTDSAed = Number(incomeTaxTDS) || 0;
 
+  // Full-page branded letterhead from the HQ Joint Ven template (user-supplied).
+  // Contains header, watermark, green border, and Sonashi footer logo.
   try {
-    const letterheadImg = await loadImage("/letterhead_header.png");
-    const imgProps = doc.getImageProperties(letterheadImg);
-    let imgWidth = pageWidth - 20;
-    let imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-    doc.addImage(letterheadImg, "PNG", 10, 8, imgWidth, imgHeight);
+    await addHighQualityImage(doc, "/letterhead_full.jpg", 0, 0, pageWidth, pageHeight, "JPEG");
   } catch (error) {
-    console.error("Strict Mode Error: Failed to load letterhead header image.");
+    console.error("HQ letterhead failed, falling back to header strip:", error);
+    try {
+      const letterheadImg = await loadImage("/letterhead_header.png");
+      const imgProps = doc.getImageProperties(letterheadImg);
+      const imgWidth = pageWidth - 20;
+      const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+      doc.addImage(letterheadImg, "PNG", 10, 8, imgWidth, imgHeight, undefined, "NONE");
+      doc.setDrawColor(76, 175, 80);
+      doc.setLineWidth(0.8);
+      doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
+    } catch (fallbackErr) {
+      console.error("Strict Mode Error: Failed to load letterhead header image.");
+    }
   }
 
-  doc.setDrawColor(76, 175, 80);
-  doc.setLineWidth(0.8);
-  doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
-
-  try {
-    const logoImg = await loadImage("/sonashi_logo_updated.png");
-    const logoProps = doc.getImageProperties(logoImg);
-    const desiredLogoWidth = 45;
-    const desiredLogoHeight = (logoProps.height * desiredLogoWidth) / logoProps.width;
-    doc.addImage(
-      logoImg,
-      "PNG",
-      pageWidth - desiredLogoWidth - 15,
-      pageHeight - desiredLogoHeight - 15,
-      desiredLogoWidth,
-      desiredLogoHeight
-    );
-  } catch (error) {
-    console.error("Strict Mode Error: Failed to load SONASHI logo image.");
-  }
-
-  let currentY = 75;
+  // Content starts below the letterhead header band (~18% of page).
+  let currentY = pageHeight * 0.18;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
@@ -382,7 +415,7 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   doc.text(
     "This is a system generated payslip, Signature not required",
     pageWidth / 2,
-    pageHeight - 30,
+    pageHeight - 22,
     { align: "center" }
   );
 
