@@ -4,6 +4,8 @@ import {
     calculateLeaveBalance,
     computeExcelLeaveCalculation,
     countCompletedMonths,
+    getRollingFiveYearWindow,
+    hasFiveYearsOfService,
     lastFiveLeaveYears,
     totalLeaveTakenFromDoj,
 } from "./leaveCalculator";
@@ -424,6 +426,110 @@ describe("leave entitlement: months × 2.5, cap 150", () => {
         expect(calc.historicalYearTotals[2026]).toBe(11);
         expect(calc.historicalYearTotals[2027]).toBe(10);
         expect(calc.historicalTakenDays).toBe(21);
+    });
+});
+
+describe("rolling 5-year window from the Leave Start Date (5+ years of service)", () => {
+    const ymd = (d) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const senior = { _id: "e-senior", employeeId: "IDMM-500", doj: "2015-03-10" };
+    const leave = (id, startDate, endDate, extra = {}) => ({
+        _id: id,
+        status: "Approved",
+        employeeId: "IDMM-500",
+        startDate,
+        endDate,
+        ...extra,
+    });
+
+    test.each([
+        ["Case 1", "2026-10-05", "2021-10-05"],
+        ["Case 2", "2026-12-20", "2021-12-20"],
+        ["Case 3 (previous year)", "2025-06-15", "2020-06-15"],
+        ["Case 5 (edited date)", "2026-11-10", "2021-11-10"],
+        ["leap day → 28 Feb", "2024-02-29", "2019-02-28"],
+        ["month end", "2026-08-31", "2021-08-31"],
+        ["year end", "2026-12-31", "2021-12-31"],
+        ["new year", "2027-01-01", "2022-01-01"],
+    ])("%s: %s → window starts %s", (_label, leaveStart, expectedStart) => {
+        const period = getRollingFiveYearWindow(leaveStart);
+        expect(ymd(period.start)).toBe(expectedStart);
+        expect(ymd(period.end)).toBe(leaveStart);
+
+        const calc = computeExcelLeaveCalculation(senior, [], leaveStart);
+        expect(calc.rollingFiveYear).toBe(true);
+        expect(ymd(calc.rollingWindowStart)).toBe(expectedStart);
+        expect(ymd(calc.rollingWindowEnd)).toBe(leaveStart);
+        expect(calc.entitlement).toBe(150);
+    });
+
+    test("5+ years is decided from DOJ on the Leave Start Date", () => {
+        expect(hasFiveYearsOfService("2021-10-05", "2026-10-05")).toBe(true);
+        expect(hasFiveYearsOfService("2021-10-06", "2026-10-05")).toBe(false);
+        expect(hasFiveYearsOfService(null, "2026-10-05")).toBe(false);
+    });
+
+    test("only approved leave inside the rolling period counts", () => {
+        const leaves = [
+            leave("before", "2021-06-01", "2021-06-21"), // before 05/10/2021 → excluded
+            leave("inside-2022", "2022-03-01", "2022-03-11"), // 10
+            leave("inside-2026", "2026-07-01", "2026-07-15"), // 14
+            leave("after", "2026-11-01", "2026-11-11"), // after leave start → excluded
+            leave("rejected", "2024-01-01", "2024-01-20", { status: "Rejected" }),
+            leave("other-emp", "2024-01-01", "2024-01-20", { employeeId: "IDMM-999" }),
+        ];
+        const calc = computeExcelLeaveCalculation(senior, leaves, "2026-10-05");
+        expect(calc.totalTaken).toBe(24);
+        expect(calc.yearTotals[2021]).toBe(0);
+        expect(calc.yearTotals[2022]).toBe(10);
+        expect(calc.yearTotals[2026]).toBe(14);
+        expect(calc.availableDays).toBe(150 - 24);
+        // Calendar-year history keeps every approved record unchanged.
+        expect(calc.historicalYearTotals[2021]).toBe(20);
+        expect(calc.historicalYearTotals[2026]).toBe(24);
+    });
+
+    test("changing the Leave Start Date moves the period with it", () => {
+        const leaves = [
+            leave("oct-2021", "2021-10-20", "2021-10-30"), // 10
+            leave("nov-2026", "2026-11-01", "2026-11-06"), // 5
+        ];
+        expect(computeExcelLeaveCalculation(senior, leaves, "2026-10-05").totalTaken).toBe(10);
+        // 10/11/2021 → 10/11/2026: Oct 2021 drops out, Nov 2026 comes in.
+        expect(computeExcelLeaveCalculation(senior, leaves, "2026-11-10").totalTaken).toBe(5);
+    });
+
+    test("a leave crossing the window start is prorated to days inside the period", () => {
+        const leaves = [leave("cross", "2021-10-01", "2021-10-11")]; // 10 days, 6 inside
+        const calc = computeExcelLeaveCalculation(senior, leaves, "2026-10-05");
+        expect(calc.totalTaken).toBe(6);
+    });
+
+    test("the leave being edited is not counted in its own history", () => {
+        const editing = leave("editing", "2026-10-05", "2026-10-15");
+        const prior = leave("prior", "2025-01-01", "2025-01-11"); // 10
+        const moved = calculateLeaveBalance(senior, [editing, prior], "2026-11-10", {
+            excludeLeaveId: "editing",
+        });
+        expect(moved.totalTaken).toBe(10);
+        const same = calculateLeaveBalance(senior, [editing, prior], "2026-10-05", {
+            excludeLeaveId: "editing",
+        });
+        expect(same.totalTaken).toBe(10);
+    });
+
+    test("Case 4: under 5 years keeps the existing calendar-year window", () => {
+        const junior = { _id: "e-junior", employeeId: "IDMM-501", doj: "2023-01-01" };
+        const leaves = [
+            { _id: "j1", status: "Approved", employeeId: "IDMM-501", startDate: "2026-11-01", endDate: "2026-11-11" },
+        ];
+        const calc = computeExcelLeaveCalculation(junior, leaves, "2026-10-05", { excludeLeaveId: "j1" });
+        expect(calc.rollingFiveYear).toBe(false);
+        expect(calc.rollingWindowStart).toBeNull();
+        expect(ymd(calc.windowStart)).toBe("2021-01-01");
+        // Existing rule: taken runs to 31 Dec of the calculation year.
+        expect(calc.totalTaken).toBe(10);
+        expect(calc.entitlement).toBe(calculateEntitlementDays("2023-01-01", "2026-10-05"));
     });
 });
 

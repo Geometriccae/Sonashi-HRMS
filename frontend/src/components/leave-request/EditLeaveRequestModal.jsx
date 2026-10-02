@@ -464,7 +464,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     // Full leave history for this employee only — never the year-filtered Leave Management table.
     const balanceLeaveSource = Array.isArray(employeeLeaveHistory) ? employeeLeaveHistory : [];
 
-    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, balanceLeaveSource, formData.startDate || new Date()) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
+    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, balanceLeaveSource, formData.startDate || new Date(), { excludeLeaveId: leaveRequest?._id }) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
     // Same employee-ID + approved filter as leaveCalculator (not name / Imported).
     const employeeLeaves = selectedEmp && typeof selectedEmp === "object"
         ? getApprovedLeavesForEmployee(selectedEmp, balanceLeaveSource)
@@ -854,7 +854,9 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                     <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Leave Taken</div>
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
                                     <div style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>
-                                        {selectedEmp?.doj
+                                        {leaveStats.rollingFiveYear
+                                            ? `${new Date(leaveStats.rollingWindowStart).toLocaleDateString("en-GB")} → ${new Date(leaveStats.rollingWindowEnd).toLocaleDateString("en-GB")}`
+                                            : selectedEmp?.doj
                                             ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
                                             : "From DOJ to today"}
                                     </div>

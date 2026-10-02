@@ -1,7 +1,9 @@
 /**
- * UAE WPS SIF helpers — matches sample format:
- * EDR,<EMPID>,<AGENTCODE>,<BANKACCOUNT>,<start>,<end>,<days>,<fixed>,<variable>,<leaveDays>
+ * UAE WPS SIF helpers.
+ * Export (EMPID / Emirates ID is not exported):
+ * EDR,<AGENTCODE>,<BANKACCOUNT>,<start>,<end>,<days>,<fixed>,<variable>,<leaveDays>
  * SCR,<EMPLOYERID>,<agent>,<fileDate>,<fileTime>,<MMYYYY>,<count>,<total>,AED,<fileRef>
+ * Import still reads legacy EDR lines that carry EMPID as the second field.
  */
 
 const pad = (value, len) => String(value ?? "").padStart(len, "0");
@@ -76,7 +78,7 @@ const validateBankAccount = (account) => {
 
 /**
  * Build EDR rows + skip list from employees for a pay period.
- * Only employees with Emirates ID (14–15), AGENTCODE (9), and bank account are included.
+ * Only employees with AGENTCODE (9) and bank account are included.
  */
 const buildEdrPayload = (employees, year, month) => {
   const { start, end, days } = periodDates(year, month);
@@ -87,7 +89,6 @@ const buildEdrPayload = (employees, year, month) => {
   let totalSalary = 0;
 
   employees.forEach((emp) => {
-    const empid = normalizeEmiratesId(emp.emiratesId);
     const agent = digitsOnly(emp.salaryDetails?.bankSortCode);
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
@@ -95,8 +96,6 @@ const buildEdrPayload = (employees, year, month) => {
     const empName = emp.employeeName || "";
 
     const reasons = [];
-    if (!empid) reasons.push("Missing Emirates ID");
-    else if (validateEmpId(empid)) reasons.push("Invalid Emirates ID (must be 14–15 digits)");
     if (!agent) reasons.push("Missing AGENTCODE");
     else if (validateAgentCode(agent)) reasons.push("Invalid AGENTCODE (must be 9 digits)");
     if (!bank) reasons.push("Missing IBAN / Bank Account");
@@ -105,7 +104,6 @@ const buildEdrPayload = (employees, year, month) => {
     if (reasons.length) {
       skipped.push({
         staffId,
-        empId: empid || "",
         empName,
         missing: reasons,
         reason: reasons.join("; "),
@@ -115,7 +113,6 @@ const buildEdrPayload = (employees, year, month) => {
 
     const line = [
       "EDR",
-      empid,
       agent,
       bank,
       start,
@@ -129,7 +126,6 @@ const buildEdrPayload = (employees, year, month) => {
     edrLines.push(line);
     edrRecords.push({
       staffId,
-      empId: empid,
       empName,
       agentCode: agent,
       bankAccount: bank,
@@ -206,7 +202,7 @@ const generateSifContent = ({
 
   if (edrLines.length === 0) {
     return {
-      error: "No employees with complete WPS data (Emirates ID, AGENTCODE, bank account) for SIF export.",
+      error: "No employees with complete WPS data (AGENTCODE, bank account) for SIF export.",
       skipped,
       edrCount: 0,
       totalSalary: 0,

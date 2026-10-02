@@ -23,6 +23,7 @@ import {
   buildVacationDatePrompt,
   toDateInputValue,
 } from "../utils/vacationStatusUpdate";
+import { annualVacationsPath, teamManagementPath } from "../utils/cardNavigation";
 
 function DashboardOverview() {
   const navigate = useNavigate();
@@ -237,13 +238,14 @@ function DashboardOverview() {
     }
   }
 
+  // `path`: open the existing page with this card's filter; cards without one keep the details modal.
   const cards = [
-    { label: "Total Employees", value: counts.total, icon: <FaUsers />, color: "#4f46e5", trend: "+3 this month" },
-    { label: "Active Employees", value: counts.active, icon: <FaUserCheck />, color: "#10b981", trend: "Steady" },
-    { label: "Inactive Employees", value: counts.inactive, icon: <FaUserTimes />, color: "#64748b" },
-    { label: "On vacation", value: counts.onVacation, icon: <FaPlane />, color: "#3b82f6", trend: "Live" },
-    { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "All upcoming", tooltip: "All employees with approved or pending leave (any type) who are yet to travel (no date limit)" },
-    { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 6 months", tooltip: "Employees who returned from vacation in the last 6 months" },
+    { label: "Total Employees", value: counts.total, icon: <FaUsers />, color: "#4f46e5", trend: "+3 this month", path: teamManagementPath("All") },
+    { label: "Active Employees", value: counts.active, icon: <FaUserCheck />, color: "#10b981", trend: "Steady", path: teamManagementPath("Active") },
+    { label: "Inactive Employees", value: counts.inactive, icon: <FaUserTimes />, color: "#64748b", path: teamManagementPath("Inactive") },
+    { label: "On vacation", value: counts.onVacation, icon: <FaPlane />, color: "#3b82f6", trend: "Live", path: annualVacationsPath("onVacation") },
+    { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "All upcoming", tooltip: "All employees with approved or pending leave (any type) who are yet to travel (no date limit)", path: annualVacationsPath("yetToGo") },
+    { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 6 months", tooltip: "Employees who returned from vacation in the last 6 months", path: annualVacationsPath("returned") },
     { label: "Visa Expiry", value: counts.visaExpiry, icon: <FaPassport />, color: "#f97316", sub: "Next 90 days", alert: true, tooltip: "Visas expiring within the next 3 months. Action required." },
     { label: "Passport Expiry", value: counts.passportExpiry, icon: <FaIdCard />, color: "#0d9488", sub: "Next 6 months", alert: true, tooltip: "Passports expiring within the next 6 months. Action required." },
   ];
@@ -266,7 +268,15 @@ function DashboardOverview() {
               key={index}
               className={`${styles.statCard} ${card.alert ? styles.alertCard : ""}`}
               title={card.tooltip || ""}
-              onClick={() => handleCardClick(card.label)}
+              role="button"
+              tabIndex={0}
+              onClick={() => (card.path ? navigate(card.path) : handleCardClick(card.label))}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                if (card.path) navigate(card.path);
+                else handleCardClick(card.label);
+              }}
             >
               <div className={styles.cardHeader}>
                 <div className={styles.iconContainer} style={{ backgroundColor: `${card.color}15`, color: card.color }}>

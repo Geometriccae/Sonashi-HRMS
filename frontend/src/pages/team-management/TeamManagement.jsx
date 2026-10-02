@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Row, Col, Card, Statistic, ConfigProvider, Typography } from "antd";
 import {
   TeamOutlined,
@@ -22,6 +23,7 @@ const statCards = [
     color: "#007aff",
     bg: "linear-gradient(135deg, #e8f4ff 0%, #f0f8ff 100%)",
     field: "totalEmployees",
+    listFilter: "All",
   },
   {
     key: "active",
@@ -31,6 +33,7 @@ const statCards = [
     color: "#52c41a",
     bg: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)",
     field: "activeEmployees",
+    listFilter: "Active",
   },
   {
     key: "inactive",
@@ -40,6 +43,7 @@ const statCards = [
     color: "#fa8c16",
     bg: "linear-gradient(135deg, #fff7e6 0%, #fffbe6 100%)",
     field: "inactiveEmployees",
+    listFilter: "Inactive",
   },
 ];
 
@@ -52,13 +56,27 @@ function TeamManagement() {
     inactiveEmployees: 0,
   });
 
+  const [, setSearchParams] = useSearchParams();
+
   useEffect(() => {
     fetchStats();
   }, []);
 
-  const fetchStats = async () => {
+  // Same URL filter the employee list already uses (?filter=Active|Inactive|All).
+  const handleStatCardClick = (listFilter) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("page");
+      if (listFilter === "Active") next.delete("filter");
+      else next.set("filter", listFilter);
+      return next;
+    }, { replace: true });
+    fetchStats({ force: true });
+  };
+
+  const fetchStats = async ({ force = false } = {}) => {
     try {
-      const employeeStats = await EmployeeService.getEmployeeStats({ basic: true });
+      const employeeStats = await EmployeeService.getEmployeeStats({ basic: true, force });
       setStats({
         attendancePercentage: 0,
         totalAssignedProjects: employeeStats.totalAssignedProjects || 0,
@@ -94,10 +112,21 @@ function TeamManagement() {
                   <Col xs={24} sm={24} md={8} key={card.key}>
                     <Card
                       bordered={false}
+                      role="button"
+                      tabIndex={0}
+                      title={`Show ${card.title}`}
+                      onClick={() => handleStatCardClick(card.listFilter)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleStatCardClick(card.listFilter);
+                        }
+                      }}
                       style={{
                         background: card.bg,
                         boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
                         height: "100%",
+                        cursor: "pointer",
                       }}
                       styles={{ body: { padding: "20px 24px" } }}
                     >

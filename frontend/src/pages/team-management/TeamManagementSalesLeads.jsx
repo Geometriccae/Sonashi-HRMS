@@ -33,6 +33,7 @@ import {
 } from "../../utils/employeeStatusDisplay";
 import { ACTIVE_OPTIONS } from "../../constants/employeeDropdownOptions";
 import { readPersistedPath } from "../../hooks/usePersistedListPage";
+import { leaveManagementPath, LEAVE_STATUS_FILTERS } from "../../utils/cardNavigation";
 import { canUpdateVacationReturn, canEdit } from "../../utils/permissions";
 import {
   isNoticeOrProvisionStatus,
@@ -1420,6 +1421,25 @@ function TeamManagementSalesLeads() {
                       ? calculateLeaveBalance(employee, allLeaveRequests)
                       : null;
                     const latest = employeeLeaves[0];
+                    const leaveSearch = employee?.employeeId || employee?.employeeName || "";
+                    const leaveBoxLink = (status) => {
+                      if (!leaveSearch) return {};
+                      const open = () => navigate(leaveManagementPath({ status, search: leaveSearch }));
+                      return {
+                        role: "button",
+                        tabIndex: 0,
+                        title: "Open in Leave Management",
+                        onClick: open,
+                        onKeyDown: (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            open();
+                          }
+                        },
+                      };
+                    };
+                    const leaveBoxStyle = { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px", cursor: leaveSearch ? "pointer" : "default" };
+                    const latestStatusFilter = LEAVE_STATUS_FILTERS.includes(latest?.status) ? latest.status : "All";
                     return (
                       <div
                         style={{
@@ -1429,13 +1449,13 @@ function TeamManagementSalesLeads() {
                           marginBottom: "16px",
                         }}
                       >
-                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                        <div style={leaveBoxStyle} {...leaveBoxLink(latestStatusFilter)}>
                           <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Current Leave Status</div>
                           <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
                             {latest?.status || "No active record"}
                           </div>
                         </div>
-                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                        <div style={leaveBoxStyle} {...leaveBoxLink("Approved")}>
                           <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                             Leave Taken{" "}
                             <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>(5 Years)</span>
@@ -1444,7 +1464,7 @@ function TeamManagementSalesLeads() {
                             {leaveStats ? `${leaveStats.totalTaken} Days` : "0 Days"}
                           </div>
                         </div>
-                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                        <div style={leaveBoxStyle} {...leaveBoxLink("Approved")}>
                           <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                             Total Leave Taken
                           </div>

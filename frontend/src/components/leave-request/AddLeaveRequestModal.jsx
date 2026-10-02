@@ -745,7 +745,9 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                             <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Leave Taken</div>
                                             <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
                                             <div style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>
-                                                {selectedEmp?.doj
+                                                {leaveStats.rollingFiveYear
+                                                    ? `${new Date(leaveStats.rollingWindowStart).toLocaleDateString("en-GB")} → ${new Date(leaveStats.rollingWindowEnd).toLocaleDateString("en-GB")}`
+                                                    : selectedEmp?.doj
                                                     ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
                                                     : "From DOJ to today"}
                                             </div>

@@ -865,6 +865,8 @@ export default function HrMetricsDashboard() {
 
   const openLeaveList = useCallback((extra = {}) => {
     const params = new URLSearchParams();
+    // Leave Overview counts approved leave; Leave Management otherwise opens on Pending.
+    params.set("status", "Approved");
     params.set("year", String(activeYear));
     const monthParam = leaveMonthParam(filters.month);
     if (monthParam) params.set("month", monthParam);

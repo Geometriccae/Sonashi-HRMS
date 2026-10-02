@@ -8,6 +8,10 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
 const {
+    sendPendingLeaveNotification,
+    getPendingLeaveRecipients,
+} = require('../services/pendingLeaveEmailService');
+const {
     patchListCacheEmployee,
     invalidateListCache,
     invalidateApprovedLeavesCache,
@@ -397,7 +401,13 @@ async function sendLeaveRequestToHodAndAdmin(leaveRequest) {
         if (toAdmin.length === 0) {
             console.warn('[Leave] No Admin user with emailId. Add emailId for the user with role "admin" in User collection.');
         }
-        const toList = [...new Set([...toHod, ...toAdmin])];
+        // Pending-leave approvers already receive their own approval email for this request.
+        const pendingApprovers = leaveRequest.status === 'Pending'
+            ? new Set(getPendingLeaveRecipients())
+            : new Set();
+        const toList = [...new Set([...toHod, ...toAdmin])]
+            .filter((to) => !pendingApprovers.has(String(to).toLowerCase()));
+        if (toList.length === 0) return;
         console.log('[Leave] Sending new leave request – HOD:', toHod.length, 'recipient(s), Admin:', toAdmin.length, 'recipient(s). To:', toList.join(', '));
         const startStr = leaveRequest.startDate ? new Date(leaveRequest.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
         const endStr = leaveRequest.endDate ? new Date(leaveRequest.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
@@ -933,10 +943,17 @@ router.post('/', authMiddleware, async (req, res) => {
             endDate: savedRequest.endDate,
             reason: savedRequest.reason,
             appliedOn: savedRequest.appliedOn,
+            status: savedRequest.status,
         };
         sendLeaveRequestToHodAndAdmin(leaveSnapshot)
             .then(() => console.log('[Leave] HOD/Admin email sent'))
             .catch(e => console.error('[Leave] HOD/Admin email error:', e));
+
+        // Once per new Pending request (not on page loads, edits, or status changes).
+        if (savedRequest.status === 'Pending') {
+            sendPendingLeaveNotification(savedRequest.toObject(), { transporter: getLeaveTransporter() })
+                .catch((e) => console.error('[Leave] Pending leave email error:', e?.message || e));
+        }
 
         if (!isPastLeave) {
             const io = req.app.get('io');

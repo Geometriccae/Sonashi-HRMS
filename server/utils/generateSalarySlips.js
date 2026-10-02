@@ -17,11 +17,11 @@ const {
   isSalarySlipEligibleForMonth,
   FULL_MONTH_LEAVE_REASON,
 } = require('./salarySlipEligibility');
-
-const toAmt = (v) => {
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : 0;
-};
+const {
+  buildPayrollCycleInputs,
+  applyCarryForwardDeduction,
+  payrollCycleDataRange,
+} = require('./payrollCycle');
 
 const payrollEmailForEmployee = (emp) => {
   const email = String(emp?.emailId || '').trim().toLowerCase();
@@ -51,6 +51,88 @@ const isPayrollCandidateForPeriod = (emp, period) => {
 };
 
 /**
+ * Salary slip for one employee and month (no database access).
+ * Days after the cut-off (or approved after it) move to the next cycle;
+ * earlier cycles' leftovers are carried into this slip. See utils/payrollCycle.js.
+ *
+ * @param {object[]} params.employeeSlips Stored slips of this employee (any month).
+ * @returns {{ skipped: true, reason: string } | { skipped: false, slipData: object }}
+ */
+function buildEmployeeSalarySlip({
+  employee,
+  month,
+  year,
+  attendanceRecords = [],
+  leaveRequests = [],
+  employeeSlips = [],
+}) {
+  const yearStr = String(year).trim();
+  const eligibility = isSalarySlipEligibleForMonth({
+    employee,
+    month,
+    year: yearStr,
+    attendanceRecords,
+    leaveRequests,
+  });
+  if (!eligibility.eligible) {
+    return { skipped: true, reason: eligibility.reason || FULL_MONTH_LEAVE_REASON };
+  }
+
+  const cycle = buildPayrollCycleInputs({
+    employee,
+    month,
+    year: yearStr,
+    leaveRequests,
+    attendanceRecords,
+    employeeSlips,
+  });
+
+  const days = computePayablePayrollDays({
+    employee,
+    month,
+    year: yearStr,
+    attendanceRecords: cycle.ownAttendanceRecords,
+    leaveRequests: cycle.ownLeaveRequests,
+  });
+
+  if (days.skip || days.payableDays <= 0) {
+    return { skipped: true, reason: days.skipReason || 'No payable working days' };
+  }
+
+  // Original salary components stay untouched; unpaid days become a
+  // separate leave deduction. See utils/salarySlipAmounts.js.
+  const carry = applyCarryForwardDeduction(
+    composeSalarySlipAmounts({
+      salaryDetails: employee.salaryDetails,
+      payableDays: days.payableDays,
+    }),
+    cycle.carryDays
+  );
+
+  return {
+    skipped: false,
+    slipData: {
+      employeeName: employee.employeeName,
+      emailId: payrollEmailForEmployee(employee),
+      department: employee.department || '',
+      designation: employee.designation || employee.role || 'Employee',
+      dateOfJoining: employee.doj ? new Date(employee.doj).toISOString().slice(0, 10) : '',
+      month,
+      year: yearStr,
+      totalWorkingDays: days.totalWorkingDays,
+      presentDays: days.presentDays,
+      payableDays: days.payableDays,
+      ...carry.amounts,
+      payrollCutoffDate: cycle.cutoffDate,
+      carriedForwardLeaveDays: carry.carriedForwardLeaveDays,
+      carriedForwardLeaveDeduction: carry.carriedForwardLeaveDeduction,
+      processedLeaveDays: [...cycle.ownLedger, ...carry.carriedLedger],
+      pendingCarryForward: carry.pendingCarryForward,
+    },
+  };
+}
+
+/**
  * Generate/update salary slips for every eligible employee in a payroll month.
  * Each employee is evaluated independently for that month/year only.
  */
@@ -68,14 +150,45 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
     isPayrollCandidateForPeriod(emp, period)
   );
 
+  // Stored slips of these employees: needed to know which unpaid days were already charged.
+  const cycleRange = payrollCycleDataRange(month, yearStr);
+  const payrollEmails = employees.map(payrollEmailForEmployee);
+  const existingSlips = await SalarySlip.find({ emailId: { $in: payrollEmails } })
+    .select('emailId month year updatedAt payrollCutoffDate processedLeaveDays pendingCarryForward')
+    .lean();
+  const slipsByEmail = new Map();
+  existingSlips.forEach((slip) => {
+    const key = String(slip.emailId || '').toLowerCase();
+    if (!slipsByEmail.has(key)) slipsByEmail.set(key, []);
+    slipsByEmail.get(key).push(slip);
+  });
+  const pendingLeaveIds = new Set();
+  const pendingAttendanceIds = new Set();
+  existingSlips.forEach((slip) => {
+    (slip.pendingCarryForward || []).forEach((entry) => {
+      const target = entry.source === 'attendance' ? pendingAttendanceIds : pendingLeaveIds;
+      if (entry.sourceId) target.add(entry.sourceId);
+    });
+  });
+  const validIds = (ids) => Array.from(ids).filter((id) => /^[a-f0-9]{24}$/i.test(id));
+
+  // This month, the previous month (post-cut-off days), leave approved during this
+  // cycle for earlier dates, and anything still pending from an earlier cycle.
   const [attendanceRecords, leaveRequests] = await Promise.all([
     Attendance.find({
-      date: { $gte: period.start, $lte: monthEndInclusive },
+      $or: [
+        { date: { $gte: cycleRange.previousMonthStart, $lte: monthEndInclusive } },
+        { _id: { $in: validIds(pendingAttendanceIds) } },
+      ],
     }).lean(),
     LeaveRequest.find({
       status: { $in: ['Approved', 'HOD Approved'] },
-      startDate: { $lte: monthEndInclusive },
-      endDate: { $gte: period.start },
+      $or: [
+        { startDate: { $lte: monthEndInclusive }, endDate: { $gte: cycleRange.previousMonthStart } },
+        { hodApprovedAt: { $gt: cycleRange.previousCutoffEnd, $lte: cycleRange.cutoffEnd } },
+        { adminApprovedAt: { $gt: cycleRange.previousCutoffEnd, $lte: cycleRange.cutoffEnd } },
+        { _id: { $in: validIds(pendingLeaveIds) } },
+      ],
     })
       .populate('employee', 'employeeId username emailId')
       .lean(),
@@ -87,58 +200,21 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
 
   for (const emp of employees) {
     try {
-      const eligibility = isSalarySlipEligibleForMonth({
-        employee: emp,
-        month,
-        year: yearStr,
-        attendanceRecords,
-        leaveRequests,
-      });
-      if (!eligibility.eligible) {
-        skipped.push({
-          name: emp.employeeName,
-          reason: eligibility.reason || FULL_MONTH_LEAVE_REASON,
-        });
-        continue;
-      }
-
-      const days = computePayablePayrollDays({
-        employee: emp,
-        month,
-        year: yearStr,
-        attendanceRecords,
-        leaveRequests,
-      });
-
-      if (days.skip || days.payableDays <= 0) {
-        skipped.push({
-          name: emp.employeeName,
-          reason: days.skipReason || 'No payable working days',
-        });
-        continue;
-      }
-
       const email = payrollEmailForEmployee(emp);
-      // Original salary components stay untouched; unpaid days become a
-      // separate leave deduction. See utils/salarySlipAmounts.js.
-      const amounts = composeSalarySlipAmounts({
-        salaryDetails: emp.salaryDetails,
-        payableDays: days.payableDays,
-      });
-
-      const slipData = {
-        employeeName: emp.employeeName,
-        emailId: email,
-        department: emp.department || '',
-        designation: emp.designation || emp.role || 'Employee',
-        dateOfJoining: emp.doj ? new Date(emp.doj).toISOString().slice(0, 10) : '',
+      const built = buildEmployeeSalarySlip({
+        employee: emp,
         month,
         year: yearStr,
-        totalWorkingDays: days.totalWorkingDays,
-        presentDays: days.presentDays,
-        payableDays: days.payableDays,
-        ...amounts,
-      };
+        attendanceRecords,
+        leaveRequests,
+        employeeSlips: slipsByEmail.get(email) || [],
+      });
+      if (built.skipped) {
+        skipped.push({ name: emp.employeeName, reason: built.reason });
+        continue;
+      }
+
+      const slipData = built.slipData;
       if (uploadedBy) slipData.uploadedBy = uploadedBy;
 
       await SalarySlip.findOneAndUpdate(
@@ -154,8 +230,10 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
       results.push({
         email,
         name: emp.employeeName,
-        payableDays: days.payableDays,
-        netSalary,
+        payableDays: slipData.payableDays,
+        netSalary: slipData.netSalary,
+        carriedForwardLeaveDays: slipData.carriedForwardLeaveDays,
+        carriedForwardLeaveDeduction: slipData.carriedForwardLeaveDeduction,
       });
     } catch (err) {
       errors.push({ name: emp.employeeName, error: err.message });
@@ -163,9 +241,11 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
     }
   }
 
+  const carriedCount = results.filter((r) => r.carriedForwardLeaveDays > 0).length;
+
   return {
     ok: true,
-    message: `Successfully generated/updated ${results.length} salary slips${skipped.length ? ` (${skipped.length} skipped)` : ''}.`,
+    message: `Successfully generated/updated ${results.length} salary slips${skipped.length ? ` (${skipped.length} skipped)` : ''}${carriedCount ? `; ${carriedCount} include carried-forward leave deduction` : ''}.`,
     count: results.length,
     results,
     skipped,
@@ -175,6 +255,7 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
 
 module.exports = {
   generateSalarySlipsForMonth,
+  buildEmployeeSalarySlip,
   payrollEmailForEmployee,
   isPayrollCandidateForPeriod,
   yearQueryValue,

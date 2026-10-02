@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import styles from "./LeaveRequestTable.module.css";
 import plus from "../../assets/dashboard/plus.svg";
@@ -29,6 +29,7 @@ import {
     useResetPageOnFilterChange,
 } from "../../hooks/usePersistedListPage";
 import { calculateLeaveDays } from "../../utils/leaveCalculator";
+import { LEAVE_STATUS_FILTERS } from "../../utils/cardNavigation";
 
 const EditIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -54,13 +55,21 @@ const RevertIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
 );
 
-function LeaveRequestTable({ onUpdate }) {
+function LeaveRequestTable({ onUpdate, filterRequest }) {
     const { showToast } = useToast();
     const [leaveRequests, setLeaveRequests] = useState([]);
     const [totalLeaveCount, setTotalLeaveCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-    const [activeFilter, setActiveFilter] = useState("All");
+    const [searchParams, setSearchParams] = useSearchParams();
+    // Default view: every Pending request across all years; a card link may pass ?status=
+    const [activeFilter, setActiveFilter] = useState(() => {
+        const fromUrl = searchParams.get("status");
+        return LEAVE_STATUS_FILTERS.includes(fromUrl) ? fromUrl : "Pending";
+    });
+    // First load on each visit bypasses the client/server list cache.
+    const forceNextFetchRef = useRef(true);
+    const [refreshToken, setRefreshToken] = useState(0);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -68,7 +77,6 @@ function LeaveRequestTable({ onUpdate }) {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [userRole, setUserRole] = useState("");
-    const [searchParams, setSearchParams] = useSearchParams();
 
     // Page from URL, else last session page (survives sidebar navigation)
     const currentPage = Math.max(
@@ -107,15 +115,14 @@ function LeaveRequestTable({ onUpdate }) {
         }
     }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const [searchQuery, setSearchQuery] = useState("");
-    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
+    const [debouncedSearch, setDebouncedSearch] = useState(() => (searchParams.get("search") || "").trim());
     const [selectedDept, setSelectedDept] = useState("All");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [selectedManager, setSelectedManager] = useState("All");
     const [selectedMonth, setSelectedMonth] = useState(() => searchParams.get("month") || "All");
-    // Default current year so Leave Management shows that year's records (change dropdown for 2022–2025 etc.)
-    const [selectedYear, setSelectedYear] = useState(() => searchParams.get("year") || String(new Date().getFullYear()));
+    const [selectedYear, setSelectedYear] = useState(() => searchParams.get("year") || "All");
     const [selectedLeaveType] = useState(() => searchParams.get("leaveType") || "All");
     const [departments, setDepartments] = useState([]);
     const [managers, setManagers] = useState([]);
@@ -143,6 +150,8 @@ function LeaveRequestTable({ onUpdate }) {
 
     const fetchLeaveRequests = useCallback(async (opts = {}) => {
         setIsLoading(true);
+        const force = Boolean(opts.force) || forceNextFetchRef.current;
+        forceNextFetchRef.current = false;
         try {
             const params = {
                 page: currentPage,
@@ -156,7 +165,7 @@ function LeaveRequestTable({ onUpdate }) {
                 startDate,
                 endDate,
                 leaveType: selectedLeaveType,
-                ...(opts.force ? { force: true } : {}),
+                ...(force ? { force: true } : {}),
             };
             const data = await leaveRequestService.getLeaveRequests(params);
             const rows = Array.isArray(data) ? data : (data?.data || []);
@@ -187,7 +196,7 @@ function LeaveRequestTable({ onUpdate }) {
         }
     }, [
         currentPage, itemsPerPage, activeFilter, debouncedSearch, selectedDept, selectedManager,
-        selectedYear, selectedMonth, startDate, endDate, selectedLeaveType,
+        selectedYear, selectedMonth, startDate, endDate, selectedLeaveType, refreshToken,
     ]); // eslint-disable-line react-hooks/exhaustive-deps -- onUpdate/showToast stable enough for this page
 
     useEffect(() => {
@@ -197,6 +206,28 @@ function LeaveRequestTable({ onUpdate }) {
     useEffect(() => {
         fetchLeaveRequests();
     }, [fetchLeaveRequests]);
+
+    // KPI card on this page: show exactly that card's records (status, all years, no other filters).
+    useEffect(() => {
+        if (!filterRequest?.status) return;
+        forceNextFetchRef.current = true;
+        setActiveFilter(LEAVE_STATUS_FILTERS.includes(filterRequest.status) ? filterRequest.status : "All");
+        setSelectedYear("All");
+        setSelectedMonth("All");
+        setSearchQuery("");
+        setDebouncedSearch("");
+        setSelectedDept("All");
+        setSelectedManager("All");
+        setStartDate("");
+        setEndDate("");
+        setRefreshToken((t) => t + 1);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            ["status", "year", "month", "search", "page"].forEach((key) => next.delete(key));
+            return next;
+        }, { replace: true });
+        writePersistedPage("leave-requests", 1);
+    }, [filterRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         return employeeService.onEmployeeDataChanged?.(() => {
@@ -513,7 +544,7 @@ function LeaveRequestTable({ onUpdate }) {
                                 label: selectedYear === "All" ? "All Years" : String(selectedYear),
                             }
                         }
-                        onChange={(opt) => setSelectedYear(opt?.value || String(new Date().getFullYear()))}
+                        onChange={(opt) => setSelectedYear(opt?.value || "All")}
                         styles={{
                             control: (base) => ({
                                 ...base,
@@ -656,7 +687,7 @@ function LeaveRequestTable({ onUpdate }) {
                                 setStartDate("");
                                 setEndDate("");
                                 setSelectedMonth("All");
-                                setSelectedYear(String(new Date().getFullYear()));
+                                setSelectedYear("All");
                             }}
                         >
                             Reset

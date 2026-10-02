@@ -144,11 +144,22 @@ const inspectSlipProration = (slip, employee) => {
 
   // The non-leave part of the stored deductions is preserved as-is.
   const fixedDeduction = Math.max(0, roundAed(storedDeduction(slip) - toAmt(slip?.leave)));
-  const expected = composeSalarySlipAmounts({
+  const composed = composeSalarySlipAmounts({
     salaryDetails: employee.salaryDetails,
     payableDays,
     fixedDeduction,
   });
+  // A carried-forward leave deduction from an earlier payroll cycle stays on the slip.
+  const carried = roundAed(toAmt(slip?.carriedForwardLeaveDeduction));
+  const expected = carried
+    ? {
+        ...composed,
+        leave: roundAed(composed.leave + carried),
+        totalDeduction: roundAed(composed.totalDeduction + carried),
+        deductionsPFTax: roundAed(composed.totalDeduction + carried),
+        netSalary: roundAed(composed.grossSalary - composed.totalDeduction - carried),
+      }
+    : composed;
   const leaveDeduction = expected.leave;
   const totalDeduction = expected.totalDeduction;
   result.expectedLeaveDeduction = leaveDeduction;

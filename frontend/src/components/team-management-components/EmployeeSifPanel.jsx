@@ -115,17 +115,14 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
 
   const employeePreview = useMemo(() => {
     if (!employee) return null;
-    const empId = digitsOnly(employee.emiratesId);
     const agent = digitsOnly(employee.salaryDetails?.bankSortCode);
     const bank = getBankAccount(employee);
     const pay = getFixedIncome(employee);
     const missing = [];
-    if (empId.length < 14 || empId.length > 15) missing.push("Emirates ID");
     if (agent.length !== 9) missing.push("AGENTCODE");
     if (!bank) missing.push("Bank account / IBAN");
     return {
       staffId: employee.employeeId || "—",
-      empId: empId || "—",
       employerId: employerDigits || "—",
       agentCode: agent || "—",
       bankAccount: bank || "—",
@@ -294,7 +291,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
         <h3 className={styles.title}>SIF (WPS) Import / Export</h3>
         <p className={styles.subtitle}>
           Red Excel columns denote required WPS fields. Export builds EDR rows for Active employees
-          with Emirates ID, AGENTCODE, and bank account, then an SCR totals line.
+          with AGENTCODE and bank account, then an SCR totals line. EMPID / Emirates ID is not exported.
         </p>
       </div>
 
@@ -306,10 +303,6 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               <div>
                 <span className={styles.label}>STAFFID</span>
                 <span className={styles.value}>{employeePreview.staffId}</span>
-              </div>
-              <div>
-                <span className={styles.label}>EMPID / Emirates ID</span>
-                <span className={styles.value}>{employeePreview.empId}</span>
               </div>
               <div>
                 <span className={styles.label}>EMPLOYERID</span>
@@ -329,8 +322,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               </div>
             </div>
             <p className={styles.hint}>
-              Edit EMPID on Basic Info (Emirates ID). Edit AGENTCODE / BANKACCOUNT on Salary Details
-              (Bank SORT Code / IBAN).
+              Edit AGENTCODE / BANKACCOUNT on Salary Details (Bank SORT Code / IBAN).
               {!employeePreview.ready && (
                 <span className={styles.warn}>
                   {" "}

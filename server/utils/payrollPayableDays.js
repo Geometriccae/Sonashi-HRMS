@@ -291,6 +291,7 @@ module.exports = {
   unpaidPayrollDays,
   leaveDeductionAmount,
   leaveMatchesEmployee,
+  unpaidFractionForLeave,
   inclusiveDays,
   dateKey,
   toDayStart,
