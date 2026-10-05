@@ -72,6 +72,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
   const now = new Date();
   const [employerId, setEmployerId] = useState("");
   const [agentRouting, setAgentRouting] = useState("");
+  const [employers, setEmployers] = useState([]);
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [loadingSettings, setLoadingSettings] = useState(true);
@@ -98,6 +99,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       const s = await sifService.getSettings();
       setEmployerId(s.employerId || "");
       setAgentRouting(s.defaultAgentRoutingCode || "");
+      setEmployers(Array.isArray(s.employers) ? s.employers : []);
     } catch (err) {
       toast(err.message || "Failed to load SIF settings", "error");
     } finally {
@@ -118,19 +120,24 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     const agent = digitsOnly(employee.salaryDetails?.bankSortCode);
     const bank = getBankAccount(employee);
     const pay = getFixedIncome(employee);
+    const labourCard = String(employee.workPermitNo || "").replace(/[\s-]+/g, "");
+    const employer = String(employee.companyCode || "").replace(/[\s-]+/g, "");
     const missing = [];
+    if (!/^\d{14}$/.test(labourCard)) missing.push("Staff ID / Labour Card No. (Person Code, 14 digits)");
     if (agent.length !== 9) missing.push("AGENTCODE");
     if (!bank) missing.push("Bank account / IBAN");
+    if (!/^\d{13}$/.test(employer)) missing.push("Company Code (13-digit Employer ID)");
     return {
       staffId: employee.employeeId || "—",
-      employerId: employerDigits || "—",
+      labourCard: labourCard || "—",
+      employerId: employer || "—",
       agentCode: agent || "—",
       bankAccount: bank || "—",
       netPay: pay,
       ready: missing.length === 0,
       missing,
     };
-  }, [employee, employerDigits]);
+  }, [employee]);
 
   const validateSettingsLocal = () => {
     if (employerDigits.length !== 13) {
@@ -290,8 +297,9 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       <div className={styles.header}>
         <h3 className={styles.title}>SIF (WPS) Import / Export</h3>
         <p className={styles.subtitle}>
-          Red Excel columns denote required WPS fields. Export builds EDR rows for Active employees
-          with AGENTCODE and bank account, then an SCR totals line. EMPID / Emirates ID is not exported.
+          Red Excel columns denote required WPS fields. Export builds one EDR row per employee of the
+          selected EMPLOYERID (Company Code) from that month&apos;s generated salary slip — labour card,
+          AGENTCODE, IBAN, days and net salary — then an SCR totals line. EMPID / Emirates ID is not exported.
         </p>
       </div>
 
@@ -303,6 +311,10 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               <div>
                 <span className={styles.label}>STAFFID</span>
                 <span className={styles.value}>{employeePreview.staffId}</span>
+              </div>
+              <div>
+                <span className={styles.label}>LABOUR CARD NO.</span>
+                <span className={styles.value}>{employeePreview.labourCard}</span>
               </div>
               <div>
                 <span className={styles.label}>EMPLOYERID</span>
@@ -322,7 +334,8 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               </div>
             </div>
             <p className={styles.hint}>
-              Edit AGENTCODE / BANKACCOUNT on Salary Details (Bank SORT Code / IBAN).
+              Edit AGENTCODE / BANKACCOUNT on Salary Details (Bank SORT Code / IBAN); labour card
+              is the employee&apos;s Person Code and EMPLOYERID is the Company Code.
               {!employeePreview.ready && (
                 <span className={styles.warn}>
                   {" "}
@@ -345,6 +358,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               type="text"
               inputMode="numeric"
               maxLength={13}
+              list="employee-sif-employer-options"
               value={employerId}
               onChange={(e) => {
                 setSettingsError("");
@@ -354,6 +368,13 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               className={styles.input}
               placeholder="0000000000000"
             />
+            <datalist id="employee-sif-employer-options">
+              {employers.map((emp) => (
+                <option key={emp.employerId} value={emp.employerId}>
+                  {`${emp.employeeCount} employee(s)`}
+                </option>
+              ))}
+            </datalist>
             {employerDigits.length > 0 && employerDigits.length !== 13 && (
               <span className={styles.fieldError}>Must be exactly 13 digits ({employerDigits.length}/13)</span>
             )}

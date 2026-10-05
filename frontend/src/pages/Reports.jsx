@@ -141,11 +141,11 @@ const mapEmployeeMasterRow = (e) => {
 };
 
 const SIF_HEADERS = [
-  "StaffID", "EMPID", "EMPNAME", "EMPLOYERID", "AGENTCODE",
+  "StaffID", "LABOURCARD", "EMPID", "EMPNAME", "EMPLOYERID", "AGENTCODE",
   "BANKACCOUNT", "STATUS", "BASIC", "HRA", "TRANSPOR",
   "OTHERALLOV", "DEDUCTIO", "TOTA",
 ];
-const SIF_RED_HEADERS = new Set(["StaffID", "EMPID", "EMPLOYERID", "AGENTCODE", "BANKACCOUNT"]);
+const SIF_RED_HEADERS = new Set(["StaffID", "LABOURCARD", "EMPID", "EMPLOYERID", "AGENTCODE", "BANKACCOUNT"]);
 
 const EMPLOYEE_MENU_VISIBLE_COUNT = 5;
 const EMPLOYEE_OPTION_HEIGHT = 48;
@@ -347,6 +347,7 @@ function Reports() {
   // SIF settings (Salary report)
   const [sifEmployerId, setSifEmployerId] = useState("");
   const [sifAgentCode, setSifAgentCode] = useState("");
+  const [sifEmployers, setSifEmployers] = useState([]);
   const sifInputRef = useRef(null);
   const [sifImportOpen, setSifImportOpen] = useState(false);
   const [sifDragOver, setSifDragOver] = useState(false);
@@ -389,6 +390,7 @@ function Reports() {
       .then((s) => {
         setSifEmployerId(s.employerId || "");
         setSifAgentCode(s.defaultAgentRoutingCode || "");
+        setSifEmployers(Array.isArray(s.employers) ? s.employers : []);
       })
       .catch(() => {});
   }, []);
@@ -488,6 +490,44 @@ function Reports() {
       status: statusFilter || undefined,
     });
     return Array.isArray(data) ? data : (data.employees || data.data || []);
+  };
+
+  /** Salary report / SIF pay month: selected Month + Year, else the current month. */
+  const getSalaryPayrollPeriod = () => {
+    const now = new Date();
+    const m = filterMonth !== "All"
+      ? monthsList.indexOf(filterMonth)
+      : now.getMonth() + 1;
+    const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
+    return { m, y };
+  };
+
+  /**
+   * Payroll + WPS fields per employee (_id) from the same rows the SIF export uses.
+   * If they cannot be loaded the report still renders from Employee Master data.
+   */
+  const fetchSalaryPayrollRows = async () => {
+    const { m, y } = getSalaryPayrollPeriod();
+    try {
+      const { rows = [] } = await sifService.getSalaryReportRows(m, y);
+      return new Map(rows.map((r) => [String(r.employeeRecordId), r]));
+    } catch (err) {
+      console.warn("Salary report payroll data unavailable:", err?.message || err);
+      return new Map();
+    }
+  };
+
+  /** WPS fields straight from Employee Master (same rules as the server SIF mapping). */
+  const employeeWpsFields = (e) => {
+    const sal = e.salaryDetails || {};
+    const account = String(sal.ibanNumber || sal.accountNumber || "").replace(/\s+/g, "").toUpperCase();
+    return {
+      staffId: String(e.workPermitNo || "").replace(/[\s-]+/g, "").toUpperCase(),
+      employerId: String(e.companyCode || "").replace(/[\s-]+/g, "").toUpperCase(),
+      companyCode: e.companyCode || "",
+      agentCode: digitsOnly(sal.bankSortCode),
+      iban: /^\d+$/.test(account) && account.length < 23 ? account.padStart(23, "0") : account,
+    };
   };
 
   /** Build Staff Leave Report Master tracker data (summary + yearly sheets).
@@ -908,16 +948,20 @@ function Reports() {
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
       empList = filterByExperience(empList);
 
+      const payrollById = await fetchSalaryPayrollRows();
       const rows = empList.map(e => {
         const sal = e.salaryDetails || {};
+        const p = payrollById.get(String(e._id)) || employeeWpsFields(e);
+        const missing = p.employeeRecordId ? (p.missing || []) : ["Payroll data not loaded"];
         return {
           "Employee ID": e.employeeId || "",
           "Name": e.employeeName || "",
           "Status": e.employeeStatus || "",
-          "Department": e.department || "",
+          "Staff ID / Labour Card No.": p.staffId || "",
+          "Employer ID": p.employerId || "",
+          "Company Code": p.companyCode || e.companyCode || "",
           "Role": e.role || "",
           "Company": e.office || "",
-          "Company Code": e.companyCode || "",
           "Basic Salary": Number(sal.basicSalary) || 0,
           "House Rent Allowance": Number(sal.houseRent) || 0,
           "Travel Allowance": Number(sal.travelExp) || 0,
@@ -927,8 +971,13 @@ function Reports() {
           "Total / Net Salary": Number(sal.totalSalary) || 0,
           "Bank Name": sal.bankName || "",
           "Account Number": sal.accountNumber || "",
-          "IBAN": sal.ibanNumber || "",
-          "Sort Code": sal.bankSortCode || ""
+          "Bank Agent Code": p.agentCode || "",
+          "IBAN Number": p.iban || "",
+          "Payroll Month": p.payrollMonth || "",
+          "Days Worked": p.daysWorked ?? "",
+          "Leave Days": p.leaveDays ?? "",
+          "SIF Salary": p.fixedIncome ?? "",
+          "SIF Status": missing.length ? `Incomplete: ${missing.join("; ")}` : "Ready",
         };
       });
 
@@ -1129,18 +1178,20 @@ function Reports() {
   };
 
   const generateSalaryReport = async () => {
-    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    const now = new Date();
-    const m = filterMonth !== "All"
-      ? monthNames.indexOf(filterMonth) + 1
-      : now.getMonth() + 1;
-    const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
+    const { m, y } = getSalaryPayrollPeriod();
 
     if (format === "SIF") {
       await saveSifSettings(sifEmployerId, sifAgentCode, { silent: true });
       const result = await sifService.exportSif(m, y);
       if (result.skippedCount > 0) {
-        alert(`SIF exported (${result.edrCount} records). ${result.skippedCount} employee(s) skipped due to missing data.`);
+        const lines = (result.skipped || [])
+          .slice(0, 15)
+          .map((s) => `• ${s.empName || ""}${s.staffId ? ` (${s.staffId})` : ""} — ${s.reason || ""}`);
+        const more = result.skippedCount > lines.length ? `\n…and ${result.skippedCount - lines.length} more` : "";
+        alert(
+          `SIF exported: ${result.fileName} (${result.edrCount} records). ` +
+          `${result.skippedCount} employee(s) skipped due to missing data:\n\n${lines.join("\n")}${more}`
+        );
       }
       return;
     }
@@ -1172,7 +1223,11 @@ function Reports() {
         downloadStaffSalaryWorkbook,
       } = await loadStaffSalaryExport();
       const days = getSalaryReportDays(filterMonth, filterYear);
-      const wb = buildStaffSalaryWorkbook(empList, { days, tillYear: y });
+      const payrollById = await fetchSalaryPayrollRows();
+      empList.forEach((e) => {
+        if (!payrollById.has(String(e._id))) payrollById.set(String(e._id), employeeWpsFields(e));
+      });
+      const wb = buildStaffSalaryWorkbook(empList, { days, tillYear: y, payrollById });
       await downloadStaffSalaryWorkbook(wb, "Staff_Salary_Report", saveAs);
       return;
     }
@@ -1224,6 +1279,9 @@ function Reports() {
 
   const SIF_IMPORT_HEADER_ALIASES = {
     STAFFID: "StaffID", EMPID: "EMPID", EMPNAME: "EMPNAME",
+    LABOURCARD: "LABOURCARD", LABORCARD: "LABOURCARD", LABOURCARDNO: "LABOURCARD",
+    LABORCARDNO: "LABOURCARD", LABOURCARDNUMBER: "LABOURCARD", LABORCARDNUMBER: "LABOURCARD",
+    PERSONCODE: "LABOURCARD", WORKPERMITNO: "LABOURCARD",
     EMPLOYERID: "EMPLOYERID", AGENTCODE: "AGENTCODE", AGENTCODI: "AGENTCODE",
     BANKACCOUNT: "BANKACCOUNT", STATUS: "STATUS", BASIC: "BASIC",
     HRA: "HRA", TRANSPOR: "TRANSPOR", TRANSPORT: "TRANSPOR",
@@ -1262,8 +1320,10 @@ function Reports() {
     const lines = text.split(/\r?\n/).filter((l) => l.startsWith("EDR"));
     return lines.map((line) => {
       const parts = line.split(",");
+      const id = String(parts[1] || "").trim();
+      const isEmiratesId = /^784\d{12}$/.test(id);
       return {
-        EMPID: parts[1] || "",
+        [isEmiratesId ? "EMPID" : "LABOURCARD"]: id,
         AGENTCODE: parts[2] || "",
         BANKACCOUNT: parts[3] || "",
         BASIC: parts[7] || "",
@@ -1803,10 +1863,18 @@ function Reports() {
                         className={styles["select-field"]}
                         placeholder="13-digit Employer ID"
                         maxLength={13}
+                        list="sif-employer-options"
                         value={sifEmployerId}
                         onChange={(e) => setSifEmployerId(e.target.value.replace(/\D/g, "").slice(0, 13))}
                         onBlur={() => saveSifSettings(sifEmployerId, sifAgentCode)}
                       />
+                      <datalist id="sif-employer-options">
+                        {sifEmployers.map((emp) => (
+                          <option key={emp.employerId} value={emp.employerId}>
+                            {`${emp.employeeCount} employee(s)`}
+                          </option>
+                        ))}
+                      </datalist>
                     </div>
                   </div>
                   <div className={styles["form-row"]}>

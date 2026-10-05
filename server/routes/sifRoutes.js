@@ -6,11 +6,14 @@ const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
 const Employee = require("../models/Employee");
 const CompanySifSettings = require("../models/CompanySifSettings");
 const { workingStatusFilter } = require("../utils/employeeStatus");
+const { loadSalaryReportRows } = require("../utils/sifSalaryReportRows");
 const {
+  MONTH_NAMES,
   generateSifContent,
   parseSifContent,
   digitsOnly,
   normalizeEmiratesId,
+  getEmployeeEmployerId,
   excelHeaders,
   RED_HEADERS,
   employeeToExcelRow,
@@ -54,6 +57,22 @@ async function loadActiveEmployees() {
   return Employee.find(workingStatusFilter()).lean();
 }
 
+/** Employer IDs (company codes) of working employees, for the SIF employer picker. */
+async function listEmployers() {
+  const employees = await Employee.find(workingStatusFilter()).select("companyCode").lean();
+  const counts = new Map();
+  employees.forEach((emp) => {
+    const id = getEmployeeEmployerId(emp);
+    if (id) counts.set(id, (counts.get(id) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .map(([employerId, employeeCount]) => ({ employerId, employeeCount }))
+    .sort((a, b) => b.employeeCount - a.employeeCount);
+}
+
+/** 14-digit MOHRE person code; Emirates IDs are 15 digits starting with 784. */
+const labourCardLooksLike = (value) => value.length === 14 && !value.startsWith("784");
+
 async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
   const results = { updated: 0, skipped: [], errors: [] };
   const seenKeys = new Set();
@@ -62,24 +81,29 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
     $or: [
       { emiratesId: { $exists: true, $nin: [null, ""] } },
       { employeeId: { $exists: true, $nin: [null, ""] } },
+      { workPermitNo: { $exists: true, $nin: [null, ""] } },
     ],
-  }).select("_id emiratesId employeeId employeeName salaryDetails");
+  }).select("_id emiratesId employeeId employeeName workPermitNo salaryDetails");
 
   const byEmpid = new Map();
   const byStaff = new Map();
+  const byLabourCard = new Map();
   allWithId.forEach((e) => {
     const eid = normalizeEmiratesId(e.emiratesId);
     if (eid) byEmpid.set(eid, e);
     if (e.employeeId) byStaff.set(String(e.employeeId).trim(), e);
+    const card = digitsOnly(e.workPermitNo);
+    if (card) byLabourCard.set(card, e);
   });
 
   for (let rowIndex = 0; rowIndex < edrs.length; rowIndex += 1) {
     const edr = edrs[rowIndex];
     const empId = normalizeEmiratesId(edr.empId);
     const staffId = String(edr.staffId || "").trim();
+    const labourCard = digitsOnly(edr.labourCard);
     const rowLabel = `Row ${rowIndex + 1}`;
 
-    if (!empId && !staffId) {
+    if (!empId && !staffId && !labourCard) {
       results.skipped.push({
         empId: "",
         staffId: "",
@@ -128,7 +152,7 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
       continue;
     }
 
-    const dedupeKey = empId || `staff:${staffId}`;
+    const dedupeKey = empId || (labourCard ? `card:${labourCard}` : `staff:${staffId}`);
     if (seenKeys.has(dedupeKey)) {
       results.skipped.push({
         empId,
@@ -140,7 +164,17 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
     }
     seenKeys.add(dedupeKey);
 
-    let empDoc = empId ? byEmpid.get(empId) : null;
+    // The EDR employee ID is the labour card (person code) in the client's SIF
+    // files; older files carried the Emirates ID in the same position.
+    let matchedByLabourCard = false;
+    let empDoc = null;
+    if (labourCard && byLabourCard.has(labourCard)) {
+      empDoc = byLabourCard.get(labourCard);
+    } else if (empId && byLabourCard.has(empId)) {
+      empDoc = byLabourCard.get(empId);
+      matchedByLabourCard = true;
+    }
+    if (!empDoc && empId) empDoc = byEmpid.get(empId) || null;
     if (!empDoc && staffId) {
       empDoc = byStaff.get(staffId) || null;
     }
@@ -168,7 +202,14 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
       }
 
       // Only update fields that are present and valid in the import row
-      if (empId) emp.emiratesId = empId;
+      const empIdIsEmiratesId = empId.length === 15 && empId.startsWith("784");
+      if (empId && !matchedByLabourCard && (empIdIsEmiratesId || !labourCardLooksLike(empId))) {
+        emp.emiratesId = empId;
+      }
+      const cardToSave = labourCard || (!empIdIsEmiratesId && labourCardLooksLike(empId) ? empId : "");
+      if (cardToSave.length === 14 && !digitsOnly(emp.workPermitNo)) {
+        emp.workPermitNo = cardToSave;
+      }
       if (!emp.salaryDetails) emp.salaryDetails = {};
       if (agentRaw) emp.salaryDetails.bankSortCode = agentRaw;
 
@@ -208,8 +249,10 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
       await emp.save();
       results.updated += 1;
 
-      if (empId) byEmpid.set(empId, emp);
+      if (empId && emp.emiratesId === empId) byEmpid.set(empId, emp);
       if (emp.employeeId) byStaff.set(String(emp.employeeId).trim(), emp);
+      const savedCard = digitsOnly(emp.workPermitNo);
+      if (savedCard) byLabourCard.set(savedCard, emp);
     } catch (err) {
       results.errors.push({
         empId,
@@ -232,6 +275,7 @@ router.get("/settings", authMiddleware, async (req, res) => {
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      employers: await listEmployers(),
     });
   } catch (err) {
     console.error("SIF settings GET error:", err);
@@ -275,9 +319,9 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
 
-    const employees = await loadActiveEmployees();
+    const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
     const result = generateSifContent({
-      employees,
+      rows,
       employerId: settings.employerId || "",
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
       year: parsed.year,
@@ -324,9 +368,9 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
-    const employees = await loadActiveEmployees();
+    const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
     const result = generateSifContent({
-      employees,
+      rows,
       employerId: settings.employerId || "",
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
       year: parsed.year,
@@ -340,12 +384,37 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
       totalSalary: result.totalSalary || 0,
       skipped: result.skipped || [],
       skippedCount: (result.skipped || []).length,
+      otherEmployerCount: result.otherEmployerCount || 0,
+      edrRecords: result.edrRecords || [],
       fileName: result.fileName || null,
       error: result.error || null,
     });
   } catch (err) {
     console.error("SIF preview error:", err);
     res.status(500).json({ message: "Failed to preview SIF export" });
+  }
+});
+
+// ── Salary Report rows (same rows the SIF is generated from) ─────────────────
+
+router.get("/salary-report", authMiddleware, async (req, res) => {
+  try {
+    const parsed = parseMonthYear(req);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const rows = await loadSalaryReportRows({
+      month: parsed.month,
+      year: parsed.year,
+      payrollEligibleOnly: false,
+    });
+    res.json({
+      month: parsed.month,
+      year: parsed.year,
+      payrollMonth: `${MONTH_NAMES[parsed.month - 1]} ${parsed.year}`,
+      rows,
+    });
+  } catch (err) {
+    console.error("Salary report rows error:", err);
+    res.status(500).json({ message: "Failed to load salary report payroll data" });
   }
 });
 
@@ -499,6 +568,7 @@ router.post(
 
         return {
           staffId: String(mapped.StaffID || "").trim(),
+          labourCard: digitsOnly(mapped.LABOURCARD),
           empId: normalizeEmiratesId(mapped.EMPID),
           agentCode: digitsOnly(mapped.AGENTCODE),
           bankAccount: String(mapped.BANKACCOUNT || "").trim(),

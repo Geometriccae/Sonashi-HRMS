@@ -58,6 +58,16 @@ class SifService {
     return res.json();
   }
 
+  /** Salary Report payroll/WPS rows for a month — the same rows the SIF is built from. */
+  async getSalaryReportRows(month, year) {
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    const res = await fetch(`${this.baseURL}/salary-report?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to load salary report payroll data");
+    return res.json();
+  }
+
   async exportSif(month, year) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
