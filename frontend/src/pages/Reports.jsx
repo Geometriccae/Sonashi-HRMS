@@ -13,6 +13,8 @@ import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import sifService from "../services/SifService";
+import CompanyDocumentService from "../services/CompanyDocumentService";
+import { buildCompanyOptionsFromDocuments } from "../utils/companyCodeFromDocuments";
 import { buildYearList } from "../utils/yearOptions";
 import { calculateLeaveDays } from "../utils/leaveCalculator";
 import {
@@ -325,9 +327,9 @@ function Reports() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // SIF settings (Salary report)
+  // SIF Employer ID (Salary report) — options from existing company-code config
   const [sifEmployerId, setSifEmployerId] = useState("");
-  const [sifAgentCode, setSifAgentCode] = useState("");
+  const [companyDocuments, setCompanyDocuments] = useState([]);
   const sifInputRef = useRef(null);
   const [sifImportOpen, setSifImportOpen] = useState(false);
   const [sifDragOver, setSifDragOver] = useState(false);
@@ -368,11 +370,45 @@ function Reports() {
   useEffect(() => {
     sifService.getSettings()
       .then((s) => {
-        setSifEmployerId(s.employerId || "");
-        setSifAgentCode(s.defaultAgentRoutingCode || "");
+        setSifEmployerId(String(s.employerId || "").replace(/\D/g, "").slice(0, 13));
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    CompanyDocumentService.getAll()
+      .then((data) => {
+        const docs = Array.isArray(data) ? data : data?.documents || data?.data || [];
+        setCompanyDocuments(docs);
+      })
+      .catch(() => setCompanyDocuments([]));
+  }, []);
+
+  // Employer ID dropdown: existing configured codes (Company Documents + employee companyCode + SIF settings)
+  const sifEmployerIdOptions = useMemo(() => {
+    const byCode = new Map();
+
+    buildCompanyOptionsFromDocuments(companyDocuments).forEach((opt) => {
+      const code = String(opt.companyCode || "").replace(/\D/g, "");
+      if (code.length === 13 && !byCode.has(code)) {
+        byCode.set(code, { value: code, label: opt.label || code });
+      }
+    });
+
+    (employeeList || []).forEach((e) => {
+      const code = String(e.companyCode || "").replace(/\D/g, "");
+      if (code.length === 13 && !byCode.has(code)) {
+        byCode.set(code, { value: code, label: code });
+      }
+    });
+
+    const selected = String(sifEmployerId || "").replace(/\D/g, "");
+    if (selected.length === 13 && !byCode.has(selected)) {
+      byCode.set(selected, { value: selected, label: selected });
+    }
+
+    return Array.from(byCode.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [companyDocuments, employeeList, sifEmployerId]);
 
   // Employees Master Data: default Status=Active, then auto-load / refresh preview
   const masterDataReadyRef = useRef(false);
@@ -428,17 +464,6 @@ function Reports() {
     filterOffice,
     filterCountry,
   ]);
-
-  const saveSifSettings = useCallback(async (employerId, agentCode, { silent = true } = {}) => {
-    try {
-      await sifService.saveSettings({
-        employerId: employerId,
-        defaultAgentRoutingCode: agentCode,
-      });
-    } catch (err) {
-      if (!silent) throw err;
-    }
-  }, []);
 
   const digitsOnly = (v) => String(v ?? "").replace(/\D/g, "");
 
@@ -1098,8 +1123,15 @@ function Reports() {
     const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
 
     if (format === "SIF") {
-      await saveSifSettings(sifEmployerId, sifAgentCode, { silent: true });
-      const result = await sifService.exportSif(m, y);
+      const employerId = digitsOnly(sifEmployerId);
+      if (!employerId || employerId.length !== 13) {
+        setError("Please select a valid 13-digit Employer ID.");
+        alert("Please select a valid 13-digit Employer ID.");
+        return;
+      }
+      // Pass selected Employer ID for this export only.
+      // Agent Code continues from existing SIF Settings on the server.
+      const result = await sifService.exportSif(m, y, { employerId });
       if (result.skippedCount > 0) {
         alert(`SIF exported (${result.edrCount} records). ${result.skippedCount} employee(s) skipped due to missing data.`);
       }
@@ -1274,11 +1306,10 @@ function Reports() {
         `Import complete. ${updated} employee(s) updated.${skipped ? ` ${skipped} skipped.` : ""}`
       );
 
-      // Reload SIF settings (EMPLOYERID may have been updated from file)
+      // Reload SIF Employer ID (may have been updated from file into SIF Settings)
       try {
         const s = await sifService.getSettings();
-        setSifEmployerId(s.employerId || "");
-        setSifAgentCode(s.defaultAgentRoutingCode || "");
+        setSifEmployerId(String(s.employerId || "").replace(/\D/g, "").slice(0, 13));
       } catch {}
 
       if (reportType === "Salary report") {
@@ -1751,29 +1782,16 @@ function Reports() {
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Employer ID</div>
                     <div className={styles["form-field"]}>
-                      <input
-                        type="text"
+                      <select
                         className={styles["select-field"]}
-                        placeholder="13-digit Employer ID"
-                        maxLength={13}
                         value={sifEmployerId}
-                        onChange={(e) => setSifEmployerId(e.target.value.replace(/\D/g, "").slice(0, 13))}
-                        onBlur={() => saveSifSettings(sifEmployerId, sifAgentCode)}
-                      />
-                    </div>
-                  </div>
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Agent Code</div>
-                    <div className={styles["form-field"]}>
-                      <input
-                        type="text"
-                        className={styles["select-field"]}
-                        placeholder="9-digit Agent Routing Code"
-                        maxLength={9}
-                        value={sifAgentCode}
-                        onChange={(e) => setSifAgentCode(e.target.value.replace(/\D/g, "").slice(0, 9))}
-                        onBlur={() => saveSifSettings(sifEmployerId, sifAgentCode)}
-                      />
+                        onChange={(e) => setSifEmployerId(e.target.value)}
+                      >
+                        <option value="">Select Employer ID</option>
+                        {sifEmployerIdOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>

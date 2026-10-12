@@ -11,6 +11,7 @@ const {
   parseSifContent,
   digitsOnly,
   normalizeEmiratesId,
+  validateEmployerId,
   excelHeaders,
   RED_HEADERS,
   employeeToExcelRow,
@@ -198,10 +199,19 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
 
+    // Prefer Employer ID selected in Report UI for this export only.
+    // Do not overwrite CompanySifSettings or employee companyCode.
+    const selectedEmployerId = digitsOnly(req.query.employerId);
+    const employerId = selectedEmployerId || digitsOnly(settings.employerId) || "";
+    const employerErr = validateEmployerId(employerId);
+    if (employerErr) {
+      return res.status(400).json({ message: employerErr });
+    }
+
     const employees = await loadActiveEmployees();
     const result = generateSifContent({
       employees,
-      employerId: settings.employerId || "",
+      employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
       year: parsed.year,
       month: parsed.month,
@@ -243,17 +253,20 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
+    const selectedEmployerId = digitsOnly(req.query.employerId);
+    const employerId =
+      selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
     const employees = await loadActiveEmployees();
     const result = generateSifContent({
       employees,
-      employerId: settings.employerId || "0000000000000",
+      employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode,
       year: parsed.year,
       month: parsed.month,
     });
 
     res.json({
-      employerId: settings.employerId || "",
+      employerId: selectedEmployerId || settings.employerId || "",
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
       skipped: result.skipped || [],
