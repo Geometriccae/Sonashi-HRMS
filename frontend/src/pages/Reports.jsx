@@ -10,6 +10,8 @@ import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import sifService from "../services/SifService";
+import CompanyDocumentService from "../services/CompanyDocumentService";
+import { buildCompanyOptionsFromDocuments } from "../utils/companyCodeFromDocuments";
 import { buildYearList } from "../utils/yearOptions";
 import { calculateLeaveDays } from "../utils/leaveCalculator";
 import {
@@ -344,10 +346,9 @@ function Reports() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // SIF settings (Salary report)
+  // SIF Employer ID (Salary report) — options from existing company-code config
   const [sifEmployerId, setSifEmployerId] = useState("");
-  const [sifSettingsEmployerId, setSifSettingsEmployerId] = useState("");
-  const [sifEmployers, setSifEmployers] = useState([]);
+  const [companyDocuments, setCompanyDocuments] = useState([]);
   const sifInputRef = useRef(null);
   const [sifImportOpen, setSifImportOpen] = useState(false);
   const [sifDragOver, setSifDragOver] = useState(false);
@@ -388,24 +389,45 @@ function Reports() {
   useEffect(() => {
     sifService.getSettings()
       .then((s) => {
-        setSifEmployerId(s.employerId || "");
-        setSifSettingsEmployerId(s.employerId || "");
-        setSifEmployers(Array.isArray(s.employers) ? s.employers : []);
+        setSifEmployerId(String(s.employerId || "").replace(/\D/g, "").slice(0, 13));
       })
       .catch(() => {});
   }, []);
 
-  // SIF Settings EMPLOYERID first, then the 13-digit company codes employees are filed under.
-  const sifEmployerOptions = useMemo(() => {
-    const counts = new Map(sifEmployers.map((emp) => [emp.employerId, emp.employeeCount]));
-    const ids = [sifSettingsEmployerId, ...sifEmployers.map((emp) => emp.employerId)]
-      .filter((id) => /^\d{13}$/.test(String(id || "")));
-    return [...new Set(ids)].map((id) => ({
-      employerId: id,
-      employeeCount: counts.get(id) || 0,
-      isSettingsDefault: id === sifSettingsEmployerId,
-    }));
-  }, [sifEmployers, sifSettingsEmployerId]);
+  useEffect(() => {
+    CompanyDocumentService.getAll()
+      .then((data) => {
+        const docs = Array.isArray(data) ? data : data?.documents || data?.data || [];
+        setCompanyDocuments(docs);
+      })
+      .catch(() => setCompanyDocuments([]));
+  }, []);
+
+  // Employer ID dropdown: existing configured codes (Company Documents + employee companyCode + SIF settings)
+  const sifEmployerIdOptions = useMemo(() => {
+    const byCode = new Map();
+
+    buildCompanyOptionsFromDocuments(companyDocuments).forEach((opt) => {
+      const code = String(opt.companyCode || "").replace(/\D/g, "");
+      if (code.length === 13 && !byCode.has(code)) {
+        byCode.set(code, { value: code, label: opt.label || code });
+      }
+    });
+
+    (employeeList || []).forEach((e) => {
+      const code = String(e.companyCode || "").replace(/\D/g, "");
+      if (code.length === 13 && !byCode.has(code)) {
+        byCode.set(code, { value: code, label: code });
+      }
+    });
+
+    const selected = String(sifEmployerId || "").replace(/\D/g, "");
+    if (selected.length === 13 && !byCode.has(selected)) {
+      byCode.set(selected, { value: selected, label: selected });
+    }
+
+    return Array.from(byCode.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [companyDocuments, employeeList, sifEmployerId]);
 
   // Employees Master Data: default Status=Active, then auto-load / refresh preview
   const masterDataReadyRef = useRef(false);
@@ -1182,11 +1204,15 @@ function Reports() {
     const { m, y } = getSalaryPayrollPeriod();
 
     if (format === "SIF") {
-      if (!/^\d{13}$/.test(sifEmployerId)) {
-        alert("Please select an Employer ID.");
+      const employerId = digitsOnly(sifEmployerId);
+      if (!employerId || employerId.length !== 13) {
+        setError("Please select a valid 13-digit Employer ID.");
+        alert("Please select a valid 13-digit Employer ID.");
         return;
       }
-      const result = await sifService.exportSif(m, y, sifEmployerId);
+      // Pass selected Employer ID for this export only.
+      // Agent Code continues from existing SIF Settings on the server.
+      const result = await sifService.exportSif(m, y, { employerId });
       if (result.skippedCount > 0) {
         const lines = (result.skipped || [])
           .slice(0, 15)
@@ -1383,12 +1409,10 @@ function Reports() {
         `Import complete. ${updated} employee(s) updated.${skipped ? ` ${skipped} skipped.` : ""}`
       );
 
-      // Reload SIF settings (EMPLOYERID may have been updated from file)
+      // Reload SIF Employer ID (may have been updated from file into SIF Settings)
       try {
         const s = await sifService.getSettings();
-        setSifEmployerId(s.employerId || "");
-        setSifSettingsEmployerId(s.employerId || "");
-        setSifEmployers(Array.isArray(s.employers) ? s.employers : []);
+        setSifEmployerId(String(s.employerId || "").replace(/\D/g, "").slice(0, 13));
       } catch {}
 
       if (reportType === "Salary report") {
@@ -1869,10 +1893,8 @@ function Reports() {
                         onChange={(e) => setSifEmployerId(e.target.value)}
                       >
                         <option value="">Select Employer ID</option>
-                        {sifEmployerOptions.map((emp) => (
-                          <option key={emp.employerId} value={emp.employerId}>
-                            {`${emp.employerId} — ${emp.employeeCount} employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}`}
-                          </option>
+                        {sifEmployerIdOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
                     </div>

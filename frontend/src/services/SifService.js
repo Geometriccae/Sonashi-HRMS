@@ -49,9 +49,9 @@ class SifService {
     return res.json();
   }
 
-  async previewExport(month, year, employerId) {
+  async previewExport(month, year, { employerId } = {}) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
-    if (employerId) params.set("employerId", String(employerId));
+    if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
     const res = await fetch(`${this.baseURL}/export/sif/preview?${params}`, {
       headers: this.getAuthHeaders(),
     });
@@ -59,19 +59,9 @@ class SifService {
     return res.json();
   }
 
-  /** Salary Report payroll/WPS rows for a month — the same rows the SIF is built from. */
-  async getSalaryReportRows(month, year) {
+  async exportSif(month, year, { employerId } = {}) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
-    const res = await fetch(`${this.baseURL}/salary-report?${params}`, {
-      headers: this.getAuthHeaders(),
-    });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to load salary report payroll data");
-    return res.json();
-  }
-
-  async exportSif(month, year, employerId) {
-    const params = new URLSearchParams({ month: String(month), year: String(year) });
-    if (employerId) params.set("employerId", String(employerId));
+    if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
       headers: this.getAuthHeaders(false),
     });
