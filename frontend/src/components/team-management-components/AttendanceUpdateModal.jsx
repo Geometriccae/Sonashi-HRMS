@@ -4,6 +4,7 @@ import DateInput from "../DateInput";
 
 function AttendanceUpdateModal({ isOpen, onClose, employee, onSaved }) {
   const [date, setDate] = useState("");
+  const [dateBaseline, setDateBaseline] = useState("");
   const [status, setStatus] = useState("Onsite");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -13,6 +14,7 @@ function AttendanceUpdateModal({ isOpen, onClose, employee, onSaved }) {
     if (isOpen) {
       const t = new Date().toISOString().slice(0, 10);
       setDate(t);
+      setDateBaseline(t);
       setStatus("Onsite");
       setNote("");
       setError("");
@@ -57,7 +59,7 @@ function AttendanceUpdateModal({ isOpen, onClose, employee, onSaved }) {
         <div style={{ padding: "12px 16px", display: "flex", gap: 12, alignItems: "center" }}>
           <label>
             <div>Date</div>
-            <DateInput value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateInput value={date} defaultValue={dateBaseline} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label>
             <div>Status</div>

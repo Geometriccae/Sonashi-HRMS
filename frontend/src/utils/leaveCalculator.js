@@ -1,18 +1,170 @@
-/** Staff Leave Report / Master Tracker calculation (Excel reference). */
+/**
+ * Sonashi leave entitlement + taken.
+ *
+ * ENTITLEMENT: completed months × 2.5, cap 150 (last 5 years). Unchanged policy.
+ * TAKEN: approved LeaveRequest records only (Approved / HOD Approved).
+ *        Pending, rejected, cancelled, and deleted rows never count.
+ *        A stale Employee.excelLeaveYearTaken snapshot is not added on top —
+ *        that is what made Leave Management and Employee Master disagree.
+ * AVAILABLE: entitlement − taken.
+ * EXPIRED: accrual before the active window (DOJ history minus window).
+ */
+
+export const LEAVE_POLICY = Object.freeze({
+    ANNUAL_LEAVE_DAYS: 30,
+    MONTHLY_ACCRUAL_DAYS: 2.5,
+    MAX_ACTIVE_YEARS: 5,
+    MAX_ACTIVE_MONTHS: 60,
+    MAX_ACTIVE_ENTITLEMENT_DAYS: 150,
+    DAYS_PER_YEAR: 365,
+    /** One request cannot contribute more than the 5-year cap to Taken. */
+    MAX_TAKEN_DAYS_PER_REQUEST: 150,
+    MAX_MATERNITY_TAKEN_DAYS: 180,
+});
 
 const APPROVED_LEAVE_STATUSES = new Set(["Approved", "HOD Approved"]);
+const HR_STAFF_CODE_RE = /^id[a-z]{2,4}-\d+/i;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const DAYS_PER_YEAR = 365;
-const ANNUAL_LEAVE_DAYS = 30;
-const AVERAGE_LEAVE_CAP_YEARS = 5;
+const {
+    ANNUAL_LEAVE_DAYS,
+    MONTHLY_ACCRUAL_DAYS,
+    MAX_ACTIVE_YEARS,
+    MAX_ACTIVE_MONTHS,
+    MAX_ACTIVE_ENTITLEMENT_DAYS,
+    DAYS_PER_YEAR,
+    MAX_TAKEN_DAYS_PER_REQUEST,
+    MAX_MATERNITY_TAKEN_DAYS,
+} = LEAVE_POLICY;
 
-export const calculateLeaveDays = (startDate, endDate) => {
+function isDevLeaveCalc() {
+    return typeof process !== "undefined" && process.env && process.env.NODE_ENV !== "production";
+}
+
+function warnLeaveCalc(message, extra) {
+    if (!isDevLeaveCalc()) return;
+    console.warn("[leaveCalculator]", message, extra || "");
+}
+
+export function isHrStaffCode(value) {
+    return HR_STAFF_CODE_RE.test(String(value || "").trim());
+}
+
+function hrStaffCode(value) {
+    const s = String(value || "").trim();
+    return isHrStaffCode(s) ? s.toLowerCase() : "";
+}
+
+function refId(value) {
+    if (value == null || value === "") return "";
+    if (typeof value === "object") return String(value._id || "").toLowerCase();
+    return String(value).toLowerCase();
+}
+
+function maxTakenDaysForLeaveType(leaveType) {
+    return /maternity|paternity/i.test(String(leaveType || ""))
+        ? MAX_MATERNITY_TAKEN_DAYS
+        : MAX_TAKEN_DAYS_PER_REQUEST;
+}
+
+function leaveDatesWereReplaced(req) {
+    const remarks = String(req?.changeRemarks || "");
+    if (/approved leave dates unchanged/i.test(remarks)) return false;
+    return /leave end date updated|returned earlier|vacation extended/i.test(remarks);
+}
+
+export const calculateLeaveDays = (startDate, endDate, leaveDaysOverride = null) => {
+    if (leaveDaysOverride != null && leaveDaysOverride !== "") {
+        const stored = Number(leaveDaysOverride);
+        if (Number.isFinite(stored) && stored >= 0) return stored;
+    }
     const s = toLeaveCalendarDate(startDate);
     const e = toLeaveCalendarDate(endDate);
     if (!s || !e) return null;
-    const days = Math.round((utcDay(e) - utcDay(s)) / MS_PER_DAY) + 1;
-    return days > 0 ? days : null;
+    const days = Math.round((utcDay(e) - utcDay(s)) / MS_PER_DAY);
+    if (days < 0) return null;
+    // Excel Master Tracker: END − START. Same calendar day counts as 1 for live requests.
+    return days === 0 ? 1 : days;
 };
+
+export function leaveRequestDays(req) {
+    if (!req) return 0;
+    if (req.excludeFromBalance) return 0;
+
+    const maxDays = maxTakenDaysForLeaveType(req.leaveType);
+    const storedRaw = req.leaveDays;
+    const stored = storedRaw != null && storedRaw !== "" ? Number(storedRaw) : NaN;
+    const hasStored = Number.isFinite(stored) && stored >= 0;
+
+    // Trust a stored Excel/form day count only when it is a plausible leave length.
+    if (hasStored && stored <= maxDays) return stored;
+
+    if (leaveDatesWereReplaced(req)) return 0;
+
+    const span = calculateLeaveDays(req.startDate, req.endDate) || 0;
+    if (span > maxDays || (hasStored && stored > maxDays)) {
+        warnLeaveCalc("excluded implausible leave days from Taken", {
+            leaveId: req._id || null,
+            employeeId: req.linkedEmployeeCode || req.employeeId || null,
+            employeeName: req.employeeName || null,
+            startDate: req.startDate,
+            endDate: req.endDate,
+            leaveDays: hasStored ? stored : null,
+            spanDays: span,
+        });
+        return 0;
+    }
+    return span;
+}
+
+/**
+ * Split one leave's taken days across calendar years using END−START duration.
+ * A same-year trip stays in that year. A span such as 20/12/2026 → 10/01/2027
+ * is split so the total still equals leaveRequestDays(req).
+ */
+export function allocateLeaveDaysByYear(req) {
+    const total = leaveRequestDays(req);
+    if (!total) return {};
+    const start = toLeaveCalendarDate(req.startDate);
+    const end = toLeaveCalendarDate(req.endDate) || start;
+    if (!start || !end) return {};
+
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+    if (startYear === endYear) {
+        return { [startYear]: total };
+    }
+
+    const buckets = {};
+    let allocated = 0;
+    for (let year = startYear; year <= endYear; year += 1) {
+        const yearStart = new Date(year, 0, 1);
+        const yearEnd = new Date(year, 11, 31);
+        const from = start > yearStart ? start : yearStart;
+        const to = end < yearEnd ? end : yearEnd;
+        if (from > to) continue;
+
+        let part;
+        if (from.getTime() === start.getTime()) {
+            part = calculateLeaveDays(from, to) || 0;
+        } else {
+            const dayBefore = new Date(from);
+            dayBefore.setDate(dayBefore.getDate() - 1);
+            part = calculateLeaveDays(dayBefore, to) || 0;
+        }
+        if (!part) continue;
+        buckets[year] = part;
+        allocated += part;
+    }
+
+    if (!allocated) return { [startYear]: total };
+    if (allocated === total) return buckets;
+
+    const scaled = {};
+    Object.keys(buckets).forEach((year) => {
+        scaled[year] = roundLeaveNumber((buckets[year] / allocated) * total);
+    });
+    return scaled;
+}
 
 export function toLeaveCalendarDate(value) {
     if (!value) return null;
@@ -20,7 +172,7 @@ export function toLeaveCalendarDate(value) {
         return new Date(value.getFullYear(), value.getMonth(), value.getDate());
     }
     if (typeof value === "string") {
-        const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        const match = value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
         if (match) {
             return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
         }
@@ -41,7 +193,7 @@ export function roundLeaveNumber(value, digits = 2) {
     return Math.round(n * f) / f;
 }
 
-/** Excel date subtraction: Till Date − Calculate Leave Date (not inclusive of start). */
+/** Excel date subtraction: end − start (exclusive of start day). */
 export function excelDateDiffDays(endDate, startDate) {
     const end = toLeaveCalendarDate(endDate);
     const start = toLeaveCalendarDate(startDate);
@@ -49,115 +201,619 @@ export function excelDateDiffDays(endDate, startDate) {
     return Math.max(0, Math.round((utcDay(end) - utcDay(start)) / MS_PER_DAY));
 }
 
-/** Default Till Date = 31 Dec of the live/selected year. */
+/**
+ * Completed calendar months between start and end (inclusive of start anniversary).
+ * Example: 24/02/2026 → 24/08/2026 = 6. Partial months do not count.
+ */
+export function countCompletedMonths(startDate, endDate) {
+    const start = toLeaveCalendarDate(startDate);
+    const end = toLeaveCalendarDate(endDate);
+    if (!start || !end || end < start) return 0;
+
+    let months =
+        (end.getFullYear() - start.getFullYear()) * 12 +
+        (end.getMonth() - start.getMonth());
+
+    if (end.getDate() < start.getDate()) {
+        months -= 1;
+    }
+
+    return Math.max(0, months);
+}
+
+/** Accrued leave days from completed months (keeps .5 precision). */
+export function accrueLeaveDays(completedMonths) {
+    const months = Math.max(0, Number(completedMonths) || 0);
+    return roundLeaveNumber(months * MONTHLY_ACCRUAL_DAYS);
+}
+
+/** Default Till Date = the calculation/report date (Excel TILL column). */
 export function getLeaveTillDate(asOf = new Date()) {
-    const d = toLeaveCalendarDate(asOf) || new Date();
-    return new Date(d.getFullYear(), 11, 31);
+    return toLeaveCalendarDate(asOf) || toLeaveCalendarDate(new Date());
 }
 
-export function getCalculateLeaveDate(joiningDate, tillDate) {
+/**
+ * Same calendar day `years` earlier. 29 Feb maps to 28 Feb when the target year is not a leap year.
+ */
+export function subtractCalendarYears(value, years) {
+    const date = toLeaveCalendarDate(value);
+    if (!date) return null;
+    const targetYear = date.getFullYear() - (Number(years) || 0);
+    const lastDayOfMonth = new Date(targetYear, date.getMonth() + 1, 0).getDate();
+    return new Date(targetYear, date.getMonth(), Math.min(date.getDate(), lastDayOfMonth));
+}
+
+/**
+ * Rolling 5-year period for a leave: (Leave Start Date − 5 years) → Leave Start Date.
+ * e.g. 05/10/2026 → 05/10/2021 … 05/10/2026.
+ */
+export function getRollingFiveYearWindow(leaveStartDate) {
+    const end = toLeaveCalendarDate(leaveStartDate);
+    if (!end) return null;
+    return { start: subtractCalendarYears(end, MAX_ACTIVE_YEARS), end };
+}
+
+/** 5+ years of service on the Leave Start Date, from Employee Master DOJ. */
+export function hasFiveYearsOfService(joiningDate, leaveStartDate) {
     const join = toLeaveCalendarDate(joiningDate);
-    const till = toLeaveCalendarDate(tillDate) || getLeaveTillDate();
-    if (!join) return till;
-    return join > till ? till : join;
+    const period = getRollingFiveYearWindow(leaveStartDate);
+    if (!join || !period) return false;
+    return join <= period.start;
 }
 
+/**
+ * Active leave window.
+ *
+ * 5+ years of service: exact rolling window (calculation date − 5 years) → calculation date,
+ * where the calculation date is the Leave Start Date of the leave being applied/edited
+ * (today on pages without a leave).
+ *
+ * Under 5 years (unchanged Master Tracker CALCULATE LEAVE):
+ * Window start = 1 Jan of (calculation year − 5); effective start = MAX(DOJ, window start).
+ */
+export function getActiveLeaveWindow(calculationDateInput = null, joiningDate = null) {
+    const end = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
+    const join = toLeaveCalendarDate(joiningDate);
+
+    if (hasFiveYearsOfService(join, end)) {
+        const rollingStart = subtractCalendarYears(end, MAX_ACTIVE_YEARS);
+        return {
+            calculationDate: end,
+            tillDate: end,
+            windowStart: rollingStart,
+            effectiveStart: rollingStart,
+            calculationEndDate: end,
+            joiningDate: join,
+            rollingFiveYear: true,
+        };
+    }
+
+    const windowStart = new Date(end.getFullYear() - MAX_ACTIVE_YEARS, 0, 1);
+
+    let effectiveStart = windowStart;
+    if (join) {
+        effectiveStart = join > windowStart ? join : windowStart;
+        if (join > end) {
+            effectiveStart = join;
+        }
+    }
+
+    return {
+        calculationDate: end,
+        tillDate: end,
+        windowStart,
+        effectiveStart,
+        calculationEndDate: end,
+        joiningDate: join,
+        rollingFiveYear: false,
+    };
+}
+
+/**
+ * Taken / Leave History day range start.
+ * Uses 1 Jan of the joining year (not the exact DOJ day) so imported leave in the
+ * joining year still counts, while years before joining stay excluded.
+ * Still capped by the 5-year window start.
+ */
+export function getTakenLeaveRangeStart(calculationDateInput = null, joiningDate = null) {
+    const { windowStart, joiningDate: join } = getActiveLeaveWindow(
+        calculationDateInput,
+        joiningDate
+    );
+    if (!join) return windowStart;
+    const joiningYearStart = new Date(join.getFullYear(), 0, 1);
+    return joiningYearStart > windowStart ? joiningYearStart : windowStart;
+}
+
+/** @deprecated Prefer getActiveLeaveWindow().effectiveStart */
+export function getCalculateLeaveDate(joiningDate, tillDate) {
+    const { effectiveStart } = getActiveLeaveWindow(tillDate, joiningDate);
+    return effectiveStart;
+}
+
+/** Calendar years touched by the active window (labels/export). */
 export function lastFiveLeaveYears(tillDate) {
-    const tillYear = (toLeaveCalendarDate(tillDate) || getLeaveTillDate()).getFullYear();
+    const till = toLeaveCalendarDate(tillDate) || toLeaveCalendarDate(new Date());
+    const { windowStart } = getActiveLeaveWindow(till);
+    const startYear = windowStart.getFullYear();
+    const endYear = till.getFullYear();
     const years = [];
-    for (let year = tillYear - 4; year <= tillYear; year += 1) years.push(year);
+    for (let year = startYear; year <= endYear; year += 1) {
+        years.push(year);
+    }
     return years;
 }
 
-export function matchesLeaveEmployee(req, emp) {
-    const reqName = String(req?.employeeName || "").toLowerCase().trim();
-    const empName = String(emp?.employeeName || emp?.name || "").toLowerCase().trim();
-    if (reqName && empName && reqName === empName) return true;
+/** Inclusive overlap day count between a leave span and a date range. */
+export function leaveDaysOverlappingRange(leaveStart, leaveEnd, rangeStart, rangeEnd, leaveDaysOverride = null) {
+    const start = toLeaveCalendarDate(leaveStart);
+    const end = toLeaveCalendarDate(leaveEnd) || start;
+    const rangeFrom = toLeaveCalendarDate(rangeStart);
+    const rangeTo = toLeaveCalendarDate(rangeEnd);
+    if (!start || !end || !rangeFrom || !rangeTo) return 0;
 
-    const empMongoId = String(emp?._id || "").toLowerCase();
-    const empCode = String(emp?.employeeId || "").toLowerCase();
-    const linked = req?.employee;
-    if (linked) {
-        const linkedId = String(
-            linked.employeeId?._id || linked._id || linked.employeeId || linked || ""
-        ).toLowerCase();
-        if (linkedId && (linkedId === empMongoId || linkedId === empCode)) return true;
+    const overlapStart = start > rangeFrom ? start : rangeFrom;
+    const overlapEnd = end < rangeTo ? end : rangeTo;
+    if (overlapStart > overlapEnd) return 0;
+
+    return calculateLeaveDays(overlapStart, overlapEnd, leaveDaysOverride) || 0;
+}
+
+function mergeLeaveIntervals(leaves) {
+    const intervals = (leaves || [])
+        .map((req) => {
+            const start = toLeaveCalendarDate(req.startDate);
+            const end = toLeaveCalendarDate(req.endDate) || start;
+            if (!start || !end || end < start) return null;
+            return { start, end };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.start - b.start);
+
+    const merged = [];
+    intervals.forEach((interval) => {
+        const last = merged[merged.length - 1];
+        if (!last || interval.start > last.end) {
+            merged.push({ ...interval });
+            return;
+        }
+        if (interval.end > last.end) {
+            last.end = interval.end;
+        }
+    });
+    return merged;
+}
+
+/** Approved leave days overlapping [rangeStart, rangeEnd], merged to avoid double-count. */
+export function sumApprovedLeaveInWindow(employee, allLeaveRequests, rangeStart, rangeEnd) {
+    const approved = getApprovedLeavesForEmployee(employee, allLeaveRequests).filter(
+        (req) => leaveRequestDays(req) > 0
+    );
+    const merged = mergeLeaveIntervals(approved);
+    return roundLeaveNumber(
+        merged.reduce(
+            (sum, interval) =>
+                sum + leaveDaysOverlappingRange(interval.start, interval.end, rangeStart, rangeEnd),
+            0
+        )
+    );
+}
+
+/**
+ * Total approved leave taken from employee DOJ through `asOf` (default: today).
+ * Uses the same day-overlap rules as Leave Management; future days are excluded.
+ * Independent of the rolling 5-year entitlement / Leave Taken window.
+ */
+export function totalLeaveTakenFromDoj(employee, allLeaveRequests, asOf = null) {
+    const calcDate = toLeaveCalendarDate(asOf) || toLeaveCalendarDate(new Date());
+    const joiningDate = toLeaveCalendarDate(employee?.doj);
+    if (!calcDate) return 0;
+    if (!joiningDate) {
+        // No DOJ: still count approved leave already taken up to asOf (no invented start).
+        return sumApprovedLeaveInWindow(
+            employee,
+            allLeaveRequests,
+            new Date(1900, 0, 1),
+            calcDate
+        );
     }
-    if (req?.employeeId && empCode && String(req.employeeId).toLowerCase() === empCode) {
-        return true;
+    if (joiningDate > calcDate) return 0;
+    return sumApprovedLeaveInWindow(employee, allLeaveRequests, joiningDate, calcDate);
+}
+
+/** Historical leave taken strictly before the active window (informational). */
+export function sumApprovedLeaveBeforeDate(employee, allLeaveRequests, beforeDate) {
+    const before = toLeaveCalendarDate(beforeDate);
+    if (!before) return 0;
+
+    const approved = getApprovedLeavesForEmployee(employee, allLeaveRequests).filter(
+        (req) => leaveRequestDays(req) > 0
+    );
+    const merged = mergeLeaveIntervals(approved);
+    const lastDayBefore = new Date(before);
+    lastDayBefore.setDate(lastDayBefore.getDate() - 1);
+
+    return roundLeaveNumber(
+        merged.reduce((sum, interval) => {
+            if (interval.start >= before) return sum;
+            const end = interval.end < lastDayBefore ? interval.end : lastDayBefore;
+            return sum + (calculateLeaveDays(interval.start, end) || 0);
+        }, 0)
+    );
+}
+
+export function matchesLeaveEmployee(req, emp) {
+    if (!req || !emp) return false;
+
+    const empMongoId = refId(emp._id || emp.id);
+    const empStaffCode = hrStaffCode(emp.employeeId);
+    const empEmail = String(emp.emailId || "").trim().toLowerCase();
+
+    const reqStaffCode = hrStaffCode(req.linkedEmployeeCode) || hrStaffCode(req.employeeId);
+    // A leave labeled with a different HR staff code must never enter this employee.
+    if (empStaffCode && reqStaffCode && empStaffCode !== reqStaffCode) {
+        warnLeaveCalc("skipped leave with mismatched employee ID", {
+            leaveId: req._id || null,
+            selectedEmployeeId: empStaffCode,
+            leaveEmployeeId: reqStaffCode,
+        });
+        return false;
     }
+
+    const recordId = refId(req.employeeRecordId);
+    if (empMongoId && recordId && recordId === empMongoId) return true;
+
+    if (empStaffCode && reqStaffCode && empStaffCode === reqStaffCode) return true;
+
+    const reqRef = refId(req.employee);
+    if (empMongoId && reqRef && reqRef === empMongoId) return true;
+
+    const userEmpId = refId(req.employee?.employeeId);
+    if (userEmpId && empMongoId && userEmpId === empMongoId) return true;
+
+    if (req.employeeId) {
+        const rid = String(req.employeeId).toLowerCase();
+        if (empMongoId && rid === empMongoId) return true;
+        if (empStaffCode && rid === empStaffCode) return true;
+    }
+
+    const hasEmployeeRef = Boolean(
+        reqRef ||
+        req.employeeId ||
+        req.employeeRecordId ||
+        req.linkedEmployeeCode ||
+        req.employee?.employeeId
+    );
+
+    // Email is a fallback only when the leave has no staff code / record id.
+    if (!reqStaffCode && !recordId && empEmail && empEmail.includes("@")) {
+        const reqEmail = String(req.employee?.emailId || "").trim().toLowerCase();
+        if (reqEmail && reqEmail === empEmail) return true;
+    }
+
+    if (!hasEmployeeRef) {
+        const reqName = String(req.employeeName || "").toLowerCase().trim();
+        const empName = String(emp.employeeName || emp.name || "").toLowerCase().trim();
+        if (reqName && empName && reqName === empName) return true;
+    }
+
     return false;
 }
 
+function dedupeLeaveRequests(rows) {
+    const seenIds = new Set();
+    const seenSpans = new Set();
+    return (rows || []).filter((req) => {
+        const id = String(req?._id || "");
+        if (id) {
+            if (seenIds.has(id)) {
+                warnLeaveCalc("skipped duplicate leave record", { leaveId: id });
+                return false;
+            }
+            seenIds.add(id);
+        }
+
+        // Same employee + same dates + same import source must count once
+        // (Excel re-imports can create near-duplicate rows with different _ids).
+        const start = toLeaveCalendarDate(req.startDate);
+        const end = toLeaveCalendarDate(req.endDate) || start;
+        if (start) {
+            const owner =
+                refId(req.employeeRecordId) ||
+                hrStaffCode(req.linkedEmployeeCode) ||
+                hrStaffCode(req.employeeId) ||
+                refId(req.employee) ||
+                String(req.employeeName || "").toLowerCase().trim();
+            const spanKey = [
+                owner,
+                start.toISOString().slice(0, 10),
+                end ? end.toISOString().slice(0, 10) : "",
+                String(req.importSource || ""),
+                String(req.status || ""),
+            ].join("|");
+            if (seenSpans.has(spanKey)) {
+                warnLeaveCalc("skipped duplicate leave span", {
+                    leaveId: id || null,
+                    spanKey,
+                });
+                return false;
+            }
+            seenSpans.add(spanKey);
+        }
+        return true;
+    });
+}
+
+export function filterLeavesForEmployee(employee, allLeaveRequests, options = {}) {
+    const { statuses = null } = options;
+    return dedupeLeaveRequests(allLeaveRequests).filter((req) => {
+        if (statuses && !statuses.has(req.status)) return false;
+        return matchesLeaveEmployee(req, employee);
+    });
+}
+
 export function getApprovedLeavesForEmployee(employee, allLeaveRequests) {
-    return (allLeaveRequests || []).filter(
+    return dedupeLeaveRequests(allLeaveRequests).filter(
         (req) => APPROVED_LEAVE_STATUSES.has(req.status) && matchesLeaveEmployee(req, employee)
     );
 }
 
-export function yearWiseLeaveTaken(employee, allLeaveRequests) {
+/** Assign approved leave days to each calendar year they overlap. */
+export function yearWiseLeaveTakenInWindow(employee, allLeaveRequests, rangeStart, rangeEnd) {
     const byYear = {};
+    const rangeFrom = toLeaveCalendarDate(rangeStart);
+    const rangeTo = toLeaveCalendarDate(rangeEnd);
+    if (!rangeFrom || !rangeTo) return byYear;
+
+    const currentYear = rangeTo.getFullYear();
+    const startYear = rangeFrom.getFullYear();
+    const endYear = Math.min(rangeTo.getFullYear(), currentYear);
+
     getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
-        const start = toLeaveCalendarDate(req.startDate);
-        const end = toLeaveCalendarDate(req.endDate) || start;
-        if (!start) return;
-        const year = start.getFullYear();
-        const days = calculateLeaveDays(start, end) || 0;
-        byYear[year] = (byYear[year] || 0) + days;
+        const buckets = allocateLeaveDaysByYear(req);
+        Object.keys(buckets).forEach((yearKey) => {
+            const year = Number(yearKey);
+            if (!Number.isFinite(year) || year > currentYear) return;
+            const yearStart = new Date(year, 0, 1);
+            const yearEnd = new Date(year, 11, 31);
+            if (yearEnd < rangeFrom || yearStart > rangeTo) return;
+            const days = Number(buckets[year]) || 0;
+            if (!days) return;
+            byYear[year] = (byYear[year] || 0) + days;
+        });
     });
+
+    for (let year = startYear; year <= endYear; year += 1) {
+        byYear[year] = roundLeaveNumber(byYear[year] || 0);
+    }
     return byYear;
 }
 
 /**
- * Excel master-tracker leave due:
- * Working Days = Till Date − Calculate Leave Date (joining date)
- * Working Years = Working Days / 365
- * Average Leave = min(Working Years, 5)
- * Leave Taken = sum of approved leave in last 5 calendar years through Till year
- * Leave Due = (Average Leave × 30) − Leave Taken
+ * Part of one approved leave inside [rangeStart, rangeEnd).
+ * rangeEnd is the Leave Start Date, so a leave starting on that day is the leave being
+ * applied/edited and is not part of its own history. A leave crossing a boundary keeps
+ * its stored day count prorated by END−START span.
  */
-export function computeExcelLeaveCalculation(employee, allLeaveRequests, tillDateInput = null) {
-    const till = toLeaveCalendarDate(tillDateInput) || getLeaveTillDate();
-    const calculateLeaveDate = getCalculateLeaveDate(employee?.doj, till);
-    const workingDays = excelDateDiffDays(till, calculateLeaveDate);
-    const workingYearsExact = workingDays / DAYS_PER_YEAR;
-    const workingYears = roundLeaveNumber(workingYearsExact);
-    const averageLeave = Math.min(workingYears, AVERAGE_LEAVE_CAP_YEARS);
-    const yearTotals = yearWiseLeaveTaken(employee, allLeaveRequests);
-    const last5Years = lastFiveLeaveYears(till);
-    const totalTaken = last5Years.reduce((sum, year) => sum + (yearTotals[year] || 0), 0);
-    const cutoffYear = last5Years[0];
-    const expiredDays = Object.entries(yearTotals).reduce((sum, [year, days]) => {
-        return Number(year) < cutoffYear ? sum + days : sum;
-    }, 0);
-    const entitlement = roundLeaveNumber(averageLeave * ANNUAL_LEAVE_DAYS);
-    const leaveDue = roundLeaveNumber(entitlement - totalTaken);
+function leavePortionInRange(req, rangeStart, rangeEnd) {
+    const total = leaveRequestDays(req);
+    if (!total) return null;
+    const start = toLeaveCalendarDate(req.startDate);
+    const end = toLeaveCalendarDate(req.endDate) || start;
+    if (!start || !end || end < start) return null;
+    if (start >= rangeEnd || end < rangeStart) return null;
 
+    const clipStart = start > rangeStart ? start : rangeStart;
+    const clipEnd = end < rangeEnd ? end : rangeEnd;
+    if (clipStart.getTime() === start.getTime() && clipEnd.getTime() === end.getTime()) {
+        return { ...req, startDate: start, endDate: end, leaveDays: total };
+    }
+
+    const fullSpan = excelDateDiffDays(end, start);
+    const clipSpan = excelDateDiffDays(clipEnd, clipStart);
+    if (!fullSpan || !clipSpan) return null;
     return {
-        tillDate: till,
-        calculateLeaveDate,
-        joiningDate: toLeaveCalendarDate(employee?.doj),
-        workingDays,
-        workingYearsExact,
-        workingYears,
-        averageLeave,
-        yearTotals,
-        last5Years,
-        totalTaken,
-        expiredDays,
-        entitlement,
-        balance: leaveDue,
-        leaveDue,
+        ...req,
+        startDate: clipStart,
+        endDate: clipEnd,
+        leaveDays: roundLeaveNumber((total * clipSpan) / fullSpan),
     };
 }
 
-export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDate = null) => {
+/** Approved leave days per calendar year, clipped to the exact rolling 5-year window. */
+export function yearWiseLeaveTakenInRollingWindow(employee, allLeaveRequests, rangeStart, rangeEnd) {
+    const byYear = {};
+    const rangeFrom = toLeaveCalendarDate(rangeStart);
+    const rangeTo = toLeaveCalendarDate(rangeEnd);
+    if (!rangeFrom || !rangeTo || rangeTo < rangeFrom) return byYear;
+
+    getApprovedLeavesForEmployee(employee, allLeaveRequests).forEach((req) => {
+        const portion = leavePortionInRange(req, rangeFrom, rangeTo);
+        if (!portion) return;
+        const buckets = allocateLeaveDaysByYear(portion);
+        Object.keys(buckets).forEach((yearKey) => {
+            const days = Number(buckets[yearKey]) || 0;
+            if (!days) return;
+            byYear[yearKey] = (byYear[yearKey] || 0) + days;
+        });
+    });
+
+    for (let year = rangeFrom.getFullYear(); year <= rangeTo.getFullYear(); year += 1) {
+        byYear[year] = roundLeaveNumber(byYear[year] || 0);
+    }
+    return byYear;
+}
+
+/** Full historical calendar-year totals from DOJ onward (display). */
+export function yearWiseLeaveTaken(employee, allLeaveRequests, rangeStart = null) {
+    const join = toLeaveCalendarDate(rangeStart ?? employee?.doj);
+    const end = new Date(new Date().getFullYear(), 11, 31);
+    if (!join) {
+        return yearWiseLeaveTakenInWindow(employee, allLeaveRequests, new Date(1900, 0, 1), end);
+    }
+    return yearWiseLeaveTakenInWindow(employee, allLeaveRequests, join, end);
+}
+
+/**
+ * Active entitlement from DOJ and the calculation date: completed months × 2.5, cap 150.
+ */
+export function calculateEntitlementDays(joiningDate, calculationDateInput = null) {
+    const calcDate = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
+    const join = toLeaveCalendarDate(joiningDate);
+    const { effectiveStart } = getActiveLeaveWindow(calcDate, join);
+    const months = Math.min(countCompletedMonths(effectiveStart, calcDate), MAX_ACTIVE_MONTHS);
+    return Math.min(accrueLeaveDays(months), MAX_ACTIVE_ENTITLEMENT_DAYS);
+}
+
+/**
+ * Central leave summary.
+ *
+ * Entitlement = min(completed months, 60) × 2.5
+ * Taken       = this employee’s approved LeaveRequest days in the rolling window
+ * Available   = entitlement − taken
+ * Expired     = months accrued before the active window
+ */
+export function computeExcelLeaveCalculation(
+    employee,
+    allLeaveRequests,
+    calculationDateInput = null,
+    options = {}
+) {
+    const calcDate = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
+    const joiningDate = toLeaveCalendarDate(employee?.doj);
+    const { windowStart, effectiveStart, rollingFiveYear } = getActiveLeaveWindow(calcDate, joiningDate);
+    const takenRangeStart = getTakenLeaveRangeStart(calcDate, joiningDate);
+
+    const totalEligibleMonths = joiningDate ? countCompletedMonths(joiningDate, calcDate) : 0;
+    const activeEligibleMonthsRaw = countCompletedMonths(effectiveStart, calcDate);
+    const activeEligibleMonths = Math.min(activeEligibleMonthsRaw, MAX_ACTIVE_MONTHS);
+
+    const workingDays = excelDateDiffDays(calcDate, effectiveStart);
+    const totalWorkingDays = joiningDate ? excelDateDiffDays(calcDate, joiningDate) : workingDays;
+    // Excel yrs / LEAVE DUE use day-count years. Entitlement does not.
+    const workingYearsExact = workingDays / DAYS_PER_YEAR;
+    const workingYears = roundLeaveNumber(workingYearsExact);
+
+    const totalAccruedDays = accrueLeaveDays(totalEligibleMonths);
+    const windowAccruedUncapped = accrueLeaveDays(activeEligibleMonthsRaw);
+    const entitlement = calculateEntitlementDays(joiningDate, calcDate);
+    const expiredDays = roundLeaveNumber(Math.max(totalAccruedDays - windowAccruedUncapped, 0));
+    const windowYearsForAverage = Math.min(Math.max(workingYearsExact, 0), MAX_ACTIVE_YEARS);
+
+    const takenWindowEnd = new Date(calcDate.getFullYear(), 11, 31);
+    const historyStart = joiningDate
+        ? new Date(joiningDate.getFullYear(), 0, 1)
+        : takenRangeStart;
+
+    // History: joining year → current year. Active taken: same day merge within taken window.
+    const yearTotals = yearWiseLeaveTakenInWindow(
+        employee,
+        allLeaveRequests,
+        historyStart,
+        takenWindowEnd
+    );
+    let activeYearTotals;
+    if (rollingFiveYear) {
+        // The leave being edited must not count toward its own history under its old dates.
+        const excludeLeaveId = options?.excludeLeaveId ? String(options.excludeLeaveId) : "";
+        const rollingSource = excludeLeaveId
+            ? (allLeaveRequests || []).filter((req) => String(req?._id || "") !== excludeLeaveId)
+            : allLeaveRequests;
+        activeYearTotals = yearWiseLeaveTakenInRollingWindow(
+            employee,
+            rollingSource,
+            takenRangeStart,
+            calcDate
+        );
+    } else {
+        activeYearTotals = yearWiseLeaveTakenInWindow(
+            employee,
+            allLeaveRequests,
+            takenRangeStart,
+            takenWindowEnd
+        );
+    }
+    const totalTaken = roundLeaveNumber(
+        Object.values(activeYearTotals).reduce((sum, days) => sum + (days || 0), 0)
+    );
+    const historicalTakenOutsideWindow = sumApprovedLeaveBeforeDate(
+        employee,
+        allLeaveRequests,
+        takenRangeStart
+    );
+    const historicalTakenDays = roundLeaveNumber(
+        Object.values(yearTotals).reduce((sum, days) => sum + (days || 0), 0)
+    );
+    const last5Years = lastFiveLeaveYears(calcDate);
+
+    const averageLeave = roundLeaveNumber(
+        windowYearsForAverage > 0 ? totalTaken / windowYearsForAverage : 0
+    );
+    const availableDays = roundLeaveNumber(entitlement - totalTaken);
+
+    return {
+        tillDate: calcDate,
+        calculationDate: calcDate,
+        calculateLeaveDate: effectiveStart,
+        calculationStartDate: effectiveStart,
+        takenRangeStart,
+        calculationEndDate: calcDate,
+        windowStart,
+        rollingFiveYear: Boolean(rollingFiveYear),
+        rollingWindowStart: rollingFiveYear ? takenRangeStart : null,
+        rollingWindowEnd: rollingFiveYear ? calcDate : null,
+        joiningDate,
+        totalEligibleMonths,
+        activeEligibleMonths,
+        totalAccruedDays,
+        workingDays,
+        totalWorkingDays,
+        workingYearsExact,
+        workingYears,
+        averageLeave,
+        yearTotals: activeYearTotals,
+        historicalYearTotals: yearTotals,
+        last5Years,
+        totalTaken,
+        activeTakenDays: totalTaken,
+        historicalTakenDays,
+        historicalTakenOutsideWindow,
+        expiredDays,
+        entitlement,
+        balance: availableDays,
+        leaveDue: availableDays,
+        availableDays,
+    };
+}
+
+/** Status label for a year row in Leave History. */
+export function getLeaveHistoryYearStatus(year, doj, calculationDateInput, takenDays) {
+    const calcDate = toLeaveCalendarDate(calculationDateInput) || toLeaveCalendarDate(new Date());
+    const currentYear = calcDate.getFullYear();
+    const join = toLeaveCalendarDate(doj);
+    const joinYear = join ? join.getFullYear() : null;
+
+    if (year > currentYear) return "Not Applicable";
+    if (joinYear != null && year < joinYear) return "Not Applicable";
+
+    const yearEnd = new Date(year, 11, 31);
+    const { effectiveStart } = getActiveLeaveWindow(calcDate, doj);
+    if (yearEnd < effectiveStart) {
+        return takenDays > 0 ? "Expired" : "No Leave";
+    }
+
+    if (!takenDays) return "No Leave";
+    return takenDays > ANNUAL_LEAVE_DAYS ? "Exceeded" : "Within Limit";
+}
+
+export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDate = null, options = {}) => {
     if (!employee) {
         return {
             workingMonths: 0,
             workingYears: 0,
             entitlement: 0,
             totalTaken: 0,
+            totalLeaveTakenFromDoj: 0,
             balance: 0,
             expiredDays: 0,
             airfareStatus: "N/A",
@@ -167,14 +823,16 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
         };
     }
 
-    const calc = computeExcelLeaveCalculation(
+    // Live entitlement uses the actual calculation date (not forced year-end).
+    const calcDate = toLeaveCalendarDate(calculationDate) || toLeaveCalendarDate(new Date());
+    const calc = computeExcelLeaveCalculation(employee, allLeaveRequests, calcDate, options);
+
+    const today = calcDate;
+    const totalLeaveTakenFromDojDays = totalLeaveTakenFromDoj(
         employee,
         allLeaveRequests,
-        getLeaveTillDate(calculationDate || new Date())
+        calcDate
     );
-
-    const workingMonths = Math.floor(calc.workingDays / 30.44);
-    const today = toLeaveCalendarDate(calculationDate) || toLeaveCalendarDate(new Date());
 
     let lastAirfareDate = null;
     let airfareUsedRecently = false;
@@ -189,24 +847,42 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
         if (airfareDate > twoYearsAgo) airfareUsedRecently = true;
     });
 
-    const hasMinExperience = calc.workingYearsExact >= 2;
+    const hasMinExperience = (calc.totalEligibleMonths || 0) >= 24;
     const airfareEligible = hasMinExperience;
     const airfareAvailable = hasMinExperience;
     const airfareStatus = hasMinExperience ? "Available" : "Personal Ticket Only";
 
     return {
-        workingMonths,
+        workingMonths: calc.activeEligibleMonths,
+        totalEligibleMonths: calc.totalEligibleMonths,
+        activeEligibleMonths: calc.activeEligibleMonths,
         workingYears: calc.workingYears.toFixed(2),
         workingDays: calc.workingDays,
+        totalWorkingDays: calc.totalWorkingDays,
         averageLeave: calc.averageLeave,
         entitlement: calc.entitlement,
         expiredDays: calc.expiredDays,
         totalTaken: calc.totalTaken,
+        activeTakenDays: calc.activeTakenDays,
+        historicalTakenDays: calc.historicalTakenDays,
+        /** DOJ → as-of (today): all approved leave taken; not limited to 5-year window. */
+        totalLeaveTakenFromDoj: totalLeaveTakenFromDojDays,
         balance: calc.balance,
         leaveDue: calc.leaveDue,
+        availableDays: calc.availableDays,
+        totalAccruedDays: calc.totalAccruedDays,
         calculateLeaveDate: calc.calculateLeaveDate,
+        calculationStartDate: calc.calculationStartDate,
+        calculationEndDate: calc.calculationEndDate,
+        windowStart: calc.windowStart,
+        rollingFiveYear: calc.rollingFiveYear,
+        rollingWindowStart: calc.rollingWindowStart,
+        rollingWindowEnd: calc.rollingWindowEnd,
         tillDate: calc.tillDate,
         yearTotals: calc.yearTotals,
+        historicalYearTotals: calc.historicalYearTotals,
+        takenRangeStart: calc.takenRangeStart,
+        last5Years: calc.last5Years,
         airfareStatus,
         airfareEligible,
         airfareAvailable,
@@ -214,3 +890,24 @@ export const calculateLeaveBalance = (employee, allLeaveRequests, calculationDat
         airfareUsedRecently,
     };
 };
+
+/** Alias used by API docs / one-function contract. */
+export function calculateEmployeeLeaveSummary(employee, allLeaveRequests, calculationDate = null) {
+    const calc = computeExcelLeaveCalculation(employee, allLeaveRequests, calculationDate);
+    return {
+        employeeId: employee?.employeeId || "",
+        employeeName: employee?.employeeName || employee?.name || "",
+        doj: calc.joiningDate,
+        currentDate: calc.calculationDate,
+        rollingWindowStart: calc.windowStart,
+        rollingWindowEnd: calc.calculationDate,
+        entitlement: calc.entitlement,
+        activeTaken: calc.activeTakenDays,
+        expired: calc.expiredDays,
+        available: calc.availableDays,
+        historicalTaken: calc.historicalTakenDays,
+        yearlyLeave: calc.historicalYearTotals,
+        workingYears: calc.workingYears,
+        last5Years: calc.last5Years,
+    };
+}

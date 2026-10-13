@@ -18,7 +18,7 @@ class EmployeeService {
 
     this.baseURL = `${apiRoot}/employees`;
     this.attendanceURL = `${apiRoot}/attendance`;
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, ts: 0 };
     this._inflight = {};
   }
 
@@ -27,8 +27,18 @@ class EmployeeService {
   }
 
   invalidateCache() {
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, stats: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, ts: 0 };
     this._inflight = {};
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('hrms:employee-data-changed', { detail: { ts: Date.now() } }));
+    }
+  }
+
+  onEmployeeDataChanged(handler) {
+    if (typeof window === 'undefined' || typeof handler !== 'function') return () => {};
+    const wrapped = () => handler();
+    window.addEventListener('hrms:employee-data-changed', wrapped);
+    return () => window.removeEventListener('hrms:employee-data-changed', wrapped);
   }
 
   // Get auth token from localStorage
@@ -68,7 +78,9 @@ class EmployeeService {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        this._cache[cacheKey] = data;
+        // Both list endpoints now return the same date-derived vacationStatus.
+        this._cache.list = data;
+        this._cache.listWithVacation = data;
         this._cache.ts = Date.now();
         return data;
       } catch (error) {
@@ -113,6 +125,7 @@ class EmployeeService {
           leaves: Array.isArray(data?.leaves) ? data.leaves : [],
         };
         this._cache.vacationBundle = bundle;
+        this._cache.list = bundle.employees;
         this._cache.listWithVacation = bundle.employees;
         this._cache.ts = Date.now();
         return bundle;
@@ -151,27 +164,144 @@ class EmployeeService {
     }
   }
 
-  // Stats only — counts for dashboard cards
-  async getEmployeeStats({ force = false } = {}) {
-    if (!force && this._isCacheValid() && this._cache.stats) {
-      return this._cache.stats;
+  // Stats only — counts for dashboard / annual vacation cards
+  // basic: true → headcount only (Team Management) — skips vacation/leave aggregates
+  async getEmployeeStats({ force = false, basic = false } = {}) {
+    const cacheSlot = basic ? 'statsBasic' : 'stats';
+    if (!force && this._isCacheValid() && this._cache[cacheSlot]) {
+      return this._cache[cacheSlot];
     }
+    if (!force && this._inflight[cacheSlot]) {
+      return this._inflight[cacheSlot];
+    }
+    this._inflight[cacheSlot] = (async () => {
+      try {
+        const params = new URLSearchParams();
+        if (force) params.set('force', '1');
+        if (basic) params.set('basic', '1');
+        const qs = params.toString();
+        const response = await fetch(`${this.baseURL}/stats${qs ? `?${qs}` : ''}`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        this._cache[cacheSlot] = data;
+        this._cache.ts = Date.now();
+        return data;
+      } catch (error) {
+        console.error('Error fetching employee stats:', error);
+        throw error;
+      } finally {
+        delete this._inflight[cacheSlot];
+      }
+    })();
+    return this._inflight[cacheSlot];
+  }
+
+  /**
+   * Annual Vacations: one tab page only (server-side pagination + filters).
+   * tab: onVacation | yetToGo | returned
+   */
+  async getVacationTab({
+    tab,
+    page = 1,
+    limit = 20,
+    search = '',
+    filters = {},
+    all = false,
+  } = {}) {
     try {
-      const response = await fetch(`${this.baseURL}/stats`, {
+      const params = new URLSearchParams({
+        tab: String(tab || ''),
+        page: String(page),
+        limit: String(all ? 100000 : limit),
+      });
+      if (all) params.set('all', '1');
+      if (search) params.set('search', search);
+      const f = filters || {};
+      ['department', 'role', 'office', 'country', 'dojFrom', 'dojTo', 'expMin', 'expMax', 'vacationMonth', 'vacationYear']
+        .forEach((key) => {
+          if (f[key] !== undefined && f[key] !== null && f[key] !== '') {
+            params.set(key, String(f[key]));
+          }
+        });
+      const response = await fetch(`${this.baseURL}/vacation-tab?${params}`, {
         method: 'GET',
         headers: this.getAuthHeaders(),
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const data = await response.json();
-      this._cache.stats = data;
-      this._cache.ts = Date.now();
-      return data;
+      const tabData = await response.json();
+      return tabData;
     } catch (error) {
-      console.error('Error fetching employee stats:', error);
+      console.error('Error fetching vacation tab:', error);
       throw error;
     }
+  }
+
+  /**
+   * Dashboard drill-down: fetch only the opened category (paginated).
+   * category: total | active | inactive | onVacation | yetToGo | returned | visaExpiry | passportExpiry
+   */
+  async getDashboardCategory({ category, page = 1, limit = 50, search = '', all = false } = {}) {
+    try {
+      const params = new URLSearchParams({
+        category: String(category || ''),
+        page: String(page),
+        limit: String(all ? 100000 : limit),
+      });
+      if (all) params.set('all', '1');
+      if (search) params.set('search', search);
+      const response = await fetch(`${this.baseURL}/dashboard-category?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching dashboard category:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * HR Metrics payload — full enough for KPIs/charts, without profile photos.
+   * Prefer this over getEmployees({ force: true }) on the metrics dashboard.
+   */
+  async getEmployeesForMetrics({ force = false } = {}) {
+    if (!force && this._isCacheValid() && this._cache.metrics) {
+      return this._cache.metrics;
+    }
+    if (!force && this._inflight.metrics) {
+      return this._inflight.metrics;
+    }
+    this._inflight.metrics = (async () => {
+      try {
+        const response = await fetch(`${this.baseURL}?${new URLSearchParams({ view: 'metrics' })}`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        this._cache.metrics = data;
+        this._cache.ts = Date.now();
+        return data;
+      } catch (error) {
+        console.error('Error fetching employees for metrics:', error);
+        throw error;
+      } finally {
+        delete this._inflight.metrics;
+      }
+    })();
+    return this._inflight.metrics;
   }
 
   // Get all employees (full records — use only when editing/detail views need everything)
@@ -182,29 +312,38 @@ class EmployeeService {
     if (!force && !statusFilter && this._isCacheValid() && this._cache.full) {
       return this._cache.full;
     }
-    try {
-      const url = statusFilter
-        ? `${this.baseURL}?${new URLSearchParams({ status: statusFilter })}`
-        : this.baseURL;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!statusFilter) {
-        this._cache.full = data;
-        this._cache.ts = Date.now();
-      }
-      return data;
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      throw error;
+    const inflightKey = statusFilter ? `full:${statusFilter}` : 'full';
+    if (!force && this._inflight[inflightKey]) {
+      return this._inflight[inflightKey];
     }
+    this._inflight[inflightKey] = (async () => {
+      try {
+        const url = statusFilter
+          ? `${this.baseURL}?${new URLSearchParams({ status: statusFilter })}`
+          : this.baseURL;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!statusFilter) {
+          this._cache.full = data;
+          this._cache.ts = Date.now();
+        }
+        return data;
+      } catch (error) {
+        console.error('Error fetching employees:', error);
+        throw error;
+      } finally {
+        delete this._inflight[inflightKey];
+      }
+    })();
+    return this._inflight[inflightKey];
   }
 
   // Batch fetch profile photos for a list of employee IDs (current page only).
@@ -773,6 +912,30 @@ async updateEmployee(id, employeeData, profileImageFile = null) {
       };
     } catch (error) {
       console.error('Error updating employee attendance:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Authorized vacation status transitions (Onsite / On Vacation / Yet to Go / Returned).
+   * Uses dedicated endpoint so Authorize User can update status without full employee write access.
+   */
+  async updateVacationStatus(employeeId, payload = {}) {
+    try {
+      const response = await fetch(`${this.baseURL}/${employeeId}/vacation-status`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      this.invalidateCache();
+      const data = await response.json();
+      return data?.employee || data;
+    } catch (error) {
+      console.error('Error updating vacation status:', error);
       throw error;
     }
   }

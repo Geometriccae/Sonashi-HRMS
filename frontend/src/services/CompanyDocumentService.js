@@ -34,14 +34,13 @@ const getAll = async () => {
   return parseResponse(response);
 };
 
-const upload = async (file, { particulars, docNumber, issueDate, expiryDate, uploadedBy, userRole } = {}) => {
+const upload = async (file, { particulars, docNumber, issueDate, expiryDate } = {}) => {
   const formData = new FormData();
   formData.append("particulars", particulars || "");
   formData.append("docNumber", docNumber || "");
   if (issueDate) formData.append("issueDate", issueDate);
   if (expiryDate) formData.append("expiryDate", expiryDate);
-  if (uploadedBy) formData.append("uploadedBy", uploadedBy);
-  if (userRole) formData.append("userRole", userRole);
+  // Uploader identity is derived by the server from the bearer token.
   formData.append("file", file);
 
   const response = await fetch(baseUrl, {

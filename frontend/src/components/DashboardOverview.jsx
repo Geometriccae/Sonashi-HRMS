@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styles from "./DashboardOverview.module.css";
-import "bootstrap/dist/css/bootstrap.min.css";
 import employeeService from "../services/EmployeeService";
-import leaveRequestService from "../services/LeaveRequestService";
 import {
   FaUsers,
   FaUserCheck,
@@ -15,73 +13,20 @@ import {
 import { useNavigate } from "react-router-dom";
 import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
-import { buildYetToGoFromLeaves, findLeaveForEmployee } from "../utils/yetToGoHelpers";
-import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
 import { canUpdateVacationReturn } from "../utils/permissions";
-
-const toDateInputValue = (value) => {
-  if (!value) return "";
-  try {
-    return new Date(value).toISOString().split("T")[0];
-  } catch {
-    return "";
-  }
-};
-
-const getDateConfigForStatus = (status) => {
-  const configs = {
-    "On Vacation": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Pending": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Approved": {
-      label: "Return / Entry Date",
-      fieldKey: "returnDate",
-      secondaryLabel: "First Working Day",
-      secondaryFieldKey: "firstWorkingDay",
-    },
-  };
-  return configs[status] || null;
-};
-
-const buildVacationDatePrompt = (employeeItem, newStatus) => {
-  const cfg = getDateConfigForStatus(newStatus);
-  if (!cfg) return null;
-  return {
-    employeeItem,
-    newStatus,
-    label: cfg.label,
-    fieldKey: cfg.fieldKey,
-    dateValue: toDateInputValue(employeeItem[cfg.fieldKey]),
-    secondaryLabel: cfg.secondaryLabel,
-    secondaryFieldKey: cfg.secondaryFieldKey,
-    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(employeeItem[cfg.secondaryFieldKey]) : "",
-    tertiaryLabel: cfg.tertiaryLabel,
-    tertiaryFieldKey: cfg.tertiaryFieldKey,
-    tertiaryDateValue: cfg.tertiaryFieldKey
-      ? toDateInputValue(employeeItem.endDate || employeeItem.leaveEndDate)
-      : "",
-  };
-};
+import {
+  formatVacationStatus,
+  VACATION_STATUS_EDIT_OPTIONS,
+} from "../utils/vacationStatusDisplay";
+import {
+  applyVacationStatusChange,
+  buildVacationDatePrompt,
+  toDateInputValue,
+} from "../utils/vacationStatusUpdate";
+import { annualVacationsPath, teamManagementPath } from "../utils/cardNavigation";
 
 function DashboardOverview() {
   const navigate = useNavigate();
-  const [data, setData] = useState({
-    employees: [],
-    leaveRequests: []
-  });
   const [counts, setCounts] = useState({
     total: 0,
     active: 0,
@@ -93,6 +38,7 @@ function DashboardOverview() {
     passportExpiry: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [modalLoading, setModalLoading] = useState(false);
 
   // Modal State
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -103,83 +49,43 @@ function DashboardOverview() {
   const [datePromptSaving, setDatePromptSaving] = useState(false);
   // datePrompt = { employeeItem, newStatus, label, fieldKey, dateValue }
 
+  const CATEGORY_API_KEY = {
+    "Total Employees": "total",
+    "Active Employees": "active",
+    "Inactive Employees": "inactive",
+    "On vacation": "onVacation",
+    "Yet to go": "yetToGo",
+    "Returned back from vacation": "returned",
+    "Visa Expiry": "visaExpiry",
+    "Passport Expiry": "passportExpiry",
+  };
+
+  const applySummaryToCounts = (summary) => ({
+    total: summary.totalEmployees ?? 0,
+    active: summary.activeEmployees ?? 0,
+    inactive: summary.inactiveEmployees ?? 0,
+    onVacation: summary.onVacation ?? 0,
+    upcomingVacation: summary.yetToGo ?? summary.upcomingVacation ?? 0,
+    vacationReturn: summary.returnedBack ?? summary.vacationReturn ?? 0,
+    visaExpiry: summary.visaExpiry ?? 0,
+    passportExpiry: summary.passportExpiry ?? 0,
+  });
+
+  const refreshSummary = async ({ force = false } = {}) => {
+    const summary = await employeeService.getEmployeeStats({ force });
+    setCounts(applySummaryToCounts(summary));
+    return summary;
+  };
+
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Same source as Annual Vacations: stored vacationStatus + leave list for Yet-to-go
-        const [empRes, leaveRes] = await Promise.all([
-          employeeService.getEmployeesList(),
-          leaveRequestService.getLeaveRequests({ view: "lite" }),
-        ]);
-        const empList = Array.isArray(empRes) ? empRes : empRes?.data || [];
-        const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const next90Days = new Date(today);
-        next90Days.setDate(today.getDate() + 90);
-
-        const next6Months = new Date(today);
-        next6Months.setMonth(today.getMonth() + 6);
-
-        // 1. Employee Stats
-        let active = 0;
-        let inactive = 0;
-        let visaExpiry = 0;
-        let passportExpiry = 0;
-        let attOnVacation = 0;
-        let attVacReturn = 0;
-
-        empList.forEach(emp => {
-          const vs = emp.vacationStatus || "Onsite";
-
-          if (isWorkingEmployeeStatus(emp.employeeStatus)) active++;
-          else if (isNonWorkingEmployeeStatus(emp.employeeStatus)) inactive++;
-
-          // Count vacation statuses for current staff only
-          if (isWorkingEmployeeStatus(emp.employeeStatus)) {
-            if (vs === "On Vacation") attOnVacation++;
-            else if (vs === "Vacation Approved") attVacReturn++;
-          }
-
-          if (emp.visaExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
-            const expiry = new Date(emp.visaExpiryDate);
-            if (expiry > today && expiry <= next90Days) {
-              visaExpiry++;
-            }
-          }
-
-          if (emp.passportExpiryDate && isWorkingEmployeeStatus(emp.employeeStatus)) {
-            const expiry = new Date(emp.passportExpiryDate);
-            if (expiry > today && expiry <= next6Months) {
-              passportExpiry++;
-            }
-          }
-        });
-
-        // Yet to go = all upcoming leave (any type) + Vacation Pending (no 60-day limit)
-        const yetToGoList = buildYetToGoFromLeaves(empList, leaveList).filter(
-          (row) => isWorkingEmployeeStatus(row.employeeStatus)
-        );
-        let onVacation = attOnVacation;
-        let upcomingVacation = yetToGoList.length;
-        let vacationReturn = attVacReturn;
-
+        // Counts only — do not fetch all employees / leaves on dashboard open
+        const summary = await employeeService.getEmployeeStats({ force: true });
         if (isMounted) {
-          setData({ employees: empList, leaveRequests: leaveList });
-          setCounts({
-            total: empList.length,
-            active,
-            inactive,
-            onVacation,
-            upcomingVacation,
-            vacationReturn,
-            visaExpiry,
-            passportExpiry
-          });
+          setCounts(applySummaryToCounts(summary));
         }
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err);
@@ -189,7 +95,13 @@ function DashboardOverview() {
     };
 
     fetchData();
-    return () => { isMounted = false; };
+    const unsubscribe = employeeService.onEmployeeDataChanged?.(() => {
+      refreshSummary({ force: true });
+    });
+    return () => {
+      isMounted = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const handleMarkAsReturned = (item) => {
@@ -217,56 +129,28 @@ function DashboardOverview() {
   const handleVacationStatusChange = async (employeeItem, newStatus, extraFields = {}) => {
     const empId = employeeItem.linkedEmployeeId || employeeItem._id || employeeItem.id;
     try {
-      // Returning from vacation (early or extended): sync leave end date + statuses
-      if (newStatus === "Vacation Approved" && (extraFields.returnDate || extraFields.firstWorkingDay)) {
-        const returnDate = extraFields.returnDate || extraFields.firstWorkingDay;
-        const firstWorkingDay = extraFields.firstWorkingDay || returnDate;
-        await employeeService.markVacationReturn(empId, {
-          returnDate,
-          firstWorkingDay,
-          leaveId: employeeItem.linkedLeaveId || null,
-        });
-      } else {
-        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extraFields });
-      }
+      const updated = await applyVacationStatusChange({
+        employeeId: empId,
+        newStatus,
+        dates: extraFields,
+        leaveId: employeeItem.linkedLeaveId || null,
+      });
 
-      // Patch data.employees with both status and extra fields (dates)
-      const updatedEmployees = data.employees.map(e =>
-        (e._id === empId || e.id === empId || String(e._id) === String(empId))
-          ? { ...e, vacationStatus: newStatus, ...extraFields, attendance: newStatus === "Vacation Approved" ? "Onsite" : e.attendance }
-          : e
-      );
+      const liveStatus = updated?.vacationStatus || newStatus;
 
-      // Patch filteredList with both status and extra fields (dates)
       setFilteredList(prev =>
         prev.map(e =>
           (e._id === empId || e.id === empId || e.linkedEmployeeId === empId || String(e._id) === String(empId))
-            ? { ...e, vacationStatus: newStatus, ...extraFields }
+            ? { ...e, ...extraFields, vacationStatus: liveStatus }
             : e
         )
       );
 
-      // Recompute vacation counts the same way as Annual Vacations (working staff only)
-      let attOnVacation = 0, attVacReturn = 0;
-      updatedEmployees.forEach(e => {
-        if (!isWorkingEmployeeStatus(e.employeeStatus)) return;
-        const vs = e.vacationStatus || "Onsite";
-        if (vs === "On Vacation") attOnVacation++;
-        else if (vs === "Vacation Approved") attVacReturn++;
-      });
-      const upcomingVacation = buildYetToGoFromLeaves(
-        updatedEmployees,
-        data.leaveRequests || []
-      ).filter((row) => isWorkingEmployeeStatus(row.employeeStatus)).length;
-      setCounts(prev => ({
-        ...prev,
-        onVacation: attOnVacation,
-        upcomingVacation,
-        vacationReturn: attVacReturn
-      }));
-
-      setData(prev => ({ ...prev, employees: updatedEmployees }));
-      return updatedEmployees;
+      await refreshSummary({ force: true });
+      if (selectedCategory) {
+        await handleCardClick(selectedCategory);
+      }
+      return true;
     } catch (err) {
       console.error("Failed to update vacation status:", err);
       alert(err?.message || "Failed to update status.");
@@ -295,36 +179,21 @@ function DashboardOverview() {
       return;
     }
     const extraFields = {};
-    if (dateValue) extraFields[fieldKey] = new Date(dateValue).toISOString();
+    if (dateValue) extraFields[fieldKey] = toDateInputValue(dateValue);
     if (secondaryFieldKey && secondaryDateValue) {
-      extraFields[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+      extraFields[secondaryFieldKey] = toDateInputValue(secondaryDateValue);
     } else if (newStatus === "Vacation Approved" && dateValue) {
-      extraFields.firstWorkingDay = new Date(dateValue).toISOString();
+      extraFields.firstWorkingDay = toDateInputValue(dateValue);
     }
     if (tertiaryFieldKey && tertiaryDateValue) {
-      extraFields[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
+      extraFields[tertiaryFieldKey] = toDateInputValue(tertiaryDateValue);
     }
     setDatePromptSaving(true);
     try {
-      const updatedEmployees = await handleVacationStatusChange(employeeItem, newStatus, extraFields);
-      if (employeeItem.linkedLeaveId && tertiaryDateValue) {
-        try {
-          await leaveRequestService.updateLeaveRequest(employeeItem.linkedLeaveId, {
-            endDate: new Date(tertiaryDateValue).toISOString(),
-          });
-        } catch (_) { /* employee dates already saved */ }
-      }
-      // Refresh leave list so Leave Status / end dates stay in sync (same source as Annual Vacations)
-      try {
-        employeeService.invalidateCache();
-        leaveRequestService.invalidateCache();
-        const leaveRes = await leaveRequestService.getLeaveRequests({ view: "lite" });
-        const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
-        setData(prev => ({ ...prev, leaveRequests: leaveList }));
-      } catch (_) { /* non-blocking */ }
+      await handleVacationStatusChange(employeeItem, newStatus, extraFields);
       setDatePrompt(null);
       if (categoryToReopen) {
-        handleCardClick(categoryToReopen, updatedEmployees);
+        handleCardClick(categoryToReopen);
       }
     } catch (err) {
       // handled in handleVacationStatusChange
@@ -343,101 +212,40 @@ function DashboardOverview() {
     }
   };
 
-  const handleCardClick = (category, customEmpList = null) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const next90Days = new Date(today);
-    next90Days.setDate(today.getDate() + 90);
-    const next6Months = new Date(today);
-    next6Months.setMonth(today.getMonth() + 6);
+  async function handleCardClick(category) {
+    const apiKey = CATEGORY_API_KEY[category];
+    if (!apiKey) return;
 
-    const empSource = customEmpList || data.employees;
-    const leaveSource = data.leaveRequests || [];
-
-    let list = [];
-    try {
-      switch (category) {
-        case "Total Employees":
-          list = empSource;
-          break;
-        case "Active Employees":
-          list = empSource.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
-          break;
-        case "Inactive Employees":
-          list = empSource.filter(e => isNonWorkingEmployeeStatus(e.employeeStatus));
-          break;
-        case "On vacation": {
-          list = empSource
-            .filter(e => isWorkingEmployeeStatus(e.employeeStatus) && e.vacationStatus === "On Vacation")
-            .map(e => {
-              const leave = findLeaveForEmployee(e, leaveSource, empSource, "onVacation");
-              return {
-                ...e,
-                linkedEmployeeId: e._id,
-                linkedLeaveId: leave?._id || null,
-                startDate: leave?.startDate || e.lastWorkingDay || null,
-                endDate: leave?.endDate || e.leaveEndDate || e.returnDate || null,
-              };
-            });
-          break;
-        }
-        case "Yet to go": {
-          list = buildYetToGoFromLeaves(empSource, leaveSource)
-            .filter(e => isWorkingEmployeeStatus(e.employeeStatus));
-          break;
-        }
-        case "Returned back from vacation": {
-          list = empSource
-            .filter(e => isWorkingEmployeeStatus(e.employeeStatus) && e.vacationStatus === "Vacation Approved")
-            .map(e => {
-              const leave = findLeaveForEmployee(e, leaveSource, empSource, "returned");
-              return {
-                ...e,
-                linkedEmployeeId: e._id,
-                linkedLeaveId: leave?._id || null,
-                startDate: leave?.startDate || e.lastWorkingDay || null,
-                endDate: leave?.endDate || e.firstWorkingDay || e.returnDate || null,
-              };
-            });
-          break;
-        }
-        case "Visa Expiry":
-          list = empSource.filter(e => {
-            if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
-            if (!e.visaExpiryDate) return false;
-            const expiry = new Date(e.visaExpiryDate);
-            return expiry > today && expiry <= next90Days;
-          });
-          break;
-        case "Passport Expiry":
-          list = empSource.filter(e => {
-            if (!isWorkingEmployeeStatus(e.employeeStatus)) return false;
-            if (!e.passportExpiryDate) return false;
-            const expiry = new Date(e.passportExpiryDate);
-            return expiry > today && expiry <= next6Months;
-          });
-          break;
-        case "ONBOARDING":
-          list = [];
-          break;
-        default:
-          list = [];
-      }
-    } catch (error) {
-      console.error(`Failed to open dashboard card "${category}":`, error);
-      list = [];
-    }
-    setFilteredList(list);
     setSelectedCategory(category);
-  };
+    setFilteredList([]);
+    setModalLoading(true);
+    try {
+      // Vacation categories often need the full matching set for status edits;
+      // employee totals/expiry use a larger page size for the modal table.
+      const needsFullVacationList = apiKey === "onVacation" || apiKey === "yetToGo" || apiKey === "returned";
+      const result = await employeeService.getDashboardCategory({
+        category: apiKey,
+        page: 1,
+        limit: needsFullVacationList ? 500 : 100,
+        all: needsFullVacationList,
+      });
+      setFilteredList(Array.isArray(result?.employees) ? result.employees : []);
+    } catch (err) {
+      console.error("Failed to load dashboard category:", err);
+      setFilteredList([]);
+    } finally {
+      setModalLoading(false);
+    }
+  }
 
+  // `path`: open the existing page with this card's filter; cards without one keep the details modal.
   const cards = [
-    { label: "Total Employees", value: counts.total, icon: <FaUsers />, color: "#4f46e5", trend: "+3 this month" },
-    { label: "Active Employees", value: counts.active, icon: <FaUserCheck />, color: "#10b981", trend: "Steady" },
-    { label: "Inactive Employees", value: counts.inactive, icon: <FaUserTimes />, color: "#64748b" },
-    { label: "On vacation", value: counts.onVacation, icon: <FaPlane />, color: "#3b82f6", trend: "Live" },
-    { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "All upcoming", tooltip: "All employees with approved or pending leave (any type) who are yet to travel (no date limit)" },
-    { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 1 month", tooltip: "Employees who returned from vacation in the last 1 month" },
+    { label: "Total Employees", value: counts.total, icon: <FaUsers />, color: "#4f46e5", trend: "+3 this month", path: teamManagementPath("All") },
+    { label: "Active Employees", value: counts.active, icon: <FaUserCheck />, color: "#10b981", trend: "Steady", path: teamManagementPath("Active") },
+    { label: "Inactive Employees", value: counts.inactive, icon: <FaUserTimes />, color: "#64748b", path: teamManagementPath("Inactive") },
+    { label: "On vacation", value: counts.onVacation, icon: <FaPlane />, color: "#3b82f6", trend: "Live", path: annualVacationsPath("onVacation") },
+    { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "All upcoming", tooltip: "All employees with approved or pending leave (any type) who are yet to travel (no date limit)", path: annualVacationsPath("yetToGo") },
+    { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 6 months", tooltip: "Employees who returned from vacation in the last 6 months", path: annualVacationsPath("returned") },
     { label: "Visa Expiry", value: counts.visaExpiry, icon: <FaPassport />, color: "#f97316", sub: "Next 90 days", alert: true, tooltip: "Visas expiring within the next 3 months. Action required." },
     { label: "Passport Expiry", value: counts.passportExpiry, icon: <FaIdCard />, color: "#0d9488", sub: "Next 6 months", alert: true, tooltip: "Passports expiring within the next 6 months. Action required." },
   ];
@@ -460,7 +268,15 @@ function DashboardOverview() {
               key={index}
               className={`${styles.statCard} ${card.alert ? styles.alertCard : ""}`}
               title={card.tooltip || ""}
-              onClick={() => handleCardClick(card.label)}
+              role="button"
+              tabIndex={0}
+              onClick={() => (card.path ? navigate(card.path) : handleCardClick(card.label))}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                if (card.path) navigate(card.path);
+                else handleCardClick(card.label);
+              }}
             >
               <div className={styles.cardHeader}>
                 <div className={styles.iconContainer} style={{ backgroundColor: `${card.color}15`, color: card.color }}>
@@ -494,8 +310,13 @@ function DashboardOverview() {
                 <button className={styles.closeBtn} onClick={() => setSelectedCategory(null)}>&times;</button>
               </div>
               <div className={styles.modalBody}>
-                {filteredList.length > 0 ? (
-                  <div className={styles.modalTableWrap}>
+                {modalLoading ? (
+                  <div className={styles.emptyState} style={{ padding: "40px 0" }}>
+                    <div className={styles.spinner}></div>
+                    <p>Loading {selectedCategory}…</p>
+                  </div>
+                ) : filteredList.length > 0 ? (
+                  <div className={`${styles.modalTableWrap} hrms-table-scroll`}>
                   <table className={styles.detailsTable}>
                     <thead>
                       <tr>
@@ -533,7 +354,7 @@ function DashboardOverview() {
                           {(selectedCategory === "On vacation" || selectedCategory === "Yet to go" || selectedCategory === "Returned back from vacation") ? (
                             <>
                               <td>{item.startDate ? new Date(item.startDate).toLocaleDateString('en-GB') : "—"}</td>
-                              <td>{(item.endDate || item.leaveEndDate) ? new Date(item.endDate || item.leaveEndDate).toLocaleDateString('en-GB') : "—"}</td>
+                              <td>{(item.leaveEndDate || item.endDate) ? new Date(item.leaveEndDate || item.endDate).toLocaleDateString('en-GB') : "—"}</td>
                               {selectedCategory === "On vacation" && canUpdateVacationReturn() && (
                                 <td>
                                   <button
@@ -604,7 +425,7 @@ function DashboardOverview() {
                                             boxShadow: `0 0 0 2px ${cfg.dot}30`,
                                           }} />
                                           <span style={{ fontSize: "11px" }}>{cfg.icon}</span>
-                                          {vs === "On Vacation" ? "On vacation" : vs === "Vacation Approved" ? "Returned back from vacation" : vs === "Vacation Pending" ? "Yet to go" : vs}
+                                          {formatVacationStatus(vs)}
                                         </span>
                                         {/* Right: chevron */}
                                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, marginLeft: "4px" }}>
@@ -624,10 +445,9 @@ function DashboardOverview() {
                                           handleStatusDropdownChange(item, newStatus);
                                         }}
                                       >
-                                        <option value="Onsite">Onsite</option>
-                                        <option value="On Vacation">On vacation</option>
-                                        <option value="Vacation Approved">Returned back from vacation</option>
-                                        <option value="Vacation Pending">Yet to go</option>
+                                        {VACATION_STATUS_EDIT_OPTIONS.map(opt => (
+                                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
                                       </select>
                                     </div>
                                   );
@@ -643,7 +463,7 @@ function DashboardOverview() {
                                         fontSize: "12px", fontWeight: "600", color: "#334155"
                                       }}>
                                         <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-                                        {vs === "On Vacation" ? "On vacation" : vs === "Vacation Approved" ? "Returned back from vacation" : vs === "Vacation Pending" ? "Yet to go" : vs}
+                                        {formatVacationStatus(vs)}
                                       </span>
                                     );
                                   })()
@@ -720,12 +540,12 @@ function DashboardOverview() {
           : "EE";
 
         const getStatusLabelAndStyle = (status) => {
-          const config = {
-            "On Vacation": { label: "On vacation", bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)", color: "#1e3a8a", dot: "#3b82f6" },
-            "Vacation Approved": { label: "Returned back from vacation", bg: "linear-gradient(135deg, #ede9fe, #ddd6fe)", color: "#4c1d95", dot: "#7c3aed" },
-            "Vacation Pending": { label: "Yet to go", bg: "linear-gradient(135deg, #fef9c3, #fde68a)", color: "#713f12", dot: "#f59e0b" }
-          };
-          return config[status] || { label: status, bg: "#f8fafc", color: "#334155", dot: "#64748b" };
+          const style = {
+            "On Vacation": { bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)", color: "#1e3a8a", dot: "#3b82f6" },
+            "Vacation Approved": { bg: "linear-gradient(135deg, #ede9fe, #ddd6fe)", color: "#4c1d95", dot: "#7c3aed" },
+            "Vacation Pending": { bg: "linear-gradient(135deg, #fef9c3, #fde68a)", color: "#713f12", dot: "#f59e0b" }
+          }[status] || { bg: "#f8fafc", color: "#334155", dot: "#64748b" };
+          return { label: formatVacationStatus(status) || status, ...style };
         };
 
         const statusCfg = getStatusLabelAndStyle(datePrompt.newStatus);

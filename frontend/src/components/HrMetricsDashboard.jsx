@@ -17,11 +17,12 @@ import {
 } from "recharts";
 import { Button, Input, Modal, Table } from "antd";
 import styles from "./HrMetricsDashboard.module.css";
+import DateInput from "./DateInput";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import attendanceService from "../services/AttendanceService";
 import salarySlipService from "../services/SalarySlipService";
-import { calculateLeaveBalance, calculateLeaveDays } from "../utils/leaveCalculator";
+import { calculateLeaveBalance, leaveRequestDays } from "../utils/leaveCalculator";
 import { CURRENCY_CODE } from "../utils/currency";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
 import {
@@ -334,7 +335,7 @@ export default function HrMetricsDashboard() {
   const currentYear = String(new Date().getFullYear());
   const yearFromUrl = searchParams.get("year");
   const [filters, setFilters] = useState({
-    year: yearFromUrl && yearFromUrl !== "All" ? yearFromUrl : currentYear,
+    year: yearFromUrl || "All",
     month: searchParams.get("month") || "All",
     startDate: searchParams.get("startDate") || "",
     endDate: searchParams.get("endDate") || "",
@@ -344,25 +345,32 @@ export default function HrMetricsDashboard() {
     employeeType: searchParams.get("employeeType") || "All",
     gender: searchParams.get("gender") || "All",
   });
+  const [filterDateDefaults] = useState(() => ({
+    startDate: searchParams.get("startDate") || "",
+    endDate: searchParams.get("endDate") || "",
+  }));
 
   const selectedRange = useMemo(
-    () => resolvePeriodRange({ ...filters, activeYear: Number(filters.year) || Number(currentYear) }),
+    () => resolvePeriodRange({ ...filters, activeYear: Number(currentYear) }),
     [filters, currentYear]
   );
+  const yearIsAll = !filters.year || filters.year === "All";
   const activeYear = useMemo(() => {
+    if (yearIsAll) return Number(currentYear);
     const parsed = Number(filters.year);
     const liveYear = new Date().getFullYear();
     if (!Number.isFinite(parsed) || parsed > liveYear) return liveYear;
     return parsed;
-  }, [filters.year]);
+  }, [filters.year, yearIsAll, currentYear]);
+  const yearLabel = yearIsAll ? "All" : String(activeYear);
   const asOfDate = useMemo(
-    () => selectedRange.end || new Date(activeYear, 11, 31, 23, 59, 59, 999),
-    [selectedRange.end, activeYear]
+    () => selectedRange.end || new Date(),
+    [selectedRange.end]
   );
 
   useEffect(() => {
     const params = new URLSearchParams();
-    params.set("year", String(activeYear));
+    params.set("year", yearIsAll ? "All" : String(activeYear));
     if (filters.month && filters.month !== "All") params.set("month", filters.month);
     if (filters.startDate) params.set("startDate", filters.startDate);
     if (filters.endDate) params.set("endDate", filters.endDate);
@@ -377,7 +385,7 @@ export default function HrMetricsDashboard() {
     if (searchParams.toString() !== qs) {
       setSearchParams(params, { replace: true });
     }
-  }, [activeYear, filters, searchParams, setSearchParams]);
+  }, [activeYear, yearIsAll, filters, searchParams, setSearchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -387,41 +395,49 @@ export default function HrMetricsDashboard() {
       setError("");
 
       try {
-        const [employeeResponse, leaveResponse, attendanceTrendResponse, salarySlipResponse] =
-          await Promise.all([
-            employeeService.getEmployees({ force: true }),
-            leaveRequestService.getLeaveRequests(),
-            attendanceService.getMonthlySummary(activeYear),
-            salarySlipService.getAllSalarySlips("", filters.year || currentYear),
-          ]);
-
-        const employeeList = toArray(employeeResponse);
-        const leaveList = toArray(leaveResponse);
-        const slipList = Array.isArray(salarySlipResponse) ? salarySlipResponse : [];
-
-        let attendanceRangeList = [];
-        if (selectedRange.start && selectedRange.end) {
-          try {
-            attendanceRangeList = await attendanceService.getByRange(
-              selectedRange.start.toISOString().slice(0, 10),
-              selectedRange.end.toISOString().slice(0, 10)
-            );
-          } catch (attendanceError) {
-            console.error("Failed to load attendance range data:", attendanceError);
-          }
-        }
+        // Critical path: metrics employees + lite leaves (no heavy leave populates)
+        const [employeeResponse, leaveResponse] = await Promise.all([
+          employeeService.getEmployeesForMetrics(),
+          leaveRequestService.getLeaveRequests({ view: "lite" }),
+        ]);
 
         if (!isMounted) return;
-        setEmployees(employeeList);
-        setLeaves(leaveList);
-        setSalarySlips(slipList);
-        setAttendanceMonthlySummary(Array.isArray(attendanceTrendResponse) ? attendanceTrendResponse : []);
-        setAttendanceRecords(Array.isArray(attendanceRangeList) ? attendanceRangeList : []);
+        setEmployees(toArray(employeeResponse));
+        setLeaves(toArray(leaveResponse));
+        setLoading(false);
+
+        // Secondary: salary slips + attendance — do not block first paint
+        Promise.all([
+          attendanceService.getMonthlySummary(activeYear).catch(() => []),
+          salarySlipService.getAllSalarySlips("", yearIsAll ? "" : String(activeYear)).catch(() => []),
+        ]).then(([attendanceTrendResponse, salarySlipResponse]) => {
+          if (!isMounted) return;
+          setAttendanceMonthlySummary(Array.isArray(attendanceTrendResponse) ? attendanceTrendResponse : []);
+          setSalarySlips(Array.isArray(salarySlipResponse) ? salarySlipResponse : []);
+        });
+
+        if (selectedRange.start && selectedRange.end) {
+          attendanceService
+            .getByRange(
+              selectedRange.start.toISOString().slice(0, 10),
+              selectedRange.end.toISOString().slice(0, 10)
+            )
+            .then((attendanceRangeList) => {
+              if (!isMounted) return;
+              setAttendanceRecords(Array.isArray(attendanceRangeList) ? attendanceRangeList : []);
+            })
+            .catch((attendanceError) => {
+              console.error("Failed to load attendance range data:", attendanceError);
+            });
+        } else {
+          setAttendanceRecords([]);
+        }
       } catch (loadError) {
         console.error("Failed to load HR metrics dashboard:", loadError);
-        if (isMounted) setError(loadError.message || "Failed to load dashboard data.");
-      } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setError(loadError.message || "Failed to load dashboard data.");
+          setLoading(false);
+        }
       }
     };
 
@@ -429,7 +445,7 @@ export default function HrMetricsDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [filters.year, currentYear, selectedRange.start, selectedRange.end, activeYear]);
+  }, [filters.year, currentYear, selectedRange.start, selectedRange.end, activeYear, yearIsAll]);
 
   const filterOptions = useMemo(() => {
     const buildOptions = (getter) => [
@@ -444,7 +460,7 @@ export default function HrMetricsDashboard() {
     }
 
     return {
-      years: yearsFromJoining,
+      years: ["All", ...yearsFromJoining.filter((y) => y !== "All")],
       departments: buildOptions((employee) => employee.department),
       designations: buildOptions((employee) => employee.designation || employee.role),
       locations: buildOptions((employee) => employee.office),
@@ -470,13 +486,13 @@ export default function HrMetricsDashboard() {
 
   const filteredLeaves = useMemo(() => {
     return leaves.filter((leave) => {
-      const employeeId = String(
-        leave.employee?._id || leave.employee || leave.employeeId || ""
-      );
-      const employeeName = String(leave.employeeName || "").trim().toLowerCase();
+      const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+      const linkedViaUser = String(leave.employee?.employeeId?._id || leave.employee?.employeeId || "");
+      const employeeId = String(leave.employee?._id || leave.employee || leave.employeeId || "");
       const matchesEmployee =
-        (employeeId && employeeIdSet.has(employeeId)) ||
-        (employeeName && employeeNameSet.has(employeeName));
+        (recordId && employeeIdSet.has(recordId)) ||
+        (linkedViaUser && employeeIdSet.has(linkedViaUser)) ||
+        (employeeId && employeeIdSet.has(employeeId));
       if (!matchesEmployee) return false;
 
       if (selectedRange.start && selectedRange.end) {
@@ -484,7 +500,7 @@ export default function HrMetricsDashboard() {
       }
       return true;
     });
-  }, [leaves, employeeIdSet, employeeNameSet, selectedRange]);
+  }, [leaves, employeeIdSet, selectedRange]);
 
   const filteredSalarySlips = useMemo(
     () => filterSalarySlipsForWorkforce(salarySlips, filteredEmployees, selectedRange, {
@@ -503,7 +519,11 @@ export default function HrMetricsDashboard() {
   }, [attendanceRecords, employeeIdSet]);
 
   const kpis = useMemo(() => {
-    const computed = computeKpis(filteredEmployees, selectedRange, asOfDate);
+    // Year=All: workforce is all-time (matches Dashboard); joiners/exits still use the live calendar year
+    const periodForJoinExit = yearIsAll
+      ? yearRangeBounds(Number(currentYear), filters.month !== "All" ? filters.month : "All")
+      : selectedRange;
+    const computed = computeKpis(filteredEmployees, periodForJoinExit, asOfDate);
     const payrollFromSlips = sumPayrollFromSlips(filteredSalarySlips);
     return {
       ...computed,
@@ -511,7 +531,7 @@ export default function HrMetricsDashboard() {
       totalPayroll: payrollFromSlips,
       payrollSlipCount: filteredSalarySlips.length,
     };
-  }, [filteredEmployees, selectedRange, asOfDate, filteredSalarySlips]);
+  }, [filteredEmployees, selectedRange, asOfDate, filteredSalarySlips, yearIsAll, currentYear, filters.month]);
 
   const openEmployeeDrillDown = useCallback((title, employeeList, columns = EMPLOYEE_BASE_COLUMNS) => {
     const list = employeeList || [];
@@ -596,7 +616,7 @@ export default function HrMetricsDashboard() {
 
     const totalsByType = approvedLeaves.reduce((acc, leave) => {
       const key = leave.leaveType || "Other";
-      const days = calculateLeaveDays(leave.startDate, leave.endDate) || 0;
+      const days = leaveRequestDays(leave);
       acc[key] = (acc[key] || 0) + days;
       acc.total += days;
       return acc;
@@ -609,11 +629,14 @@ export default function HrMetricsDashboard() {
       approvedLeaves.forEach((leave) => {
         if (!names.has(String(leave.leaveType || "").toLowerCase())) return;
         const emp = filteredEmployees.find((e) => {
+          const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+          const linkedViaUser = String(leave.employee?.employeeId?._id || leave.employee?.employeeId || "");
           const id = String(leave.employee?._id || leave.employee || "");
-          const name = String(leave.employeeName || "").trim().toLowerCase();
+          const empId = String(e._id || e.id || "");
           return (
-            (id && String(e._id || e.id) === id) ||
-            (name && String(e.employeeName || "").trim().toLowerCase() === name)
+            (recordId && empId === recordId) ||
+            (linkedViaUser && empId === linkedViaUser) ||
+            (id && empId === id)
           );
         });
         if (!emp) return;
@@ -625,9 +648,43 @@ export default function HrMetricsDashboard() {
       return out;
     };
 
+    // Index leaves once — avoid O(employees × leaves) full scans in calculateLeaveBalance
+    // Keys must use Employee._id / HR code — leave.employee is often User._id
+    const leavesByEmpId = new Map();
+    const leavesByEmpCode = new Map();
+    const pushLeave = (map, key, leave) => {
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(leave);
+    };
+    (leaves || []).forEach((leave) => {
+      if (!["Approved", "HOD Approved"].includes(leave.status)) return;
+      const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+      const ownerId = String(leave.employee?._id || leave.employee || "");
+      const linkedViaUser = String(leave.employee?.employeeId?._id || leave.employee?.employeeId || "");
+      const code = String(leave.linkedEmployeeCode || leave.employeeId || "").trim().toLowerCase();
+      if (recordId) pushLeave(leavesByEmpId, recordId, leave);
+      if (linkedViaUser) pushLeave(leavesByEmpId, linkedViaUser, leave);
+      if (ownerId && recordId && ownerId === recordId) pushLeave(leavesByEmpId, ownerId, leave);
+      if (code && !/^[a-f0-9]{24}$/i.test(code)) pushLeave(leavesByEmpCode, code, leave);
+    });
+
     const aggregateBalance = filteredEmployees.reduce(
       (acc, employee) => {
-        const balance = calculateLeaveBalance(employee, leaves);
+        const empId = String(employee._id || employee.id || "");
+        const empCode = String(employee.employeeId || "").trim().toLowerCase();
+        const empLeaves = [
+          ...(empId && leavesByEmpId.has(empId) ? leavesByEmpId.get(empId) : []),
+          ...(empCode && leavesByEmpCode.has(empCode) ? leavesByEmpCode.get(empCode) : []),
+        ];
+        const seenLeave = new Set();
+        const uniqueLeaves = empLeaves.filter((l) => {
+          const id = String(l._id || "");
+          if (id && seenLeave.has(id)) return false;
+          if (id) seenLeave.add(id);
+          return true;
+        });
+        const balance = calculateLeaveBalance(employee, uniqueLeaves.length ? uniqueLeaves : []);
         acc.entitlement += balance.entitlement || 0;
         acc.taken += balance.totalTaken || 0;
         acc.balance += balance.balance || 0;
@@ -676,7 +733,10 @@ export default function HrMetricsDashboard() {
   }, [kpis.lists.withSalary]);
 
   const exitOverview = useMemo(() => {
-    const exitEmployees = getPeriodExits(filteredEmployees, selectedRange);
+    const periodForJoinExit = yearIsAll
+      ? yearRangeBounds(Number(currentYear), filters.month !== "All" ? filters.month : "All")
+      : selectedRange;
+    const exitEmployees = getPeriodExits(filteredEmployees, periodForJoinExit);
     const exitTypes = addPercentages(
       getValueLabelPairs(exitEmployees, (employee) => employee.employeeStatus)
     );
@@ -689,7 +749,7 @@ export default function HrMetricsDashboard() {
       exitEmployees,
       rehireEligible: null,
     };
-  }, [filteredEmployees, selectedRange, kpis.attrition]);
+  }, [filteredEmployees, selectedRange, kpis.attrition, yearIsAll, currentYear, filters.month]);
 
   const employeeOverviewCharts = useMemo(() => {
     const departments = getValueLabelPairs(filteredEmployees, (employee) => employee.department);
@@ -805,6 +865,8 @@ export default function HrMetricsDashboard() {
 
   const openLeaveList = useCallback((extra = {}) => {
     const params = new URLSearchParams();
+    // Leave Overview counts approved leave; Leave Management otherwise opens on Pending.
+    params.set("status", "Approved");
     params.set("year", String(activeYear));
     const monthParam = leaveMonthParam(filters.month);
     if (monthParam) params.set("month", monthParam);
@@ -1000,17 +1062,17 @@ export default function HrMetricsDashboard() {
         </label>
         <label>
           <span>Date Range Start</span>
-          <input
-            type="date"
+          <DateInput
             value={filters.startDate}
+            defaultValue={filterDateDefaults.startDate}
             onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))}
           />
         </label>
         <label>
           <span>Date Range End</span>
-          <input
-            type="date"
+          <DateInput
             value={filters.endDate}
+            defaultValue={filterDateDefaults.endDate}
             onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))}
           />
         </label>
@@ -1083,19 +1145,19 @@ export default function HrMetricsDashboard() {
 
       <div className={styles.metricsGrid}>
         <MetricCard
-          label={`Total Employees (${activeYear})`}
+          label={`Total Employees (${yearLabel})`}
           value={formatCount(kpis.totalEmployees)}
-          onClick={() => openEmployeeDrillDown(`Total Employees (${activeYear})`, kpis.lists.workforce)}
+          onClick={() => openEmployeeDrillDown(`Total Employees (${yearLabel})`, kpis.lists.workforce)}
         />
         <MetricCard
           label="Active Employees"
           value={formatCount(kpis.activeEmployees)}
-          onClick={() => openEmployeeDrillDown(`Active Employees (${activeYear})`, kpis.lists.active)}
+          onClick={() => openEmployeeDrillDown(`Active Employees (${yearLabel})`, kpis.lists.active)}
         />
         <MetricCard
           label="New Joiners"
           value={formatCount(kpis.newJoiners)}
-          onClick={() => openEmployeeDrillDown(`New Joiners – ${activeYear}`, kpis.lists.joiners, [
+          onClick={() => openEmployeeDrillDown(`New Joiners – ${yearIsAll ? currentYear : yearLabel}`, kpis.lists.joiners, [
             ...EMPLOYEE_BASE_COLUMNS.slice(0, 5),
             { title: "Status", dataIndex: "status", key: "status", width: 120 },
             { title: "Location", dataIndex: "location", key: "location", width: 160 },
@@ -1104,7 +1166,7 @@ export default function HrMetricsDashboard() {
         <MetricCard
           label="Total Exits"
           value={formatCount(kpis.totalExits)}
-          onClick={() => openEmployeeDrillDown(`Exits – ${activeYear}`, kpis.lists.exits, [
+          onClick={() => openEmployeeDrillDown(`Exits – ${yearIsAll ? currentYear : yearLabel}`, kpis.lists.exits, [
             ...EMPLOYEE_BASE_COLUMNS.slice(0, 4),
             { title: "Joining Date", dataIndex: "doj", key: "doj", width: 110 },
             { title: "Last Working Day", dataIndex: "lastWorkingDay", key: "lastWorkingDay", width: 130 },
@@ -1135,13 +1197,13 @@ export default function HrMetricsDashboard() {
           label="Total Payroll"
           value={formatCurrency(kpis.totalPayroll)}
           subtext={kpis.payrollSlipCount ? `${kpis.payrollSlipCount} salary slip(s)` : "No salary slips for period"}
-          onClick={() => openPayrollDrillDown(`Total Payroll – ${activeYear}`, filteredSalarySlips)}
+          onClick={() => openPayrollDrillDown(`Total Payroll – ${yearLabel}`, filteredSalarySlips)}
         />
         <MetricCard
           label="Attrition %"
           value={formatPercent(kpis.attrition)}
           subtext="Exits ÷ avg headcount in period"
-          onClick={() => openEmployeeDrillDown(`Attrition Exits – ${activeYear}`, kpis.lists.exits, [
+          onClick={() => openEmployeeDrillDown(`Attrition Exits – ${yearIsAll ? currentYear : yearLabel}`, kpis.lists.exits, [
             ...EMPLOYEE_BASE_COLUMNS.slice(0, 4),
             { title: "Joining Date", dataIndex: "doj", key: "doj", width: 110 },
             { title: "Last Working Day", dataIndex: "lastWorkingDay", key: "lastWorkingDay", width: 130 },
@@ -1488,7 +1550,7 @@ export default function HrMetricsDashboard() {
               {
                 label: "Total Exits",
                 value: formatCount(exitOverview.totalExits),
-                onClick: () => openEmployeeDrillDown(`Exits – ${activeYear}`, exitOverview.exitEmployees || [], [
+                onClick: () => openEmployeeDrillDown(`Exits – ${yearIsAll ? currentYear : yearLabel}`, exitOverview.exitEmployees || [], [
                   ...EMPLOYEE_BASE_COLUMNS.slice(0, 4),
                   { title: "Joining Date", dataIndex: "doj", key: "doj", width: 110 },
                   { title: "Last Working Day", dataIndex: "lastWorkingDay", key: "lastWorkingDay", width: 130 },
@@ -1499,7 +1561,7 @@ export default function HrMetricsDashboard() {
               {
                 label: "Attrition %",
                 value: formatPercent(exitOverview.attrition),
-                onClick: () => openEmployeeDrillDown(`Attrition Exits – ${activeYear}`, exitOverview.exitEmployees || []),
+                onClick: () => openEmployeeDrillDown(`Attrition Exits – ${yearIsAll ? currentYear : yearLabel}`, exitOverview.exitEmployees || []),
               },
               { label: "Rehire Eligible", value: "No data" },
             ]}

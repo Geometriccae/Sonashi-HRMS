@@ -7,15 +7,53 @@ const Employee = require('../models/Employee');
 const authMiddleware = require('../middleware/authMiddleware');
 const { calculateWorkingDays, isPublicHoliday } = require('../utils/leaveUtils');
 const { notifyLeaveSubmitted, notifyLeaveStatusChange } = require('../services/hrNotificationService');
-const { patchListCacheEmployee, invalidateApprovedLeavesCache } = require('../utils/employeeListCache');
+const {
+    sendPendingLeaveNotification,
+    getPendingLeaveRecipients,
+} = require('../services/pendingLeaveEmailService');
+const {
+    patchListCacheEmployee,
+    invalidateListCache,
+    invalidateApprovedLeavesCache,
+} = require('../utils/employeeListCache');
+const {
+    resolveEmployeeVacationStatus,
+    leaveBelongsToEmployee,
+    toCalendarDate,
+    APPROVED_LEAVE_STATUSES,
+} = require('../utils/vacationStatusFromDates');
+const {
+    resolveLeaveOwnerIds,
+    buildEmployeeLeaveMongoFilter,
+    enrichLeaveRowsWithEmployeeIdentity,
+    identityFieldsFromEmployee,
+} = require('../utils/leaveEmployeeIdentity');
 
 const CHANGE_STATUSES = ['Created', 'Modified', 'Cancelled', 'Approved', 'Rejected', 'Error'];
 
 const LEAVE_LIST_TTL_MS = 30000;
+const LEAVE_METRICS_TTL_MS = 60000;
 let _leaveListCache = { key: '', data: null, ts: 0 };
+let _leaveMetricsCache = { key: '', data: null, ts: 0 };
 
 function leaveListCacheKey(role, status, employeeId) {
   return `${role || ''}|${status || ''}|${employeeId || ''}`;
+}
+
+/** Merge an extra Mongo clause into a filter without clobbering existing $or/$and. */
+function andMongoClause(filter, clause) {
+  if (!clause) {
+    if (!filter) return {};
+    if (filter.$and) return { ...filter, $and: [...filter.$and] };
+    return { ...filter };
+  }
+  if (!filter || Object.keys(filter).length === 0) {
+    return { ...clause };
+  }
+  if (filter.$and) {
+    return { ...filter, $and: [...filter.$and, clause] };
+  }
+  return { $and: [{ ...filter }, clause] };
 }
 
 function getLeaveListCache(key) {
@@ -29,8 +67,20 @@ function setLeaveListCache(key, data) {
   _leaveListCache = { key, data, ts: Date.now() };
 }
 
+function getLeaveMetricsCache(key) {
+  if (_leaveMetricsCache.data && _leaveMetricsCache.key === key && Date.now() - _leaveMetricsCache.ts < LEAVE_METRICS_TTL_MS) {
+    return _leaveMetricsCache.data;
+  }
+  return null;
+}
+
+function setLeaveMetricsCache(key, data) {
+  _leaveMetricsCache = { key, data, ts: Date.now() };
+}
+
 function invalidateLeaveListCache() {
   _leaveListCache = { key: '', data: null, ts: 0 };
+  _leaveMetricsCache = { key: '', data: null, ts: 0 };
   invalidateApprovedLeavesCache();
 }
 
@@ -60,6 +110,70 @@ function applyChangeAudit(updateData, changeStatus, user, remarks = '') {
 }
 
 const isObjectIdStr = (v) => typeof v === "string" && /^[a-fA-F0-9]{24}$/.test(v);
+
+function excelLeaveDays(start, end) {
+    if (!start || !end) return null;
+    const s = new Date(start);
+    const e = new Date(end);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return null;
+    const days = Math.round(
+        (Date.UTC(e.getFullYear(), e.getMonth(), e.getDate()) -
+            Date.UTC(s.getFullYear(), s.getMonth(), s.getDate())) / 86400000
+    );
+    if (!Number.isFinite(days) || days < 0) return null;
+    return days === 0 ? 1 : days;
+}
+
+function leaveTakenDaysForYearMap(leave) {
+    const stored = leave?.leaveDays != null && leave.leaveDays !== '' ? Number(leave.leaveDays) : NaN;
+    if (Number.isFinite(stored) && stored >= 0) return stored;
+    return excelLeaveDays(leave?.startDate, leave?.endDate) || 0;
+}
+
+function leaveCountedInExcelYearMap(leave, emp) {
+    if (String(leave?.importSource || '') !== 'excel-master-tracker') return false;
+    const map = emp?.excelLeaveYearTaken;
+    if (!map || typeof map !== 'object') return false;
+    const importedAt = emp.excelLeaveImportedAt ? new Date(emp.excelLeaveImportedAt).getTime() : null;
+    if (!importedAt || Number.isNaN(importedAt)) return true;
+    const created = leave.createdAt ? new Date(leave.createdAt).getTime() : 0;
+    if (!created) return true;
+    return created <= importedAt + 86400000;
+}
+
+/**
+ * excelLeaveYearTaken is a snapshot of imported yearly totals. Deleting the
+ * LeaveRequest row does not remove those days unless the map is reduced too.
+ */
+async function subtractDeletedImportedLeaveFromYearMap(leaveRequest) {
+    try {
+        if (!leaveRequest) return;
+        const emp = await resolveEmployeeForLeave(leaveRequest);
+        if (!emp || !leaveCountedInExcelYearMap(leaveRequest, emp)) return;
+
+        const start = toCalendarDate(leaveRequest.startDate);
+        if (!start) return;
+        const year = start.getFullYear();
+        const days = leaveTakenDaysForYearMap(leaveRequest);
+        if (!days) return;
+
+        const map = { ...(typeof emp.excelLeaveYearTaken === 'object' ? emp.excelLeaveYearTaken : {}) };
+        const key = Object.prototype.hasOwnProperty.call(map, year)
+            ? year
+            : Object.prototype.hasOwnProperty.call(map, String(year))
+                ? String(year)
+                : year;
+        const current = Number(map[key] ?? 0);
+        if (!Number.isFinite(current) || current <= 0) return;
+
+        const next = Math.max(0, Math.round((current - days) * 100) / 100);
+        map[key] = next;
+        await Employee.findByIdAndUpdate(emp._id, { $set: { excelLeaveYearTaken: map } });
+        patchListCacheEmployee(emp._id, { excelLeaveYearTaken: map });
+    } catch (err) {
+        console.error('[Leave] Year-map subtract error:', err.message || err);
+    }
+}
 
 /**
  * Map form employeeId (Employee._id or User._id) to the leave.employee owner ref.
@@ -108,6 +222,11 @@ async function resolveLeaveEmployeeTarget(employeeId, employeeName, fallbackUser
 async function resolveEmployeeForLeave(leaveRequest) {
     if (!leaveRequest) return null;
 
+    if (leaveRequest.employeeRecordId) {
+        const byRecord = await Employee.findById(leaveRequest.employeeRecordId);
+        if (byRecord) return byRecord;
+    }
+
     const empRef = leaveRequest.employee?._id || leaveRequest.employee;
     if (empRef) {
         const user = await User.findById(empRef).populate('employeeId');
@@ -116,19 +235,20 @@ async function resolveEmployeeForLeave(leaveRequest) {
             const emp = await Employee.findById(linkedId);
             if (emp) return emp;
         }
-        if (user) {
-            const byUser = await Employee.findOne({
-                $or: [
-                    { employeeName: user.username },
-                    { emailId: user.emailId },
-                ],
-            });
-            if (byUser) return byUser;
-        }
 
         // leave.employee may be the Employee._id when no User account exists
         const asEmployee = await Employee.findById(empRef);
         if (asEmployee) return asEmployee;
+
+        if (user) {
+            const byUser = await Employee.findOne({
+                $or: [
+                    { emailId: user.emailId },
+                    { employeeName: user.username },
+                ],
+            });
+            if (byUser) return byUser;
+        }
     }
 
     if (leaveRequest.employeeId) {
@@ -138,46 +258,111 @@ async function resolveEmployeeForLeave(leaveRequest) {
         if (byMongo) return byMongo;
     }
 
-    if (leaveRequest.employeeName) {
-        return Employee.findOne({ employeeName: leaveRequest.employeeName });
-    }
     return null;
 }
 
 /**
- * After final leave approval: mark employee as Vacation Pending (Yet to go)
- * for any leave type that has not started yet. Does not override On Vacation.
+ * Recalculate vacation status from approved leave dates and persist it
+ * so stored employee.vacationStatus matches every other route.
  */
-async function syncYetToGoVacationStatus(leaveRequest) {
+async function syncEmployeeVacationStatus(leaveRequest) {
     try {
-        if (!leaveRequest || leaveRequest.status !== 'Approved') return;
-
-        const start = leaveRequest.startDate ? new Date(leaveRequest.startDate) : null;
-        if (!start || Number.isNaN(start.getTime())) return;
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startDay = new Date(start);
-        startDay.setHours(0, 0, 0, 0);
-        if (startDay < today) return; // already started — not "yet to go"
-
+        if (!leaveRequest) return;
         const emp = await resolveEmployeeForLeave(leaveRequest);
-        if (!emp) {
-            console.warn('[Leave] Yet-to-go sync skipped: employee not found for', leaveRequest.employeeName);
-            return;
+        if (!emp) return;
+
+        const leaves = await LeaveRequest.find({
+            status: { $in: APPROVED_LEAVE_STATUSES },
+        })
+            .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate returnDate firstWorkingDay adminApprovedAt hodApprovedAt createdAt updatedAt')
+            .lean();
+
+        const empPlain = typeof emp.toObject === 'function' ? emp.toObject() : emp;
+
+        const approvedForEmployee = leaves
+            .filter((row) => leaveBelongsToEmployee(row, empPlain))
+            .filter((row) => row.startDate && row.endDate)
+            .sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+        const today = toCalendarDate(new Date());
+        const active = approvedForEmployee.find((row) => {
+            const start = toCalendarDate(row.travellingDate || row.startDate);
+            const end = toCalendarDate(row.endDate);
+            return start && end && start <= today && today <= end;
+        });
+        const future = [...approvedForEmployee]
+            .filter((row) => {
+                const start = toCalendarDate(row.travellingDate || row.startDate);
+                return start && start > today;
+            })
+            .sort((a, b) => toCalendarDate(a.travellingDate || a.startDate) - toCalendarDate(b.travellingDate || b.startDate))[0];
+        const controllingLeave = active || future || approvedForEmployee[0] || null;
+
+        // Resolve as leave-sourced with the controlling trip dates so a previous
+        // manual status cannot keep Applied-On-era or stale labels.
+        const patched = {
+            ...empPlain,
+            vacationStatusSource: 'leave',
+        };
+        if (controllingLeave) {
+            patched.travellingDate = controllingLeave.travellingDate || controllingLeave.startDate;
+            patched.leaveEndDate = controllingLeave.endDate;
+            const start = toCalendarDate(patched.travellingDate);
+            const end = toCalendarDate(controllingLeave.endDate);
+            const isCurrentOrFuture = Boolean(
+                start && ((end && start <= today && today <= end) || start > today)
+            );
+            if (isCurrentOrFuture) {
+                patched.returnDate = null;
+                patched.firstWorkingDay = null;
+            }
+        } else {
+            // Last approved leave was removed — leftover trip dates would keep
+            // Annual Vacation / status showing a deleted leave.
+            patched.travellingDate = null;
+            patched.leaveEndDate = null;
+            patched.returnDate = null;
+            patched.firstWorkingDay = null;
         }
+        const vacationStatus = resolveEmployeeVacationStatus(patched, leaves) || 'Onsite';
 
-        if (emp.vacationStatus === 'On Vacation') return;
-
-        if (emp.vacationStatus !== 'Vacation Pending') {
-            await Employee.findByIdAndUpdate(emp._id, { vacationStatus: 'Vacation Pending' });
-            console.log(`[Leave] Set Vacation Pending (Yet to go) for employee ${emp.employeeId || emp._id} (${leaveRequest.leaveType || 'leave'})`);
+        const patch = {
+            vacationStatus,
+            vacationStatusSource: 'leave',
+            vacationStatusUpdatedAt: new Date(),
+        };
+        if (controllingLeave) {
+            patch.travellingDate = controllingLeave.travellingDate || controllingLeave.startDate;
+            patch.leaveEndDate = controllingLeave.endDate;
+            if (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') {
+                patch.returnDate = null;
+                patch.firstWorkingDay = null;
+            }
+        } else {
+            patch.travellingDate = null;
+            patch.leaveEndDate = null;
+            patch.returnDate = null;
+            patch.firstWorkingDay = null;
         }
-
-        // Patch cache in-place — full invalidate caused multi-second cold Mongo reloads
-        patchListCacheEmployee(emp._id, { vacationStatus: 'Vacation Pending' });
+        await Employee.findByIdAndUpdate(emp._id, { $set: patch });
+        patchListCacheEmployee(emp._id, patch);
+        // When leave dates put the employee back On Vacation / Yet to Go, clear a
+        // leftover early-return stamp on the LeaveRequest too (Annual Vacations
+        // mark-return may have set it).
+        if (
+          controllingLeave &&
+          (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') &&
+          (controllingLeave.returnDate || controllingLeave.firstWorkingDay)
+        ) {
+          await LeaveRequest.findByIdAndUpdate(controllingLeave._id, {
+            $set: { returnDate: null, firstWorkingDay: null },
+          });
+          invalidateApprovedLeavesCache();
+        }
+        // Approval/re-approval must not leave another route serving the old
+        // employee category from the shared list cache.
+        invalidateListCache();
     } catch (err) {
-        console.error('[Leave] Yet-to-go vacationStatus sync error:', err.message || err);
+        console.error('[Leave] Vacation status sync error:', err.message || err);
     }
 }
 
@@ -216,7 +401,13 @@ async function sendLeaveRequestToHodAndAdmin(leaveRequest) {
         if (toAdmin.length === 0) {
             console.warn('[Leave] No Admin user with emailId. Add emailId for the user with role "admin" in User collection.');
         }
-        const toList = [...new Set([...toHod, ...toAdmin])];
+        // Pending-leave approvers already receive their own approval email for this request.
+        const pendingApprovers = leaveRequest.status === 'Pending'
+            ? new Set(getPendingLeaveRecipients())
+            : new Set();
+        const toList = [...new Set([...toHod, ...toAdmin])]
+            .filter((to) => !pendingApprovers.has(String(to).toLowerCase()));
+        if (toList.length === 0) return;
         console.log('[Leave] Sending new leave request – HOD:', toHod.length, 'recipient(s), Admin:', toAdmin.length, 'recipient(s). To:', toList.join(', '));
         const startStr = leaveRequest.startDate ? new Date(leaveRequest.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
         const endStr = leaveRequest.endDate ? new Date(leaveRequest.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
@@ -325,7 +516,7 @@ function hasHolidayInRange(startDate, endDate) {
 function parseLocalDate(dateStr) {
     if (!dateStr) return null;
     const s = String(dateStr).trim();
-    const match = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const match = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (match) {
         const y = parseInt(match[1], 10), m = parseInt(match[2], 10) - 1, d = parseInt(match[3], 10);
         const date = new Date(y, m, d);
@@ -338,22 +529,35 @@ function parseLocalDate(dateStr) {
 // Get all leave requests
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const { status, employeeId } = req.query;
+        const { status } = req.query;
+        // Accept Employee._id, User._id, or HR code — never match by name alone for ownership
+        const employeeKey = String(
+            req.query.employeeRecordId || req.query.employeeId || ''
+        ).trim();
         const view = String(req.query.view || '').toLowerCase();
         const isLite = view === 'lite' || view === 'vacation';
-        const filter = {};
+        const page = parseInt(req.query.page, 10);
+        const limit = parseInt(req.query.limit, 10);
+        const paginate = !isLite && !isNaN(page) && page > 0 && !isNaN(limit) && limit > 0;
+        const search = String(req.query.search || '').trim();
+        const department = String(req.query.department || '').trim();
+        const reportingManager = String(req.query.reportingManager || req.query.manager || '').trim();
+        const year = String(req.query.year || '').trim();
+        const month = String(req.query.month || '').trim();
+        const startDate = String(req.query.startDate || '').trim();
+        const endDate = String(req.query.endDate || '').trim();
+        const leaveType = String(req.query.leaveType || '').trim();
+        let filter = {};
 
         if (req.user.role === 'hod') {
-            // HOD sees only Pending requests (waiting for HOD approval)
-            // and also sees requests they have already processed (HOD Approved, Approved, Rejected)
             if (status && status !== 'All') {
-                filter.status = status;
+                if (status === 'History') {
+                    filter.status = { $in: ['Approved', 'Rejected', 'Cancelled'] };
+                } else {
+                    filter.status = status;
+                }
             } else {
-                // Default: show Pending (for approval) and completed ones
                 filter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
-            }
-            if (employeeId) {
-                filter.employee = employeeId;
             }
         } else if (
           req.user.role === 'admin' ||
@@ -361,58 +565,218 @@ router.get('/', authMiddleware, async (req, res) => {
           req.user.role === 'viewer' ||
           req.user.role === 'authorize_user'
         ) {
-            // Admin and HR see Pending requests, HOD processed requests, and final ones
             const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'];
 
             if (status && status !== 'All') {
-                if (visibleStatuses.includes(status)) {
+                if (status === 'History') {
+                    filter.status = { $in: ['Approved', 'Rejected', 'Cancelled'] };
+                } else if (visibleStatuses.includes(status)) {
                     filter.status = status;
                 } else {
-                    // If requesting a status admin/HR shouldn't see, return nothing
                     filter.status = 'RESTRICTED_VIEW';
                 }
             } else {
-                // Default: show Pending (for approval) and completed ones
                 filter.status = { $in: visibleStatuses };
             }
-            if (employeeId) {
-                filter.employee = employeeId;
-            }
         } else {
-            // Regular Employees can only see their own requests
             filter.employee = req.user.id;
             if (status && status !== 'All') {
-                filter.status = status;
+                if (status === 'History') {
+                    filter.status = { $in: ['Approved', 'Rejected', 'Cancelled'] };
+                } else {
+                    filter.status = status;
+                }
             }
         }
 
-        // Vacation/dashboard lite: only approved leaves, minimal fields (no heavy populates)
+        let resolvedOwner = null;
+        if (
+            employeeKey &&
+            (req.user.role === 'hod' ||
+                req.user.role === 'admin' ||
+                req.user.role === 'hr' ||
+                req.user.role === 'viewer' ||
+                req.user.role === 'authorize_user')
+        ) {
+            resolvedOwner = await resolveLeaveOwnerIds(employeeKey, { User, Employee });
+            const ownerFilter = buildEmployeeLeaveMongoFilter(resolvedOwner);
+            if (ownerFilter) {
+                filter = andMongoClause(filter, ownerFilter);
+            } else {
+                filter = andMongoClause(filter, { _id: null });
+            }
+        }
+
         if (isLite) {
             filter.status = { $in: ['Approved', 'HOD Approved'] };
         }
 
-        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeId || filter.employee) + (isLite ? '|lite' : '');
-        const cachedLeaves = getLeaveListCache(cacheKey);
+        if (search) {
+            const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const searchOr = [
+                { employeeName: regex },
+                { employeeId: regex },
+            ];
+            const searchOwner = await resolveLeaveOwnerIds(search, { User, Employee });
+            const searchOwnerFilter = buildEmployeeLeaveMongoFilter(searchOwner);
+            if (searchOwnerFilter) {
+                searchOr.push(searchOwnerFilter);
+            }
+            filter = andMongoClause(filter, { $or: searchOr });
+        }
+        if (department && department !== 'All') {
+            filter.department = department;
+        }
+        if (reportingManager && reportingManager !== 'All') {
+            filter.reportingManager = reportingManager;
+        }
+        if (leaveType && leaveType !== 'All') {
+            if (leaveType === 'Annual Leave') {
+                filter.leaveType = { $in: ['Annual Leave', 'Vacation'] };
+            } else {
+                filter.leaveType = leaveType;
+            }
+        }
+        // Date filters — match Leave Management UI (UTC year/month on startDate)
+        if (year && year !== 'All') {
+            const y = parseInt(year, 10);
+            if (!Number.isNaN(y)) {
+                if (month && month !== 'All') {
+                    const m = parseInt(month, 10);
+                    if (!Number.isNaN(m) && m >= 0 && m <= 11) {
+                        filter.startDate = {
+                            $gte: new Date(Date.UTC(y, m, 1)),
+                            $lte: new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)),
+                        };
+                    }
+                } else {
+                    filter.startDate = {
+                        $gte: new Date(Date.UTC(y, 0, 1)),
+                        $lte: new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999)),
+                    };
+                }
+            }
+        } else if (month && month !== 'All') {
+            const m = parseInt(month, 10);
+            if (!Number.isNaN(m) && m >= 0 && m <= 11) {
+                filter.$expr = { $eq: [{ $month: '$startDate' }, m + 1] };
+            }
+        }
+        if (startDate) {
+            const d = new Date(startDate);
+            if (!Number.isNaN(d.getTime())) {
+                filter.startDate = { ...(filter.startDate || {}), $gte: d };
+            }
+        }
+        if (endDate) {
+            const d = new Date(endDate);
+            if (!Number.isNaN(d.getTime())) {
+                d.setHours(23, 59, 59, 999);
+                filter.endDate = { $lte: d };
+            }
+        }
+
+        const cacheKey = leaveListCacheKey(req.user?.role, status, employeeKey || '')
+          + (isLite ? '|lite' : '')
+          + (paginate
+            ? `|p${page}|l${limit}|s${search}|d${department}|m${reportingManager}|y${year}|mo${month}|sd${startDate}|ed${endDate}|lt${leaveType}`
+            : '|all|v3leaveDays');
+        const skipCache =
+          String(req.query.fresh || '') === '1' ||
+          String(req.query.fresh || '').toLowerCase() === 'true';
+        const cachedLeaves = skipCache ? null : getLeaveListCache(cacheKey);
         if (cachedLeaves) {
             return res.json(cachedLeaves);
         }
 
+        const LEAVE_TABLE_SELECT =
+          'employee employeeRecordId employeeId employeeName company department reportingManager leaveType startDate endDate leaveDays importSource reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
+
         let leaveRequests;
         if (isLite) {
             leaveRequests = await LeaveRequest.find(filter)
-                .select('employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn')
-                .populate('employee', 'username emailId employeeId')
+                .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate leaveDays importSource status travellingDate lastWorkingDay returnDate firstWorkingDay department appliedOn requestAirfare')
                 .sort({ appliedOn: -1 })
                 .lean();
-        } else {
-            leaveRequests = await LeaveRequest.find(filter)
-                .populate('employee', 'username emailId employeeId role')
-                .populate('hodApprovedBy', 'username')
-                .populate('adminApprovedBy', 'username')
-                .populate('changedByUser', 'username')
-                .sort({ appliedOn: -1 })
-                .lean();
+            leaveRequests = await enrichLeaveRowsWithEmployeeIdentity(leaveRequests, { User, Employee });
+            setLeaveListCache(cacheKey, leaveRequests);
+            return res.json(leaveRequests);
         }
+
+        if (paginate) {
+            const safeLimit = Math.min(100, Math.max(1, limit));
+            const skip = (page - 1) * safeLimit;
+
+            let baseStatusFilter = {};
+            if (req.user.role === 'hod' || req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer' || req.user.role === 'authorize_user') {
+                baseStatusFilter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
+            } else {
+                baseStatusFilter.employee = req.user.id;
+            }
+            if (employeeKey && (req.user.role === 'hod' || req.user.role === 'admin' || req.user.role === 'hr' || req.user.role === 'viewer' || req.user.role === 'authorize_user')) {
+                const ownerFilter = buildEmployeeLeaveMongoFilter(resolvedOwner || await resolveLeaveOwnerIds(employeeKey, { User, Employee }));
+                if (ownerFilter) {
+                    baseStatusFilter = andMongoClause(baseStatusFilter, ownerFilter);
+                } else {
+                    baseStatusFilter = andMongoClause(baseStatusFilter, { _id: null });
+                }
+            }
+
+            const metricsKey = `metrics|${req.user?.role || ''}|${employeeKey || ''}|v2`;
+            let metricsBundle = getLeaveMetricsCache(metricsKey);
+            if (!metricsBundle) {
+                const [pending, approved, rejected, allVisible, departments, managers] = await Promise.all([
+                    LeaveRequest.countDocuments(andMongoClause({ ...baseStatusFilter }, { status: 'Pending' })),
+                    LeaveRequest.countDocuments(andMongoClause({ ...baseStatusFilter }, { status: 'Approved' })),
+                    LeaveRequest.countDocuments(andMongoClause({ ...baseStatusFilter }, { status: 'Rejected' })),
+                    LeaveRequest.countDocuments(baseStatusFilter),
+                    LeaveRequest.distinct('department', baseStatusFilter),
+                    LeaveRequest.distinct('reportingManager', baseStatusFilter),
+                ]);
+                metricsBundle = {
+                    metrics: { total: allVisible, pending, approved, rejected },
+                    filterOptions: {
+                        departments: (departments || []).filter(Boolean).sort(),
+                        managers: (managers || []).filter(Boolean).sort(),
+                    },
+                };
+                setLeaveMetricsCache(metricsKey, metricsBundle);
+            }
+
+            const [rowsRaw, total] = await Promise.all([
+                LeaveRequest.find(filter)
+                    .select(LEAVE_TABLE_SELECT)
+                    .populate('employee', 'username emailId employeeId role')
+                    .sort({ appliedOn: -1 })
+                    .skip(skip)
+                    .limit(safeLimit)
+                    .lean(),
+                LeaveRequest.countDocuments(filter),
+            ]);
+            const rows = await enrichLeaveRowsWithEmployeeIdentity(rowsRaw, { User, Employee });
+
+            const payload = {
+                data: rows,
+                total,
+                page,
+                limit: safeLimit,
+                totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+                metrics: metricsBundle.metrics,
+                filterOptions: metricsBundle.filterOptions,
+            };
+            setLeaveListCache(cacheKey, payload);
+            return res.json(payload);
+        }
+
+        leaveRequests = await LeaveRequest.find(filter)
+            .populate('employee', 'username emailId employeeId role')
+            .populate('hodApprovedBy', 'username')
+            .populate('adminApprovedBy', 'username')
+            .populate('changedByUser', 'username')
+            .sort({ appliedOn: -1 })
+            .lean();
+
+        leaveRequests = await enrichLeaveRowsWithEmployeeIdentity(leaveRequests, { User, Employee });
 
         setLeaveListCache(cacheKey, leaveRequests);
 
@@ -420,6 +784,50 @@ router.get('/', authMiddleware, async (req, res) => {
     } catch (error) {
         console.error('Error fetching leave requests:', error);
         res.status(500).json({ message: 'Error fetching leave requests', error: error.message });
+    }
+});
+
+/**
+ * Admin/HR-only consistency probe for one employee (dev/validation).
+ * GET /api/leave-requests/consistency-check?employeeRecordId=<Employee._id>
+ */
+router.get('/consistency-check', authMiddleware, async (req, res) => {
+    try {
+        const role = String(req.user?.role || '').toLowerCase();
+        if (role !== 'admin' && role !== 'hr') {
+            return res.status(403).json({ message: 'Admin or HR only' });
+        }
+        const key = String(req.query.employeeRecordId || req.query.employeeId || '').trim();
+        if (!key) {
+            return res.status(400).json({ message: 'employeeRecordId required' });
+        }
+        const resolved = await resolveLeaveOwnerIds(key, { User, Employee });
+        const ownerFilter = buildEmployeeLeaveMongoFilter(resolved);
+        if (!ownerFilter || !resolved.employeeRecordId) {
+            return res.status(404).json({ message: 'Employee not found', resolved });
+        }
+        const leaves = await LeaveRequest.find(ownerFilter)
+            .select('employee employeeRecordId employeeId employeeName startDate endDate leaveDays importSource leaveType status requestAirfare appliedOn')
+            .sort({ startDate: -1 })
+            .lean();
+        const enriched = await enrichLeaveRowsWithEmployeeIdentity(leaves, { User, Employee });
+        const byStatus = enriched.reduce((acc, l) => {
+            const s = l.status || 'Unknown';
+            acc[s] = (acc[s] || 0) + 1;
+            return acc;
+        }, {});
+        res.json({
+            employeeRecordId: resolved.employeeRecordId,
+            employeeCode: resolved.employeeCode,
+            employeeName: resolved.employeeName,
+            ownerIds: resolved.ownerIds,
+            totalLeaveRecords: enriched.length,
+            byStatus,
+            leaves: enriched,
+        });
+    } catch (error) {
+        console.error('consistency-check error:', error);
+        res.status(500).json({ message: error.message });
     }
 });
 
@@ -436,17 +844,19 @@ router.post('/', authMiddleware, async (req, res) => {
         const targetUserId = resolved.targetId;
         const resolvedEmployeeName = resolved.employeeName || employeeName || req.user.username;
 
+        let employeeObj = null;
+        if (employeeId && isObjectIdStr(String(employeeId))) {
+            employeeObj = await Employee.findById(employeeId);
+        } else if (req.user && req.user.employeeId) {
+            employeeObj = await Employee.findById(req.user.employeeId);
+        }
+
         // Validate dates against Employee's Joining Date (DOJ)
         if (startDate && endDate) {
             const start = new Date(startDate);
             const end = new Date(endDate);
             if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                let employeeObj = null;
-                if (employeeId && isObjectIdStr(String(employeeId))) {
-                    employeeObj = await Employee.findById(employeeId);
-                } else if (req.user && req.user.employeeId) {
-                    employeeObj = await Employee.findById(req.user.employeeId);
-                } else if (req.user) {
+                if (!employeeObj && req.user) {
                     employeeObj = await Employee.findOne({
                         $or: [
                             { employeeName: req.user.username },
@@ -495,6 +905,9 @@ router.post('/', authMiddleware, async (req, res) => {
             leaveType,
             startDate: new Date(startDate),
             endDate: new Date(endDate),
+            leaveDays: req.body.leaveDays != null && Number.isFinite(Number(req.body.leaveDays))
+                ? Number(req.body.leaveDays)
+                : excelLeaveDays(startDate, endDate),
             reason,
             status: isPastLeave ? 'Approved' : 'Pending',
             isPastLeave: isPastLeave,
@@ -507,11 +920,13 @@ router.post('/', authMiddleware, async (req, res) => {
             changedByUser: createEntry.changedByUser,
             changedOn: createEntry.changedOn,
             changeRemarks: createEntry.remarks,
-            statusChangeHistory: [createEntry]
+            statusChangeHistory: [createEntry],
+            ...identityFieldsFromEmployee(employeeObj),
         });
 
         const savedRequest = await newLeaveRequest.save();
         invalidateLeaveListCache();
+        await syncEmployeeVacationStatus(savedRequest);
 
         if (isPastLeave && req.body.visaExpiryDate && employeeId) {
             await Employee.findByIdAndUpdate(employeeId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
@@ -528,10 +943,17 @@ router.post('/', authMiddleware, async (req, res) => {
             endDate: savedRequest.endDate,
             reason: savedRequest.reason,
             appliedOn: savedRequest.appliedOn,
+            status: savedRequest.status,
         };
         sendLeaveRequestToHodAndAdmin(leaveSnapshot)
             .then(() => console.log('[Leave] HOD/Admin email sent'))
             .catch(e => console.error('[Leave] HOD/Admin email error:', e));
+
+        // Once per new Pending request (not on page loads, edits, or status changes).
+        if (savedRequest.status === 'Pending') {
+            sendPendingLeaveNotification(savedRequest.toObject(), { transporter: getLeaveTransporter() })
+                .catch((e) => console.error('[Leave] Pending leave email error:', e?.message || e));
+        }
 
         if (!isPastLeave) {
             const io = req.app.get('io');
@@ -677,6 +1099,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
             if (resolved.employeeName) {
                 updateData.employeeName = resolved.employeeName;
             }
+            const empForIdentity = await Employee.findById(employeeId).select('_id employeeId').lean();
+            if (empForIdentity) {
+                Object.assign(updateData, identityFieldsFromEmployee(empForIdentity));
+            } else {
+                const asUser = await User.findById(employeeId).select('employeeId').lean();
+                if (asUser?.employeeId) {
+                    const linked = await Employee.findById(asUser.employeeId).select('_id employeeId').lean();
+                    if (linked) Object.assign(updateData, identityFieldsFromEmployee(linked));
+                }
+            }
         }
         if (employeeName && updateData.employeeName === undefined) updateData.employeeName = employeeName;
         if (company) updateData.company = company;
@@ -730,6 +1162,13 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
         const effectiveStart = updateData.startDate || oldRequest.startDate;
         const effectiveEnd = updateData.endDate || oldRequest.endDate;
+        if (updateData.startDate || updateData.endDate) {
+            if (req.body.leaveDays != null && Number.isFinite(Number(req.body.leaveDays))) {
+                updateData.leaveDays = Number(req.body.leaveDays);
+            } else if (oldRequest.importSource !== 'excel-master-tracker') {
+                updateData.leaveDays = excelLeaveDays(effectiveStart, effectiveEnd);
+            }
+        }
 
         // Validate dates against Employee's Joining Date (DOJ)
         if (effectiveStart && effectiveEnd) {
@@ -832,6 +1271,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             .populate('changedByUser', 'username');
 
         invalidateLeaveListCache();
+        await syncEmployeeVacationStatus(updatedRequest);
 
         if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
             sendLeaveStatusToEmployee(updatedRequest, updateData.status)
@@ -841,11 +1281,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
             const io = req.app.get('io');
             notifyLeaveStatusChange(io, updatedRequest, updateData.status, req.user.role)
                 .catch((e) => console.error('[Leave] Status notification error:', e));
-        }
-
-        // Yet to go card: after Authorize/Approve, mark employee Vacation Pending
-        if (updateData.status === 'Approved') {
-            await syncYetToGoVacationStatus(updatedRequest);
         }
 
         res.json(updatedRequest);
@@ -935,6 +1370,7 @@ router.post('/:id/revert', authMiddleware, async (req, res) => {
             .populate('changedByUser', 'username');
 
         invalidateLeaveListCache();
+        await syncEmployeeVacationStatus(updatedRequest);
 
         const io = req.app.get('io');
         notifyLeaveStatusChange(io, updatedRequest, 'Cancelled', req.user.role)
@@ -967,6 +1403,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Leave request not found' });
         }
         invalidateLeaveListCache();
+        await subtractDeletedImportedLeaveFromYearMap(deletedRequest);
+        await syncEmployeeVacationStatus(deletedRequest);
         res.json({ message: 'Leave request deleted successfully' });
     } catch (error) {
         console.error('Error deleting leave request:', error);
@@ -986,8 +1424,19 @@ router.post('/bulk-delete', authMiddleware, async (req, res) => {
             return res.status(400).json({ message: 'No leave request IDs provided' });
         }
 
+        const toDelete = await LeaveRequest.find({ _id: { $in: ids } }).lean();
         const result = await LeaveRequest.deleteMany({ _id: { $in: ids } });
         invalidateLeaveListCache();
+        for (const row of toDelete) {
+            await subtractDeletedImportedLeaveFromYearMap(row);
+        }
+        const seen = new Set();
+        for (const row of toDelete) {
+            const key = String(row.employeeRecordId || row.employee || row.employeeId || row.employeeName || '');
+            if (key && seen.has(key)) continue;
+            if (key) seen.add(key);
+            await syncEmployeeVacationStatus(row);
+        }
         res.json({ message: `Successfully deleted ${result.deletedCount} leave requests`, deletedCount: result.deletedCount });
     } catch (error) {
         console.error('Error bulk deleting leave requests:', error);
@@ -1030,6 +1479,24 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
             if (u.employeeId) userByEmpObjIdMap[String(u.employeeId)] = u;
             if (u.username) userNameMap[String(u.username).toLowerCase().replace(/[\s_.-]/g, '')] = u;
         });
+
+        const existingApproved = await LeaveRequest.find({
+            status: { $in: ['Approved', 'HOD Approved'] },
+        })
+            .select('employee employeeRecordId employeeId startDate endDate')
+            .lean();
+        const existingByKey = new Map();
+        existingApproved.forEach((row) => {
+            const start = row.startDate ? new Date(row.startDate).toISOString().slice(0, 10) : '';
+            const end = row.endDate ? new Date(row.endDate).toISOString().slice(0, 10) : start;
+            const owner = String(row.employeeRecordId || row.employee || '');
+            if (start && owner) existingByKey.set(`${owner}|${start}|${end}`, row);
+            if (row.employeeId && start) {
+                existingByKey.set(`${String(row.employeeId).toLowerCase()}|${start}|${end}`, row);
+            }
+        });
+        const seenImportKeys = new Set();
+        let skippedDuplicates = 0;
 
         for (let i = 0; i < leaves.length; i++) {
             const row = leaves[i];
@@ -1083,22 +1550,41 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
                     endDate = startDate; // fallback to single day
                 }
 
+                const startKey = startDate.toISOString().slice(0, 10);
+                const endKey = endDate.toISOString().slice(0, 10);
+                const ownerKey = String(matchedEmp?._id || targetUserId);
+                const codeKey = String(matchedEmp?.employeeId || rawId || '').toLowerCase();
+                const dupKeys = [
+                    `${ownerKey}|${startKey}|${endKey}`,
+                    codeKey ? `${codeKey}|${startKey}|${endKey}` : '',
+                ].filter(Boolean);
+                if (dupKeys.some((k) => seenImportKeys.has(k) || existingByKey.has(k))) {
+                    skippedDuplicates += 1;
+                    continue;
+                }
+                dupKeys.forEach((k) => seenImportKeys.add(k));
+
+                const leaveDaysRaw = row.leaveDays != null ? Number(row.leaveDays) : null;
+
                 newLeaves.push({
                     employee: targetUserId,
-                    employeeName: row.employeeName || row.employeeId || 'Unknown Employee',
+                    employeeName: matchedEmp?.employeeName || row.employeeName || row.employeeId || 'Unknown Employee',
                     company: row.company || 'Unknown Company',
                     department: matchedEmp?.department || row.department || '',
                     reportingManager: matchedEmp?.reportingManager || row.reportingManager || '',
                     leaveType: row.leaveType || 'Personal Leave',
                     startDate: startDate,
                     endDate: endDate,
+                    leaveDays: Number.isFinite(leaveDaysRaw) ? leaveDaysRaw : undefined,
+                    importSource: 'excel-master-tracker',
                     reason: row.reason || 'Imported from Excel',
                     status: row.status || 'Approved', // Defaults to Approved for imported history
                     isPastLeave: true,
                     requestAirfare: row.requestAirfare === true || String(row.requestAirfare).toLowerCase() === 'yes' || String(row.requestAirfare).toLowerCase() === 'true',
                     appliedOn: row.appliedOn ? new Date(row.appliedOn) : new Date(),
                     adminApprovedBy: req.user.id,
-                    adminApprovedAt: new Date()
+                    adminApprovedAt: new Date(),
+                    ...identityFieldsFromEmployee(matchedEmp),
                 });
             } catch (err) {
                 errors.push(`[Sheet ${row.sheetName || 'Unknown'}] Row ${row.rowNumber || 'Unknown'}: Failed to process "${row.employeeName}" - ${err.message}`);
@@ -1108,12 +1594,20 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
         if (newLeaves.length > 0) {
             await LeaveRequest.insertMany(newLeaves);
             invalidateLeaveListCache();
+            const synced = new Set();
+            for (const row of newLeaves) {
+                const key = String(row.employeeRecordId || row.employee || row.employeeId || row.employeeName || '');
+                if (key && synced.has(key)) continue;
+                if (key) synced.add(key);
+                await syncEmployeeVacationStatus(row);
+            }
         }
 
         res.json({
             message: `Successfully imported ${newLeaves.length} leave requests.`,
             errors: errors.length > 0 ? errors : undefined,
-            importedCount: newLeaves.length
+            importedCount: newLeaves.length,
+            skippedDuplicates,
         });
     } catch (error) {
         console.error('Error bulk importing leave requests:', error);

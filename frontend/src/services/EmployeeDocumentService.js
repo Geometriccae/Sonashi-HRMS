@@ -3,6 +3,11 @@ import config from "../config/config";
 const apiRoot = (config.API_BASE_URL || "").replace(/\/$/, "");
 const baseUrl = `${apiRoot}/employeedocuments`;
 
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 /** Stable viewer URL — uses API file route from frontend/.env (REACT_APP_API_URL). */
 const getFileUrl = (docId) => {
   if (!docId) return "";
@@ -15,17 +20,16 @@ const listByEmployee = async (employeeId) => {
   return response.json();
 };
 
-const uploadForEmployee = async (employeeId, file, { uploadedBy, userRole, type } = {}) => {
+const uploadForEmployee = async (employeeId, file, { type } = {}) => {
   const formData = new FormData();
-  // IMPORTANT: type, uploadedBy, userRole must be appended BEFORE file
-  // so that req.body.type is available in multer's destination callback
+  // Type must be appended before file so multer can select the destination.
+  // Uploader identity is derived by the server from the bearer token.
   if (type) formData.append("type", type);
-  if (uploadedBy) formData.append("uploadedBy", uploadedBy);
-  if (userRole) formData.append("userRole", userRole);
   formData.append("file", file);
 
   const response = await fetch(`${baseUrl}/${employeeId}`, {
     method: "POST",
+    headers: getAuthHeaders(),
     body: formData,
   });
   if (!response.ok) throw new Error("Failed to upload document");
@@ -50,6 +54,7 @@ const replace = async (docId, file, type) => {
   if (type) formData.append("type", type);
   const response = await fetch(`${baseUrl}/${docId}`, {
     method: "PUT",
+    headers: getAuthHeaders(),
     body: formData,
   });
   if (!response.ok) throw new Error("Failed to replace document");

@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 
 const MASTER_START_YEAR = 2008;
 
-/** Red bold — matches Staff Salary report.xls (JOINING / IN years / dates / dept headers). */
+/** Red bold — matches Staff Salary report.xls (JOINING / IN years / dates). */
 const RED_BOLD = {
   color: { argb: "FFFF0000" },
   bold: true,
@@ -119,7 +119,6 @@ export function buildStaffSalarySummaryRows(employees, options = {}) {
       SL: idx + 1,
       Title: titleFromName(e.employeeName),
       Name: cleanName(e.employeeName) || e.employeeName || "",
-      Department: e.department || "",
       "BASIC SALARY": Number(basicAdj.toFixed(2)),
       "LUNCH EXPS": Number(lunchAdj.toFixed(2)),
       "MISC EXPS": Number(miscAdj.toFixed(2)),
@@ -141,18 +140,34 @@ export function buildStaffSalarySummaryRows(employees, options = {}) {
 }
 
 /**
+ * WPS / SIF columns, filled from the Salary Report payroll rows (same source as the SIF).
+ * [header row 1, header row 2, value getter]
+ */
+const WPS_COLUMNS = [
+  ["STAFF ID /", "LABOUR CARD", (p) => p.staffId],
+  ["EMPLOYER", "ID", (p) => p.employerId],
+  ["COMPANY", "CODE", (p, e) => p.companyCode || e.companyCode],
+  ["BANK AGENT", "CODE", (p) => p.agentCode],
+  ["IBAN", "NUMBER", (p) => p.iban],
+];
+
+/**
  * Build Staff Salary report workbook matching Staff Salary report.xls
  * Sheet name: SALARY
- * Layout: dept headers + salary components + yearly increment pairs + Excel formulas
+ * Layout: salary components + WPS fields + yearly increment pairs + Excel formulas
+ *
+ * @param {Map<string, object>} [options.payrollById] Salary Report payroll rows by employee _id.
  */
 export function buildStaffSalaryWorkbook(employees, options = {}) {
   const {
     days = 30,
     tillYear = new Date().getFullYear(),
+    payrollById = new Map(),
   } = options;
 
   const dayFactor = Math.max(0, Number(days) || 30);
   const years = buildYearList(employees, tillYear);
+  const yearStartCol = 10 + WPS_COLUMNS.length;
   const wb = new ExcelJS.Workbook();
   wb.creator = "Sonashi HRMS";
   const ws = wb.addWorksheet("SALARY");
@@ -173,6 +188,7 @@ export function buildStaffSalaryWorkbook(employees, options = {}) {
     "RENT",
     "TOTAL",
     "JOINING",
+    ...WPS_COLUMNS.map(([h1]) => h1),
   ];
   years.forEach((y) => {
     header1.push(`IN ${y}`, "");
@@ -189,6 +205,7 @@ export function buildStaffSalaryWorkbook(employees, options = {}) {
     "EXPS.",
     "SALARY",
     "DATE",
+    ...WPS_COLUMNS.map(([, h2]) => h2),
   ];
   years.forEach(() => {
     header2.push("", "");
@@ -216,20 +233,12 @@ export function buildStaffSalaryWorkbook(employees, options = {}) {
   // Reference: JOINING + all IN YYYY headers + DATE sub-header are red bold
   paintRed(r1.getCell(9), true);
   years.forEach((_, yi) => {
-    paintRed(r1.getCell(10 + yi * 2), true);
+    paintRed(r1.getCell(yearStartCol + yi * 2), true);
   });
   paintRed(r2.getCell(9), true);
 
-  // Group by department (blank dept last)
-  const groups = new Map();
-  (employees || []).forEach((e) => {
-    const dept = String(e.department || "OTHER").trim() || "OTHER";
-    if (!groups.has(dept)) groups.set(dept, []);
-    groups.get(dept).push(e);
-  });
-
-  const sortedDepts = [...groups.keys()].sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: "base" })
+  const list = [...(employees || [])].sort((a, b) =>
+    String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
   );
 
   let sl = 0;
@@ -244,127 +253,117 @@ export function buildStaffSalaryWorkbook(employees, options = {}) {
     return s;
   };
 
-  sortedDepts.forEach((dept) => {
-    const list = groups.get(dept) || [];
-    list.sort((a, b) =>
-      String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
-    );
+  list.forEach((e) => {
+    sl += 1;
+    const sal = e.salaryDetails || {};
+    const basic = toNum(sal.basicSalary);
+    const lunch = toNum(sal.travelExp);
+    const misc = toNum(sal.other);
+    const rent = toNum(sal.houseRent);
+    const byYear = incrementsByYear(e.increments);
+    const doj = parseDate(e.doj);
+    const joinYear = doj ? doj.getFullYear() : null;
 
-    const deptRow = ws.addRow([
-      "",
-      `${dept.toUpperCase()} DEPARTMENT`,
-      ...Array(7 + years.length * 2).fill(""),
-    ]);
-    // Reference: department title in red (not gray fill)
-    paintRed(deptRow.getCell(2), false);
+    const rowValues = [
+      sl,
+      titleFromName(e.employeeName),
+      cleanName(e.employeeName) || e.employeeName || "",
+      null, // BASIC formula
+      null, // LUNCH formula / blank
+      null, // MISC formula / blank
+      null, // RENT formula
+      null, // TOTAL formula
+      null, // JOINING DATE
+    ];
 
-    list.forEach((e) => {
-      sl += 1;
-      const sal = e.salaryDetails || {};
-      const basic = toNum(sal.basicSalary);
-      const lunch = toNum(sal.travelExp);
-      const misc = toNum(sal.other);
-      const rent = toNum(sal.houseRent);
-      const byYear = incrementsByYear(e.increments);
-      const doj = parseDate(e.doj);
-      const joinYear = doj ? doj.getFullYear() : null;
+    const payroll = payrollById.get(String(e._id)) || {};
+    WPS_COLUMNS.forEach(([, , valueOf]) => {
+      rowValues.push(valueOf(payroll, e) || "");
+    });
 
-      const rowValues = [
-        sl,
-        titleFromName(e.employeeName),
-        cleanName(e.employeeName) || e.employeeName || "",
-        null, // BASIC formula
-        null, // LUNCH formula / blank
-        null, // MISC formula / blank
-        null, // RENT formula
-        null, // TOTAL formula
-        null, // JOINING DATE
-      ];
-
-      years.forEach((y) => {
-        if (byYear[y] && byYear[y].amount) {
-          rowValues.push(Number(byYear[y].amount.toFixed(2)));
-          rowValues.push(byYear[y].date);
-        } else if (joinYear === y && isSaneYear(y)) {
-          // Reference: "JOIN IN YYYY" in that year's amount column
-          rowValues.push(`JOIN IN ${y}`);
-          rowValues.push("");
-        } else {
-          rowValues.push("");
-          rowValues.push("");
-        }
-      });
-
-      const row = ws.addRow(rowValues);
-      const excelRow = row.number;
-
-      // BASIC = basic/30*days  (same pattern as master sheet)
-      row.getCell(4).value = {
-        formula: `${basic}/30*${dayFactor}`,
-        result: Number(((basic / 30) * dayFactor).toFixed(2)),
-      };
-      row.getCell(4).numFmt = "#,##0.00";
-
-      // LUNCH / MISC — formulas when present (master often blank)
-      if (lunch > 0) {
-        row.getCell(5).value = {
-          formula: `${lunch}/30*${dayFactor}`,
-          result: Number(((lunch / 30) * dayFactor).toFixed(2)),
-        };
-        row.getCell(5).numFmt = "#,##0.00";
+    years.forEach((y) => {
+      if (byYear[y] && byYear[y].amount) {
+        rowValues.push(Number(byYear[y].amount.toFixed(2)));
+        rowValues.push(byYear[y].date);
+      } else if (joinYear === y && isSaneYear(y)) {
+        // Reference: "JOIN IN YYYY" in that year's amount column
+        rowValues.push(`JOIN IN ${y}`);
+        rowValues.push("");
+      } else {
+        rowValues.push("");
+        rowValues.push("");
       }
-      if (misc > 0) {
-        row.getCell(6).value = {
-          formula: `${misc}/30*${dayFactor}`,
-          result: Number(((misc / 30) * dayFactor).toFixed(2)),
-        };
-        row.getCell(6).numFmt = "#,##0.00";
-      }
+    });
 
-      // RENT
-      row.getCell(7).value = {
-        formula: `${rent}/30*${dayFactor}`,
-        result: Number(((rent / 30) * dayFactor).toFixed(2)),
+    const row = ws.addRow(rowValues);
+    const excelRow = row.number;
+
+    // BASIC = basic/30*days  (same pattern as master sheet)
+    row.getCell(4).value = {
+      formula: `${basic}/30*${dayFactor}`,
+      result: Number(((basic / 30) * dayFactor).toFixed(2)),
+    };
+    row.getCell(4).numFmt = "#,##0.00";
+
+    // LUNCH / MISC — formulas when present (master often blank)
+    if (lunch > 0) {
+      row.getCell(5).value = {
+        formula: `${lunch}/30*${dayFactor}`,
+        result: Number(((lunch / 30) * dayFactor).toFixed(2)),
       };
-      row.getCell(7).numFmt = "#,##0.00";
-
-      // TOTAL = SUM(D:G) — exact master formula
-      row.getCell(8).value = {
-        formula: `SUM(${colLetter(4)}${excelRow}:${colLetter(7)}${excelRow})`,
-        result: Number(
-          (
-            (basic / 30) * dayFactor +
-            (lunch / 30) * dayFactor +
-            (misc / 30) * dayFactor +
-            (rent / 30) * dayFactor
-          ).toFixed(2)
-        ),
+      row.getCell(5).numFmt = "#,##0.00";
+    }
+    if (misc > 0) {
+      row.getCell(6).value = {
+        formula: `${misc}/30*${dayFactor}`,
+        result: Number(((misc / 30) * dayFactor).toFixed(2)),
       };
-      row.getCell(8).numFmt = "#,##0.00";
+      row.getCell(6).numFmt = "#,##0.00";
+    }
 
-      if (doj) {
-        row.getCell(9).value = doj;
-        row.getCell(9).numFmt = "dd/mm/yy";
+    // RENT
+    row.getCell(7).value = {
+      formula: `${rent}/30*${dayFactor}`,
+      result: Number(((rent / 30) * dayFactor).toFixed(2)),
+    };
+    row.getCell(7).numFmt = "#,##0.00";
+
+    // TOTAL = SUM(D:G) — exact master formula
+    row.getCell(8).value = {
+      formula: `SUM(${colLetter(4)}${excelRow}:${colLetter(7)}${excelRow})`,
+      result: Number(
+        (
+          (basic / 30) * dayFactor +
+          (lunch / 30) * dayFactor +
+          (misc / 30) * dayFactor +
+          (rent / 30) * dayFactor
+        ).toFixed(2)
+      ),
+    };
+    row.getCell(8).numFmt = "#,##0.00";
+
+    if (doj) {
+      row.getCell(9).value = doj;
+      row.getCell(9).numFmt = "dd/mm/yy";
+    }
+    // Reference: joining date column always red bold
+    paintRed(row.getCell(9), true);
+
+    // Format year amount + date columns; date cols red bold (reference)
+    years.forEach((y, yi) => {
+      const amtCol = yearStartCol + yi * 2;
+      const dateCol = amtCol + 1;
+      const amtCell = row.getCell(amtCol);
+      const dateCell = row.getCell(dateCol);
+      if (typeof amtCell.value === "number") {
+        amtCell.numFmt = "#,##0.00";
+      } else if (typeof amtCell.value === "string" && String(amtCell.value).startsWith("JOIN IN")) {
+        paintRed(amtCell, true);
       }
-      // Reference: joining date column always red bold
-      paintRed(row.getCell(9), true);
-
-      // Format year amount + date columns; date cols red bold (reference)
-      years.forEach((y, yi) => {
-        const amtCol = 10 + yi * 2;
-        const dateCol = amtCol + 1;
-        const amtCell = row.getCell(amtCol);
-        const dateCell = row.getCell(dateCol);
-        if (typeof amtCell.value === "number") {
-          amtCell.numFmt = "#,##0.00";
-        } else if (typeof amtCell.value === "string" && String(amtCell.value).startsWith("JOIN IN")) {
-          paintRed(amtCell, true);
-        }
-        if (dateCell.value instanceof Date) {
-          dateCell.numFmt = "dd/mm/yy";
-        }
-        paintRed(dateCell, true);
-      });
+      if (dateCell.value instanceof Date) {
+        dateCell.numFmt = "dd/mm/yy";
+      }
+      paintRed(dateCell, true);
     });
   });
 
@@ -374,7 +373,8 @@ export function buildStaffSalaryWorkbook(employees, options = {}) {
   ws.getColumn(3).width = 36;
   for (let c = 4; c <= 8; c += 1) ws.getColumn(c).width = 12;
   ws.getColumn(9).width = 12;
-  for (let c = 10; c <= 9 + years.length * 2; c += 1) ws.getColumn(c).width = 10;
+  for (let c = 10; c < yearStartCol; c += 1) ws.getColumn(c).width = 26;
+  for (let c = yearStartCol; c < yearStartCol + years.length * 2; c += 1) ws.getColumn(c).width = 10;
 
   return wb;
 }

@@ -213,7 +213,7 @@ function CheckInHistory() {
             ) : checkIns.length === 0 ? (
               <div className={styles["no-data"]}>No check-in records found</div>
             ) : (
-              <div className={styles["checkin-list"]}>
+              <div className={`${styles["checkin-list"]} hrms-table-scroll`}>
                 <table className={styles["checkin-table"]}>
                   <thead>
                     <tr>

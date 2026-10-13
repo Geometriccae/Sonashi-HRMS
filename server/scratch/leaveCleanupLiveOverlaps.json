@@ -1,0 +1,328 @@
+{
+  "proposedDeleteCount": 483,
+  "keepCount": 226,
+  "scriptImportsThatOverlapLiveKeep": 8,
+  "scriptImportsWithNoLiveOverlap": 475,
+  "overlapping": [
+    {
+      "imported": {
+        "id": "69f073290742dc0cc2bb446e",
+        "employeeId": "IDMD-007",
+        "employeeName": "ZAFAR IQBAL MOHAMMAD AZIIZ KHAN",
+        "leaveType": "Vacation",
+        "startDate": "2023-08-08",
+        "endDate": "2023-10-01",
+        "leaveDays": 54,
+        "status": "Approved",
+        "createdAt": "2026-04-28T08:43:21.412Z",
+        "createdBy": "admin",
+        "updatedAt": "2026-08-31T11:59:48.794Z",
+        "updatedBy": "admin",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from 2023",
+        "reasonClass": "script_syncLeaveFromExcel",
+        "changeStatus": "Modified",
+        "changeRemarks": "Vacation return recorded; approved leave dates unchanged",
+        "isPastLeave": true,
+        "appliedOn": "2026-04-28T08:43:21.377Z",
+        "adminApprovedBy": "69b13f80ddc7fe43217bd118",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scratch/syncLeaveFromExcel.js"
+      },
+      "liveMatches": [
+        {
+          "id": "6a27f3872bc35db388acd743",
+          "employeeName": "ZAFAR IQBAL MOHAMMAD AZIIZ KHAN",
+          "employeeId": "",
+          "leaveType": "Vacation",
+          "startDate": "2020-02-14",
+          "endDate": "2026-08-04",
+          "reason": "Vacation",
+          "createdBy": "admin",
+          "clientTouched": false
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "69f073290742dc0cc2bb446d",
+        "employeeId": "IDMD-007",
+        "employeeName": "ZAFAR IQBAL MOHAMMAD AZIIZ KHAN",
+        "leaveType": "Vacation",
+        "startDate": "2023-03-21",
+        "endDate": "2023-04-02",
+        "leaveDays": 12,
+        "status": "Approved",
+        "createdAt": "2026-04-28T08:43:21.411Z",
+        "createdBy": "",
+        "updatedAt": "2026-08-26T05:10:40.514Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from 2023",
+        "reasonClass": "script_syncLeaveFromExcel",
+        "changeStatus": "",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-04-28T08:43:21.377Z",
+        "adminApprovedBy": "69b13f80ddc7fe43217bd118",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scratch/syncLeaveFromExcel.js"
+      },
+      "liveMatches": [
+        {
+          "id": "6a27f3872bc35db388acd743",
+          "employeeName": "ZAFAR IQBAL MOHAMMAD AZIIZ KHAN",
+          "employeeId": "",
+          "leaveType": "Vacation",
+          "startDate": "2020-02-14",
+          "endDate": "2026-08-04",
+          "reason": "Vacation",
+          "createdBy": "admin",
+          "clientTouched": false
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "6a8e75471f4cff133424b1c9",
+        "employeeId": "IDMD-013",
+        "employeeName": "MOHSIN BASHIR SARDAR MUHANNAD BASHIR KHAN",
+        "leaveType": "Vacation",
+        "startDate": "2016-01-01",
+        "endDate": "2016-03-02",
+        "leaveDays": 61,
+        "status": "Approved",
+        "createdAt": "2026-08-26T05:10:31.200Z",
+        "createdBy": "",
+        "updatedAt": "2026-08-26T05:10:31.200Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2016",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-08-26T05:10:31.199Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "liveMatches": [
+        {
+          "id": "6a35029e6abb6366949c3495",
+          "employeeName": "MOHSIN BASHIR SARDAR MUHANNAD BASHIR KHAN",
+          "employeeId": "",
+          "leaveType": "Vacation",
+          "startDate": "2015-12-01",
+          "endDate": "2016-03-03",
+          "reason": "Annual Leave",
+          "createdBy": "",
+          "clientTouched": false
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "6a8e75581f4cff133424b3f2",
+        "employeeId": "IDML-084",
+        "employeeName": "MUHAMMAD MEHTAB MUHAMMAD IRSHAD",
+        "leaveType": "Vacation",
+        "startDate": "2026-05-03",
+        "endDate": "2026-07-06",
+        "leaveDays": 64,
+        "status": "Approved",
+        "createdAt": "2026-08-26T05:10:48.788Z",
+        "createdBy": "",
+        "updatedAt": "2026-08-26T05:10:48.788Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2026",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-08-26T05:10:48.788Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "liveMatches": [
+        {
+          "id": "6a2a7a9c54828137fa01f3fc",
+          "employeeName": "MUHAMMAD MEHTAB MUHAMMAD IRSHAD",
+          "employeeId": "",
+          "leaveType": "Vacation",
+          "startDate": "2026-05-04",
+          "endDate": "2026-07-06",
+          "reason": "Annual Vacation",
+          "createdBy": "Melvin",
+          "clientTouched": true
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "6a9a6bc6e31d52a8ca0bb8b2",
+        "employeeId": "IDBO-036",
+        "employeeName": "ASHFAQ MUHAMMAD AHAMED",
+        "leaveType": "Vacation",
+        "startDate": "2019-01-01",
+        "endDate": "2019-01-06",
+        "leaveDays": 5,
+        "status": "Approved",
+        "createdAt": "2026-09-04T06:57:10.446Z",
+        "createdBy": "",
+        "updatedAt": "2026-09-04T06:57:10.446Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2019",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-09-04T06:57:10.445Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "liveMatches": [
+        {
+          "id": "6a3280430098db7d8c6b6455",
+          "employeeName": "ASHFAQ MUHAMMAD AHAMED",
+          "employeeId": "IDBO-036",
+          "leaveType": "Annual Leave",
+          "startDate": "2018-12-08",
+          "endDate": "2019-01-05",
+          "reason": "Annual Leave",
+          "createdBy": "Melvin",
+          "clientTouched": true
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "6a9a6bc8e31d52a8ca0bb8df",
+        "employeeId": "IDMM-131",
+        "employeeName": "UMESH PAYYAM VALAPPIL",
+        "leaveType": "Vacation",
+        "startDate": "2025-01-01",
+        "endDate": "2025-02-08",
+        "leaveDays": 38,
+        "status": "Approved",
+        "createdAt": "2026-09-04T06:57:12.397Z",
+        "createdBy": "",
+        "updatedAt": "2026-09-04T06:57:12.397Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2025",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-09-04T06:57:12.397Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "liveMatches": [
+        {
+          "id": "6a955aefb22625b3720bf677",
+          "employeeName": "UMESH PAYYAM VALAPPIL",
+          "employeeId": "IDMM-131",
+          "leaveType": "Annual Leave",
+          "startDate": "2024-12-31",
+          "endDate": "2025-01-01",
+          "reason": "Annual Vacation",
+          "createdBy": "Melvin",
+          "clientTouched": true
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "6a9a6bc8e31d52a8ca0bb8e8",
+        "employeeId": "IDMO-178",
+        "employeeName": "MELVIN ABRAHAM THOMAS",
+        "leaveType": "Vacation",
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-15",
+        "leaveDays": 14,
+        "status": "Approved",
+        "createdAt": "2026-09-04T06:57:12.711Z",
+        "createdBy": "",
+        "updatedAt": "2026-09-04T06:57:12.711Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2026",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-09-04T06:57:12.710Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "liveMatches": [
+        {
+          "id": "6a28031146c7ddf03d6da481",
+          "employeeName": "MELVIN ABRAHAM THOMAS",
+          "employeeId": "",
+          "leaveType": "Personal Leave",
+          "startDate": "2026-01-31",
+          "endDate": "2026-02-15",
+          "reason": "Personal",
+          "createdBy": "",
+          "clientTouched": false
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "6a9aa84b1bf5dbc8a2b13f8a",
+        "employeeId": "IDBS-012",
+        "employeeName": "VIJAY KUMAR ASHOK KUMAR",
+        "leaveType": "Vacation",
+        "startDate": "2022-04-14",
+        "endDate": "2022-07-07",
+        "leaveDays": 84,
+        "status": "Approved",
+        "createdAt": "2026-09-04T11:15:23.625Z",
+        "createdBy": "",
+        "updatedAt": "2026-09-04T11:15:23.625Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2022",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-09-04T11:15:23.624Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "liveMatches": [
+        {
+          "id": "69f073290742dc0cc2bb448d",
+          "employeeName": "VIJAY KUMAR ASHOK KUMAR",
+          "employeeId": "IDBS-012",
+          "leaveType": "Vacation",
+          "startDate": "2022-05-23",
+          "endDate": "2022-05-31",
+          "reason": "Annual Leave",
+          "createdBy": "",
+          "clientTouched": false
+        }
+      ]
+    }
+  ]
+}

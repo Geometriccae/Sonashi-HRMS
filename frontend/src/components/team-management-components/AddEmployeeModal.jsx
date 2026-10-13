@@ -31,7 +31,7 @@ import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
-import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { formatEmployeeMasterExperienceLabel } from "../../utils/yetToGoHelpers";
 import CompanyDocumentService from "../../services/CompanyDocumentService";
 import {
   buildCompanyOptionsFromDocuments,
@@ -55,6 +55,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     // 1. Basic Information
     workPermitNo: "",
     employeeId: "",
+    unifiedId: "",
     office: DEFAULT_COMPANY_NAME,
     employeeName: "",
     reportingManager: "",
@@ -117,11 +118,14 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
     accountNumber: "",
     ibanNumber: "",
     bankSortCode: "",
+    modeOfPay: "",
   });
 
   const [clients, setClients] = useState([]);
   const [companyDocuments, setCompanyDocuments] = useState([]);
-  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS_DEFAULT);
+  // Designation reuses the existing 'role' option store (defaults + /api/options/role),
+  // which already holds the job titles used as designations.
+  const [designationOptions, setDesignationOptions] = useState(ROLE_OPTIONS_DEFAULT);
   const [departmentOptions, setDepartmentOptions] = useState(DEPARTMENT_OPTIONS_DEFAULT);
   const [toasts, setToasts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
@@ -185,40 +189,40 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         OptionService.getExcludedDefaults('department'),
       ]);
 
-      setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles, excludedRoles));
+      setDesignationOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles, excludedRoles));
       setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts, excludedDepts));
     } catch (err) {
       console.error("Failed to fetch dynamic options:", err);
-      setRoleOptions(ROLE_OPTIONS_DEFAULT);
+      setDesignationOptions(ROLE_OPTIONS_DEFAULT);
       setDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
     }
   };
 
-  const handleRoleAdd = async (label) => {
+  const handleDesignationAdd = async (label) => {
     try {
       await OptionService.addOption('role', label);
       await fetchEmployeeDropdownValues();
-      addToast(`Role "${label}" added successfully`, "success");
+      addToast(`Designation "${label}" added successfully`, "success");
     } catch (err) {
-      console.error("Error adding role:", err);
-      addToast(err.response?.data?.message || "Failed to add role", "error");
+      console.error("Error adding designation:", err);
+      addToast(err.response?.data?.message || "Failed to add designation", "error");
     }
   };
 
-  const handleRoleDelete = async (option) => {
+  const handleDesignationDelete = async (option) => {
     if (!option?.label || option.label === "-Select-") return;
     try {
-      const roles = await OptionService.getOptions('role');
-      const toDelete = roles.find((r) => r.label === option.label);
+      const stored = await OptionService.getOptions('role');
+      const toDelete = stored.find((r) => r.label === option.label);
       if (toDelete) {
         await OptionService.deleteOption('role', toDelete._id);
       } else {
         await OptionService.excludeDefaultOption('role', option.label);
       }
       await fetchEmployeeDropdownValues();
-      addToast(`Role "${option.label}" deleted`, "success");
+      addToast(`Designation "${option.label}" deleted`, "success");
     } catch (err) {
-      addToast("Failed to delete role", "error");
+      addToast("Failed to delete designation", "error");
     }
   };
 
@@ -308,9 +312,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         errors.employeeName = true;
         missingFields.push("Employee Name");
       }
-      if (!formData.role) {
-        errors.role = true;
-        missingFields.push("Role");
+      if (!formData.designation) {
+        errors.designation = true;
+        missingFields.push("Designation");
       }
     } else if (step === 2) {
 
@@ -361,9 +365,9 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       errors.employeeName = true;
       missingFields.push("Employee Name");
     }
-    if (!formData.role) {
-      errors.role = true;
-      missingFields.push("Role");
+    if (!formData.designation) {
+      errors.designation = true;
+      missingFields.push("Designation");
     }
     if (!formData.department) {
       errors.department = true;
@@ -394,10 +398,16 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       // Extract salary details cleanly
       const payload = { ...filteredData };
 
+      // Employee.role is required by the schema and still read by reports / salary
+      // slips, so it stays in sync with the single designation the user picked.
+      payload.designation = String(formData.designation || "").trim();
+      payload.role = payload.designation;
+
       // Always persist bank / labour / company fields
       payload.labourCardNumber = formData.labourCardNumber || "";
       payload.companyCode = resolveDefaultCompanyCode(formData.companyCode);
       payload.office = resolveDefaultCompanyName(formData.office);
+      payload.unifiedId = formData.unifiedId || "";
       payload.salaryDetails = {
         basicSalary: parseFloat(formData.basicSalary) || 0,
         houseRent: parseFloat(formData.houseRent) || 0,
@@ -409,11 +419,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         bankName: formData.bankName || "",
         accountNumber: formData.accountNumber || "",
         ibanNumber: formData.ibanNumber || "",
-        bankSortCode: formData.bankSortCode || ""
+        bankSortCode: formData.bankSortCode || "",
+        modeOfPay: formData.modeOfPay || "",
       };
       [
         "basicSalary", "houseRent", "travelExp", "other", "totalAllowance",
-        "deduction", "totalSalary", "bankName", "accountNumber", "ibanNumber", "bankSortCode",
+        "deduction", "totalSalary", "bankName", "accountNumber", "ibanNumber", "bankSortCode", "modeOfPay",
       ].forEach((k) => delete payload[k]);
 
       payload.emergencyContact = {
@@ -444,8 +455,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
       const empId = savedEmployee._id || savedEmployee.id || savedEmployee.employee?._id || savedEmployee.employee?.id;
       if (empId) {
-        const uploadedBy = localStorage.getItem("username") || "";
-        const userRole = localStorage.getItem("role") || "";
         const docUploads = [
           { file: employeeDocuments.passportPage1, type: "Passport Page 1" },
           { file: employeeDocuments.passportPage2, type: "Passport Page 2" },
@@ -458,8 +467,6 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           if (!file) continue;
           try {
             await DocumentsService.uploadForEmployee(empId, file, {
-              uploadedBy,
-              userRole,
               type,
             });
           } catch (docErr) {
@@ -480,6 +487,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
       setFormData({
         workPermitNo: "",
         employeeId: "",
+        unifiedId: "",
         office: DEFAULT_COMPANY_NAME,
         employeeName: "",
         reportingManager: "",
@@ -537,6 +545,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
         accountNumber: "",
         ibanNumber: "",
         bankSortCode: "",
+        modeOfPay: "",
       });
 
       setProfileImage(null);
@@ -618,6 +627,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                   handleInputChange("employeeId", e.target.value)
                 }
                 hasError={validationErrors.employeeId}
+              />
+
+              <InputField
+                label="Unified ID"
+                placeholder="Enter Unified ID"
+                value={formData.unifiedId}
+                onChange={(e) =>
+                  handleInputChange("unifiedId", e.target.value)
+                }
               />
 
               <Dropdown
@@ -717,24 +735,15 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               />
 
               <Dropdown
-                id="add-employee-role"
-                label="Role"
-                placeholder="Select role"
-                options={roleOptions}
-                value={formData.role}
-                onAdd={handleRoleAdd}
-                onDelete={handleRoleDelete}
-                onChange={(e) => handleInputChange("role", e.target.value)}
-                hasError={validationErrors.role}
-              />
-
-              <InputField
+                id="add-employee-designation"
                 label="Designation"
-                placeholder="Designation"
+                placeholder="Select designation"
+                options={designationOptions}
                 value={formData.designation}
-                onChange={(e) =>
-                  handleInputChange("designation", e.target.value)
-                }
+                onAdd={handleDesignationAdd}
+                onDelete={handleDesignationDelete}
+                onChange={(e) => handleInputChange("designation", e.target.value)}
+                hasError={validationErrors.designation}
               />
 
               <InputField
@@ -960,13 +969,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
                 label="Total Year of Experience"
                 placeholder="—"
                 value={
-                  formatExperienceLabel(
-                    formData.doj,
-                    formData.totalYearsExperience,
-                    (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
-                      ? formData.lastWorkingDay
-                      : new Date()
-                  ) || "—"
+                  formatEmployeeMasterExperienceLabel(formData) || "—"
                 }
                 readOnly
               />
@@ -1147,6 +1150,12 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           <div className="billing-content">
             <div className="form-fields-grid">
               <InputField
+                label="Mode of Pay"
+                placeholder="e.g. Bank Transfer / Cash / Cheque"
+                value={formData.modeOfPay}
+                onChange={(e) => handleInputChange("modeOfPay", e.target.value)}
+              />
+              <InputField
                 label="Basic Salary (BASIC)"
                 placeholder="0.00"
                 type="number"
@@ -1285,16 +1294,19 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
               value: formData.employeeId || "Not provided",
             },
             {
-              label: "Employee Name",
-              value: formData.employeeName || "Not provided",
+              label: "Unified ID",
+              value: formData.unifiedId || "Not provided",
             },
           ],
           [
+            {
+              label: "Employee Name",
+              value: formData.employeeName || "Not provided",
+            },
             { label: "Mobile", value: formData.mobile || "Not provided" },
-            { label: "Email", value: formData.emailId || "Not provided" },
           ],
           [
-            { label: "Role", value: formData.role || "Not provided" },
+            { label: "Email", value: formData.emailId || "Not provided" },
             {
               label: "Designation",
               value: formData.designation || "Not provided",
@@ -1312,42 +1324,52 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
           ],
           [
             {
+              label: "Attendance",
+              value: formData.attendance || "Not provided",
+            },
+            {
               label: "Notice Period",
               value: formData.noticePeriod || "Not provided",
             },
+          ],
+          [
             {
               label: "Provision Period",
               value: formData.provisionPeriod || "Not provided",
             },
-          ],
-          [
             {
               label: "Company",
               value: formData.office || "Not provided",
             },
+          ],
+          [
             {
               label: "Company Code",
               value: formData.companyCode || "Not provided",
             },
-          ],
-          [
             {
               label: "Labour Card Number",
               value: formData.labourCardNumber || "Not provided",
             },
+          ],
+          [
             {
               label: "Air Fare",
               value: formData.airFare ? "Yes" : "No",
             },
-          ],
-          [
             {
               label: "Life Insurance",
               value: formData.lifeInsurance ? "Yes" : "No",
             },
+          ],
+          [
             {
               label: "Medical Insurance",
               value: formData.medicalInsurance ? "Yes" : "No",
+            },
+            {
+              label: "Mode of Pay",
+              value: formData.modeOfPay || "Not provided",
             },
           ],
           [
@@ -1515,4 +1537,3 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 }
 
 export default AddEmployeeModal;
-

@@ -109,8 +109,8 @@ function calculateWorkingDays(startDate, endDate) {
  * @returns {number} - Leave entitlement in days
  */
 function calculateProRataLeave(monthsOfService) {
-    const MONTHLY_ACCRUAL_RATE = 1.75;
-    const MAX_ANNUAL_LEAVE = 21;
+    const MONTHLY_ACCRUAL_RATE = 2.5;
+    const MAX_ANNUAL_LEAVE = 30;
 
     const calculatedLeave = monthsOfService * MONTHLY_ACCRUAL_RATE;
     return Math.min(calculatedLeave, MAX_ANNUAL_LEAVE);
@@ -119,12 +119,12 @@ function calculateProRataLeave(monthsOfService) {
 /**
  * Default annual leave balance for confirmed employees
  */
-const DEFAULT_ANNUAL_LEAVE = 21;
+const DEFAULT_ANNUAL_LEAVE = 30;
 
 /**
  * Leave accrual rate per month
  */
-const MONTHLY_LEAVE_ACCRUAL = 1.75;
+const MONTHLY_LEAVE_ACCRUAL = 2.5;
 
 module.exports = {
     calculateWorkingDays,

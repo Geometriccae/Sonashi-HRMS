@@ -126,7 +126,7 @@ const UserManagement = () => {
         </div>
       )}
 
-      <div className={styles.tableContainer}>
+      <div className={`${styles.tableContainer} hrms-table-scroll`}>
         <table className={styles.table}>
           <thead>
             <tr>

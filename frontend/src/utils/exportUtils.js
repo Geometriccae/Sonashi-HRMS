@@ -85,7 +85,7 @@ export const exportEmployeeBasicInfo = (employeeData) => {
     'Employee Name': employeeData.employeeName || 'Not provided',
     'Email ID': employeeData.emailId || 'Not provided',
     'Mobile Number': employeeData.mobile || 'Not provided',
-    'Role': employeeData.role || 'Not provided',
+    'Person Code': employeeData.workPermitNo || 'Not provided',
     'Designation': employeeData.designation || 'Not provided',
     'Department': employeeData.department || 'Not provided',
     'Attendance Status': employeeData.attendance || 'Not provided',

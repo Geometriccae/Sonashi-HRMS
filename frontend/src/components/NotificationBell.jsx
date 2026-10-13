@@ -5,6 +5,35 @@ import chevrondown from "../assets/dashboard/chevron-down.svg";
 import config, { getApiBaseUrl } from '../config/config';
 import { io as ioClient } from "socket.io-client";
 
+// ─── Singleton socket ────────────────────────────────────────────────────────
+// Keeps one persistent connection across page navigations instead of
+// creating/destroying a socket every time NotificationBell mounts/unmounts.
+let _sharedSocket = null;
+let _sharedSocketUrl = null;
+
+function getSharedSocket() {
+  const socketUrl = getApiBaseUrl();
+  if (_sharedSocket && _sharedSocketUrl === socketUrl && _sharedSocket.connected) {
+    return _sharedSocket;
+  }
+  if (_sharedSocket && _sharedSocketUrl !== socketUrl) {
+    try { _sharedSocket.disconnect(); } catch (e) { /* ignore */ }
+    _sharedSocket = null;
+  }
+  if (!_sharedSocket) {
+    _sharedSocket = ioClient(socketUrl, {
+      path: '/socket.io',
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      timeout: 20000,
+    });
+    _sharedSocketUrl = socketUrl;
+  }
+  return _sharedSocket;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const REMINDER_NOTIFICATION_TYPES = new Set([
   "meeting-reminder",
   "event-reminder",
@@ -327,102 +356,72 @@ function NotificationBell({ small = true }) {
   }, []);
 
   useEffect(() => {
-    const socketUrl = getApiBaseUrl();
-
-    const socket = ioClient(socketUrl, {
-      path: '/socket.io',
-      transports: ['polling', 'websocket'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      timeout: 20000
-    });
+    const socket = getSharedSocket();
     socketRef.current = socket;
 
-    socket.on('connect', async () => {
+    const joinAndPrefetch = async () => {
       try {
         const token = localStorage.getItem('token');
-        if (token) {
-          const resp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (resp.ok) {
-            const me = await resp.json();
-            meRef.current = me;
+        if (!token) return;
+        const apiRoot = config.API_BASE_URL.replace(/\/api\/?$/, '');
+        const headers = { Authorization: `Bearer ${token}` };
 
-            // Defer heavy notification prefetch so page data loads first
-            setTimeout(async () => {
-              const apiRoot = config.API_BASE_URL.replace(/\/api\/?$/, '');
-              const headers = { Authorization: `Bearer ${token}` };
+        const resp = await fetch(`${apiRoot}/api/auth/me`, { headers });
+        if (!resp.ok) return;
+        const me = await resp.json();
+        meRef.current = me;
 
-              try {
-                const [eventsResp, empEventsResp] = await Promise.all([
-                  fetch(`${apiRoot}/api/clients/events`, { headers }),
-                  fetch(`${apiRoot}/api/employees/events`, { headers }),
-                ]);
-                if (eventsResp.ok) {
-                  const list = await eventsResp.json();
-                  (list || []).forEach(ev => scheduleLocalReminders(ev));
-                }
-                if (empEventsResp.ok) {
-                  const list = await empEventsResp.json();
-                  (list || []).forEach(ev => scheduleLocalReminders(ev));
-                }
-              } catch (evErr) {
-                console.debug('Could not prefetch events:', evErr);
-              }
+        const userId = me._id || me.id || localStorage.getItem('userId');
+        const userRole = me.role || localStorage.getItem('role');
+        const email = me.emailId || me.email || localStorage.getItem('email') || null;
 
-              try {
-                if (['admin', 'hr', 'viewer', 'hod'].includes(me.role)) {
-                  const alertsResp = await fetch(`${apiRoot}/api/notifications/hr-alerts`, { headers });
-                  if (alertsResp.ok) {
-                    const hrAlerts = await alertsResp.json();
-                    (hrAlerts || []).forEach((alert) => pushNotification(alert));
-                  }
-                }
-              } catch (hrAlertErr) {
-                console.warn('Could not fetch HR alerts:', hrAlertErr);
-              }
-            }, 3000);
-          }
-        }
-      } catch (meErr) {
-        console.warn('Error fetching current user:', meErr);
-      }
+        if (userId) socket.emit('join-user', { userId, role: userRole });
+        if (email) socket.emit('join-email', email);
 
-      console.log('🔌 Notification socket connected', socket.id);
-
-      try {
-        const token = localStorage.getItem('token');
-        if (token) {
-          const resp = await fetch(`${config.API_BASE_URL.replace(/\/api\/?$/, '')}/api/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (resp.ok) {
-            const me = await resp.json();
-            const userId = me._id || me.id || localStorage.getItem('userId');
-            const userRole = me.role || localStorage.getItem('role');
-            const email = me.emailId || me.email || localStorage.getItem('email') || null;
-
-            if (userId) {
-              socket.emit('join-user', { userId, role: userRole });
+        // Defer heavy notification prefetch so page data loads first
+        setTimeout(async () => {
+          try {
+            const [eventsResp, empEventsResp] = await Promise.all([
+              fetch(`${apiRoot}/api/clients/events`, { headers }),
+              fetch(`${apiRoot}/api/employees/events`, { headers }),
+            ]);
+            if (eventsResp.ok) {
+              const list = await eventsResp.json();
+              (list || []).forEach(ev => scheduleLocalReminders(ev));
             }
-            if (email) {
-              socket.emit('join-email', email);
-              console.log(`Joining socket email room for ${email}`);
+            if (empEventsResp.ok) {
+              const list = await empEventsResp.json();
+              (list || []).forEach(ev => scheduleLocalReminders(ev));
             }
-          } else {
-            console.warn('Failed to fetch /api/auth/me');
+          } catch (evErr) {
+            console.debug('Could not prefetch events:', evErr);
           }
-        } else {
-          const userIdLS = localStorage.getItem('userId');
-          const roleLS = localStorage.getItem('role');
-          const emailLS = localStorage.getItem('email');
-          if (userIdLS) socket.emit('join-user', { userId: userIdLS, role: roleLS });
-          if (emailLS) socket.emit('join-email', emailLS);
-        }
+
+          try {
+            if (['admin', 'hr', 'viewer', 'hod'].includes(me.role)) {
+              const alertsResp = await fetch(`${apiRoot}/api/notifications/hr-alerts`, { headers });
+              if (alertsResp.ok) {
+                const hrAlerts = await alertsResp.json();
+                (hrAlerts || []).forEach((alert) => pushNotification(alert));
+              }
+            }
+          } catch (hrAlertErr) {
+            console.warn('Could not fetch HR alerts:', hrAlertErr);
+          }
+        }, 3000);
       } catch (meErr) {
         console.warn('Error fetching current user for socket join:', meErr);
       }
+    };
+
+    // If socket already connected (singleton persists across nav), join immediately
+    if (socket.connected) {
+      joinAndPrefetch();
+    }
+
+    socket.on('connect', () => {
+      console.log('🔌 Notification socket connected', socket.id);
+      joinAndPrefetch();
     });
 
     socket.on('connect_error', (err) => {
@@ -608,7 +607,16 @@ function NotificationBell({ small = true }) {
 
     return () => {
       document.removeEventListener("click", onDocClick);
-      try { socket.disconnect(); } catch (e) { /* ignore */ }
+      // Do NOT disconnect the shared socket — it persists across navigations.
+      // Remove listeners that reference this component instance.
+      socket.off('connect');
+      socket.off('connect_error');
+      socket.off('disconnect');
+      socket.off('notification');
+      socket.off('event-reminder');
+      socket.off('client-event');
+      socket.off('employee-event');
+      socket.off('task-reminder');
     };
   }, [notificationSupported, permissionStatus, requestNotificationPermission, triggerBrowserReminder, playBeep, scheduleLocalReminders]);
 

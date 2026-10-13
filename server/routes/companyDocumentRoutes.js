@@ -6,6 +6,10 @@ const CompanyDocument = require("../models/CompanyDocument");
 const authMiddleware = require("../middleware/authMiddleware");
 const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
 const { ensureUploadSubdir, resolveUploadDiskPath } = require("../utils/uploadsPath");
+const {
+  buildUploaderFields,
+  resolveUploaderDisplay,
+} = require("../utils/uploaderIdentity");
 
 const router = express.Router();
 
@@ -18,10 +22,18 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+const normalizeDoc = (doc) => {
+  const { uploadedBy, userRole } = resolveUploaderDisplay(doc);
+  return { ...doc, uploadedBy, userRole };
+};
+
 router.get("/", authMiddleware, async (_req, res) => {
   try {
-    const documents = await CompanyDocument.find().sort({ createdAt: -1 }).lean();
-    res.json(documents);
+    const documents = await CompanyDocument.find()
+      .populate("uploaderId", "username role")
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(documents.map(normalizeDoc));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -40,6 +52,7 @@ router.post("/", authMiddleware, blockViewerWrites, upload.single("file"), async
 
     const issueDate = req.body.issueDate ? new Date(req.body.issueDate) : null;
     const expiryDate = req.body.expiryDate ? new Date(req.body.expiryDate) : null;
+    const uploader = buildUploaderFields(req.user);
 
     const newDoc = new CompanyDocument({
       particulars,
@@ -50,12 +63,21 @@ router.post("/", authMiddleware, blockViewerWrites, upload.single("file"), async
       fileType: req.file.mimetype,
       fileSize: req.file.size,
       filePath: `/uploads/companydocuments/${req.file.filename}`,
-      uploadedBy: req.body.uploadedBy || req.user?.username || "",
-      userRole: req.body.userRole || req.user?.role || "",
+      uploaderId: uploader.uploaderId,
+      uploadedBy: uploader.uploadedBy,
+      userRole: uploader.userRole,
     });
 
     await newDoc.save();
-    res.status(201).json(newDoc);
+    const plain = typeof newDoc.toObject === "function" ? newDoc.toObject() : newDoc;
+    res.status(201).json(normalizeDoc({
+      ...plain,
+      uploaderId: {
+        _id: uploader.uploaderId,
+        username: uploader.uploadedBy,
+        role: req.user.role,
+      },
+    }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

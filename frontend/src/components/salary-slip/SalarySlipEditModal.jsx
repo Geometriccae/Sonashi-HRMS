@@ -4,6 +4,7 @@ import { FaTimes, FaSave, FaSpinner } from 'react-icons/fa';
 import salarySlipService from '../../services/SalarySlipService';
 import { useToast } from '../../context/ToastContext';
 import DateInput from '../DateInput';
+import { savedRecordDateDefault } from '../../utils/dateFieldReset';
 import { formatAed } from '../../utils/currency';
 
 function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
@@ -195,7 +196,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Date of Joining</label>
-                                <DateInput name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} />
+                                <DateInput name="dateOfJoining" value={formData.dateOfJoining} defaultValue={savedRecordDateDefault(salarySlip, "dateOfJoining")} onChange={handleChange} />
                             </div>
                             <div className={styles.inputGroup}>
                                 <label>Month</label>

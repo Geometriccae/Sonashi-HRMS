@@ -2,10 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import Select from "react-select";
 import styles from "./Reports.module.css";
 import Side from "./sidebar/Sidebar";
-import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import DateInput from "../components/DateInput";
@@ -18,25 +15,29 @@ import { buildCompanyOptionsFromDocuments } from "../utils/companyCodeFromDocume
 import { buildYearList } from "../utils/yearOptions";
 import { calculateLeaveDays } from "../utils/leaveCalculator";
 import {
-  buildLeaveMasterTrackerData,
-  buildLeaveMasterTrackerSummaryRows,
-  buildLeaveMasterTrackerWorkbook,
-  downloadLeaveMasterTrackerWorkbook,
-} from "../utils/leaveMasterTrackerExport";
-import {
-  buildStaffSalaryWorkbook,
-  downloadStaffSalaryWorkbook,
-  getSalaryReportDays,
-} from "../utils/staffSalaryExport";
-import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
   formatEmployeeStatusDisplay,
   toSearchableEmployeeOption,
-  filterReactSelectEmployeeOption,
+  filterReactSelectEmployeeOptionIncludingInactive,
 } from "../utils/employeeStatusDisplay";
-import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../utils/yetToGoHelpers";
+import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatEmployeeMasterExperienceLabel, employeeMasterExperienceAsOf, computeExperienceMonthsFromDoj } from "../utils/yetToGoHelpers";
+import { displayEmployeeEmail } from "../utils/employeeEmailDisplay";
 import { useUrlListView } from "../hooks/usePersistedListPage";
+
+const loadXlsx = async () => {
+  const mod = await import("xlsx");
+  return mod.default || mod;
+};
+const loadJsPdf = async () => {
+  const [{ default: jsPDF }, autoTableMod] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  return { jsPDF, autoTable: autoTableMod.default || autoTableMod };
+};
+const loadLeaveMasterTrackerExport = () => import("../utils/leaveMasterTrackerExport");
+const loadStaffSalaryExport = () => import("../utils/staffSalaryExport");
 
 const REPORT_TYPES = [
   "Leave Report",
@@ -66,11 +67,25 @@ const formatYesNo = (value) => {
   return "";
 };
 
+/**
+ * Salary amount as a number so the cell stays summable in Excel. A stored zero
+ * is a real amount and is kept; an amount the employee has no value for at all
+ * stays blank rather than being reported as zero.
+ */
+const formatReportAmount = (value) => {
+  if (value == null || value === "") return "";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : "";
+};
+
 /** Map one Employee Master record to report columns (existing schema fields only). */
 const mapEmployeeMasterRow = (e) => {
   const emergency = e.emergencyContact || {};
   const uae = emergency.uae || {};
   const home = emergency.homeCountry || {};
+  // Employee Master salary details, exactly as stored against this employee.
+  // Payroll never writes back here, so Basic is the original master amount.
+  const salary = e.salaryDetails || {};
   return {
     "Employee ID": e.employeeId || "",
     "Employee Name": e.employeeName || "",
@@ -79,14 +94,12 @@ const mapEmployeeMasterRow = (e) => {
     Nationality: e.nationality || "",
     Department: e.department || "",
     Designation: e.designation || "",
-    Role: e.role || "",
     Company: e.office || "",
     "Company Code": e.companyCode || "",
     "Office Location": e.office || "",
     "Joining Date": formatReportDate(e.doj),
     "Employment Status": formatEmployeeStatusDisplay(e),
-    "Employee Status (Raw)": e.employeeStatus || "",
-    Email: e.emailId || "",
+    Email: displayEmployeeEmail(e.emailId, ""),
     "Contact Number": e.mobile || "",
     "Reporting Manager": e.reportingManager || "",
     "Notice Period": e.noticePeriod || "",
@@ -105,13 +118,8 @@ const mapEmployeeMasterRow = (e) => {
     "Labour Card Number": e.labourCardNumber || "",
     "Labour Card Expiry": formatReportDate(e.labourCardExpiryDate),
     "Visa Expiry": formatReportDate(e.visaExpiryDate),
-    "Work Permit No": e.workPermitNo || "",
-    "Contract Renewal Date": formatReportDate(e.contractRenewalDate),
-    "Total Years Experience": formatExperienceLabel(
-      e.doj,
-      e.totalYearsExperience,
-      (isNonWorkingEmployeeStatus(e.employeeStatus) && e.lastWorkingDay) ? e.lastWorkingDay : new Date()
-    ) || "",
+    "Person Code": e.workPermitNo || "",
+    "Total Years Experience": formatEmployeeMasterExperienceLabel(e) || "",
     "Life Insurance": formatYesNo(e.lifeInsurance),
     "Medical Insurance": formatYesNo(e.medicalInsurance),
     Airfare: formatYesNo(e.airFare),
@@ -120,15 +128,26 @@ const mapEmployeeMasterRow = (e) => {
     "Emergency Contact (Home) Name": home.name || "",
     "Emergency Contact (Home) Phone": home.contactNo || "",
     Remarks: e.remarks || "",
+    Basic: formatReportAmount(salary.basicSalary),
+    "House Rent": formatReportAmount(salary.houseRent),
+    "Travel Exp": formatReportAmount(salary.travelExp),
+    Other: formatReportAmount(salary.other),
+    "Total Allowance": formatReportAmount(salary.totalAllowance),
+    Deduction: formatReportAmount(salary.deduction),
+    "Net Salary": formatReportAmount(salary.totalSalary),
+    "Bank Name": salary.bankName || "",
+    "Account Number": salary.accountNumber || "",
+    "IBAN Number": salary.ibanNumber || "",
+    "Bank Sort Code": salary.bankSortCode || "",
   };
 };
 
 const SIF_HEADERS = [
-  "StaffID", "EMPID", "EMPNAME", "EMPLOYERID", "AGENTCODE",
+  "StaffID", "LABOURCARD", "EMPID", "EMPNAME", "EMPLOYERID", "AGENTCODE",
   "BANKACCOUNT", "STATUS", "BASIC", "HRA", "TRANSPOR",
   "OTHERALLOV", "DEDUCTIO", "TOTA",
 ];
-const SIF_RED_HEADERS = new Set(["StaffID", "EMPID", "EMPLOYERID", "AGENTCODE", "BANKACCOUNT"]);
+const SIF_RED_HEADERS = new Set(["StaffID", "LABOURCARD", "EMPID", "EMPLOYERID", "AGENTCODE", "BANKACCOUNT"]);
 
 const EMPLOYEE_MENU_VISIBLE_COUNT = 5;
 const EMPLOYEE_OPTION_HEIGHT = 48;
@@ -491,21 +510,70 @@ function Reports() {
   // Optional statusFilter: 'Active' | 'InActive' — applied server-side.
   const fetchFullEmployees = async (statusFilter) => {
     const data = await employeeService.getEmployees({
-      force: true,
       status: statusFilter || undefined,
     });
     return Array.isArray(data) ? data : (data.employees || data.data || []);
   };
 
-  /** Build Staff Leave Report Master tracker data (summary + yearly sheets). */
+  /** Salary report / SIF pay month: selected Month + Year, else the current month. */
+  const getSalaryPayrollPeriod = () => {
+    const now = new Date();
+    const m = filterMonth !== "All"
+      ? monthsList.indexOf(filterMonth)
+      : now.getMonth() + 1;
+    const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
+    return { m, y };
+  };
+
+  /**
+   * Payroll + WPS fields per employee (_id) from the same rows the SIF export uses.
+   * If they cannot be loaded the report still renders from Employee Master data.
+   */
+  const fetchSalaryPayrollRows = async () => {
+    const { m, y } = getSalaryPayrollPeriod();
+    try {
+      const { rows = [] } = await sifService.getSalaryReportRows(m, y);
+      return new Map(rows.map((r) => [String(r.employeeRecordId), r]));
+    } catch (err) {
+      console.warn("Salary report payroll data unavailable:", err?.message || err);
+      return new Map();
+    }
+  };
+
+  /** WPS fields straight from Employee Master (same rules as the server SIF mapping). */
+  const employeeWpsFields = (e) => {
+    const sal = e.salaryDetails || {};
+    const account = String(sal.ibanNumber || sal.accountNumber || "").replace(/\s+/g, "").toUpperCase();
+    return {
+      staffId: String(e.workPermitNo || "").replace(/[\s-]+/g, "").toUpperCase(),
+      employerId: String(e.companyCode || "").replace(/[\s-]+/g, "").toUpperCase(),
+      companyCode: e.companyCode || "",
+      agentCode: digitsOnly(sal.bankSortCode),
+      iban: /^\d+$/.test(account) && account.length < 23 ? account.padStart(23, "0") : account,
+    };
+  };
+
+  /** Build Staff Leave Report Master tracker data (summary + yearly sheets).
+   * Always fetches latest DB data — never export stale frontend/service cache.
+   */
   const loadLeaveMasterTracker = async () => {
-    let leaves = await leaveRequestService.getLeaveRequests();
+    // Bust frontend + backend caches so add/edit/delete/ticket changes are included
+    leaveRequestService.invalidateCache();
+    employeeService.invalidateCache();
+
+    let leaves = await leaveRequestService.getLeaveRequests({ force: true });
     leaves = Array.isArray(leaves) ? leaves : (leaves.data || []);
 
-    let empList = await fetchFullEmployees(
-      employeeStatus === "Active" ? "Active" : employeeStatus === "InActive" ? "InActive" : undefined
-    );
-    if (!Array.isArray(empList)) empList = [];
+    let empList = await employeeService.getEmployees({
+      force: true,
+      status:
+        employeeStatus === "Active"
+          ? "Active"
+          : employeeStatus === "InActive"
+            ? "InActive"
+            : undefined,
+    });
+    empList = Array.isArray(empList) ? empList : (empList.employees || empList.data || []);
 
     // Same status matching as other employee reports (Active / InActive)
     if (employeeStatus !== "All") {
@@ -522,15 +590,24 @@ function Reports() {
       const selectedEmp = employeeList.find(e => (e.employeeId || e._id) === filterEmployee)
         || empList.find(e => (e.employeeId || e._id) === filterEmployee);
       if (selectedEmp) {
+        const selectedId = String(selectedEmp._id || "");
+        const selectedCode = String(selectedEmp.employeeId || "");
         empList = empList.filter(e =>
-          (e.employeeId && e.employeeId === selectedEmp.employeeId) ||
-          (e._id && String(e._id) === String(selectedEmp._id))
+          (selectedCode && e.employeeId === selectedCode) ||
+          (selectedId && String(e._id) === selectedId)
         );
-        leaves = leaves.filter(l =>
-          l.employeeName === selectedEmp.employeeName ||
-          l.employeeId === selectedEmp.employeeId ||
-          l.employeeId === filterEmployee
-        );
+        leaves = leaves.filter(l => {
+          const leaveRecordId = String(l.employeeRecordId?._id || l.employeeRecordId || "");
+          const leaveEmpId = String(l.employee?._id || l.employee || "");
+          const leaveLinked = String(l.employee?.employeeId?._id || l.employee?.employeeId || "");
+          const leaveCode = String(l.linkedEmployeeCode || l.employeeId || l.employee?.employeeId || "");
+          return (
+            (selectedId && leaveRecordId === selectedId) ||
+            (selectedId && leaveLinked === selectedId) ||
+            (selectedId && leaveEmpId === selectedId) ||
+            (selectedCode && leaveCode === selectedCode)
+          );
+        });
       }
     }
 
@@ -542,11 +619,13 @@ function Reports() {
     // Do not strip leave history by month/year — master tracker needs full yearly totals for LEAVE DUE.
     // Year filter only affects the TILL (as-of) date used in calculations.
 
+    // Stable order by Employee ID (matches client master tracker convention)
     empList = [...empList].sort((a, b) =>
-      String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
+      String(a.employeeId || "").localeCompare(String(b.employeeId || ""), undefined, { numeric: true })
+      || String(a.employeeName || "").localeCompare(String(b.employeeName || ""))
     );
 
-    let tillDate = new Date(new Date().getFullYear(), 11, 31);
+    let tillDate = new Date();
     if (filterYear !== "All" && !Number.isNaN(Number(filterYear))) {
       tillDate = new Date(Number(filterYear), 11, 31);
     } else if (endDate) {
@@ -554,6 +633,7 @@ function Reports() {
       if (!Number.isNaN(ed.getTime())) tillDate = ed;
     }
 
+    const { buildLeaveMasterTrackerData } = await loadLeaveMasterTrackerExport();
     return buildLeaveMasterTrackerData({
       employees: empList,
       leaveRequests: leaves,
@@ -634,18 +714,6 @@ function Reports() {
     setShowPreview(false);
   };
 
-  // Compute experience in months from Date of Joining
-  const computeExperienceFromDoj = (doj) => {
-    if (!doj) return null;
-    const joinDate = new Date(doj);
-    if (isNaN(joinDate.getTime())) return null;
-    const now = new Date();
-    const years = now.getFullYear() - joinDate.getFullYear();
-    const months = now.getMonth() - joinDate.getMonth();
-    const totalMonths = years * 12 + months - (now.getDate() < joinDate.getDate() ? 1 : 0);
-    return Math.max(0, totalMonths);
-  };
-
   const formatExperience = (totalMonths) => {
     if (totalMonths == null) return "N/A";
     const y = Math.floor(totalMonths / 12);
@@ -656,7 +724,7 @@ function Reports() {
   };
 
   const getEmployeeExperienceMonths = (e) => {
-    const fromDoj = computeExperienceFromDoj(e.doj);
+    const fromDoj = computeExperienceMonthsFromDoj(e.doj, employeeMasterExperienceAsOf(e));
     return fromDoj != null ? fromDoj : ((e.totalYearsExperience || 0) * 12);
   };
 
@@ -761,10 +829,9 @@ function Reports() {
           );
           leaves = leaves.filter(
             (l) =>
-              l.employeeName === selectedEmp.employeeName ||
-              l.employeeId === selectedEmp.employeeId ||
-              l.employeeId === filterEmployee ||
-              findLinkedEmployee(l, [selectedEmp])
+              findLinkedEmployee(l, [selectedEmp]) ||
+              String(l.employeeRecordId || "") === String(selectedEmp._id) ||
+              String(l.employeeId || "") === String(selectedEmp.employeeId || "")
           );
         }
       }
@@ -798,7 +865,7 @@ function Reports() {
 
         if (hasDateFilter && !isDateMatch(start)) continue;
 
-        const days = calculateLeaveDays(start, end || start) || 0;
+        const days = calculateLeaveDays(start, end || start, leave.leaveDays) || 0;
 
         rows.push({
           "Employee ID": emp?.employeeId || leave.employeeId || "",
@@ -904,16 +971,20 @@ function Reports() {
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
       empList = filterByExperience(empList);
 
+      const payrollById = await fetchSalaryPayrollRows();
       const rows = empList.map(e => {
         const sal = e.salaryDetails || {};
+        const p = payrollById.get(String(e._id)) || employeeWpsFields(e);
+        const missing = p.employeeRecordId ? (p.missing || []) : ["Payroll data not loaded"];
         return {
           "Employee ID": e.employeeId || "",
           "Name": e.employeeName || "",
           "Status": e.employeeStatus || "",
-          "Department": e.department || "",
+          "Staff ID / Labour Card No.": p.staffId || "",
+          "Employer ID": p.employerId || "",
+          "Company Code": p.companyCode || e.companyCode || "",
           "Role": e.role || "",
           "Company": e.office || "",
-          "Company Code": e.companyCode || "",
           "Basic Salary": Number(sal.basicSalary) || 0,
           "House Rent Allowance": Number(sal.houseRent) || 0,
           "Travel Allowance": Number(sal.travelExp) || 0,
@@ -923,8 +994,13 @@ function Reports() {
           "Total / Net Salary": Number(sal.totalSalary) || 0,
           "Bank Name": sal.bankName || "",
           "Account Number": sal.accountNumber || "",
-          "IBAN": sal.ibanNumber || "",
-          "Sort Code": sal.bankSortCode || ""
+          "Bank Agent Code": p.agentCode || "",
+          "IBAN Number": p.iban || "",
+          "Payroll Month": p.payrollMonth || "",
+          "Days Worked": p.daysWorked ?? "",
+          "Leave Days": p.leaveDays ?? "",
+          "SIF Salary": p.fixedIncome ?? "",
+          "SIF Status": missing.length ? `Incomplete: ${missing.join("; ")}` : "Ready",
         };
       });
 
@@ -973,12 +1049,17 @@ function Reports() {
           : employeeStatus === "InActive"
             ? "InActive"
             : undefined;
-      let empList = await fetchFullEmployees(statusForApi);
+      employeeService.invalidateCache();
+      let empList = await employeeService.getEmployees({
+        force: true,
+        status: statusForApi,
+      });
+      empList = Array.isArray(empList) ? empList : (empList.employees || empList.data || []);
       if (!Array.isArray(empList)) empList = [];
 
       // Same live vacation status as Annual Vacations (includeVacation merge)
       try {
-        const vacList = await employeeService.getEmployeesList({ includeVacation: true });
+        const vacList = await employeeService.getEmployeesList({ force: true, includeVacation: true });
         empList = mergeEffectiveVacationStatuses(empList, vacList);
       } catch (vacErr) {
         console.warn("Employees Master Data: vacation status overlay failed:", vacErr?.message || vacErr);
@@ -1083,6 +1164,11 @@ function Reports() {
     if (format === "Excel") {
       // Excel keeps existing master-tracker workbook + calculations unchanged
       const tracker = await loadLeaveMasterTracker();
+      const {
+        buildLeaveMasterTrackerSummaryRows,
+        buildLeaveMasterTrackerWorkbook,
+        downloadLeaveMasterTrackerWorkbook,
+      } = await loadLeaveMasterTrackerExport();
       const exportData = buildLeaveMasterTrackerSummaryRows(tracker);
       if (exportData.length === 0) {
         alert("No data found for the selected filters.");
@@ -1100,7 +1186,7 @@ function Reports() {
       return;
     }
     if (format === "PDF") {
-      exportToPDF(exportData, "Leave_Report");
+      await exportToPDF(exportData, "Leave_Report");
     }
   };
 
@@ -1108,19 +1194,14 @@ function Reports() {
     const exportData = await fetchReportData("Document expiry");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "Excel") {
-      exportToExcel(exportData, "Document_Expiry_Report");
+      await exportToExcel(exportData, "Document_Expiry_Report");
     } else if (format === "PDF") {
-      exportToPDF(exportData, "Document_Expiry_Report");
+      await exportToPDF(exportData, "Document_Expiry_Report");
     }
   };
 
   const generateSalaryReport = async () => {
-    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    const now = new Date();
-    const m = filterMonth !== "All"
-      ? monthNames.indexOf(filterMonth) + 1
-      : now.getMonth() + 1;
-    const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
+    const { m, y } = getSalaryPayrollPeriod();
 
     if (format === "SIF") {
       const employerId = digitsOnly(sifEmployerId);
@@ -1133,7 +1214,14 @@ function Reports() {
       // Agent Code continues from existing SIF Settings on the server.
       const result = await sifService.exportSif(m, y, { employerId });
       if (result.skippedCount > 0) {
-        alert(`SIF exported (${result.edrCount} records). ${result.skippedCount} employee(s) skipped due to missing data.`);
+        const lines = (result.skipped || [])
+          .slice(0, 15)
+          .map((s) => `• ${s.empName || ""}${s.staffId ? ` (${s.staffId})` : ""} — ${s.reason || ""}`);
+        const more = result.skippedCount > lines.length ? `\n…and ${result.skippedCount - lines.length} more` : "";
+        alert(
+          `SIF exported: ${result.fileName} (${result.edrCount} records). ` +
+          `${result.skippedCount} employee(s) skipped due to missing data:\n\n${lines.join("\n")}${more}`
+        );
       }
       return;
     }
@@ -1159,8 +1247,17 @@ function Reports() {
         return;
       }
 
+      const {
+        getSalaryReportDays,
+        buildStaffSalaryWorkbook,
+        downloadStaffSalaryWorkbook,
+      } = await loadStaffSalaryExport();
       const days = getSalaryReportDays(filterMonth, filterYear);
-      const wb = buildStaffSalaryWorkbook(empList, { days, tillYear: y });
+      const payrollById = await fetchSalaryPayrollRows();
+      empList.forEach((e) => {
+        if (!payrollById.has(String(e._id))) payrollById.set(String(e._id), employeeWpsFields(e));
+      });
+      const wb = buildStaffSalaryWorkbook(empList, { days, tillYear: y, payrollById });
       await downloadStaffSalaryWorkbook(wb, "Staff_Salary_Report", saveAs);
       return;
     }
@@ -1168,7 +1265,7 @@ function Reports() {
     const exportData = await fetchReportData("Salary report");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "PDF") {
-      exportToPDF(exportData, "Salary_Report");
+      await exportToPDF(exportData, "Salary_Report");
     }
   };
 
@@ -1176,9 +1273,9 @@ function Reports() {
     const exportData = await fetchReportData("Employee Experience");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (format === "Excel") {
-      exportToExcel(exportData, "Employee_Experience_Report");
+      await exportToExcel(exportData, "Employee_Experience_Report");
     } else if (format === "PDF") {
-      exportToPDF(exportData, "Employee_Experience_Report");
+      await exportToPDF(exportData, "Employee_Experience_Report");
     }
   };
 
@@ -1189,9 +1286,9 @@ function Reports() {
       return;
     }
     if (format === "Excel") {
-      exportToExcel(exportData, "Employees_Master_Data_Report");
+      await exportToExcel(exportData, "Employees_Master_Data_Report");
     } else if (format === "PDF") {
-      exportToPDF(exportData, "Employees_Master_Data_Report");
+      await exportToPDF(exportData, "Employees_Master_Data_Report");
     }
   };
 
@@ -1212,6 +1309,9 @@ function Reports() {
 
   const SIF_IMPORT_HEADER_ALIASES = {
     STAFFID: "StaffID", EMPID: "EMPID", EMPNAME: "EMPNAME",
+    LABOURCARD: "LABOURCARD", LABORCARD: "LABOURCARD", LABOURCARDNO: "LABOURCARD",
+    LABORCARDNO: "LABOURCARD", LABOURCARDNUMBER: "LABOURCARD", LABORCARDNUMBER: "LABOURCARD",
+    PERSONCODE: "LABOURCARD", WORKPERMITNO: "LABOURCARD",
     EMPLOYERID: "EMPLOYERID", AGENTCODE: "AGENTCODE", AGENTCODI: "AGENTCODE",
     BANKACCOUNT: "BANKACCOUNT", STATUS: "STATUS", BASIC: "BASIC",
     HRA: "HRA", TRANSPOR: "TRANSPOR", TRANSPORT: "TRANSPOR",
@@ -1229,6 +1329,7 @@ function Reports() {
 
     if (isExcel) {
       const buffer = await file.arrayBuffer();
+      const XLSX = await loadXlsx();
       const wb = XLSX.read(buffer, { type: "array" });
       const sheetName = wb.SheetNames[0];
       if (!sheetName) return [];
@@ -1249,8 +1350,10 @@ function Reports() {
     const lines = text.split(/\r?\n/).filter((l) => l.startsWith("EDR"));
     return lines.map((line) => {
       const parts = line.split(",");
+      const id = String(parts[1] || "").trim();
+      const isEmiratesId = /^784\d{12}$/.test(id);
       return {
-        EMPID: parts[1] || "",
+        [isEmiratesId ? "EMPID" : "LABOURCARD"]: id,
         AGENTCODE: parts[2] || "",
         BANKACCOUNT: parts[3] || "",
         BASIC: parts[7] || "",
@@ -1341,7 +1444,8 @@ function Reports() {
     await handleFileForPreview(file);
   };
 
-  const exportToExcel = (data, fileName, dropdownOptions) => {
+  const exportToExcel = async (data, fileName, dropdownOptions) => {
+    const XLSX = await loadXlsx();
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
 
@@ -1364,7 +1468,8 @@ function Reports() {
     saveAs(dataBlob, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const exportToPDF = (data, fileName) => {
+  const exportToPDF = async (data, fileName) => {
+    const { jsPDF, autoTable } = await loadJsPdf();
     const doc = new jsPDF({ orientation: "landscape" });
     
     // Add title
@@ -1547,7 +1652,7 @@ function Reports() {
                           if (!inputValue) return true;
                           return String(option.label || "").toLowerCase().includes(inputValue.trim().toLowerCase());
                         }
-                        return filterReactSelectEmployeeOption(option, inputValue);
+                        return filterReactSelectEmployeeOptionIncludingInactive(option, inputValue);
                       }}
                     />
                   </div>
@@ -1818,7 +1923,7 @@ function Reports() {
                   <div className={styles["report-title"]}>Report Preview ({reportType})</div>
                   <div className={styles["preview-subtitle"]}>Showing {previewData.length} records</div>
                 </div>
-                <div className={styles["preview-table-container"]}>
+                <div className={`${styles["preview-table-container"]} hrms-table-scroll`}>
                   <table className={styles["preview-table"]}>
                     <thead>
                       <tr>
@@ -1944,7 +2049,7 @@ function Reports() {
               </div>
             ) : (
               <>
-                <div className={styles.sifPreviewTableWrap}>
+                <div className={`${styles.sifPreviewTableWrap} hrms-table-scroll`}>
                   <table className={styles.sifPreviewTable}>
                     <thead>
                       <tr>

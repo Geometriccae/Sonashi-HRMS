@@ -19,6 +19,11 @@ function setListCache(data) {
 
 function invalidateListCache() {
   _listCache = { data: null, ts: 0 };
+  _approvedLeavesCache = { data: null, ts: 0 };
+  try {
+    const { invalidateVacationDashboardStats } = require('./vacationDashboardStats');
+    invalidateVacationDashboardStats();
+  } catch (_) { /* circular-safe during boot */ }
 }
 
 /** Patch one employee in-place so leave vacation updates don't force a cold Mongo reload. */
@@ -47,6 +52,10 @@ function setApprovedLeavesCache(data) {
 
 function invalidateApprovedLeavesCache() {
   _approvedLeavesCache = { data: null, ts: 0 };
+  try {
+    const { invalidateVacationDashboardStats } = require('./vacationDashboardStats');
+    invalidateVacationDashboardStats();
+  } catch (_) { /* circular-safe during boot */ }
 }
 
 module.exports = {

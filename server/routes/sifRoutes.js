@@ -6,7 +6,9 @@ const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
 const Employee = require("../models/Employee");
 const CompanySifSettings = require("../models/CompanySifSettings");
 const { workingStatusFilter } = require("../utils/employeeStatus");
+const { loadSalaryReportRows } = require("../utils/sifSalaryReportRows");
 const {
+  MONTH_NAMES,
   generateSifContent,
   parseSifContent,
   digitsOnly,
@@ -51,45 +53,144 @@ function parseMonthYear(req) {
   return { month, year };
 }
 
+/** Employer ID picked for this export; SIF Settings EMPLOYERID when none is sent. */
+function resolveExportEmployerId(req, settings) {
+  const requested = digitsOnly(req.query.employerId);
+  return requested || settings.employerId || "";
+}
+
 async function loadActiveEmployees() {
   return Employee.find(workingStatusFilter()).lean();
 }
 
+/** Employer IDs (company codes) of working employees, for the SIF employer picker. */
+async function listEmployers() {
+  const employees = await Employee.find(workingStatusFilter()).select("companyCode").lean();
+  const counts = new Map();
+  employees.forEach((emp) => {
+    const id = getEmployeeEmployerId(emp);
+    if (id) counts.set(id, (counts.get(id) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .map(([employerId, employeeCount]) => ({ employerId, employeeCount }))
+    .sort((a, b) => b.employeeCount - a.employeeCount);
+}
+
+/** 14-digit MOHRE person code; Emirates IDs are 15 digits starting with 784. */
+const labourCardLooksLike = (value) => value.length === 14 && !value.startsWith("784");
+
 async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
   const results = { updated: 0, skipped: [], errors: [] };
+  const seenKeys = new Set();
 
   const allWithId = await Employee.find({
     $or: [
       { emiratesId: { $exists: true, $nin: [null, ""] } },
       { employeeId: { $exists: true, $nin: [null, ""] } },
+      { workPermitNo: { $exists: true, $nin: [null, ""] } },
     ],
-  }).select("_id emiratesId employeeId employeeName salaryDetails");
+  }).select("_id emiratesId employeeId employeeName workPermitNo salaryDetails");
 
   const byEmpid = new Map();
   const byStaff = new Map();
+  const byLabourCard = new Map();
   allWithId.forEach((e) => {
     const eid = normalizeEmiratesId(e.emiratesId);
     if (eid) byEmpid.set(eid, e);
     if (e.employeeId) byStaff.set(String(e.employeeId).trim(), e);
+    const card = digitsOnly(e.workPermitNo);
+    if (card) byLabourCard.set(card, e);
   });
 
-  for (const edr of edrs) {
+  for (let rowIndex = 0; rowIndex < edrs.length; rowIndex += 1) {
+    const edr = edrs[rowIndex];
     const empId = normalizeEmiratesId(edr.empId);
-    if (!empId && !edr.staffId) {
-      results.skipped.push({ empId: edr.empId, reason: "Missing EMPID and StaffID" });
+    const staffId = String(edr.staffId || "").trim();
+    const labourCard = digitsOnly(edr.labourCard);
+    const rowLabel = `Row ${rowIndex + 1}`;
+
+    if (!empId && !staffId && !labourCard) {
+      results.skipped.push({
+        empId: "",
+        staffId: "",
+        empName: "",
+        reason: "Missing EMPID",
+      });
       continue;
     }
 
-    let empDoc = empId ? byEmpid.get(empId) : null;
-    if (!empDoc && edr.staffId) {
-      empDoc = byStaff.get(String(edr.staffId).trim()) || null;
+    if (empId && (empId.length < 14 || empId.length > 15)) {
+      results.skipped.push({
+        empId,
+        staffId,
+        empName: "",
+        reason: "Invalid Emirates ID (must be 14–15 digits)",
+      });
+      continue;
+    }
+
+    const agentRaw = edr.agentCode != null && String(edr.agentCode).trim() !== ""
+      ? digitsOnly(edr.agentCode)
+      : "";
+    if (agentRaw && agentRaw.length !== 9) {
+      results.skipped.push({
+        empId,
+        staffId,
+        empName: "",
+        reason: "Invalid AGENTCODE (must be 9 digits)",
+      });
+      continue;
+    }
+
+    if (
+      updateSalary &&
+      edr.fixedIncome != null &&
+      String(edr.fixedIncome).trim() !== "" &&
+      Number.isNaN(Number(edr.fixedIncome))
+    ) {
+      results.errors.push({
+        empId,
+        staffId,
+        employeeId: staffId,
+        empName: "",
+        reason: `${rowLabel} — Invalid salary format`,
+      });
+      continue;
+    }
+
+    const dedupeKey = empId || (labourCard ? `card:${labourCard}` : `staff:${staffId}`);
+    if (seenKeys.has(dedupeKey)) {
+      results.skipped.push({
+        empId,
+        staffId,
+        empName: "",
+        reason: "Duplicate row in import file",
+      });
+      continue;
+    }
+    seenKeys.add(dedupeKey);
+
+    // The EDR employee ID is the labour card (person code) in the client's SIF
+    // files; older files carried the Emirates ID in the same position.
+    let matchedByLabourCard = false;
+    let empDoc = null;
+    if (labourCard && byLabourCard.has(labourCard)) {
+      empDoc = byLabourCard.get(labourCard);
+    } else if (empId && byLabourCard.has(empId)) {
+      empDoc = byLabourCard.get(empId);
+      matchedByLabourCard = true;
+    }
+    if (!empDoc && empId) empDoc = byEmpid.get(empId) || null;
+    if (!empDoc && staffId) {
+      empDoc = byStaff.get(staffId) || null;
     }
 
     if (!empDoc) {
       results.skipped.push({
         empId,
-        staffId: edr.staffId || "",
-        reason: "No matching employee (EMPID / StaffID)",
+        staffId,
+        empName: "",
+        reason: "Employee not found",
       });
       continue;
     }
@@ -97,15 +198,28 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
     try {
       const emp = await Employee.findById(empDoc._id);
       if (!emp) {
-        results.skipped.push({ empId, reason: "Employee record not found" });
+        results.skipped.push({
+          empId,
+          staffId: empDoc.employeeId || staffId,
+          empName: empDoc.employeeName || "",
+          reason: "Employee not found",
+        });
         continue;
       }
 
-      if (empId) emp.emiratesId = empId;
+      // Only update fields that are present and valid in the import row
+      const empIdIsEmiratesId = empId.length === 15 && empId.startsWith("784");
+      if (empId && !matchedByLabourCard && (empIdIsEmiratesId || !labourCardLooksLike(empId))) {
+        emp.emiratesId = empId;
+      }
+      const cardToSave = labourCard || (!empIdIsEmiratesId && labourCardLooksLike(empId) ? empId : "");
+      if (cardToSave.length === 14 && !digitsOnly(emp.workPermitNo)) {
+        emp.workPermitNo = cardToSave;
+      }
       if (!emp.salaryDetails) emp.salaryDetails = {};
-      if (edr.agentCode) emp.salaryDetails.bankSortCode = digitsOnly(edr.agentCode);
+      if (agentRaw) emp.salaryDetails.bankSortCode = agentRaw;
 
-      const bank = String(edr.bankAccount || "").trim();
+      const bank = String(edr.bankAccount || "").trim().replace(/\s+/g, "");
       if (bank) {
         if (/^AE/i.test(bank)) {
           emp.salaryDetails.ibanNumber = bank.toUpperCase();
@@ -121,23 +235,36 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
         emp.salaryDetails.totalSalary = Number(edr.fixedIncome);
       }
 
-      if (edr.basic != null) emp.salaryDetails.basicSalary = Number(edr.basic) || 0;
-      if (edr.hra != null) emp.salaryDetails.houseRent = Number(edr.hra) || 0;
-      if (edr.transport != null) emp.salaryDetails.travelExp = Number(edr.transport) || 0;
-      if (edr.other != null) emp.salaryDetails.other = Number(edr.other) || 0;
-      if (edr.deduction != null) emp.salaryDetails.deduction = Number(edr.deduction) || 0;
+      if (edr.basic != null && !Number.isNaN(Number(edr.basic))) {
+        emp.salaryDetails.basicSalary = Number(edr.basic) || 0;
+      }
+      if (edr.hra != null && !Number.isNaN(Number(edr.hra))) {
+        emp.salaryDetails.houseRent = Number(edr.hra) || 0;
+      }
+      if (edr.transport != null && !Number.isNaN(Number(edr.transport))) {
+        emp.salaryDetails.travelExp = Number(edr.transport) || 0;
+      }
+      if (edr.other != null && !Number.isNaN(Number(edr.other))) {
+        emp.salaryDetails.other = Number(edr.other) || 0;
+      }
+      if (edr.deduction != null && !Number.isNaN(Number(edr.deduction))) {
+        emp.salaryDetails.deduction = Number(edr.deduction) || 0;
+      }
 
       emp.markModified("salaryDetails");
       await emp.save();
       results.updated += 1;
 
-      // keep maps warm for duplicate rows
-      if (empId) byEmpid.set(empId, emp);
+      if (empId && emp.emiratesId === empId) byEmpid.set(empId, emp);
       if (emp.employeeId) byStaff.set(String(emp.employeeId).trim(), emp);
+      const savedCard = digitsOnly(emp.workPermitNo);
+      if (savedCard) byLabourCard.set(savedCard, emp);
     } catch (err) {
       results.errors.push({
         empId,
+        staffId: empDoc.employeeId || staffId,
         employeeId: empDoc.employeeId,
+        empName: empDoc.employeeName || "",
         reason: err.message || "Update failed",
       });
     }
@@ -154,6 +281,7 @@ router.get("/settings", authMiddleware, async (req, res) => {
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      employers: await listEmployers(),
     });
   } catch (err) {
     console.error("SIF settings GET error:", err);
@@ -166,18 +294,16 @@ router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, as
     const employerId = digitsOnly(req.body.employerId);
     const defaultAgentRoutingCode = digitsOnly(req.body.defaultAgentRoutingCode);
 
-    if (employerId && employerId.length !== 13) {
-      return res.status(400).json({ message: "Employer ID must be exactly 13 digits" });
+    if (employerId.length !== 13) {
+      return res.status(400).json({ message: "EMPLOYERID must be exactly 13 digits" });
     }
-    if (defaultAgentRoutingCode && defaultAgentRoutingCode.length !== 9) {
-      return res.status(400).json({ message: "Default agent routing code must be exactly 9 digits" });
+    if (defaultAgentRoutingCode.length !== 9) {
+      return res.status(400).json({ message: "Default agent routing must be exactly 9 digits" });
     }
 
     const doc = await getOrCreateSettings();
-    if (req.body.employerId !== undefined) doc.employerId = employerId;
-    if (req.body.defaultAgentRoutingCode !== undefined) {
-      doc.defaultAgentRoutingCode = defaultAgentRoutingCode;
-    }
+    doc.employerId = employerId;
+    doc.defaultAgentRoutingCode = defaultAgentRoutingCode;
     await doc.save();
 
     res.json({
@@ -232,11 +358,15 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     res.setHeader("X-SIF-Edr-Count", String(result.edrCount));
     res.setHeader("X-SIF-Skipped", String((result.skipped || []).length));
     res.setHeader("X-SIF-Total", String(result.totalSalary));
+    res.setHeader(
+      "Access-Control-Expose-Headers",
+      "Content-Disposition, X-SIF-Edr-Count, X-SIF-Skipped, X-SIF-Total, X-SIF-Skip-Summary"
+    );
     // Expose skip summary via custom header (JSON) for UI — keep body as pure SIF
     if (result.skipped?.length) {
       res.setHeader(
         "X-SIF-Skip-Summary",
-        Buffer.from(JSON.stringify(result.skipped.slice(0, 50))).toString("base64")
+        Buffer.from(JSON.stringify(result.skipped.slice(0, 200))).toString("base64")
       );
     }
     res.send(result.content);
@@ -270,12 +400,38 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
       skipped: result.skipped || [],
+      skippedCount: (result.skipped || []).length,
+      otherEmployerCount: result.otherEmployerCount || 0,
+      edrRecords: result.edrRecords || [],
       fileName: result.fileName || null,
       error: result.error || null,
     });
   } catch (err) {
     console.error("SIF preview error:", err);
     res.status(500).json({ message: "Failed to preview SIF export" });
+  }
+});
+
+// ── Salary Report rows (same rows the SIF is generated from) ─────────────────
+
+router.get("/salary-report", authMiddleware, async (req, res) => {
+  try {
+    const parsed = parseMonthYear(req);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const rows = await loadSalaryReportRows({
+      month: parsed.month,
+      year: parsed.year,
+      payrollEligibleOnly: false,
+    });
+    res.json({
+      month: parsed.month,
+      year: parsed.year,
+      payrollMonth: `${MONTH_NAMES[parsed.month - 1]} ${parsed.year}`,
+      rows,
+    });
+  } catch (err) {
+    console.error("Salary report rows error:", err);
+    res.status(500).json({ message: "Failed to load salary report payroll data" });
   }
 });
 
@@ -414,7 +570,6 @@ router.post(
 
       const settings = await getOrCreateSettings();
       let employerFromFile = "";
-      let agentCodeFromFile = "";
 
       const edrs = json.map((row) => {
         const mapped = {};
@@ -427,12 +582,10 @@ router.post(
         if (mapped.EMPLOYERID) {
           employerFromFile = digitsOnly(mapped.EMPLOYERID);
         }
-        if (mapped.AGENTCODE && !agentCodeFromFile) {
-          agentCodeFromFile = digitsOnly(mapped.AGENTCODE);
-        }
 
         return {
           staffId: String(mapped.StaffID || "").trim(),
+          labourCard: digitsOnly(mapped.LABOURCARD),
           empId: normalizeEmiratesId(mapped.EMPID),
           agentCode: digitsOnly(mapped.AGENTCODE),
           bankAccount: String(mapped.BANKACCOUNT || "").trim(),
@@ -457,16 +610,9 @@ router.post(
         };
       });
 
-      let settingsChanged = false;
-      if (employerFromFile && employerFromFile.length === 13) {
+      // Company EMPLOYERID only — do not overwrite SCR agent routing from employee AGENTCODE rows
+      if (employerFromFile && employerFromFile.length === 13 && !settings.employerId) {
         settings.employerId = employerFromFile;
-        settingsChanged = true;
-      }
-      if (agentCodeFromFile && agentCodeFromFile.length >= 5) {
-        settings.defaultAgentRoutingCode = agentCodeFromFile;
-        settingsChanged = true;
-      }
-      if (settingsChanged) {
         await settings.save();
       }
 

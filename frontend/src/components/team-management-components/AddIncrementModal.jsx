@@ -16,6 +16,7 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee, initialData })
   });
 
   const [loading, setLoading] = useState(false);
+  const [dateBaseline, setDateBaseline] = useState(new Date().toISOString().split("T")[0]);
 
   const [revisedInputs, setRevisedInputs] = useState({
     basicSalaryIncrement: "",
@@ -60,8 +61,10 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee, initialData })
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
+        const loadedDate = initialData.date ? new Date(initialData.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+        setDateBaseline(loadedDate);
         setFormData({
-          date: initialData.date ? new Date(initialData.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          date: loadedDate,
           previousSalary: initialData.previousSalary || 0,
           incrementAmount: initialData.incrementAmount || 0,
           newSalary: initialData.newSalary || 0,
@@ -92,8 +95,10 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee, initialData })
         });
       } else if (employee) {
         const currentSalary = employee.salaryDetails?.totalSalary || 0;
+        const today = new Date().toISOString().split('T')[0];
+        setDateBaseline(today);
         setFormData({
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           previousSalary: currentSalary,
           incrementAmount: 0,
           newSalary: currentSalary,
@@ -223,6 +228,7 @@ const AddIncrementModal = ({ isOpen, onClose, onSubmit, employee, initialData })
               <label>Effective Date</label>
               <DateInput
                 value={formData.date}
+                defaultValue={dateBaseline}
                 onChange={(e) => handleDateOrReasonChange("date", e.target.value)}
                 required
               />

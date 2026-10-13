@@ -18,18 +18,45 @@ import FileUploadModal from "../../components/FileUploadModal";
 import DropDownList from "../../components/DropDownList";
 import AddIncrementModal from "../../components/team-management-components/AddIncrementModal";
 import AddLeaveRequestModal from "../../components/leave-request/AddLeaveRequestModal";
+import { displayEmployeeEmail } from "../../utils/employeeEmailDisplay";
 import EditLeaveRequestModal from "../../components/leave-request/EditLeaveRequestModal";
+import EmployeeSifPanel from "../../components/team-management-components/EmployeeSifPanel";
 import { exportEmployeeBasicInfo, exportEvents, exportDocuments, exportToPDF, exportToTXT } from "../../utils/exportUtils";
 import { getEventsByEmployeeId } from "../../services/AssignEventService";
 import { useToast } from "../../context/ToastContext";
-import { calculateLeaveBalance, calculateLeaveDays } from "../../utils/leaveCalculator";
-import { findLinkedEmployee, formatVacationStatusLabel, mergeEffectiveVacationStatuses, formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { calculateLeaveBalance, calculateLeaveDays, filterLeavesForEmployee } from "../../utils/leaveCalculator";
+import { formatEmployeeMasterExperienceLabel } from "../../utils/yetToGoHelpers";
 import {
   formatEmployeeStatusDisplay,
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
+import { ACTIVE_OPTIONS } from "../../constants/employeeDropdownOptions";
 import { readPersistedPath } from "../../hooks/usePersistedListPage";
+import { leaveManagementPath, LEAVE_STATUS_FILTERS } from "../../utils/cardNavigation";
+import { canUpdateVacationReturn, canEdit } from "../../utils/permissions";
+import {
+  isNoticeOrProvisionStatus,
+  buildEmployeeStatusPrompt,
+  validateEmployeeStatusPrompt,
+  datesFromEmployeeStatusPrompt,
+  applyEmployeeStatusChange,
+  applyEmployeeStatusReset,
+  employeeStatusChangeSuccessMessage,
+  employeeStatusResetSuccessMessage,
+} from "../../utils/employeeStatusUpdate";
+import EmployeeStatusDatePromptModal from "../../components/team-management-components/EmployeeStatusDatePromptModal";
+import {
+  employeeVacationStatus,
+  formatVacationStatus,
+  VACATION_STATUS_EDIT_OPTIONS,
+} from "../../utils/vacationStatusDisplay";
+import {
+  applyVacationStatusChange,
+  buildStatusChangePrompt,
+  datesFromPrompt,
+} from "../../utils/vacationStatusUpdate";
+import VacationDatePromptModal from "../../components/team-management-components/VacationDatePromptModal";
 
 import belldot from "../../assets/dashboard/bell-dot.svg";
 import admindemo from "../../assets/dashboard/admin-demo.jpg";
@@ -88,6 +115,7 @@ function TeamManagementSalesLeads() {
   const salaryRef = useRef(null);
   const incrementsRef = useRef(null);
   const leaveTabRef = useRef(null);
+  const sifTabRef = useRef(null);
   const documentsRef = useRef(null);
 
   const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0 });
@@ -129,6 +157,7 @@ function TeamManagementSalesLeads() {
   const [employee, setEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const leaveFetchGenRef = useRef(0);
 
   useEffect(() => {
     setUsername(localStorage.getItem("username") || "");
@@ -139,21 +168,37 @@ function TeamManagementSalesLeads() {
 
   // Fetch employee data when component mounts or employeeId changes
   useEffect(() => {
-    if (employeeId) {
+    if (!employeeId) return;
+    // Clear stale entitlement data from the previous employee immediately
+    setEmployee(null);
+    setEmployeeLeaves([]);
+    setAllLeaveRequests([]);
+    setLoading(true);
+    setError(null);
+    fetchEmployeeData();
+  }, [employeeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!employeeId) return;
+    return employeeService.onEmployeeDataChanged?.(() => {
       fetchEmployeeData();
-    }
-  }, [employeeId]);
+    });
+  }, [employeeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchEmployeeLeaves = async (currentEmployee) => {
-    try {
-      const leaves = await leaveRequestService.getLeaveRequests();
-      const allLeaves = Array.isArray(leaves) ? leaves : leaves.data || [];
-      setAllLeaveRequests(allLeaves);
+    const gen = ++leaveFetchGenRef.current;
+    const emp = currentEmployee || employee;
+    if (!emp?._id && !employeeId) return;
 
-      const emp =
-        currentEmployee ||
-        employee ||
-        (employeeId ? { _id: employeeId } : null);
+    try {
+      const leaves = await leaveRequestService.getLeaveRequests({
+        employeeRecordId: emp._id || employeeId,
+        force: true,
+      });
+      const allLeaves = Array.isArray(leaves) ? leaves : leaves.data || [];
+      if (gen !== leaveFetchGenRef.current) return;
+
+      setAllLeaveRequests(allLeaves);
 
       const visibleStatuses = new Set([
         "Approved",
@@ -162,44 +207,9 @@ function TeamManagementSalesLeads() {
         "Imported",
       ]);
 
-      const empLeaves = allLeaves.filter((req) => {
-        if (!req || !visibleStatuses.has(req.status)) return false;
+      const empLeaves = filterLeavesForEmployee(emp, allLeaves, { statuses: visibleStatuses });
 
-        // Primary: shared linker (User.employeeId ↔ Employee._id, name, codes)
-        if (emp && findLinkedEmployee(req, [emp])) return true;
-
-        // Fallback: leave.employee stored as Employee._id when no User exists
-        const empMongoId = String(emp?._id || employeeId || "");
-        const empCode = String(emp?.employeeId || "");
-        const reqRef = String(req.employee?._id || req.employee || "");
-        if (empMongoId && reqRef && reqRef === empMongoId) return true;
-
-        const linkedEmpId = String(
-          req.employee?.employeeId?._id || req.employee?.employeeId || ""
-        );
-        if (
-          linkedEmpId &&
-          (linkedEmpId === empMongoId || (empCode && linkedEmpId === empCode))
-        ) {
-          return true;
-        }
-
-        if (req.employeeId) {
-          const rid = String(req.employeeId);
-          if (rid === empMongoId || (empCode && rid === empCode)) return true;
-        }
-
-        const reqName = String(req.employeeName || "")
-          .toLowerCase()
-          .trim();
-        const empName = String(emp?.employeeName || "")
-          .toLowerCase()
-          .trim();
-        if (reqName && empName && reqName === empName) return true;
-
-        return false;
-      });
-
+      if (gen !== leaveFetchGenRef.current) return;
       setEmployeeLeaves(
         empLeaves.sort(
           (a, b) => new Date(b.startDate) - new Date(a.startDate)
@@ -210,9 +220,9 @@ function TeamManagementSalesLeads() {
     }
   };
 
-  // Keep Leave Entitlement in sync whenever the tab is opened
+  // Keep Leave Entitlement in sync whenever the tab is opened or employee record loads
   useEffect(() => {
-    if (activeTab === "leave" && (employee || employeeId)) {
+    if (activeTab === "leave" && employee?._id) {
       fetchEmployeeLeaves(employee);
     }
   }, [activeTab, employeeId, employee?._id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -254,17 +264,8 @@ function TeamManagementSalesLeads() {
         setError("No employee data returned from API");
         setEmployee(null);
       } else {
-        // Same live vacation status as Annual Vacations (includeVacation merge)
-        let withVacation = employeeData;
-        try {
-          const vacList = await employeeService.getEmployeesList({ includeVacation: true });
-          const merged = mergeEffectiveVacationStatuses([employeeData], vacList);
-          withVacation = merged[0] || employeeData;
-        } catch (vacErr) {
-          console.warn("Could not overlay live vacation status:", vacErr?.message || vacErr);
-        }
-        setEmployee(withVacation);
-        fetchEmployeeLeaves(withVacation);
+        setEmployee(employeeData);
+        await fetchEmployeeLeaves(employeeData);
       }
     } catch (err) {
       console.error("Error fetching employee:", err);
@@ -273,6 +274,152 @@ function TeamManagementSalesLeads() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const canEditVacationStatus = canUpdateVacationReturn(userRole);
+  const canEditEmployeeStatusRole = canEdit(userRole);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [datePrompt, setDatePrompt] = useState(null);
+  const [employeeStatusPrompt, setEmployeeStatusPrompt] = useState(null);
+  const [employeeStatusSaving, setEmployeeStatusSaving] = useState(false);
+  const [periodResetTarget, setPeriodResetTarget] = useState(null);
+  const [periodResetSaving, setPeriodResetSaving] = useState(false);
+
+  /** Persist a status (+ its dates) through the one shared update mechanism. */
+  const saveVacationStatus = async (newStatus, dates = {}) => {
+    setStatusSaving(true);
+    try {
+      const updated = await applyVacationStatusChange({
+        employeeId: employee?._id || employeeId,
+        newStatus,
+        dates,
+      });
+      // Re-read the record so this page shows what every other screen will show.
+      const fresh = await employeeService
+        .getEmployee(employee?._id || employeeId)
+        .catch(() => null);
+      if (fresh) setEmployee(fresh);
+      else if (updated && typeof updated === "object") {
+        setEmployee((prev) => ({ ...(prev || {}), ...updated }));
+      }
+      showToast("Vacation status updated successfully.", "success");
+      return true;
+    } catch (err) {
+      console.error("Failed to update vacation status:", err);
+      showToast(err?.message || "Failed to update vacation status.", "error");
+      return false;
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  /**
+   * Status edit on the employee page. Opens the same date-selection dialog as the
+   * Team Management status column, so Employee Master and the list share one flow.
+   */
+  const handleVacationStatusSelect = (newStatus) => {
+    const current = employeeVacationStatus(employee);
+    if (!newStatus || newStatus === current || statusSaving) return;
+
+    const prompt = buildStatusChangePrompt(employee, newStatus);
+    if (prompt) setDatePrompt(prompt);
+    else saveVacationStatus(newStatus);
+  };
+
+  const handleEmployeeStatusSelect = (newStatus, options = {}) => {
+    if (!employee || !newStatus || employeeStatusSaving || periodResetSaving) return;
+    const current = employee.employeeStatus || "Active";
+    const isEdit = Boolean(options.isEdit);
+    if (!isEdit && newStatus === current) return;
+
+    const prompt = buildEmployeeStatusPrompt(employee, newStatus, options);
+    if (prompt) {
+      setEmployeeStatusPrompt(prompt);
+      return;
+    }
+    confirmEmployeeStatusChange(employee, newStatus, {}, options);
+  };
+
+  const confirmEmployeeStatusChange = async (employeeItem, newStatus, dates = {}, options = {}) => {
+    const isEdit = Boolean(options.isEdit);
+    setEmployeeStatusSaving(true);
+    try {
+      const { payload, updated } = await applyEmployeeStatusChange({
+        employeeItem,
+        newStatus,
+        dates,
+      });
+      const empId = employeeItem?._id || employeeId;
+      const fresh = await employeeService.getEmployee(empId).catch(() => null);
+      if (fresh) setEmployee(fresh);
+      else if (updated && typeof updated === "object") {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload, ...updated }));
+      } else {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload }));
+      }
+      showToast(employeeStatusChangeSuccessMessage(newStatus, isEdit), "success");
+      setEmployeeStatusPrompt(null);
+    } catch (err) {
+      console.error("Failed to update employee status:", err);
+      showToast(err?.message || "Failed to update employee status.", "error");
+    } finally {
+      setEmployeeStatusSaving(false);
+    }
+  };
+
+  const handleEmployeeStatusPromptConfirm = async () => {
+    if (!employeeStatusPrompt || employeeStatusSaving) return;
+    const error = validateEmployeeStatusPrompt(employeeStatusPrompt);
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+    await confirmEmployeeStatusChange(
+      employeeStatusPrompt.employeeItem,
+      employeeStatusPrompt.newStatus,
+      datesFromEmployeeStatusPrompt(employeeStatusPrompt),
+      { isEdit: Boolean(employeeStatusPrompt.isEdit) }
+    );
+  };
+
+  const requestPeriodReset = (employeeItem = employee) => {
+    if (!employeeItem || !isNoticeOrProvisionStatus(employeeItem.employeeStatus)) return;
+    setPeriodResetTarget(employeeItem);
+  };
+
+  const handlePeriodResetConfirm = async () => {
+    if (!periodResetTarget || periodResetSaving) return;
+    setPeriodResetSaving(true);
+    try {
+      const { payload, updated, currentStatus } = await applyEmployeeStatusReset(periodResetTarget);
+      const empId = periodResetTarget?._id || employeeId;
+      const fresh = await employeeService.getEmployee(empId).catch(() => null);
+      if (fresh) setEmployee(fresh);
+      else if (updated && typeof updated === "object") {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload, ...updated }));
+      } else {
+        setEmployee((prev) => ({ ...(prev || {}), ...payload }));
+      }
+      showToast(employeeStatusResetSuccessMessage(currentStatus), "success");
+      setPeriodResetTarget(null);
+      setEmployeeStatusPrompt(null);
+    } catch (err) {
+      console.error("Failed to reset employee status:", err);
+      showToast(err?.message || "Failed to reset status.", "error");
+    } finally {
+      setPeriodResetSaving(false);
+    }
+  };
+
+  const handleDatePromptConfirm = async () => {
+    if (!datePrompt || statusSaving) return;
+    const { dates, error } = datesFromPrompt(datePrompt);
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+    const saved = await saveVacationStatus(datePrompt.newStatus, dates);
+    if (saved) setDatePrompt(null);
   };
 
   const fetchRemarks = React.useCallback(async () => {
@@ -336,6 +483,9 @@ function TeamManagementSalesLeads() {
           break;
         case "leave":
           activeElement = leaveTabRef.current;
+          break;
+        case "sif":
+          activeElement = sifTabRef.current;
           break;
 
         default:
@@ -423,14 +573,20 @@ function TeamManagementSalesLeads() {
     setEvents(prev => [...prev, newEvent]);
   };
 
-  const handleEditEmployeeSubmit = async (updatedEmployee) => {
+  const handleEditEmployeeSubmit = async () => {
     try {
-      setEmployee(updatedEmployee);
+      employeeService.invalidateCache?.();
+      const fresh = await employeeService.getEmployee(employeeId);
+      if (!fresh) {
+        showToast("Employee was saved, but the latest record could not be loaded.", "error");
+        return;
+      }
+      setEmployee(fresh);
       setIsEditEmployeeModalOpen(false);
       showToast("Employee details updated successfully.", 'success');
     } catch (err) {
       console.error("Error updating employee:", err);
-      showToast("Failed to update employee.", 'error');
+      showToast("Failed to refresh employee after update.", "error");
     }
   };
 
@@ -481,11 +637,7 @@ function TeamManagementSalesLeads() {
         const file = isFile ? fileObj : fileObj.rawFile;
         const type = isFile ? undefined : fileObj.type;
 
-        await DocumentsService.uploadForEmployee(employeeId, file, {
-          uploadedBy: "Current User",
-          userRole: "Sales Executive",
-          type: type
-        });
+        await DocumentsService.uploadForEmployee(employeeId, file, { type });
       }
       // Refresh documents tab
       setDocumentsKey(prev => prev + 1);
@@ -756,20 +908,120 @@ function TeamManagementSalesLeads() {
                           : employee?.employeeName || "Employee Name"}
                       </span>
                     </div>
-                    <button className={styles.button}>
-                      <span className={styles.text2}>
-                        {(() => {
-                          if (loading) return "...";
-                          const vs = employee?.vacationStatus || "Onsite";
-                          const labelMap = {
-                            "On Vacation": "On Vacation",
-                            "Vacation Approved": "Returned back from vacation",
-                            "Vacation Pending": "Yet to go",
-                          };
-                          return labelMap[vs] || formatVacationStatusLabel(vs) || vs;
-                        })()}
-                      </span>
-                    </button>
+                    <div className={styles.headerStatusRow}>
+                    {(() => {
+                      const currentStatus = employee?.employeeStatus || "Active";
+                      const canEditEmployeeStatus =
+                        canEditEmployeeStatusRole &&
+                        !loading &&
+                        !!employee;
+                      const statusOptions = ACTIVE_OPTIONS.filter((opt) => opt.value);
+                      const options = statusOptions.some((opt) => opt.value === currentStatus)
+                        ? statusOptions
+                        : [...statusOptions, { value: currentStatus, label: formatEmployeeStatusDisplay(employee) }];
+                      const showPeriodActions =
+                        canEditEmployeeStatus && isNoticeOrProvisionStatus(currentStatus);
+
+                      return (
+                        <div className={styles.headerStatusChip}>
+                          <span className={styles.headerStatusLabel}>Employee Status</span>
+                          <div className={styles.headerStatusControlRow}>
+                            <div className={styles.headerStatusControl}>
+                              <button className={styles.button} type="button">
+                                <span className={styles.text2}>
+                                  {loading ? "..." : employeeStatusSaving ? "Saving..." : formatEmployeeStatusDisplay(employee)}
+                                </span>
+                              </button>
+                              {canEditEmployeeStatus && (
+                                <select
+                                  aria-label="Employee status"
+                                  className={styles.employeeStatusSelect}
+                                  value={currentStatus}
+                                  disabled={employeeStatusSaving || periodResetSaving}
+                                  onChange={(e) => handleEmployeeStatusSelect(e.target.value)}
+                                >
+                                  {options.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            {showPeriodActions && (
+                              <div className={styles.headerStatusActions}>
+                                <button
+                                  type="button"
+                                  className={styles.headerStatusIconBtn}
+                                  title="Edit Status Dates"
+                                  disabled={employeeStatusSaving || periodResetSaving}
+                                  onClick={() => handleEmployeeStatusSelect(currentStatus, { isEdit: true })}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+                                    <path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.headerStatusIconBtn}
+                                  title="Reset Status"
+                                  disabled={employeeStatusSaving || periodResetSaving}
+                                  onClick={() => requestPeriodReset(employee)}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M4 12a8 8 0 1 1 2.3 5.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                    <path d="M4 7v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {(() => {
+                      const vs = employeeVacationStatus(employee);
+                      const canEditVacation =
+                        canEditVacationStatus &&
+                        !loading &&
+                        !!employee &&
+                        isWorkingEmployeeStatus(employee?.employeeStatus);
+                      const options = VACATION_STATUS_EDIT_OPTIONS.some(
+                        (opt) => opt.value === vs
+                      )
+                        ? VACATION_STATUS_EDIT_OPTIONS
+                        : [...VACATION_STATUS_EDIT_OPTIONS, { value: vs, label: formatVacationStatus(vs) }];
+
+                      return (
+                        <div className={styles.headerStatusChip}>
+                          <span className={styles.headerStatusLabel}>Vacation Status</span>
+                          <div className={styles.headerStatusControl}>
+                            <button className={styles.button} type="button">
+                              <span className={styles.text2}>
+                                {loading ? "..." : statusSaving ? "Saving..." : formatVacationStatus(vs)}
+                              </span>
+                            </button>
+                            {canEditVacation && (
+                              <select
+                                aria-label="Vacation status"
+                                className={styles.employeeStatusSelect}
+                                value={vs}
+                                disabled={statusSaving}
+                                onChange={(e) => handleVacationStatusSelect(e.target.value)}
+                              >
+                                {options.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    </div>
                   </div>
                 </div>
 
@@ -851,6 +1103,14 @@ function TeamManagementSalesLeads() {
                   >
                     <span className={styles.text8}>{"Leave Entitlement"}</span>
                   </div>
+                  <div
+                    ref={sifTabRef}
+                    className={`${styles.view2} ${activeTab === "sif" ? styles.active : ""
+                      }`}
+                    onClick={() => setActiveTab("sif")}
+                  >
+                    <span className={styles.text8}>{"SIF"}</span>
+                  </div>
 
                   <div
                     className={styles.box}
@@ -888,11 +1148,10 @@ function TeamManagementSalesLeads() {
                       <div className={styles.row_view6}>
                         <div className={styles.column4}><span className={styles.text9}>Employee ID</span><span className={styles.text10}>{employee.employeeId || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Employee Name</span><span className={styles.text10}>{employee.employeeName || "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Email ID</span><span className={styles.text10}>{employee.emailId || "Not provided"}</span></div>
+                        <div className={styles.column4}><span className={styles.text9}>Email ID</span><span className={styles.text10}>{displayEmployeeEmail(employee.emailId, "Not provided")}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Mobile Number</span><span className={styles.text10}>{employee.mobile || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
-                        <div className={styles.column4}><span className={styles.text9}>Role</span><span className={styles.text10}>{employee.role || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Designation</span><span className={styles.text10}>{employee.designation || "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Department</span><span className={styles.text10}>{employee.department || "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Attendance Status</span><span className={styles.text10}>{employee.attendance || "Not provided"}</span></div>
@@ -902,13 +1161,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4}>
                           <span className={styles.text9}>Total Experience</span>
                           <span className={styles.text10}>
-                            {formatExperienceLabel(
-                              employee.doj,
-                              employee.totalYearsExperience,
-                              (isNonWorkingEmployeeStatus(employee.employeeStatus) && employee.lastWorkingDay)
-                                ? employee.lastWorkingDay
-                                : new Date()
-                            ) || "Not provided"}
+                            {formatEmployeeMasterExperienceLabel(employee) || "Not provided"}
                           </span>
                         </div>
                         <div className={styles.column4}><span className={styles.text9}>Notice Period</span><span className={styles.text10}>{employee.noticePeriod || "Not provided"}</span></div>
@@ -940,7 +1193,6 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column4}><span className={styles.text9}>Labour Card Expiry</span><span className={styles.text10}>{employee.labourCardExpiryDate ? new Date(employee.labourCardExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Visa Expiry</span><span className={styles.text10}>{employee.visaExpiryDate ? new Date(employee.visaExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>Emirates ID Expiry</span><span className={styles.text10}>{employee.emiratesIdExpiryDate ? new Date(employee.emiratesIdExpiryDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
-                        <div className={styles.column4}><span className={styles.text9}>Contract Renewal</span><span className={styles.text10}>{employee.contractRenewalDate ? new Date(employee.contractRenewalDate).toLocaleDateString('en-GB') : "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Office</span><span className={styles.text10}>{employee.office || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
@@ -972,12 +1224,7 @@ function TeamManagementSalesLeads() {
                                   "Onsite": { bg: "#f0fdf4", color: "#15803d" },
                                 };
                                 const style = colorMap[vs] || colorMap["Onsite"];
-                                const labelMap = {
-                                  "On Vacation": "On Vacation",
-                                  "Vacation Approved": "Returned back from vacation",
-                                  "Vacation Pending": "Yet to go",
-                                };
-                                const displayLabel = labelMap[vs] || formatVacationStatusLabel(vs) || vs;
+                                const displayLabel = formatVacationStatus(vs) || vs;
                                 return (
                                   <span style={{
                                     display: "inline-flex",
@@ -995,7 +1242,7 @@ function TeamManagementSalesLeads() {
                               })()}
                             </span>
                           </div>
-                          {(employee.vacationStatus === "On Vacation" || employee.vacationStatus === "Vacation Pending") && (
+                          {(employee.lastWorkingDay || employee.travellingDate || employee.leaveEndDate || employee.endDate) && (
                             <>
                               <div className={styles.column4}>
                                 <span className={styles.text9}>Last Working Day</span>
@@ -1017,7 +1264,7 @@ function TeamManagementSalesLeads() {
                               </div>
                             </>
                           )}
-                          {employee.vacationStatus === "Vacation Approved" && (
+                          {(employee.returnDate || employee.firstWorkingDay) && (
                             <>
                               <div className={styles.column4}>
                                 <span className={styles.text9}>Return / Entry Date</span>
@@ -1110,7 +1357,7 @@ function TeamManagementSalesLeads() {
 
               {activeTab === "increments" && (
                 <div style={{ padding: "0 36px", width: "100%" }}>
-                  <div className={styles.increments_table_container}>
+                  <div className={`${styles.increments_table_container} hrms-table-scroll`}>
                     <table className={styles.increments_table}>
                       <thead>
                         <tr>
@@ -1174,6 +1421,25 @@ function TeamManagementSalesLeads() {
                       ? calculateLeaveBalance(employee, allLeaveRequests)
                       : null;
                     const latest = employeeLeaves[0];
+                    const leaveSearch = employee?.employeeId || employee?.employeeName || "";
+                    const leaveBoxLink = (status) => {
+                      if (!leaveSearch) return {};
+                      const open = () => navigate(leaveManagementPath({ status, search: leaveSearch }));
+                      return {
+                        role: "button",
+                        tabIndex: 0,
+                        title: "Open in Leave Management",
+                        onClick: open,
+                        onKeyDown: (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            open();
+                          }
+                        },
+                      };
+                    };
+                    const leaveBoxStyle = { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px", cursor: leaveSearch ? "pointer" : "default" };
+                    const latestStatusFilter = LEAVE_STATUS_FILTERS.includes(latest?.status) ? latest.status : "All";
                     return (
                       <div
                         style={{
@@ -1183,16 +1449,27 @@ function TeamManagementSalesLeads() {
                           marginBottom: "16px",
                         }}
                       >
-                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
+                        <div style={leaveBoxStyle} {...leaveBoxLink(latestStatusFilter)}>
                           <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Current Leave Status</div>
                           <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
                             {latest?.status || "No active record"}
                           </div>
                         </div>
-                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
-                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Leave Days Taken</div>
+                        <div style={leaveBoxStyle} {...leaveBoxLink("Approved")}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            Leave Taken{" "}
+                            <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>(5 Years)</span>
+                          </div>
                           <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
-                            {leaveStats ? leaveStats.totalTaken : 0}
+                            {leaveStats ? `${leaveStats.totalTaken} Days` : "0 Days"}
+                          </div>
+                        </div>
+                        <div style={leaveBoxStyle} {...leaveBoxLink("Approved")}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            Total Leave Taken
+                          </div>
+                          <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                            {leaveStats ? `${leaveStats.totalLeaveTakenFromDoj ?? 0} Days` : "0 Days"}
                           </div>
                         </div>
                         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "12px 14px" }}>
@@ -1210,7 +1487,7 @@ function TeamManagementSalesLeads() {
                       </div>
                     );
                   })()}
-                  <div className={styles.increments_table_container}>
+                  <div className={`${styles.increments_table_container} hrms-table-scroll`}>
                     <table className={styles.increments_table}>
                       <thead>
                         <tr>
@@ -1232,7 +1509,7 @@ function TeamManagementSalesLeads() {
                               <td>{new Date(leave.endDate).toLocaleDateString('en-GB')}</td>
                               <td style={{ textAlign: "center", fontWeight: 600 }}>
                                 {(() => {
-                                  const days = calculateLeaveDays(leave.startDate, leave.endDate);
+                                  const days = calculateLeaveDays(leave.startDate, leave.endDate, leave.leaveDays);
                                   return days != null ? `${days} ${days === 1 ? "day" : "days"}` : "—";
                                 })()}
                               </td>
@@ -1293,6 +1570,14 @@ function TeamManagementSalesLeads() {
                 </div>
               )}
 
+              {activeTab === "sif" && (
+                <EmployeeSifPanel
+                  employee={employee}
+                  canManage={isAdmin}
+                  showToast={showToast}
+                />
+              )}
+
             </div>
           </div>
         </div>
@@ -1340,6 +1625,43 @@ function TeamManagementSalesLeads() {
         onClose={handleEditEmployeeClose}
         onSubmit={handleEditEmployeeSubmit}
         employee={employee}
+      />
+
+      <DeleteModal
+        isOpen={Boolean(periodResetTarget)}
+        onClose={() => { if (!periodResetSaving) setPeriodResetTarget(null); }}
+        onConfirm={handlePeriodResetConfirm}
+        confirmText="Reset"
+        zIndex={100010}
+        title={periodResetTarget?.employeeStatus === "Provision Period" ? "Reset Provision Period?" : "Reset Notice Period?"}
+        description={
+          periodResetTarget?.employeeStatus === "Provision Period"
+            ? "Are you sure you want to reset the Provision Period for this employee? This will clear the current Provision Period dates and restore the employee's previous status. This action cannot be undone automatically."
+            : "Are you sure you want to reset the Notice Period for this employee? This will clear the current Notice Period dates, clear the Last Working Day, and restore the employee's previous status. This action cannot be undone automatically."
+        }
+      />
+
+      {/* Same vacation date selection the Team Management status column uses */}
+      <VacationDatePromptModal
+        prompt={datePrompt}
+        saving={statusSaving}
+        onChange={(patch) => setDatePrompt((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onCancel={() => {
+          if (!statusSaving) setDatePrompt(null);
+        }}
+        onConfirm={handleDatePromptConfirm}
+      />
+
+      <EmployeeStatusDatePromptModal
+        prompt={employeeStatusPrompt}
+        saving={employeeStatusSaving}
+        periodResetSaving={periodResetSaving}
+        onChange={(patch) => setEmployeeStatusPrompt((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onCancel={() => {
+          if (!employeeStatusSaving && !periodResetSaving) setEmployeeStatusPrompt(null);
+        }}
+        onConfirm={handleEmployeeStatusPromptConfirm}
+        onReset={() => requestPeriodReset(employeeStatusPrompt?.employeeItem)}
       />
 
       <AddIncrementModal

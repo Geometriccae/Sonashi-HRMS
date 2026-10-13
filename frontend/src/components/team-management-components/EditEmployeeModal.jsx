@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./AddEmployeeModal.css"; // Using the same CSS file
 import ProgressSteps from "../ProgressSteps";
 import InputField from "../InputField";
@@ -18,14 +18,13 @@ import {
   ATTENDANCE_OPTIONS,
   VACATION_STATUS_OPTIONS,
   DEPARTMENT_OPTIONS_DEFAULT,
+  ROLE_OPTIONS_DEFAULT,
   GENDER_OPTIONS,
   EMERGENCY_RELATIONSHIP_OPTIONS,
-  ROLE_OPTIONS_DEFAULT,
   DEFAULT_COMPANY_CODE,
   DEFAULT_COMPANY_NAME,
   resolveDefaultCompanyCode,
   ensureOptionWithValue,
-  mergeWithDynamicOptions,
 } from "../../constants/employeeDropdownOptions";
 import CompanyDocumentService from "../../services/CompanyDocumentService";
 import {
@@ -37,9 +36,13 @@ import {
   isNonWorkingEmployeeStatus,
   isWorkingEmployeeStatus,
 } from "../../utils/employeeStatusDisplay";
-import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
+import { formatEmployeeMasterExperienceLabel } from "../../utils/yetToGoHelpers";
+import { savedRecordDateDefault } from "../../utils/dateFieldReset";
+import { isPlaceholderEmployeeEmail } from "../../utils/employeeEmailDisplay";
 
 function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
+  const savedDateDefault = (field) => savedRecordDateDefault(employee, field);
+  const loadedEmployeeRef = useRef(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
   const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState(null);
@@ -64,6 +67,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     // 1. Basic Information
     workPermitNo: "",
     employeeId: "",
+    unifiedId: "",
     office: DEFAULT_COMPANY_NAME,
     employeeName: "",
     reportingManager: "",
@@ -126,12 +130,14 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     accountNumber: "",
     ibanNumber: "",
     bankSortCode: "",
+    modeOfPay: "",
   });
 
   const [clients, setClients] = useState([]);
   const [companyDocuments, setCompanyDocuments] = useState([]);
-  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS_DEFAULT);
   const [departmentOptions, setDepartmentOptions] = useState(DEPARTMENT_OPTIONS_DEFAULT);
+  // Same designation store as Add Employee: 'role' option type + built-in defaults.
+  const [designationOptions, setDesignationOptions] = useState(ROLE_OPTIONS_DEFAULT);
   const [toasts, setToasts] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,47 +212,49 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
   const fetchEmployeeDropdownValues = async () => {
     try {
-      const [roles, depts, excludedRoles, excludedDepts] = await Promise.all([
-        OptionService.getOptions('role'),
+      const [depts, excludedDepts, designations, excludedDesignations] = await Promise.all([
         OptionService.getOptions('department'),
-        OptionService.getExcludedDefaults('role'),
         OptionService.getExcludedDefaults('department'),
+        OptionService.getOptions('role'),
+        OptionService.getExcludedDefaults('role'),
       ]);
 
-      setRoleOptions(OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, roles, excludedRoles));
       setDepartmentOptions(OptionService.mergeWithDynamicOptions(DEPARTMENT_OPTIONS_DEFAULT, depts, excludedDepts));
+      setDesignationOptions(
+        OptionService.mergeWithDynamicOptions(ROLE_OPTIONS_DEFAULT, designations, excludedDesignations)
+      );
     } catch (err) {
       console.error("Failed to fetch dynamic options:", err);
-      setRoleOptions(ROLE_OPTIONS_DEFAULT);
       setDepartmentOptions(DEPARTMENT_OPTIONS_DEFAULT);
+      setDesignationOptions(ROLE_OPTIONS_DEFAULT);
     }
   };
 
-  const handleRoleAdd = async (label) => {
+  const handleDesignationAdd = async (label) => {
     try {
       await OptionService.addOption('role', label);
       await fetchEmployeeDropdownValues();
-      addToast(`Role "${label}" added successfully`, "success");
+      addToast(`Designation "${label}" added successfully`, "success");
     } catch (err) {
-      console.error("Error adding role:", err);
-      addToast(err.response?.data?.message || "Failed to add role", "error");
+      console.error("Error adding designation:", err);
+      addToast(err.response?.data?.message || "Failed to add designation", "error");
     }
   };
 
-  const handleRoleDelete = async (option) => {
+  const handleDesignationDelete = async (option) => {
     if (!option?.label || option.label === "-Select-") return;
     try {
-      const roles = await OptionService.getOptions('role');
-      const toDelete = roles.find((r) => r.label === option.label);
+      const stored = await OptionService.getOptions('role');
+      const toDelete = stored.find((r) => r.label === option.label);
       if (toDelete) {
         await OptionService.deleteOption('role', toDelete._id);
       } else {
         await OptionService.excludeDefaultOption('role', option.label);
       }
       await fetchEmployeeDropdownValues();
-      addToast(`Role "${option.label}" deleted`, "success");
+      addToast(`Designation "${option.label}" deleted`, "success");
     } catch (err) {
-      addToast("Failed to delete role", "error");
+      addToast("Failed to delete designation", "error");
     }
   };
 
@@ -298,100 +306,127 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     }
   };
 
-  // Populate form data when employee prop changes
+  const employeeRecordId = employee?._id || employee?.id || "";
+
+  // Always hydrate from GET /employees/:id (DB), never from a list-row stub.
   useEffect(() => {
-    if (employee && isOpen) {
-      setRoleOptions((prev) => ensureOptionWithValue(prev, employee.role));
-      setDepartmentOptions((prev) => ensureOptionWithValue(prev, employee.department));
+    if (!isOpen || !employeeRecordId) return undefined;
+
+    let cancelled = false;
+
+    const populateFromRecord = (record) => {
+      if (!record || cancelled) return;
+      loadedEmployeeRef.current = record;
+      setDepartmentOptions((prev) => ensureOptionWithValue(prev, record.department));
+      setDesignationOptions((prev) =>
+        ensureOptionWithValue(prev, record.designation || record.role)
+      );
 
       setFormData({
-        workPermitNo: employee.workPermitNo || "",
-        employeeId: employee.employeeId || "",
-        office: employee.office || DEFAULT_COMPANY_NAME,
-        employeeName: employee.employeeName || "",
-        reportingManager: employee.reportingManager || "",
-        gender: employee.gender || "",
-        mobile: employee.mobile || "",
-        emailId: employee.emailId || "",
-        emiratesId: employee.emiratesId || "",
-        nationality: employee.nationality || "",
-        emergencyUaeName: employee.emergencyContact?.uae?.name || "",
-        emergencyUaeRelationship: employee.emergencyContact?.uae?.relationship || "",
-        emergencyUaeAddress: employee.emergencyContact?.uae?.address || "",
-        emergencyUaeContactNo: employee.emergencyContact?.uae?.contactNo || "",
-        emergencyHomeName: employee.emergencyContact?.homeCountry?.name || "",
-        emergencyHomeRelationship: employee.emergencyContact?.homeCountry?.relationship || "",
-        emergencyHomeAddress: employee.emergencyContact?.homeCountry?.address || "",
-        emergencyHomeContactNo: employee.emergencyContact?.homeCountry?.contactNo || "",
-        emergencyHomeName2: employee.emergencyContact?.homeCountry2?.name || "",
-        emergencyHomeRelationship2: employee.emergencyContact?.homeCountry2?.relationship || "",
-        emergencyHomeAddress2: employee.emergencyContact?.homeCountry2?.address || "",
-        emergencyHomeContactNo2: employee.emergencyContact?.homeCountry2?.contactNo || "",
-        role: employee.role || "",
-        designation: employee.designation || "",
-        department: employee.department || "",
-        doj: employee.doj ? String(employee.doj).slice(0, 10) : "",
-        noticePeriod: employee.noticePeriod || "",
-        provisionPeriod: employee.provisionPeriod || "",
-        noticePeriodStartDate: employee.noticePeriodStartDate
-          ? String(employee.noticePeriodStartDate).slice(0, 10)
+        workPermitNo: record.workPermitNo || "",
+        employeeId: record.employeeId || "",
+        unifiedId: record.unifiedId || "",
+        office: record.office || DEFAULT_COMPANY_NAME,
+        employeeName: record.employeeName || "",
+        reportingManager: record.reportingManager || "",
+        gender: record.gender || "",
+        mobile: record.mobile || "",
+        emailId: isPlaceholderEmployeeEmail(record.emailId) ? "" : (record.emailId || ""),
+        emiratesId: record.emiratesId || "",
+        nationality: record.nationality || "",
+        emergencyUaeName: record.emergencyContact?.uae?.name || "",
+        emergencyUaeRelationship: record.emergencyContact?.uae?.relationship || "",
+        emergencyUaeAddress: record.emergencyContact?.uae?.address || "",
+        emergencyUaeContactNo: record.emergencyContact?.uae?.contactNo || "",
+        emergencyHomeName: record.emergencyContact?.homeCountry?.name || "",
+        emergencyHomeRelationship: record.emergencyContact?.homeCountry?.relationship || "",
+        emergencyHomeAddress: record.emergencyContact?.homeCountry?.address || "",
+        emergencyHomeContactNo: record.emergencyContact?.homeCountry?.contactNo || "",
+        emergencyHomeName2: record.emergencyContact?.homeCountry2?.name || "",
+        emergencyHomeRelationship2: record.emergencyContact?.homeCountry2?.relationship || "",
+        emergencyHomeAddress2: record.emergencyContact?.homeCountry2?.address || "",
+        emergencyHomeContactNo2: record.emergencyContact?.homeCountry2?.contactNo || "",
+        role: record.role || "",
+        // Legacy records kept the job title only in role; show it as the designation.
+        designation: record.designation || record.role || "",
+        department: record.department || "",
+        doj: record.doj ? String(record.doj).slice(0, 10) : "",
+        noticePeriod: record.noticePeriod || "",
+        provisionPeriod: record.provisionPeriod || "",
+        noticePeriodStartDate: record.noticePeriodStartDate
+          ? String(record.noticePeriodStartDate).slice(0, 10)
           : "",
-        noticePeriodEndDate: employee.noticePeriodEndDate
-          ? String(employee.noticePeriodEndDate).slice(0, 10)
+        noticePeriodEndDate: record.noticePeriodEndDate
+          ? String(record.noticePeriodEndDate).slice(0, 10)
           : "",
-        provisionPeriodStartDate: employee.provisionPeriodStartDate
-          ? String(employee.provisionPeriodStartDate).slice(0, 10)
+        provisionPeriodStartDate: record.provisionPeriodStartDate
+          ? String(record.provisionPeriodStartDate).slice(0, 10)
           : "",
-        provisionPeriodEndDate: employee.provisionPeriodEndDate
-          ? String(employee.provisionPeriodEndDate).slice(0, 10)
+        provisionPeriodEndDate: record.provisionPeriodEndDate
+          ? String(record.provisionPeriodEndDate).slice(0, 10)
           : "",
         totalYearsExperience:
-          employee.totalYearsExperience !== undefined &&
-            employee.totalYearsExperience !== null
-            ? String(employee.totalYearsExperience)
+          record.totalYearsExperience !== undefined &&
+            record.totalYearsExperience !== null
+            ? String(record.totalYearsExperience)
             : "",
-        dateOfBirth: employee.dateOfBirth ? String(employee.dateOfBirth).slice(0, 10) : "",
-        lastWorkingDay: employee.lastWorkingDay ? String(employee.lastWorkingDay).slice(0, 10) : "",
-        passportNo: employee.passportNo || "",
-        passportExpiryDate: employee.passportExpiryDate ? String(employee.passportExpiryDate).slice(0, 10) : "",
-        labourCardNumber: employee.labourCardNumber || "",
-        labourCardExpiryDate: employee.labourCardExpiryDate ? String(employee.labourCardExpiryDate).slice(0, 10) : "",
-        companyCode: resolveDefaultCompanyCode(employee.companyCode),
-        visaExpiryDate: employee.visaExpiryDate ? String(employee.visaExpiryDate).slice(0, 10) : "",
-        emiratesIdExpiryDate: employee.emiratesIdExpiryDate ? String(employee.emiratesIdExpiryDate).slice(0, 10) : "",
-        remarks: employee.remarks || "",
-        employeeStatus: employee.employeeStatus || "Active",
-        vacationStatus: employee.vacationStatus || "Onsite",
-        attendance: employee.attendance || "Onsite",
-        lifeInsurance: employee.lifeInsurance || false,
-        medicalInsurance: employee.medicalInsurance || false,
-        airFare: employee.airFare || false,
-        basicSalary: employee.salaryDetails?.basicSalary ? String(employee.salaryDetails.basicSalary) : "",
-        houseRent: employee.salaryDetails?.houseRent ? String(employee.salaryDetails.houseRent) : "",
-        travelExp: employee.salaryDetails?.travelExp ? String(employee.salaryDetails.travelExp) : "",
-        other: employee.salaryDetails?.other ? String(employee.salaryDetails.other) : "",
-        totalAllowance: employee.salaryDetails?.totalAllowance ? String(employee.salaryDetails.totalAllowance) : "",
-        deduction: employee.salaryDetails?.deduction ? String(employee.salaryDetails.deduction) : "",
-        totalSalary: employee.salaryDetails?.totalSalary ? String(employee.salaryDetails.totalSalary) : "",
-        bankName: employee.salaryDetails?.bankName || "",
-        accountNumber: employee.salaryDetails?.accountNumber || "",
-        ibanNumber: employee.salaryDetails?.ibanNumber || "",
-        bankSortCode: employee.salaryDetails?.bankSortCode || "",
+        dateOfBirth: record.dateOfBirth ? String(record.dateOfBirth).slice(0, 10) : "",
+        lastWorkingDay: record.lastWorkingDay ? String(record.lastWorkingDay).slice(0, 10) : "",
+        passportNo: record.passportNo || "",
+        passportExpiryDate: record.passportExpiryDate ? String(record.passportExpiryDate).slice(0, 10) : "",
+        labourCardNumber: record.labourCardNumber || "",
+        labourCardExpiryDate: record.labourCardExpiryDate ? String(record.labourCardExpiryDate).slice(0, 10) : "",
+        companyCode: resolveDefaultCompanyCode(record.companyCode),
+        visaExpiryDate: record.visaExpiryDate ? String(record.visaExpiryDate).slice(0, 10) : "",
+        emiratesIdExpiryDate: record.emiratesIdExpiryDate ? String(record.emiratesIdExpiryDate).slice(0, 10) : "",
+        remarks: record.remarks || "",
+        employeeStatus: record.employeeStatus || "Active",
+        vacationStatus: record.vacationStatus || "Onsite",
+        attendance: record.attendance || "Onsite",
+        lifeInsurance: record.lifeInsurance || false,
+        medicalInsurance: record.medicalInsurance || false,
+        airFare: record.airFare || false,
+        basicSalary: record.salaryDetails?.basicSalary ? String(record.salaryDetails.basicSalary) : "",
+        houseRent: record.salaryDetails?.houseRent ? String(record.salaryDetails.houseRent) : "",
+        travelExp: record.salaryDetails?.travelExp ? String(record.salaryDetails.travelExp) : "",
+        other: record.salaryDetails?.other ? String(record.salaryDetails.other) : "",
+        totalAllowance: record.salaryDetails?.totalAllowance ? String(record.salaryDetails.totalAllowance) : "",
+        deduction: record.salaryDetails?.deduction ? String(record.salaryDetails.deduction) : "",
+        totalSalary: record.salaryDetails?.totalSalary ? String(record.salaryDetails.totalSalary) : "",
+        bankName: record.salaryDetails?.bankName || "",
+        accountNumber: record.salaryDetails?.accountNumber || "",
+        ibanNumber: record.salaryDetails?.ibanNumber || "",
+        bankSortCode: record.salaryDetails?.bankSortCode || "",
+        modeOfPay: record.salaryDetails?.modeOfPay || "",
       });
 
-      // Set current profile image URL if exists
-      if (employee.profilePhoto) {
-        setCurrentProfileImageUrl(buildImageUrl(employee.profilePhoto));
+      if (record.profilePhoto) {
+        setCurrentProfileImageUrl(buildImageUrl(record.profilePhoto));
+      } else {
+        setCurrentProfileImageUrl(null);
       }
 
-      // Reset form state
       setCurrentStep(1);
       setProfileImage(null);
       setEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
       setValidationErrors({});
-      fetchEmployeeDocuments(employee._id || employee.id);
-    }
-  }, [employee, isOpen]);
+      fetchEmployeeDocuments(record._id || record.id);
+    };
+
+    (async () => {
+      try {
+        const fresh = await employeeService.getEmployee(employeeRecordId);
+        populateFromRecord(fresh);
+      } catch (err) {
+        console.warn("Edit employee: GET failed, using provided record", err);
+        populateFromRecord(employee);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, employeeRecordId]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -405,6 +440,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
       setFormData({
         workPermitNo: "",
         employeeId: "",
+        unifiedId: "",
         office: DEFAULT_COMPANY_NAME,
         employeeName: "",
         reportingManager: "",
@@ -463,6 +499,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         accountNumber: "",
         ibanNumber: "",
         bankSortCode: "",
+        modeOfPay: "",
       });
     }
   }, [isOpen]);
@@ -546,7 +583,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     if (step === 1) {
       if (!formData.employeeId) { errors.employeeId = true; missingFields.push("Employee ID"); }
       if (!formData.employeeName) { errors.employeeName = true; missingFields.push("Employee Name"); }
-      if (!formData.role) { errors.role = true; missingFields.push("Role"); }
     } else if (step === 2) {
       if (!formData.department) { errors.department = true; missingFields.push("Department"); }
     }
@@ -585,7 +621,6 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
     if (!formData.employeeId) { errors.employeeId = true; missingFields.push("Employee ID"); }
     if (!formData.employeeName) { errors.employeeName = true; missingFields.push("Employee Name"); }
-    if (!formData.role) { errors.role = true; missingFields.push("Role"); }
     if (!formData.department) { errors.department = true; missingFields.push("Department"); }
 
     if (missingFields.length > 0) {
@@ -601,110 +636,145 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     setValidationErrors({});
 
     try {
-      // Filter out empty fields
-      const filteredData = Object.fromEntries(
-        Object.entries(formData).filter(([_, value]) => value !== "")
-      );
-
-      // assignedProjects is already an array of IDs
-
-      const payload = { ...filteredData };
-
-      // Always persist bank / labour / company fields (even if empty)
-      payload.labourCardNumber = formData.labourCardNumber || "";
-      payload.companyCode = resolveDefaultCompanyCode(formData.companyCode);
-      if (!String(payload.office || "").trim()) {
-        payload.office = DEFAULT_COMPANY_NAME;
+      const empId = employeeRecordId || employee?._id || employee?.id;
+      if (!empId) {
+        addToast("Cannot update: this employee record has no database id.", "error");
+        setIsSubmitting(false);
+        return;
       }
-      payload.salaryDetails = {
-        basicSalary: parseFloat(formData.basicSalary) || 0,
-        houseRent: parseFloat(formData.houseRent) || 0,
-        travelExp: parseFloat(formData.travelExp) || 0,
-        other: parseFloat(formData.other) || 0,
-        totalAllowance: parseFloat(formData.totalAllowance) || 0,
-        deduction: parseFloat(formData.deduction) || 0,
-        totalSalary: parseFloat(formData.totalSalary) || 0,
-        bankName: formData.bankName || "",
-        accountNumber: formData.accountNumber || "",
-        ibanNumber: formData.ibanNumber || "",
-        bankSortCode: formData.bankSortCode || ""
-      };
-      // Avoid flat duplicates of nested salary/bank fields on the payload root
-      [
-        "basicSalary", "houseRent", "travelExp", "other", "totalAllowance",
-        "deduction", "totalSalary", "bankName", "accountNumber", "ibanNumber", "bankSortCode",
-      ].forEach((k) => delete payload[k]);
 
-      payload.emergencyContact = {
-        uae: {
-          name: formData.emergencyUaeName || "",
-          relationship: formData.emergencyUaeRelationship || "",
-          address: formData.emergencyUaeAddress || "",
-          contactNo: formData.emergencyUaeContactNo || ""
+      const payload = {
+        workPermitNo: formData.workPermitNo || "",
+        employeeId: formData.employeeId,
+        unifiedId: formData.unifiedId || "",
+        office: String(formData.office || "").trim() || DEFAULT_COMPANY_NAME,
+        employeeName: formData.employeeName,
+        reportingManager: formData.reportingManager || "",
+        gender: formData.gender || "",
+        mobile: formData.mobile || "",
+        emailId: String(formData.emailId || "").trim(),
+        emiratesId: formData.emiratesId || "",
+        nationality: formData.nationality || "",
+        designation: formData.designation || "",
+        department: formData.department,
+        doj: formData.doj || null,
+        noticePeriod: formData.noticePeriod || "",
+        provisionPeriod: formData.provisionPeriod || "",
+        noticePeriodStartDate: formData.noticePeriodStartDate || null,
+        noticePeriodEndDate: formData.noticePeriodEndDate || null,
+        provisionPeriodStartDate: formData.provisionPeriodStartDate || null,
+        provisionPeriodEndDate: formData.provisionPeriodEndDate || null,
+        lastWorkingDay: formData.lastWorkingDay || null,
+        totalYearsExperience:
+          formData.totalYearsExperience === "" ? null : formData.totalYearsExperience,
+        dateOfBirth: formData.dateOfBirth || null,
+        passportNo: formData.passportNo || "",
+        passportExpiryDate: formData.passportExpiryDate || null,
+        labourCardNumber: formData.labourCardNumber || "",
+        labourCardExpiryDate: formData.labourCardExpiryDate || null,
+        companyCode: resolveDefaultCompanyCode(formData.companyCode),
+        visaExpiryDate: formData.visaExpiryDate || null,
+        emiratesIdExpiryDate: formData.emiratesIdExpiryDate || null,
+        remarks: formData.remarks || "",
+        employeeStatus: formData.employeeStatus || "Active",
+        attendance: formData.attendance || "Onsite",
+        lifeInsurance: Boolean(formData.lifeInsurance),
+        medicalInsurance: Boolean(formData.medicalInsurance),
+        airFare: Boolean(formData.airFare),
+        salaryDetails: {
+          basicSalary: parseFloat(formData.basicSalary) || 0,
+          houseRent: parseFloat(formData.houseRent) || 0,
+          travelExp: parseFloat(formData.travelExp) || 0,
+          other: parseFloat(formData.other) || 0,
+          totalAllowance: parseFloat(formData.totalAllowance) || 0,
+          deduction: parseFloat(formData.deduction) || 0,
+          totalSalary: parseFloat(formData.totalSalary) || 0,
+          bankName: formData.bankName || "",
+          accountNumber: formData.accountNumber || "",
+          ibanNumber: formData.ibanNumber || "",
+          bankSortCode: formData.bankSortCode || "",
+          modeOfPay: formData.modeOfPay || "",
         },
-        homeCountry: {
-          name: formData.emergencyHomeName || "",
-          relationship: formData.emergencyHomeRelationship || "",
-          address: formData.emergencyHomeAddress || "",
-          contactNo: formData.emergencyHomeContactNo || ""
+        emergencyContact: {
+          uae: {
+            name: formData.emergencyUaeName || "",
+            relationship: formData.emergencyUaeRelationship || "",
+            address: formData.emergencyUaeAddress || "",
+            contactNo: formData.emergencyUaeContactNo || "",
+          },
+          homeCountry: {
+            name: formData.emergencyHomeName || "",
+            relationship: formData.emergencyHomeRelationship || "",
+            address: formData.emergencyHomeAddress || "",
+            contactNo: formData.emergencyHomeContactNo || "",
+          },
+          homeCountry2: {
+            name: formData.emergencyHomeName2 || "",
+            relationship: formData.emergencyHomeRelationship2 || "",
+            address: formData.emergencyHomeAddress2 || "",
+            contactNo: formData.emergencyHomeContactNo2 || "",
+          },
         },
-        homeCountry2: {
-          name: formData.emergencyHomeName2 || "",
-          relationship: formData.emergencyHomeRelationship2 || "",
-          address: formData.emergencyHomeAddress2 || "",
-          contactNo: formData.emergencyHomeContactNo2 || ""
-        }
       };
 
-      const updatedEmployee = await employeeService.updateEmployeeWithFile(
-        employee._id || employee.id,
-        payload,
-        profileImage
-      );
+      const storedEmployee = loadedEmployeeRef.current || employee || {};
+      // Designation is the field users edit; role is schema-required and still read by
+      // reports / salary slips, so keep it equal to the chosen designation.
+      const designation = String(formData.designation || "").trim();
+      const storedRole = String(storedEmployee.role || formData.role || "").trim();
+      payload.designation = designation;
+      if (designation) payload.role = designation;
+      else if (storedRole) payload.role = storedRole;
 
-      const empId = employee._id || employee.id;
-      if (empId) {
-        const uploadedBy = localStorage.getItem("username") || "";
-        const userRole = localStorage.getItem("role") || "";
-        const docUploads = [
-          { file: employeeDocuments.passportPage1, type: "Passport Page 1" },
-          { file: employeeDocuments.passportPage2, type: "Passport Page 2" },
-          { file: employeeDocuments.idCard, type: "ID Card" },
-          { file: employeeDocuments.labourCard, type: "Labour Card" },
-          { file: employeeDocuments.medicalCard, type: "Medical Card" },
-          { file: employeeDocuments.visaPage, type: "Visa Page" },
-        ];
-        for (const { file, type } of docUploads) {
-          if (!file) continue;
-          try {
-            const fieldKey = mapStoredTypeToField(type);
-            const existing = fieldKey ? existingEmployeeDocuments[fieldKey] : null;
-            if (existing?._id) {
-              try {
-                await DocumentsService.remove(existing._id);
-              } catch (removeErr) {
-                console.warn("Failed to remove previous document:", removeErr);
-              }
+      // Only send vacationStatus when the user actually changed the dropdown.
+      // Echoing a stale Returned Back label on an emergency-contact (or other
+      // master-data) save re-pins vacationStatusSource=manual and blocks
+      // Leave Management date-driven On Vacation. Trip dates are left untouched
+      // so this save cannot revive a leftover returnDate.
+      const loadedVacation = String(storedEmployee.vacationStatus || "Onsite").trim();
+      const submittedVacation = String(formData.vacationStatus || "Onsite").trim();
+      if (submittedVacation && submittedVacation !== loadedVacation) {
+        payload.vacationStatus = submittedVacation;
+      }
+
+      await employeeService.updateEmployeeWithFile(empId, payload, profileImage);
+      employeeService.invalidateCache?.();
+
+      const docUploads = [
+        { file: employeeDocuments.passportPage1, type: "Passport Page 1" },
+        { file: employeeDocuments.passportPage2, type: "Passport Page 2" },
+        { file: employeeDocuments.idCard, type: "ID Card" },
+        { file: employeeDocuments.labourCard, type: "Labour Card" },
+        { file: employeeDocuments.medicalCard, type: "Medical Card" },
+        { file: employeeDocuments.visaPage, type: "Visa Page" },
+      ];
+      for (const { file, type } of docUploads) {
+        if (!file) continue;
+        try {
+          const fieldKey = mapStoredTypeToField(type);
+          const existing = fieldKey ? existingEmployeeDocuments[fieldKey] : null;
+          if (existing?._id) {
+            try {
+              await DocumentsService.remove(existing._id);
+            } catch (removeErr) {
+              console.warn("Failed to remove previous document:", removeErr);
             }
-            await DocumentsService.uploadForEmployee(empId, file, {
-              uploadedBy,
-              userRole,
-              type,
-            });
-          } catch (docErr) {
-            console.warn("Document upload failed:", type, docErr);
           }
+          await DocumentsService.uploadForEmployee(empId, file, {
+            type,
+          });
+        } catch (docErr) {
+          console.warn("Document upload failed:", type, docErr);
         }
       }
 
-      // Call the onSubmit callback with the updated employee data
+      const freshEmployee = await employeeService.getEmployee(empId);
       if (onSubmit) {
-        onSubmit(updatedEmployee);
+        await onSubmit(freshEmployee);
       }
 
       onClose();
       setEmployeeDocuments({ passportPage1: null, passportPage2: null, idCard: null, labourCard: null, medicalCard: null, visaPage: null });
-      await fetchEmployeeDocuments(employee._id || employee.id);
     } catch (err) {
       console.error("Error updating employee:", err);
 
@@ -793,6 +863,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   handleInputChange("employeeId", e.target.value)
                 }
                 hasError={validationErrors.employeeId}
+              />
+
+              <InputField
+                label="Unified ID"
+                placeholder="Enter Unified ID"
+                value={formData.unifiedId}
+                onChange={(e) =>
+                  handleInputChange("unifiedId", e.target.value)
+                }
               />
 
               <Dropdown
@@ -892,24 +971,14 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               />
 
               <Dropdown
-                label="Role"
-                placeholder="Select role"
-                required
-                options={roleOptions}
-                value={formData.role}
-                onAdd={handleRoleAdd}
-                onDelete={handleRoleDelete}
-                onChange={(e) => handleInputChange("role", e.target.value)}
-                hasError={validationErrors.role}
-              />
-
-              <InputField
+                id="edit-employee-designation"
                 label="Designation"
-                placeholder="Designation"
+                placeholder="Select designation"
+                options={designationOptions}
                 value={formData.designation}
-                onChange={(e) =>
-                  handleInputChange("designation", e.target.value)
-                }
+                onAdd={handleDesignationAdd}
+                onDelete={handleDesignationDelete}
+                onChange={(e) => handleInputChange("designation", e.target.value)}
               />
 
               <InputField
@@ -917,6 +986,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.doj}
+                defaultValue={savedDateDefault("doj")}
                 onChange={(e) => handleInputChange("doj", e.target.value)}
               />
 
@@ -939,6 +1009,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.noticePeriodStartDate}
+                defaultValue={savedDateDefault("noticePeriodStartDate")}
                 onChange={(e) => handleInputChange("noticePeriodStartDate", e.target.value)}
               />
 
@@ -947,6 +1018,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.noticePeriodEndDate}
+                defaultValue={savedDateDefault("noticePeriodEndDate")}
                 onChange={(e) => handleInputChange("noticePeriodEndDate", e.target.value)}
               />
 
@@ -955,6 +1027,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.provisionPeriodStartDate}
+                defaultValue={savedDateDefault("provisionPeriodStartDate")}
                 onChange={(e) => handleInputChange("provisionPeriodStartDate", e.target.value)}
               />
 
@@ -963,6 +1036,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.provisionPeriodEndDate}
+                defaultValue={savedDateDefault("provisionPeriodEndDate")}
                 onChange={(e) => handleInputChange("provisionPeriodEndDate", e.target.value)}
               />
 
@@ -1138,13 +1212,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 label="Total Year of Experience"
                 placeholder="—"
                 value={
-                  formatExperienceLabel(
-                    formData.doj,
-                    formData.totalYearsExperience,
-                    (isNonWorkingEmployeeStatus(formData.employeeStatus) && formData.lastWorkingDay)
-                      ? formData.lastWorkingDay
-                      : new Date()
-                  ) || "—"
+                  formatEmployeeMasterExperienceLabel(formData) || "—"
                 }
                 readOnly
               />
@@ -1154,6 +1222,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.dateOfBirth}
+                defaultValue={savedDateDefault("dateOfBirth")}
                 onChange={(e) =>
                   handleInputChange("dateOfBirth", e.target.value)
                 }
@@ -1173,6 +1242,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.passportExpiryDate}
+                defaultValue={savedDateDefault("passportExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("passportExpiryDate", e.target.value)
                 }
@@ -1192,6 +1262,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.labourCardExpiryDate}
+                defaultValue={savedDateDefault("labourCardExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("labourCardExpiryDate", e.target.value)
                 }
@@ -1202,6 +1273,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.visaExpiryDate}
+                defaultValue={savedDateDefault("visaExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("visaExpiryDate", e.target.value)
                 }
@@ -1212,6 +1284,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                 placeholder="YYYY-MM-DD"
                 type="date"
                 value={formData.emiratesIdExpiryDate}
+                defaultValue={savedDateDefault("emiratesIdExpiryDate")}
                 onChange={(e) =>
                   handleInputChange("emiratesIdExpiryDate", e.target.value)
                 }
@@ -1254,6 +1327,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
                   placeholder="YYYY-MM-DD"
                   type="date"
                   value={formData.lastWorkingDay}
+                  defaultValue={savedDateDefault("lastWorkingDay")}
                   onChange={(e) => handleInputChange("lastWorkingDay", e.target.value)}
                 />
               )}
@@ -1335,6 +1409,12 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
         return (
           <div className="billing-content">
             <div className="form-fields-grid">
+              <InputField
+                label="Mode of Pay"
+                placeholder="e.g. Bank Transfer / Cash / Cheque"
+                value={formData.modeOfPay}
+                onChange={(e) => handleInputChange("modeOfPay", e.target.value)}
+              />
               <InputField
                 label="Basic Salary (BASIC)"
                 placeholder="0.00"
@@ -1474,16 +1554,19 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               value: formData.employeeId || "Not provided",
             },
             {
-              label: "Employee Name",
-              value: formData.employeeName || "Not provided",
+              label: "Unified ID",
+              value: formData.unifiedId || "Not provided",
             },
           ],
           [
+            {
+              label: "Employee Name",
+              value: formData.employeeName || "Not provided",
+            },
             { label: "Mobile", value: formData.mobile || "Not provided" },
-            { label: "Email", value: formData.emailId || "Not provided" },
           ],
           [
-            { label: "Role", value: formData.role || "Not provided" },
+            { label: "Email", value: formData.emailId || "Not provided" },
             {
               label: "Designation",
               value: formData.designation || "Not provided",
@@ -1497,6 +1580,16 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
             {
               label: "Employee Status",
               value: formatEmployeeStatusDisplay(formData) || "Not provided",
+            },
+          ],
+          [
+            {
+              label: "Attendance",
+              value: formData.attendance || "Not provided",
+            },
+            {
+              label: "Mode of Pay",
+              value: formData.modeOfPay || "Not provided",
             },
           ],
           [
