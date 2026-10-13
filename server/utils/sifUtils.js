@@ -9,7 +9,8 @@
  *   LABOURCARD = Employee.workPermitNo (14-digit MOHRE person code, "Person Code" in the UI)
  *   EMPLOYERID = Employee.companyCode (one SIF per employer)
  *   AGENTCODE  = salaryDetails.bankSortCode, IBAN = salaryDetails.ibanNumber || accountNumber
- *   salary = net salary of the stored SalarySlip for the pay month (existing payroll result)
+ *   salary = net salary of the stored SalarySlip for the pay month (existing payroll result),
+ *            on Employee Master Total Salary when it differs from the slip's gross (sifNetSalary)
  *   days = days in the salary period, leave = 0000 (as in the client's reference files)
  * Import reads EDR lines whose second field is the labour card number or a legacy Emirates ID.
  */
@@ -130,6 +131,37 @@ const validateBankAccount = (account) => {
 const roundAed = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 /**
+ * SIF salary of a slip, paid on Employee Master Total Salary. Increments saved
+ * as a total only raise Total Salary, not the salary parts the slip was built
+ * from, so the slip's gross can lag behind what the employee is paid.
+ * Leave and carried-forward deductions (Gross / 30 x days) follow the gross;
+ * fixed deductions stay as stored, plus any standing Employee Master deduction
+ * the slip did not charge.
+ */
+const sifNetSalary = (employee, slip) => {
+  const net = Number(slip?.netSalary) || 0;
+  const salary = employee?.salaryDetails || {};
+  const standingDeduction = Number(salary.deduction) || 0;
+  const totalSalary = Number(salary.totalSalary) || 0;
+  const slipGross = Number(slip?.grossSalary) || 0;
+  if (!(totalSalary > 0) || !(slipGross > 0)) return roundAed(net);
+
+  const slipFixed = Number(slip.advance) || 0;
+  const fixedDeductions =
+    slipFixed +
+    (Number(slip.staffLoan) || 0) +
+    (Number(slip.profTax) || 0) +
+    (Number(slip.incomeTaxTDS) || 0);
+  const masterGross = totalSalary + standingDeduction;
+  const dayDeductions = Math.max(0, slipGross - net - fixedDeductions);
+  const unpaidDays = Math.round(((dayDeductions * 30) / slipGross) * 100) / 100;
+  const dayDeductionsOnMaster = roundAed((masterGross / 30) * unpaidDays);
+  return roundAed(
+    masterGross - dayDeductionsOnMaster - fixedDeductions - Math.max(0, standingDeduction - slipFixed)
+  );
+};
+
+/**
  * One Salary Report / SIF row: Employee Master WPS fields + the stored salary
  * slip of the pay month. The Salary Report and the SIF are both built from this.
  *
@@ -157,7 +189,7 @@ const buildSalaryReportPayrollRow = ({ employee, slip, year, month }) => {
       ? Math.min(Math.floor(payable), employedDays)
       : employedDays;
     leaveDays = Math.max(0, employedDays - daysWorked);
-    fixedIncome = roundAed(slip.netSalary);
+    fixedIncome = sifNetSalary(employee, slip);
   }
 
   const missing = [];

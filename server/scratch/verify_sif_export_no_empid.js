@@ -163,10 +163,24 @@ assert.ok(r3.content.startsWith("EDR,31615069381813,803320101,AE0703312345678901
 console.log("PASS Test 3: updated agent code / IBAN used automatically");
 
 // ── Test 4: salary change flows through the regenerated salary slip ─────────
-const raised = { ...refEmp, salaryDetails: { ...refEmp.salaryDetails, basicSalary: 2000 } };
+const raised = { ...refEmp, salaryDetails: { ...refEmp.salaryDetails, basicSalary: 2000, totalSalary: 2800 } };
 const r4 = generate(rowsFor([{ employee: raised, slip: slipFor(raised) }]));
 assert.ok(r4.content.includes(",0030,2800.00,0.00,0000"), r4.content);
 console.log("PASS Test 4: current salary used via the existing payroll slip");
+
+// Increment saved as a total only: salary parts (and the slip) still on the old salary.
+const incremented = emp({ workPermitNo: "66666666666666" }, { totalSalary: 2500 });
+const incSlip = slipFor(incremented);
+assert.strictEqual(incSlip.netSalary, 2300);
+const incRow = rowsFor([{ employee: incremented, slip: incSlip }])[0];
+assert.strictEqual(incRow.fixedIncome, 2500);
+const incPartial = rowsFor([{ employee: incremented, slip: { ...incSlip, payableDays: 29, leave: 76.67, totalDeduction: 76.67, netSalary: 2223.33 } }])[0];
+assert.strictEqual(incPartial.fixedIncome, 2416.67);
+// Standing Employee Master deduction the slip did not charge.
+const withDeduction = emp({ workPermitNo: "77777777777777" }, { deduction: 300, totalSalary: 2000 });
+const dedRow = rowsFor([{ employee: withDeduction, slip: { ...slipFor(withDeduction), advance: 0, totalDeduction: 0, netSalary: 2300 } }])[0];
+assert.strictEqual(dedRow.fixedIncome, 2000);
+console.log("PASS SIF salary on Employee Master Total Salary: increment 2500, 29 days 2416.67, standing deduction 2000");
 
 // ── Test 5: approved leave → existing payroll decides days / salary ─────────
 const onLeave = emp({ workPermitNo: "44444444444444" });

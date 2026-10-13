@@ -107,7 +107,7 @@ async function loadSalaryReportRows({ month, year, payrollEligibleOnly = true })
     month: { $regex: new RegExp(`^${MONTH_NAMES[month - 1]}$`, "i") },
     year: yearQueryValue(String(year)),
   })
-    .select("emailId employeeName month year payableDays totalWorkingDays netSalary processedLeaveDays updatedAt")
+    .select("emailId employeeName month year payableDays totalWorkingDays grossSalary advance staffLoan profTax incomeTaxTDS netSalary processedLeaveDays updatedAt")
     .lean();
   const slipByEmployee = matchSlipsToEmployees(slips, allEmployees);
 

@@ -49,8 +49,9 @@ class SifService {
     return res.json();
   }
 
-  async previewExport(month, year) {
+  async previewExport(month, year, employerId) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
+    if (employerId) params.set("employerId", String(employerId));
     const res = await fetch(`${this.baseURL}/export/sif/preview?${params}`, {
       headers: this.getAuthHeaders(),
     });
@@ -68,8 +69,9 @@ class SifService {
     return res.json();
   }
 
-  async exportSif(month, year) {
+  async exportSif(month, year, employerId) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
+    if (employerId) params.set("employerId", String(employerId));
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
       headers: this.getAuthHeaders(false),
     });

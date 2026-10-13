@@ -53,6 +53,12 @@ function parseMonthYear(req) {
   return { month, year };
 }
 
+/** Employer ID picked for this export; SIF Settings EMPLOYERID when none is sent. */
+function resolveExportEmployerId(req, settings) {
+  const requested = digitsOnly(req.query.employerId);
+  return requested || settings.employerId || "";
+}
+
 async function loadActiveEmployees() {
   return Employee.find(workingStatusFilter()).lean();
 }
@@ -322,7 +328,7 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
     const result = generateSifContent({
       rows,
-      employerId: settings.employerId || "",
+      employerId: resolveExportEmployerId(req, settings),
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
       year: parsed.year,
       month: parsed.month,
@@ -368,17 +374,18 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
+    const employerId = resolveExportEmployerId(req, settings);
     const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
     const result = generateSifContent({
       rows,
-      employerId: settings.employerId || "",
+      employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
       year: parsed.year,
       month: parsed.month,
     });
 
     res.json({
-      employerId: settings.employerId || "",
+      employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
