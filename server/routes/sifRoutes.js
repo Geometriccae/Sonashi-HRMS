@@ -12,12 +12,22 @@ const {
   digitsOnly,
   normalizeEmiratesId,
   validateEmployerId,
+  validateAgentCode,
+  getBankAccount,
+  getFixedIncome,
   excelHeaders,
   RED_HEADERS,
   employeeToExcelRow,
   normalizeExcelHeader,
   HEADER_ALIASES,
 } = require("../utils/sifUtils");
+const {
+  getCompanyCodeMap,
+  applyLiveCompanyCodes,
+  filterEmployeesForEmployer,
+  normalizeCompanyCode,
+  resolveEmployeeEmployerId,
+} = require("../utils/companyCode");
 
 const router = express.Router();
 const upload = multer({
@@ -53,6 +63,24 @@ function parseMonthYear(req) {
 
 async function loadActiveEmployees() {
   return Employee.find(workingStatusFilter()).lean();
+}
+
+/** Active employees with live companyCode filled for empty records (read-only). */
+async function loadEmployeesWithCompanyCodes() {
+  const [employees, codeMap] = await Promise.all([
+    loadActiveEmployees(),
+    getCompanyCodeMap(),
+  ]);
+  return applyLiveCompanyCodes(employees, codeMap);
+}
+
+/**
+ * Load employees for a SIF export scoped to one Employer ID.
+ * WPS requires one employer per SIF file — do not mix companies.
+ */
+async function loadEmployeesForEmployerExport(employerId) {
+  const employees = await loadEmployeesWithCompanyCodes();
+  return filterEmployeesForEmployer(employees, employerId);
 }
 
 async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
@@ -208,9 +236,18 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       return res.status(400).json({ message: employerErr });
     }
 
-    const employees = await loadActiveEmployees();
+    const { matched, excluded } = await loadEmployeesForEmployerExport(employerId);
+    if (matched.length === 0) {
+      return res.status(400).json({
+        message:
+          "No employees found with company code matching the selected Employer ID.",
+        skipped: excluded.slice(0, 100),
+        excludedByCompany: excluded.length,
+      });
+    }
+
     const result = generateSifContent({
-      employees,
+      employees: matched,
       employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
       year: parsed.year,
@@ -221,8 +258,11 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       return res.status(400).json({
         message: result.error,
         skipped: result.skipped || [],
+        excludedByCompany: excluded.length,
       });
     }
+
+    const allSkipped = [...(result.skipped || []), ...excluded];
 
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader(
@@ -230,13 +270,14 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       `attachment; filename="${result.fileName}"`
     );
     res.setHeader("X-SIF-Edr-Count", String(result.edrCount));
-    res.setHeader("X-SIF-Skipped", String((result.skipped || []).length));
+    res.setHeader("X-SIF-Skipped", String(allSkipped.length));
+    res.setHeader("X-SIF-Excluded-Company", String(excluded.length));
     res.setHeader("X-SIF-Total", String(result.totalSalary));
     // Expose skip summary via custom header (JSON) for UI — keep body as pure SIF
-    if (result.skipped?.length) {
+    if (allSkipped.length) {
       res.setHeader(
         "X-SIF-Skip-Summary",
-        Buffer.from(JSON.stringify(result.skipped.slice(0, 50))).toString("base64")
+        Buffer.from(JSON.stringify(allSkipped.slice(0, 50))).toString("base64")
       );
     }
     res.send(result.content);
@@ -256,9 +297,9 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     const selectedEmployerId = digitsOnly(req.query.employerId);
     const employerId =
       selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
-    const employees = await loadActiveEmployees();
+    const { matched, excluded } = await loadEmployeesForEmployerExport(employerId);
     const result = generateSifContent({
-      employees,
+      employees: matched,
       employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode,
       year: parsed.year,
@@ -269,7 +310,9 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
       employerId: selectedEmployerId || settings.employerId || "",
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
-      skipped: result.skipped || [],
+      skipped: [...(result.skipped || []), ...excluded],
+      excludedByCompany: excluded.length,
+      matchedCount: matched.length,
       fileName: result.fileName || null,
       error: result.error || null,
     });
@@ -332,8 +375,16 @@ router.post(
 router.get("/export/excel", authMiddleware, async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
-    const employees = await loadActiveEmployees();
-    const rows = employees.map((e) => employeeToExcelRow(e, settings.employerId));
+    const selectedEmployerId = digitsOnly(req.query.employerId);
+    let employees = await loadEmployeesWithCompanyCodes();
+    if (selectedEmployerId) {
+      const { matched } = filterEmployeesForEmployer(employees, selectedEmployerId);
+      employees = matched;
+    }
+    // EMPLOYERID column comes from each employee's companyCode (see employeeToExcelRow).
+    const rows = employees.map((e) =>
+      employeeToExcelRow(e, e.companyCode || settings.employerId)
+    );
 
     const sheetData = [excelHeaders, ...rows.map((r) => excelHeaders.map((h) => r[h]))];
     const wb = XLSX.utils.book_new();
@@ -372,13 +423,20 @@ router.get("/export/excel", authMiddleware, async (req, res) => {
 router.get("/export/excel-data", authMiddleware, async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
-    const employees = await loadActiveEmployees();
-    const rows = employees.map((e) => employeeToExcelRow(e, settings.employerId));
+    const selectedEmployerId = digitsOnly(req.query.employerId);
+    let employees = await loadEmployeesWithCompanyCodes();
+    if (selectedEmployerId) {
+      const { matched } = filterEmployeesForEmployer(employees, selectedEmployerId);
+      employees = matched;
+    }
+    const rows = employees.map((e) =>
+      employeeToExcelRow(e, e.companyCode || settings.employerId)
+    );
     res.json({
       headers: excelHeaders,
       redHeaders: Array.from(RED_HEADERS),
       rows,
-      employerId: settings.employerId || "",
+      employerId: selectedEmployerId || settings.employerId || "",
     });
   } catch (err) {
     console.error("SIF excel-data error:", err);
@@ -413,7 +471,7 @@ router.post(
       }
 
       const settings = await getOrCreateSettings();
-      let employerFromFile = "";
+      const employerIdsFromFile = new Set();
       let agentCodeFromFile = "";
 
       const edrs = json.map((row) => {
@@ -425,7 +483,8 @@ router.post(
         });
 
         if (mapped.EMPLOYERID) {
-          employerFromFile = digitsOnly(mapped.EMPLOYERID);
+          const eid = digitsOnly(mapped.EMPLOYERID);
+          if (eid.length === 13) employerIdsFromFile.add(eid);
         }
         if (mapped.AGENTCODE && !agentCodeFromFile) {
           agentCodeFromFile = digitsOnly(mapped.AGENTCODE);
@@ -457,12 +516,18 @@ router.post(
         };
       });
 
+      // Do not overwrite existing SIF Settings from mixed Excel files.
+      // Only fill empty settings when the file has a single unambiguous Employer ID.
       let settingsChanged = false;
-      if (employerFromFile && employerFromFile.length === 13) {
-        settings.employerId = employerFromFile;
+      if (!settings.employerId && employerIdsFromFile.size === 1) {
+        settings.employerId = [...employerIdsFromFile][0];
         settingsChanged = true;
       }
-      if (agentCodeFromFile && agentCodeFromFile.length >= 5) {
+      if (
+        !settings.defaultAgentRoutingCode &&
+        agentCodeFromFile &&
+        agentCodeFromFile.length === 9
+      ) {
         settings.defaultAgentRoutingCode = agentCodeFromFile;
         settingsChanged = true;
       }
@@ -481,5 +546,132 @@ router.post(
     }
   }
 );
+
+// ── Read-only mapping audit (all eligible employees) ───────────────────────
+
+router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
+  try {
+    const settings = await getOrCreateSettings();
+    const settingsEmployerId = normalizeCompanyCode(settings.employerId);
+    const employees = await loadEmployeesWithCompanyCodes();
+
+    const byEmployer = {};
+    const rows = [];
+    let pass = 0;
+    let missingData = 0;
+    let mismatch = 0;
+    let agentOk = 0;
+    let agentMissing = 0;
+    let agentInvalid = 0;
+
+    employees.forEach((emp) => {
+      const employerId = resolveEmployeeEmployerId(emp);
+      const storedCode = String(emp.companyCode || "").trim();
+      const agentRaw = digitsOnly(emp.salaryDetails?.bankSortCode);
+      const agentErr = agentRaw ? validateAgentCode(agentRaw) : "AGENTCODE missing";
+      const bank = getBankAccount(emp) || "";
+      const empid = normalizeEmiratesId(emp.emiratesId);
+      const salary = getFixedIncome(emp);
+
+      const issues = [];
+      if (!employerId) issues.push("Missing Employer ID / company code");
+      else if (employerId.length !== 13) {
+        issues.push(`Employer ID / company code must be 13 digits (got ${employerId.length})`);
+      }
+      if (!empid || empid.length < 14 || empid.length > 15) {
+        issues.push("Missing/invalid Emirates ID (Person Code)");
+      }
+      if (!bank) issues.push("Missing IBAN / bank account");
+      if (agentErr) issues.push(agentErr);
+      if (settingsEmployerId && employerId && settingsEmployerId !== employerId) {
+        // Multi-company is valid; informational only for review against settings default
+        issues.push(
+          `Assigned to Employer ID ${employerId} (SIF Settings default is ${settingsEmployerId})`
+        );
+      }
+
+      const hardMissing =
+        !employerId ||
+        !empid ||
+        empid.length < 14 ||
+        empid.length > 15 ||
+        !bank;
+      const hardMismatch = Boolean(employerId && employerId.length !== 13);
+
+      let validation = "Pass";
+      if (hardMissing) validation = "Missing Data";
+      else if (hardMismatch) validation = "Mismatch";
+
+      const agentIssue = Boolean(agentErr);
+      if (!agentRaw) agentMissing += 1;
+      else if (agentErr) agentInvalid += 1;
+      else agentOk += 1;
+
+      const key = employerId || "(empty)";
+      byEmployer[key] = (byEmployer[key] || 0) + 1;
+
+      rows.push({
+        employeeId: emp.employeeId || "",
+        employeeName: emp.employeeName || "",
+        employeeStatus: emp.employeeStatus || "",
+        office: emp.office || "",
+        companyCode: storedCode,
+        employerId,
+        agentCode: agentRaw,
+        labourCard: emp.labourCardNumber || "",
+        emiratesId: empid,
+        iban: bank,
+        salary,
+        validation,
+        issues,
+        agentIssue,
+      });
+    });
+
+    pass = rows.filter((r) => r.validation === "Pass").length;
+    missingData = rows.filter((r) => r.validation === "Missing Data").length;
+    mismatch = rows.filter((r) => r.validation === "Mismatch").length;
+
+    // Flag for human review: missing/invalid mapping data or agent code problems
+    const unresolved = rows.filter(
+      (r) => r.validation !== "Pass" || r.agentIssue
+    );
+
+    res.json({
+      auditedAt: new Date().toISOString(),
+      totalEligible: employees.length,
+      sifSettings: {
+        employerId: settings.employerId || "",
+        defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
+      },
+      summary: {
+        pass,
+        missingData,
+        mismatch,
+        unresolvedForReview: unresolved.length,
+      },
+      agentCode: {
+        ok9Digits: agentOk,
+        missing: agentMissing,
+        invalidLength: agentInvalid,
+      },
+      byEmployerId: byEmployer,
+      // Full population for review (may be large)
+      employees: rows,
+      unresolved: unresolved.map((r) => ({
+        employeeId: r.employeeId,
+        employeeName: r.employeeName,
+        employerId: r.employerId,
+        companyCode: r.companyCode,
+        agentCode: r.agentCode,
+        validation: r.validation,
+        issues: r.issues,
+      })),
+    });
+  } catch (err) {
+    console.error("SIF audit error:", err);
+    res.status(500).json({ message: "Failed to run SIF mapping audit" });
+  }
+});
 
 module.exports = router;

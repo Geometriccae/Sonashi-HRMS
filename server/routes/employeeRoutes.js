@@ -15,7 +15,6 @@ const crypto = require('crypto');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const Client = require('../models/Client');
-const CompanyDocument = require('../models/CompanyDocument');
 const { buildEmployeePayload } = require('../utils/employeeExcelImport');
 const { notifyEmployeeOnboarding } = require('../services/hrNotificationService');
 const { ensureUploadSubdir } = require('../utils/uploadsPath');
@@ -33,54 +32,14 @@ const {
   setApprovedLeavesCache,
   invalidateApprovedLeavesCache,
 } = require('../utils/employeeListCache');
+const {
+  getCompanyCodeMap,
+  applyLiveCompanyCodes,
+  DEFAULT_COMPANY_CODE,
+} = require('../utils/companyCode');
 
 // ========== SERVER-SIDE LIST CACHE ==========
 // Cached via employeeListCache; invalidated on employee writes and leave yet-to-go sync.
-
-/** Map company document particulars → docNumber (Company Code). */
-const COMPANY_CODE_TTL_MS = 60000;
-let _companyCodeCache = { map: null, ts: 0 };
-
-async function getCompanyCodeMap() {
-  try {
-    if (_companyCodeCache.map && Date.now() - _companyCodeCache.ts < COMPANY_CODE_TTL_MS) {
-      return _companyCodeCache.map;
-    }
-    const docs = await CompanyDocument.find({}).select('particulars docNumber updatedAt createdAt').lean();
-    const map = {};
-    const sorted = [...docs].sort((a, b) => {
-      const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
-      const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
-      return ta - tb;
-    });
-    for (const d of sorted) {
-      const key = String(d.particulars || '').trim().toLowerCase();
-      const code = String(d.docNumber || '').trim();
-      if (key && code) map[key] = code;
-    }
-    _companyCodeCache = { map, ts: Date.now() };
-    return map;
-  } catch (err) {
-    console.error('Failed to load company codes from Company Documents:', err.message);
-    return {};
-  }
-}
-
-/** Live Company Code from Company Documents (by employee.office / company name).
- *  Preserve stored company codes. Empty → built-in JOINT VEN code.
- */
-function applyLiveCompanyCodes(employees, codeMap) {
-  if (!Array.isArray(employees)) return employees;
-  const DEFAULT_COMPANY_CODE = '0000000172509';
-  return employees.map((e) => {
-    const stored = String(e.companyCode || '').trim();
-    if (stored) return e;
-    const key = String(e.office || '').trim().toLowerCase();
-    const live = key && codeMap ? codeMap[key] : '';
-    if (live) return { ...e, companyCode: live };
-    return { ...e, companyCode: DEFAULT_COMPANY_CODE };
-  });
-}
 
 // warmListCache / invalidateListCache come from employeeListCache
 function warmListCache() {
@@ -913,7 +872,12 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
     ensureEmployeeEmailForDb(employeeData, `c${Date.now().toString(36)}`);
 
     if (!String(employeeData.companyCode || '').trim()) {
-      employeeData.companyCode = '0000000172509';
+      const codeMap = await getCompanyCodeMap();
+      const [enriched] = applyLiveCompanyCodes(
+        [{ office: employeeData.office, companyCode: '' }],
+        codeMap
+      );
+      employeeData.companyCode = enriched.companyCode || DEFAULT_COMPANY_CODE;
     }
     if (!String(employeeData.office || '').trim()) {
       employeeData.office = 'JOINT VEN TRADING CO LLC';
@@ -1062,7 +1026,12 @@ router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single(
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'companyCode')
       && !String(updateData.companyCode || '').trim()) {
-      updateData.companyCode = '0000000172509';
+      const codeMap = await getCompanyCodeMap();
+      const [enriched] = applyLiveCompanyCodes(
+        [{ office: updateData.office, companyCode: '' }],
+        codeMap
+      );
+      updateData.companyCode = enriched.companyCode || DEFAULT_COMPANY_CODE;
     }
 
     // Use $set so nested salaryDetails / bank fields merge correctly on update

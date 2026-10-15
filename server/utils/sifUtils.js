@@ -87,18 +87,31 @@ const buildEdrPayload = (employees, year, month) => {
 
   employees.forEach((emp) => {
     const empid = normalizeEmiratesId(emp.emiratesId);
-    let agent = digitsOnly(emp.salaryDetails?.bankSortCode);
+    const agent = digitsOnly(emp.salaryDetails?.bankSortCode);
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
 
-    // Include all employees; pad missing agent code rather than blocking export
-    if (agent.length !== 9) {
-      agent = pad(agent || "0", 9).slice(-9);
+    const reasons = [];
+    const empErr = validateEmpId(empid);
+    const agentErr = validateAgentCode(agent);
+    const bankErr = validateBankAccount(bank);
+    if (empErr) reasons.push(empErr);
+    if (agentErr) reasons.push(agentErr);
+    if (bankErr) reasons.push(bankErr);
+    if (reasons.length) {
+      skipped.push({
+        staffId: emp.employeeId || "",
+        empName: emp.employeeName || "",
+        empId: empid,
+        agentCode: agent,
+        reason: reasons.join("; "),
+      });
+      return;
     }
 
     const line = [
       "EDR",
-      empid || "",
+      empid,
       agent,
       bank,
       start,
@@ -308,11 +321,14 @@ const RED_HEADERS = new Set([
 
 const employeeToExcelRow = (emp, employerId) => {
   const sal = emp.salaryDetails || {};
+  // Prefer the employee's own companyCode (Employer ID); fall back to caller-supplied value.
+  const rowEmployerId =
+    digitsOnly(emp.companyCode) || digitsOnly(employerId);
   return {
     StaffID: emp.employeeId || "",
     EMPID: normalizeEmiratesId(emp.emiratesId),
     EMPNAME: emp.employeeName || "",
-    EMPLOYERID: digitsOnly(employerId),
+    EMPLOYERID: rowEmployerId,
     AGENTCODE: digitsOnly(sal.bankSortCode),
     BANKACCOUNT: getBankAccount(emp),
     STATUS: emp.employeeStatus || "",

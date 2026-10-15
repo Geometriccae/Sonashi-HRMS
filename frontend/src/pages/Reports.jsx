@@ -1132,9 +1132,13 @@ function Reports() {
       // Pass selected Employer ID for this export only.
       // Agent Code continues from existing SIF Settings on the server.
       const result = await sifService.exportSif(m, y, { employerId });
-      if (result.skippedCount > 0) {
-        alert(`SIF exported (${result.edrCount} records). ${result.skippedCount} employee(s) skipped due to missing data.`);
-      }
+      const companyNote = result.excludedByCompany > 0
+        ? ` ${result.excludedByCompany} employee(s) excluded (different company code).`
+        : "";
+      const skipNote = result.skippedCount > result.excludedByCompany
+        ? ` ${result.skippedCount - result.excludedByCompany} skipped due to missing data.`
+        : "";
+      alert(`SIF exported (${result.edrCount} records for Employer ID ${employerId}).${companyNote}${skipNote}`);
       return;
     }
 
@@ -1792,6 +1796,9 @@ function Reports() {
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
+                      <div className={styles.sifEmployerHint}>
+                        The SIF file includes only employees whose Company Code matches this Employer ID. Generate a separate file for each company.
+                      </div>
                     </div>
                   </div>
                 </div>
