@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import "./InputField.css";
+import "./DateInput.css";
 import DatePickerModal from "./DatePickerModal";
 import { DEFAULT_MIN_YEAR, getDefaultMaxYear } from "../utils/calendarNavUtils";
+import { useDateFieldBaseline } from "../utils/dateFieldReset";
 
 const formatDateDisplay = (value) => {
   if (!value) return "";
@@ -36,13 +38,27 @@ function InputField({
   inputMode,
   minYear = DEFAULT_MIN_YEAR,
   maxYear = getDefaultMaxYear(),
+  defaultValue,
+  showReset = true,
 }) {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const getResetValue = useDateFieldBaseline(value, defaultValue);
+
+  const applyDateValue = (nextValue) => {
+    if (onChange) {
+      onChange({ target: { value: nextValue, name } });
+    }
+  };
 
   const handleDateSelect = (date) => {
-    if (onChange) {
-      onChange({ target: { value: toYYYYMMDD(date), name } });
-    }
+    applyDateValue(toYYYYMMDD(date));
+    setDatePickerOpen(false);
+  };
+
+  const handleDateReset = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    applyDateValue(getResetValue());
     setDatePickerOpen(false);
   };
 
@@ -53,7 +69,7 @@ function InputField({
           {label} {required && <span style={{ color: "red", marginLeft: "4px" }}>*</span>}
         </label>
       </div>
-      <div className={`input-container ${hasError ? "input-error" : ""}`}>
+      <div className={`input-container ${hasError ? "input-error" : ""} ${type === "date" ? "date-input-group-wrap" : ""}`}>
         {isDropdown ? (
           <div className="dropdown-field">
             <select
@@ -95,10 +111,21 @@ function InputField({
               name={name}
               style={{ cursor: disabled ? "not-allowed" : "pointer" }}
             />
+            {showReset && !disabled ? (
+              <button
+                type="button"
+                className="date-reset-btn"
+                title="Reset date"
+                onClick={handleDateReset}
+              >
+                Reset
+              </button>
+            ) : null}
             <DatePickerModal
               isOpen={datePickerOpen}
               onClose={() => setDatePickerOpen(false)}
               onSelectDate={handleDateSelect}
+              onReset={handleDateReset}
               selectedDate={value}
               minYear={minYear}
               maxYear={maxYear}

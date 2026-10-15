@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import "../DateInput.css";
+import { useDateBaselines } from "../../utils/dateFieldReset";
 import { useToast } from "../../context/ToastContext";
 import leaveRequestService from "../../services/LeaveRequestService";
 import EmployeeService from "../../services/EmployeeService";
@@ -8,10 +10,15 @@ import DatePickerModal from "../DatePickerModal";
 import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
-import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import {
+    calculateLeaveBalance,
+    calculateLeaveDays,
+    getApprovedLeavesForEmployee,
+} from "../../utils/leaveCalculator";
+import { fetchEmployeeLeaveHistory } from "../../utils/fetchEmployeeLeaveHistory";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
-import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus, employeesForNativeSelect } from "../../utils/employeeStatusDisplay";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
@@ -22,6 +29,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [userRole, setUserRole] = useState("");
     const [employees, setEmployees] = useState([]);
+    const [employeeLeaveHistory, setEmployeeLeaveHistory] = useState([]);
     const [error, setError] = useState("");
     const [formData, setFormData] = useState({
         employeeId: "",
@@ -38,6 +46,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     });
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
+    const { setBaselines, getResetValue } = useDateBaselines({ start: "", end: "" });
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
     // Which leave record the form is editing (click a date in history to switch)
@@ -75,7 +84,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const populateFormFromLeave = (req) => {
         if (!req) return;
-        const rawEmpId = req.employee?._id || req.employee || req.employeeId || "";
+        const recordId = req.employeeRecordId?._id || req.employeeRecordId || "";
+        const rawEmpId = recordId || req.employee?._id || req.employee || req.employeeId || "";
         const empIdStr =
             rawEmpId && typeof rawEmpId === "object"
                 ? String(rawEmpId._id || rawEmpId)
@@ -98,6 +108,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             requestAirfare: req.requestAirfare || false,
             visaExpiryDate: formatVisaInputDate(visaSrc)
         });
+        setBaselines({
+            start: req.startDate ? new Date(req.startDate).toISOString().split("T")[0] : "",
+            end: req.endDate ? new Date(req.endDate).toISOString().split("T")[0] : "",
+        });
         setError("");
     };
 
@@ -106,6 +120,19 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         setActiveLeave(req);
         populateFormFromLeave(req);
         showToast("Loaded leave for editing — update dates and save.", "success");
+    };
+
+    const resetLeaveDateField = (fieldKey, event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const formField = fieldKey === "start" ? "startDate" : "endDate";
+        setFormData((prev) => ({ ...prev, [formField]: getResetValue(fieldKey) }));
+        setDatePickerOpen(false);
+    };
+
+    const handleDateReset = () => {
+        if (!datePickerField) return;
+        resetLeaveDateField(datePickerField);
     };
 
     const handleDateSelect = (date) => {
@@ -142,12 +169,48 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const role = localStorage.getItem("role") || "";
         setUserRole(role);
         if (isOpen) {
-            if (role.toLowerCase() === "admin" || role.toLowerCase() === "hr" || role.toLowerCase() === "hod") {
-                fetchEmployees();
-            }
+            // Same employee master source for Admin / HR / HOD / Authorize User / Viewer
+            // so DOJ, experience, and leave balance resolve consistently when reviewing.
+            fetchEmployees();
             fetchDepartmentOptions();
+        } else {
+            setEmployeeLeaveHistory([]);
         }
     }, [isOpen]);
+
+    // Load this employee's full leave history for Taken / Balance (same source as Team Entitlement)
+    useEffect(() => {
+        if (!isOpen) return;
+        const empMongoId =
+            formData.employeeId ||
+            leaveRequest?.employeeRecordId ||
+            leaveRequest?.employee?.employeeId?._id ||
+            leaveRequest?.employee?.employeeId ||
+            "";
+        if (!empMongoId || !/^[a-fA-F0-9]{24}$/.test(String(empMongoId))) {
+            setEmployeeLeaveHistory([]);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const rows = await fetchEmployeeLeaveHistory(empMongoId);
+                if (!cancelled) setEmployeeLeaveHistory(rows);
+            } catch (err) {
+                console.error("Failed to load employee leave history", err);
+                if (!cancelled) setEmployeeLeaveHistory([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        isOpen,
+        formData.employeeId,
+        leaveRequest?._id,
+        leaveRequest?.employeeRecordId,
+        leaveRequest?.employee?.employeeId,
+    ]);
 
     const fetchDepartmentOptions = async () => {
         try {
@@ -220,6 +283,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 requestAirfare: leaveRequest.requestAirfare || false,
                 visaExpiryDate: formatVisaInputDate(visaSrc)
             });
+            setBaselines({
+                start: leaveRequest.startDate ? new Date(leaveRequest.startDate).toISOString().split("T")[0] : "",
+                end: leaveRequest.endDate ? new Date(leaveRequest.endDate).toISOString().split("T")[0] : "",
+            });
             setError("");
             setSelectedYearDetails(null);
         }
@@ -228,7 +295,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const fetchEmployees = async () => {
         try {
             const data = await EmployeeService.getEmployeesList();
-            setEmployees(data);
+            setEmployees(Array.isArray(data) ? data : (data?.employees || []));
         } catch (error) {
             console.error("Error fetching employees:", error);
         }
@@ -343,7 +410,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const baseDepartmentOptions = dynamicDepartmentOptions;
 
-    const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp));
+    const employeeOptions = employeesForNativeSelect(employees, formData.employeeId).map((emp) => toSearchableEmployeeOption(emp));
 
     const reportingManagerOptions = employees.map(emp => ({
         value: emp.employeeName || emp.name || "Unknown",
@@ -364,6 +431,10 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     // Resolve Employee master (doj / visa live on Employee, not User on leaveRequest.employee)
     const linkedEmployeeId =
+        targetLeave?.employeeRecordId?._id ||
+        targetLeave?.employeeRecordId ||
+        leaveRequest?.employeeRecordId?._id ||
+        leaveRequest?.employeeRecordId ||
         targetLeave?.employee?.employeeId?._id ||
         targetLeave?.employee?.employeeId ||
         leaveRequest?.employee?.employeeId?._id ||
@@ -376,20 +447,28 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                             const fName = String(formData.employeeName || "").toLowerCase().trim();
                             return eName === fName && fName !== "";
                         })) ||
+                        leaveRequest?.employeeMaster ||
+                        targetLeave?.employeeMaster ||
                         (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
                             ? targetLeave.employee
                             : null);
-                        
-    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
-    const employeeLeaves = (allLeaveRequests || []).filter(req => {
-        const reqName = String(req.employeeName || "").toLowerCase().trim();
-        let empNameSearch = "";
-        if (selectedEmp && selectedEmp.employeeName) empNameSearch = String(selectedEmp.employeeName).toLowerCase().trim();
-        else if (selectedEmp && selectedEmp.name) empNameSearch = String(selectedEmp.name).toLowerCase().trim();
-        else empNameSearch = String(formData.employeeName || "").toLowerCase().trim();
-        
-        return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved" || req.status === "Imported");
-    });
+
+    const experienceLabel = selectedEmp
+        ? (formatExperienceLabel(
+            selectedEmp.doj,
+            selectedEmp.totalYearsExperience,
+            formData.startDate || new Date()
+        ) || "N/A")
+        : "N/A";
+
+    // Full leave history for this employee only — never the year-filtered Leave Management table.
+    const balanceLeaveSource = Array.isArray(employeeLeaveHistory) ? employeeLeaveHistory : [];
+
+    const leaveStats = selectedEmp && typeof selectedEmp === 'object' ? calculateLeaveBalance(selectedEmp, balanceLeaveSource, formData.startDate || new Date(), { excludeLeaveId: leaveRequest?._id }) : { entitlement: 0, totalTaken: 0, balance: 0, expiredDays: 0, airfareEligible: false };
+    // Same employee-ID + approved filter as leaveCalculator (not name / Imported).
+    const employeeLeaves = selectedEmp && typeof selectedEmp === "object"
+        ? getApprovedLeavesForEmployee(selectedEmp, balanceLeaveSource)
+        : [];
     const years = buildLeaveHistoryYears(selectedEmp?.doj);
 
     const getYearlyLeaves = (year) => {
@@ -397,12 +476,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     };
 
     const getYearlyTotal = (year) => {
-        return getYearlyLeaves(year)
-            .reduce((total, req) => {
-                const s = new Date(req.startDate);
-                const e = new Date(req.endDate);
-                return total + (Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1);
-            }, 0);
+        if (!leaveStats) return 0;
+        const yearEnd = new Date(year, 11, 31);
+        const takenStart = leaveStats.takenRangeStart
+            ? new Date(leaveStats.takenRangeStart)
+            : leaveStats.calculationStartDate
+              ? new Date(leaveStats.calculationStartDate)
+              : null;
+        if (takenStart && yearEnd < takenStart) {
+            return leaveStats.historicalYearTotals?.[year] ?? 0;
+        }
+        return leaveStats.yearTotals?.[year] ?? 0;
     };
 
     const handleYearClick = (year) => {
@@ -548,18 +632,20 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         <div className="input-label-container">
                                             <label className="input-label">Start Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
                                         </div>
-                                        <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.startDate || ""} placeholder="Select date" />
                                             <img src={calendarIcon} alt="" width="16" height="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("start", event)}>Reset</button>
                                         </div>
                                     </div>
                                     <div className="input-field">
                                         <div className="input-label-container">
                                             <label className="input-label">End Date <span style={{ color: "red", marginLeft: "4px" }}>*</span></label>
                                         </div>
-                                        <div className="input-container" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" style={{ cursor: "pointer" }} onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.endDate || ""} placeholder="Select date" />
                                             <img src={calendarIcon} alt="" width="16" height="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("end", event)}>Reset</button>
                                         </div>
                                     </div>
                                 </>
@@ -643,11 +729,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={
-                                                selectedEmp
-                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
-                                                    : "N/A"
-                                            } 
+                                            value={experienceLabel} 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -769,8 +851,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#14532d" }}>{leaveStats.entitlement} Days</div>
                                 </div>
                                 <div style={{ padding: "12px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecaca", textAlign: "center" }}>
-                                    <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Taken</div>
+                                    <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Leave Taken</div>
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
+                                    <div style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>
+                                        {leaveStats.rollingFiveYear
+                                            ? `${new Date(leaveStats.rollingWindowStart).toLocaleDateString("en-GB")} → ${new Date(leaveStats.rollingWindowEnd).toLocaleDateString("en-GB")}`
+                                            : selectedEmp?.doj
+                                            ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
+                                            : "From DOJ to today"}
+                                    </div>
                                 </div>
                                 <div style={{ padding: "12px", background: "#fff7ed", borderRadius: "12px", border: "1px solid #fed7aa", textAlign: "center" }}>
                                     <div style={{ fontSize: "10px", color: "#9a3412", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Expired</div>
@@ -783,9 +872,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
                                     <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
                                     <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
-                                        {selectedEmp
-                                            ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
-                                            : "N/A"}
+                                        {experienceLabel}
                                     </div>
                                 </div>
                             </div>
@@ -876,7 +963,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                                                             {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
                                                                                         </button>
                                                                                         <div style={{ fontSize: "11px", color: "#64748b" }}>
-                                                                                            {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
+                                                                                            {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate, req.leaveDays) || 0} Days
                                                                                         </div>
                                                                                     </div>
                                                                                     <div style={{ textAlign: "right" }}>
@@ -920,6 +1007,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                     isOpen={datePickerOpen}
                     onClose={() => setDatePickerOpen(false)}
                     onSelectDate={handleDateSelect}
+                    onReset={handleDateReset}
                     selectedDate={datePickerField === "start" ? formData.startDate : formData.endDate}
                 />
             )}

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import "../DateInput.css";
+import { useDateBaselines } from "../../utils/dateFieldReset";
 import { useToast } from "../../context/ToastContext";
 import leaveRequestService from "../../services/LeaveRequestService";
 import EmployeeService from "../../services/EmployeeService";
@@ -9,18 +11,24 @@ import DateInput from "../DateInput";
 import Select from "react-select";
 import { OFFICIAL_HOLIDAYS_2026 } from "../../utils/leaveHolidays";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
-import { calculateLeaveBalance } from "../../utils/leaveCalculator";
+import {
+    calculateLeaveBalance,
+    calculateLeaveDays,
+    getApprovedLeavesForEmployee,
+} from "../../utils/leaveCalculator";
+import { fetchEmployeeLeaveHistory } from "../../utils/fetchEmployeeLeaveHistory";
 import { formatExperienceLabel } from "../../utils/yetToGoHelpers";
 import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/yearOptions";
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
-import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus } from "../../utils/employeeStatusDisplay";
+import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus, employeesForNativeSelect } from "../../utils/employeeStatusDisplay";
 import "./LeaveForm.css";
 
 function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null, onEditLeave }) {
     const { showToast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [employees, setEmployees] = useState([]);
+    const [employeeLeaveHistory, setEmployeeLeaveHistory] = useState([]);
     const [userRole, setUserRole] = useState("");
     const [error, setError] = useState("");
     const [loggedInUser, setLoggedInUser] = useState({ id: "", username: "" });
@@ -38,6 +46,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     });
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
+    const { setBaselines, getResetValue } = useDateBaselines({ start: "", end: "" });
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
     const [leaveEntitlementType, setLeaveEntitlementType] = useState('New Leave'); // 'New Leave' | 'Past Leave'
@@ -82,8 +91,31 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             });
             setError("");
             setSelectedYearDetails(null);
+            setBaselines({ start: "", end: "" });
+        } else {
+            setEmployeeLeaveHistory([]);
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen || !formData.employeeId || !/^[a-fA-F0-9]{24}$/.test(String(formData.employeeId))) {
+            if (!formData.employeeId) setEmployeeLeaveHistory([]);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const rows = await fetchEmployeeLeaveHistory(formData.employeeId);
+                if (!cancelled) setEmployeeLeaveHistory(rows);
+            } catch (err) {
+                console.error("Failed to load employee leave history", err);
+                if (!cancelled) setEmployeeLeaveHistory([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, formData.employeeId]);
 
     const fetchDepartmentOptions = async () => {
         try {
@@ -204,6 +236,19 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         });
     };
 
+    const resetLeaveDateField = (fieldKey, event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const formField = fieldKey === "start" ? "startDate" : "endDate";
+        setFormData((prev) => ({ ...prev, [formField]: getResetValue(fieldKey) }));
+        setDatePickerOpen(false);
+    };
+
+    const handleDateReset = () => {
+        if (!datePickerField) return;
+        resetLeaveDateField(datePickerField);
+    };
+
     const handleDateSelect = (date) => {
         if (error) setError("");
 
@@ -299,27 +344,39 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         }
     };
 
-    // Calculate History Logic (Same as View Template)
+    // Calculate History Logic (Same as View Template / Team Leave Entitlement)
     const selectedEmp = employees.find(e => e._id === formData.employeeId);
-    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, allLeaveRequests) : { entitlement: 0, totalTaken: 0, balance: 0 };
-    const employeeLeaves = (allLeaveRequests || []).filter(req => {
-        const reqName = String(req.employeeName || "").toLowerCase().trim();
-        const empNameSearch = String(selectedEmp?.employeeName || selectedEmp?.name || "").toLowerCase().trim();
-        return (reqName === empNameSearch) && (req.status === "Approved" || req.status === "HOD Approved");
-    });
+    // Full leave history for this employee only — never the year-filtered Leave Management table.
+    const balanceLeaveSource = Array.isArray(employeeLeaveHistory) ? employeeLeaveHistory : [];
+    const leaveStats = selectedEmp ? calculateLeaveBalance(selectedEmp, balanceLeaveSource, formData.startDate || new Date()) : { entitlement: 0, totalTaken: 0, balance: 0 };
+    const employeeLeaves = selectedEmp
+        ? getApprovedLeavesForEmployee(selectedEmp, balanceLeaveSource)
+        : [];
     const years = buildLeaveHistoryYears(selectedEmp?.doj);
+    const experienceLabel = selectedEmp
+        ? (formatExperienceLabel(
+            selectedEmp.doj,
+            selectedEmp.totalYearsExperience,
+            formData.startDate || new Date()
+        ) || "N/A")
+        : "N/A";
 
     const getYearlyLeaves = (year) => {
         return employeeLeaves.filter((req) => leaveBelongsToHistoryYear(req, year, selectedEmp?.doj));
     };
 
     const getYearlyTotal = (year) => {
-        return getYearlyLeaves(year)
-            .reduce((total, req) => {
-                const s = new Date(req.startDate);
-                const e = new Date(req.endDate);
-                return total + (Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1);
-            }, 0);
+        if (!leaveStats) return 0;
+        const yearEnd = new Date(year, 11, 31);
+        const takenStart = leaveStats.takenRangeStart
+            ? new Date(leaveStats.takenRangeStart)
+            : leaveStats.calculationStartDate
+              ? new Date(leaveStats.calculationStartDate)
+              : null;
+        if (takenStart && yearEnd < takenStart) {
+            return leaveStats.historicalYearTotals?.[year] ?? 0;
+        }
+        return leaveStats.yearTotals?.[year] ?? 0;
     };
 
     const handleYearClick = (year) => {
@@ -378,7 +435,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     const departmentOptions = dynamicDepartmentOptions;
 
-    const employeeOptions = employees.map((emp) => toSearchableEmployeeOption(emp));
+    const employeeOptions = employeesForNativeSelect(employees, formData.employeeId).map((emp) => toSearchableEmployeeOption(emp));
 
     const reportingManagerOptions = employees.map(emp => ({
         value: (emp.employeeName || emp.name || "").trim(),
@@ -499,11 +556,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                             type="text" 
                                             className="input-field-input" 
                                             disabled 
-                                            value={
-                                                selectedEmp
-                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
-                                                    : "N/A"
-                                            } 
+                                            value={experienceLabel} 
                                             style={{ background: "#f8fafc" }} 
                                         />
                                     </div>
@@ -543,16 +596,18 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                 <div className="form-row">
                                     <div className="input-field">
                                         <label className="input-label">Start Date *</label>
-                                        <div className="input-container" onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" onClick={() => { setDatePickerField("start"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.startDate} placeholder="Start date" />
                                             <img src={calendarIcon} alt="" width="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("start", event)}>Reset</button>
                                         </div>
                                     </div>
                                     <div className="input-field">
                                         <label className="input-label">End Date *</label>
-                                        <div className="input-container" onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
+                                        <div className="input-container date-input-group-wrap" onClick={() => { setDatePickerField("end"); setDatePickerOpen(true); }}>
                                             <input type="text" className="input-field-input" readOnly value={formData.endDate} placeholder="End date" />
                                             <img src={calendarIcon} alt="" width="16" />
+                                            <button type="button" className="date-reset-btn" title="Reset date" onClick={(event) => resetLeaveDateField("end", event)}>Reset</button>
                                         </div>
                                     </div>
                                 </div>
@@ -687,8 +742,15 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                             <div style={{ fontSize: "16px", fontWeight: "800", color: "#14532d" }}>{leaveStats.entitlement} Days</div>
                                         </div>
                                         <div style={{ padding: "12px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecaca", textAlign: "center" }}>
-                                            <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Taken</div>
+                                            <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Leave Taken</div>
                                             <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
+                                            <div style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>
+                                                {leaveStats.rollingFiveYear
+                                                    ? `${new Date(leaveStats.rollingWindowStart).toLocaleDateString("en-GB")} → ${new Date(leaveStats.rollingWindowEnd).toLocaleDateString("en-GB")}`
+                                                    : selectedEmp?.doj
+                                                    ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
+                                                    : "From DOJ to today"}
+                                            </div>
                                         </div>
                                         <div style={{ padding: "12px", background: "#fff7ed", borderRadius: "12px", border: "1px solid #fed7aa", textAlign: "center" }}>
                                             <div style={{ fontSize: "10px", color: "#9a3412", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Expired</div>
@@ -701,9 +763,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                         <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
                                             <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
                                             <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
-                                                {selectedEmp
-                                                    ? (formatExperienceLabel(selectedEmp.doj, selectedEmp.totalYearsExperience) || "N/A")
-                                                    : "N/A"}
+                                                {experienceLabel}
                                             </div>
                                         </div>
                                     </div>
@@ -800,7 +860,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                                                     </div>
                                                                                                 )}
                                                                                                 <div style={{ fontSize: "11px", color: "#64748b" }}>
-                                                                                                    {req.leaveType} • {Math.round((new Date(req.endDate) - new Date(req.startDate)) / (1000 * 60 * 60 * 24)) + 1} Days
+                                                                                                    {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate, req.leaveDays) || 0} Days
                                                                                                 </div>
                                                                                             </div>
                                                                                             <div style={{ textAlign: "right" }}>
@@ -844,6 +904,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                 isOpen={datePickerOpen}
                 onClose={() => setDatePickerOpen(false)}
                 onSelectDate={handleDateSelect}
+                onReset={handleDateReset}
                 selectedDate={datePickerField === "start" ? formData.startDate : formData.endDate}
             />
         </div>

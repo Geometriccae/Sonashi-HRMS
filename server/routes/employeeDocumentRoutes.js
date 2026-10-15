@@ -3,7 +3,12 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const Document = require("../models/EmployeeDocuments");
+const authMiddleware = require("../middleware/authMiddleware");
 const { resolveUploadDiskPath, ensureUploadSubdir } = require("../utils/uploadsPath");
+const {
+  buildUploaderFields,
+  resolveUploaderDisplay,
+} = require("../utils/uploaderIdentity");
 
 const router = express.Router();
 
@@ -44,7 +49,14 @@ const normalizeDoc = (doc) => {
       "/uploads/employeeDocuments/"
     )
     .replace(/\/uploads\/employeedocuments\//gi, "/uploads/employeeDocuments/");
-  return { ...doc, filePath: fixed };
+  const { uploadedBy, userRole } = resolveUploaderDisplay(doc);
+
+  return {
+    ...doc,
+    filePath: fixed,
+    uploadedBy,
+    userRole,
+  };
 };
 
 // IMPORTANT: /file/:docId must be registered BEFORE /:employeeId
@@ -83,7 +95,9 @@ router.get("/:employeeId", async (req, res) => {
     if (req.params.employeeId === "file") {
       return res.status(400).json({ error: "Invalid employee id" });
     }
-    const documents = await Document.find({ employeeId: req.params.employeeId }).lean();
+    const documents = await Document.find({ employeeId: req.params.employeeId })
+      .populate("uploaderId", "username role")
+      .lean();
     res.json(documents.map(normalizeDoc));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -91,13 +105,14 @@ router.get("/:employeeId", async (req, res) => {
 });
 
 // Upload document for employee and save to disk
-router.post("/:employeeId", upload.single("file"), async (req, res) => {
+router.post("/:employeeId", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
     const docType = sanitizeDocType(req.body && req.body.type);
+    const uploader = buildUploaderFields(req.user);
 
     const newDoc = new Document({
       employeeId: req.params.employeeId,
@@ -105,21 +120,30 @@ router.post("/:employeeId", upload.single("file"), async (req, res) => {
       fileType: req.file.mimetype,
       fileSize: req.file.size,
       filePath: `/uploads/employeeDocuments/${req.params.employeeId}/${docType}/${req.file.filename}`,
-      uploadedBy: req.body.uploadedBy,
-      userRole: req.body.userRole,
+      uploaderId: uploader.uploaderId,
+      uploadedBy: uploader.uploadedBy,
+      userRole: uploader.userRole,
       type: req.body.type || "Extra",
       uploadedDate: new Date(),
     });
 
     await newDoc.save();
-    res.json(newDoc);
+    const plain = typeof newDoc.toObject === "function" ? newDoc.toObject() : newDoc;
+    res.json(normalizeDoc({
+      ...plain,
+      uploaderId: {
+        _id: uploader.uploaderId,
+        username: uploader.uploadedBy,
+        role: req.user.role,
+      },
+    }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Replace document file (re-upload)
-router.put("/:docId", memUpload.single("file"), async (req, res) => {
+router.put("/:docId", authMiddleware, memUpload.single("file"), async (req, res) => {
   try {
     const doc = await Document.findById(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
@@ -139,6 +163,7 @@ router.put("/:docId", memUpload.single("file"), async (req, res) => {
     const rawType = (req.body && req.body.type ? String(req.body.type).trim() : "") || doc.type || "Other";
     const docType = sanitizeDocType(rawType);
     const employeeId = String(doc.employeeId);
+    const uploader = buildUploaderFields(req.user);
 
     const newFilename = Date.now() + "-" + req.file.originalname;
     const uploadDir = employeeDocsDir(employeeId, docType);
@@ -155,13 +180,23 @@ router.put("/:docId", memUpload.single("file"), async (req, res) => {
           fileSize: req.file.size,
           filePath: newFilePath,
           type: rawType,
+          uploaderId: uploader.uploaderId,
+          uploadedBy: uploader.uploadedBy,
+          userRole: uploader.userRole,
           uploadedDate: new Date(),
         },
       },
       { new: true }
-    );
+    ).lean();
 
-    res.json(updated);
+    res.json(normalizeDoc({
+      ...updated,
+      uploaderId: {
+        _id: uploader.uploaderId,
+        username: uploader.uploadedBy,
+        role: req.user.role,
+      },
+    }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -180,8 +215,10 @@ router.patch("/:docId/type", async (req, res) => {
       req.params.docId,
       { $set: { type: rawType } },
       { new: true }
-    );
-    res.json(updated);
+    )
+      .populate("uploaderId", "username role")
+      .lean();
+    res.json(normalizeDoc(updated));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

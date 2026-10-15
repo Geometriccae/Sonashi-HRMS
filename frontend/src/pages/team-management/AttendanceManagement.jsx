@@ -60,7 +60,7 @@ function AttendanceManagement() {
       setLoadingEmployees(true);
       setEmployeeError("");
       try {
-        const data = await EmployeeService.getEmployees();
+        const data = await EmployeeService.getEmployeesList();
         setEmployees(Array.isArray(data) ? data : []);
       } catch (err) {
         setEmployeeError(err?.message || "Failed to load employees");
@@ -125,7 +125,7 @@ function AttendanceManagement() {
         }
       }
       try {
-        const data = await EmployeeService.getEmployees();
+        const data = await EmployeeService.getEmployeesList();
         setEmployees(Array.isArray(data) ? data : []);
         setSuccessMessage(`All employees set to ${status}`);
         setTimeout(() => setSuccessMessage(""), 3000);
@@ -310,7 +310,7 @@ function AttendanceManagement() {
             <div className={styles["error"]}>{employeeError}</div>
           )}
 
-          <div className={styles["table-wrapper"]}>
+          <div className={`${styles["table-wrapper"]} hrms-table-scroll`}>
             <table className={styles["table"]}>
               <thead>
                 <tr>
@@ -463,7 +463,7 @@ function AttendanceManagement() {
             <span>Leave: <strong>{reportData.filter(x => x.status === 'Leave').length}</strong></span>
           </div>
 
-          <div className={styles["table-wrapper"]}>
+          <div className={`${styles["table-wrapper"]} hrms-table-scroll`}>
             <table className={styles["table"]}>
               <thead>
                 <tr>
@@ -550,7 +550,7 @@ function AttendanceManagement() {
               <button className={styles["action-btn"]} onClick={fetchSummary}>Refresh</button>
             </div>
           </div>
-          <div className={styles["table-wrapper"]}>
+          <div className={`${styles["table-wrapper"]} hrms-table-scroll`}>
             <table className={styles["table"]}>
               <thead>
                 <tr>

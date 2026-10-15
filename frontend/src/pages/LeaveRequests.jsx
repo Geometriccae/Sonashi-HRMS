@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import styles from "./SalesAndLeads.module.css";
 import Side from "./sidebar/Sidebar";
 import LeaveRequestTable from "../components/leave-request/LeaveRequestTable";
-import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import leaveRequestService from "../services/LeaveRequestService";
 import UserService from "../services/UserService";
@@ -17,36 +16,69 @@ function LeaveRequests() {
         rejected: 0
     });
     const [isLoadingMetrics, setIsLoadingMetrics] = useState(true);
+    const [cardFilter, setCardFilter] = useState(null);
+
+    const openStatusCard = (status) => setCardFilter({ status, at: Date.now() });
+    const cardProps = (status, label) => ({
+        role: "button",
+        tabIndex: 0,
+        title: `Show ${label} leave requests (all years)`,
+        onClick: () => openStatusCard(status),
+        onKeyDown: (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openStatusCard(status);
+            }
+        },
+    });
+    const cardStyle = { minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem", cursor: "pointer" };
 
     useEffect(() => {
         setUserRole(localStorage.getItem("role") || "");
-        fetchMetrics();
         fetchLeaveBalance();
     }, []);
 
     const fetchLeaveBalance = async () => {
         try {
             const user = await UserService.getMe();
-            setLeaveBalance(user.leaveBalance !== undefined ? user.leaveBalance : 21);
+            setLeaveBalance(user.leaveBalance != null ? user.leaveBalance : "--");
         } catch (error) {
             console.error("Error fetching leave balance:", error);
         }
     };
 
-    const fetchMetrics = async () => {
+    /** Derive KPI cards from the same leave list the table already fetched (no second API call). */
+    const applyMetricsFromData = (data) => {
+        if (data?.metrics) {
+            setMetrics({
+                total: data.metrics.total ?? 0,
+                pending: data.metrics.pending ?? 0,
+                approved: data.metrics.approved ?? 0,
+                rejected: data.metrics.rejected ?? 0,
+            });
+            setIsLoadingMetrics(false);
+            return;
+        }
+        const list = Array.isArray(data) ? data : (data?.data || []);
+        const total = list.length;
+        const pending = list.filter((r) => r.status === "Pending").length;
+        const approved = list.filter((r) => r.status === "Approved").length;
+        const rejected = list.filter((r) => r.status === "Rejected").length;
+        setMetrics({ total, pending, approved, rejected });
+        setIsLoadingMetrics(false);
+    };
+
+    const fetchMetrics = async (maybeData) => {
+        if (Array.isArray(maybeData) || (maybeData && Array.isArray(maybeData.data))) {
+            applyMetricsFromData(maybeData);
+            return;
+        }
         setIsLoadingMetrics(true);
         try {
             const data = await leaveRequestService.getLeaveRequests();
-            const total = data.length;
-            const pending = data.filter(r => r.status === "Pending").length;
-            const approvedRequests = data.filter(r => r.status === "Approved");
-            const approved = approvedRequests.length;
-            const rejected = data.filter(r => r.status === "Rejected").length;
-
-            setMetrics({ total, pending, approved, rejected });
+            applyMetricsFromData(data);
         } catch (error) {
             console.error("Error fetching leave metrics:", error);
-        } finally {
             setIsLoadingMetrics(false);
         }
     };
@@ -60,7 +92,7 @@ function LeaveRequests() {
 
                 <PageBody>
                 <section className={styles.cardcontainer}>
-                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
+                    <div className={styles.cardbox} style={cardStyle} {...cardProps("Rejected", "Rejected")}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Rejected</h4>
@@ -69,7 +101,7 @@ function LeaveRequests() {
                         </div>
                     </div>
 
-                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
+                    <div className={styles.cardbox} style={cardStyle} {...cardProps("All", "all")}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Total Requests</h4>
@@ -78,7 +110,7 @@ function LeaveRequests() {
                         </div>
                     </div>
 
-                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
+                    <div className={styles.cardbox} style={cardStyle} {...cardProps("Pending", "Pending")}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Pending</h4>
@@ -87,7 +119,7 @@ function LeaveRequests() {
                         </div>
                     </div>
 
-                    <div className={styles.cardbox} style={{ minHeight: "100px", padding: "1rem 1.5rem", gap: "0.5rem" }}>
+                    <div className={styles.cardbox} style={cardStyle} {...cardProps("Approved", "Approved")}>
                         <div className={styles.cardboxcontent}>
                             <div className={styles.cardheader}>
                                 <h4>Approved</h4>
@@ -98,7 +130,7 @@ function LeaveRequests() {
                 </section>
 
                 <section className={styles["main-content"]}>
-                    <LeaveRequestTable onUpdate={fetchMetrics} />
+                    <LeaveRequestTable onUpdate={fetchMetrics} filterRequest={cardFilter} />
                 </section>
                 </PageBody>
             </main>

@@ -8,6 +8,7 @@ const documentSchema = new mongoose.Schema({
   fileType: String,
   fileSize: Number,
   type: String,
+  uploaderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   uploadedBy: String,
   userRole: String,
   uploadedDate: { type: Date, default: Date.now },

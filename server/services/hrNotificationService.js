@@ -3,6 +3,7 @@ const Employee = require('../models/Employee');
 const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
 const { workingStatusFilter } = require('../utils/employeeStatus');
+const { applyEffectiveVacationStatuses } = require('../utils/vacationStatusFromDates');
 
 const HR_NOTIFY_ROLES = ['admin', 'hr', 'viewer', 'hod'];
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -87,11 +88,17 @@ async function getHrAlerts() {
   today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().slice(0, 10);
 
-  const employees = await Employee.find(workingStatusFilter())
-    .select('employeeName employeeStatus vacationStatus doj passportExpiryDate visaExpiryDate labourCardExpiryDate emiratesIdExpiryDate contractRenewalDate firstWorkingDay')
-    .lean();
+  const [employees, approvedLeaves] = await Promise.all([
+    Employee.find(workingStatusFilter())
+      .select('employeeName employeeId emailId employeeStatus vacationStatus doj passportExpiryDate visaExpiryDate labourCardExpiryDate emiratesIdExpiryDate contractRenewalDate travellingDate returnDate leaveEndDate firstWorkingDay')
+      .lean(),
+    LeaveRequest.find({ status: { $in: ['Approved', 'HOD Approved'] } })
+      .select('employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate returnDate')
+      .lean(),
+  ]);
+  const resolvedEmployees = applyEffectiveVacationStatuses(employees, approvedLeaves);
 
-  for (const emp of employees) {
+  for (const emp of resolvedEmployees) {
     const empName = emp.employeeName || 'Employee';
     const empId = String(emp._id);
 

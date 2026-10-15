@@ -1,0 +1,121 @@
+{
+  "count": 2,
+  "records": [
+    {
+      "imported": {
+        "id": "6a8e75581f4cff133424b3f2",
+        "employeeId": "IDML-084",
+        "employeeName": "MUHAMMAD MEHTAB MUHAMMAD IRSHAD",
+        "leaveType": "Vacation",
+        "startDate": "2026-05-03",
+        "endDate": "2026-07-06",
+        "leaveDays": 64,
+        "status": "Approved",
+        "createdAt": "2026-08-26T05:10:48.788Z",
+        "createdBy": "",
+        "updatedAt": "2026-08-26T05:10:48.788Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2026",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-08-26T05:10:48.788Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "matches": [
+        {
+          "live": {
+            "id": "6a2a7a9c54828137fa01f3fc",
+            "employeeId": "",
+            "employeeName": "MUHAMMAD MEHTAB MUHAMMAD IRSHAD",
+            "leaveType": "Vacation",
+            "startDate": "2026-05-04",
+            "endDate": "2026-07-06",
+            "status": "Approved",
+            "createdAt": "2026-06-11T09:06:36.691Z",
+            "createdBy": "Melvin",
+            "updatedAt": "2026-08-26T05:15:10.382Z",
+            "updatedBy": "Melvin",
+            "importSource": "excel-master-tracker",
+            "reason": "Annual Vacation",
+            "reasonClass": "other",
+            "changeStatus": "Modified",
+            "changeRemarks": "Vacation extended; leave end date updated",
+            "isPastLeave": true,
+            "appliedOn": "2026-06-11T09:06:36.690Z",
+            "adminApprovedBy": "",
+            "hodApprovedBy": "",
+            "clientTouched": true,
+            "provenance": "importSource tagged excel-master-tracker (may be leftover tagging of a live record)",
+            "keepWhy": "Client/admin created or modified this leave in Leave Management."
+          },
+          "startDiff": 1,
+          "endDiff": 0
+        }
+      ]
+    },
+    {
+      "imported": {
+        "id": "6a9a6bc8e31d52a8ca0bb8e8",
+        "employeeId": "IDMO-178",
+        "employeeName": "MELVIN ABRAHAM THOMAS",
+        "leaveType": "Vacation",
+        "startDate": "2026-02-01",
+        "endDate": "2026-02-15",
+        "leaveDays": 14,
+        "status": "Approved",
+        "createdAt": "2026-09-04T06:57:12.711Z",
+        "createdBy": "",
+        "updatedAt": "2026-09-04T06:57:12.711Z",
+        "updatedBy": "",
+        "importSource": "excel-master-tracker",
+        "reason": "Imported from Excel 2026",
+        "reasonClass": "script_importExcelLeaveMaster",
+        "changeStatus": "Created",
+        "changeRemarks": "",
+        "isPastLeave": true,
+        "appliedOn": "2026-09-04T06:57:12.710Z",
+        "adminApprovedBy": "",
+        "hodApprovedBy": "",
+        "clientTouched": false,
+        "provenance": "reason written by server/scripts/importExcelLeaveMaster.js"
+      },
+      "matches": [
+        {
+          "live": {
+            "id": "6a28031146c7ddf03d6da481",
+            "employeeId": "",
+            "employeeName": "MELVIN ABRAHAM THOMAS",
+            "leaveType": "Personal Leave",
+            "startDate": "2026-01-31",
+            "endDate": "2026-02-15",
+            "status": "Approved",
+            "createdAt": "2026-06-09T12:12:01.825Z",
+            "createdBy": "",
+            "updatedAt": "2026-08-26T05:15:10.382Z",
+            "updatedBy": "",
+            "importSource": "excel-master-tracker",
+            "reason": "Personal",
+            "reasonClass": "other",
+            "changeStatus": "",
+            "changeRemarks": "",
+            "isPastLeave": true,
+            "appliedOn": "2026-06-09T12:12:01.824Z",
+            "adminApprovedBy": "",
+            "hodApprovedBy": "",
+            "clientTouched": false,
+            "provenance": "importSource tagged excel-master-tracker (may be leftover tagging of a live record)",
+            "keepWhy": "Not a script-generated reason. importSource tag alone is not enough (leftover tagging exists). Kept."
+          },
+          "startDiff": 1,
+          "endDiff": 0
+        }
+      ]
+    }
+  ]
+}

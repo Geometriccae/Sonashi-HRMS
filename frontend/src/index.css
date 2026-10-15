@@ -339,6 +339,36 @@ img {
   z-index: 10000 !important;
 }
 
+/* Shared list-table scroll: sticky header, body rows scroll (x + y) */
+.hrms-table-scroll {
+  overflow: auto !important;
+  max-height: min(58vh, 36rem);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.hrms-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  box-shadow: 0 1px 0 var(--border-default, #e2e8f0);
+}
+
+/* Flex-column tables (DataTable / ClientsTable header cells) */
+.hrms-table-scroll [class*="tableHeader"]:not([class*="tableHeaderSection"]):not([class*="tableHeaderCell"]),
+.hrms-table-scroll [class*="table-header"]:not([class*="table-header-cell"]) {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+@media (max-width: 640px) {
+  .hrms-table-scroll {
+    max-height: min(65vh, 28rem);
+  }
+}
+
 /* Header shell sits below modals */
 .hrms-watermark {
   position: relative;

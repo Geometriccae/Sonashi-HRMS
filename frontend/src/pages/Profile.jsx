@@ -43,7 +43,7 @@ function Profile() {
             ? `${config.API_BASE_URL.replace("/api", "")}${me.profilePicture}`
             : null,
         }));
-        setLeaveBalance(me.leaveBalance !== undefined ? me.leaveBalance : 21);
+        setLeaveBalance(me.leaveBalance != null ? me.leaveBalance : "--");
       } catch (e) {
         // ignore
       }

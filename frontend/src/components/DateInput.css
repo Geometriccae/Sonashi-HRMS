@@ -1,0 +1,48 @@
+.date-input-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.date-input-group .date-input-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.date-reset-btn {
+  flex-shrink: 0;
+  border: 1px solid #d5d7da;
+  background: #fff;
+  color: #414651;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(10, 13, 18, 0.05);
+  transition: background-color 0.15s ease;
+}
+
+.date-reset-btn:hover:not(:disabled) {
+  background: #f8f9fa;
+}
+
+.date-reset-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.input-container.date-input-group-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-container.date-input-group-wrap .input-field-input {
+  flex: 1;
+  min-width: 0;
+}

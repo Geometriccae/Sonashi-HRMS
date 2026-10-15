@@ -1,7 +1,11 @@
 import React, { useState, useRef, useLayoutEffect } from "react";
-import * as XLSX from "xlsx";
 import employeeService from "../../services/EmployeeService";
 import styles from "./EmployeeBulkImportModal.module.css";
+
+const loadXlsx = async () => {
+  const mod = await import("xlsx");
+  return mod.default || mod;
+};
 
 /** First-row headers aligned with Add Employee / server import mapper */
 export const EMPLOYEE_IMPORT_HEADERS = [
@@ -15,7 +19,6 @@ export const EMPLOYEE_IMPORT_HEADERS = [
   "Email ID",
   "Emirates ID",
   "Nationality",
-  "Role",
   "Designation",
   "DOJ",
   "Total Year of Experience",
@@ -49,7 +52,6 @@ const SAMPLE_ROW = [
   "sample.employee@company.com",
   "",
   "AE",
-  "Sales Executive",
   "Executive",
   "2024-01-15",
   "3",
@@ -62,6 +64,8 @@ const SAMPLE_ROW = [
   "Project Sales",
   "Active",
   "Onsite",
+  "Yes",
+  "Yes",
   "Yes",
   "Acme Bank",
   "7654321098",
@@ -85,7 +89,8 @@ function EmployeeBulkImportModal({ isOpen, onClose, onSuccess }) {
 
   if (!isOpen) return null;
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await loadXlsx();
     const sheet = XLSX.utils.aoa_to_sheet([EMPLOYEE_IMPORT_HEADERS, SAMPLE_ROW]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, sheet, "Employees");
@@ -135,7 +140,7 @@ function EmployeeBulkImportModal({ isOpen, onClose, onSuccess }) {
           </p>
           <ul className={styles.requiredList}>
             <li>
-              <strong>Required:</strong> Employee ID, Employee Name, Role, Department
+              <strong>Required:</strong> Employee ID, Employee Name, Department
             </li>
             <li>
               <strong>Optional:</strong> Mobile Number (digits only — spaces and + are removed) and

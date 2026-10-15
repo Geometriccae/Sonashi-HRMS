@@ -1,8 +1,19 @@
 /**
  * Payable working days for a salary period.
- * Reuses existing salary-slip rules: month calendar days as the denominator
- * so a full-month employee gets full monthly salary; join/leave/leave days prorate.
+ * Calendar days are used only to count payable/present days.
+ *
+ * Earnings are never prorated: Basic Pay and the allowances are paid at the
+ * exact values held in Employee Master. Unpaid days are charged as a separate
+ * deduction on a fixed 30-day month:
+ *   Daily Salary = Monthly Salary / 30
+ *   Unpaid Days = 30 - Payable Days (never below zero)
+ *   Leave Deduction = Daily Salary × Unpaid Days
+ *   Net Payable = Gross Salary - (Leave Deduction + other deductions)
  */
+
+const { lastWorkingDayIsEmploymentExit } = require("./employeeStatus");
+
+const PAYROLL_MONTH_DAYS = 30;
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -71,20 +82,37 @@ const normalizeName = (name) =>
 const leaveMatchesEmployee = (leave, employee) => {
   if (!leave || !employee) return false;
   const empMongo = String(employee._id || "");
-  const empCode = String(employee.employeeId || "");
+  const empCode = String(employee.employeeId || "").toLowerCase();
   const empName = normalizeName(employee.employeeName);
 
+  const recordId = String(leave.employeeRecordId?._id || leave.employeeRecordId || "");
+  if (empMongo && recordId && recordId === empMongo) return true;
+
   const populated = leave.employee;
-  if (populated && typeof populated === "object") {
-    if (populated.employeeId && String(populated.employeeId) === empMongo) return true;
-    if (normalizeName(populated.username) && normalizeName(populated.username) === empName) return true;
-  } else if (populated && String(populated) === empMongo) {
-    return true;
+  if (populated) {
+    // Bare ObjectId / string ref to the Employee record
+    if (String(populated) === empMongo) return true;
+    if (typeof populated === "object") {
+      if (populated._id && String(populated._id) === empMongo) return true;
+      const linkedEmp =
+        populated.employeeId?._id || populated.employeeId || null;
+      if (linkedEmp && String(linkedEmp) === empMongo) return true;
+    }
   }
 
-  if (leave.employeeId && (String(leave.employeeId) === empCode || String(leave.employeeId) === empMongo)) {
-    return true;
+  if (leave.employeeId) {
+    const rid = String(leave.employeeId).toLowerCase();
+    if (empMongo && rid === empMongo.toLowerCase()) return true;
+    if (empCode && rid === empCode) return true;
   }
+
+  const hasRef = Boolean(
+    recordId ||
+      leave.employeeId ||
+      (populated && (populated._id || populated.employeeId || populated))
+  );
+  if (hasRef) return false;
+
   const leaveName = normalizeName(leave.employeeName || "");
   return Boolean(empName && leaveName && leaveName === empName);
 };
@@ -110,9 +138,16 @@ const unpaidFractionForLeave = (leave) => {
   return 1;
 };
 
+const getPayrollExitDate = (employee) => {
+  // Vacation lastWorkingDay must not cut later payroll months.
+  // Only Relieved/Resigned/Terminated/InActive and Notice Period are employment exits.
+  if (!lastWorkingDayIsEmploymentExit(employee?.employeeStatus)) return null;
+  return toDayStart(employee?.lastWorkingDay) || toDayStart(employee?.noticePeriodEndDate);
+};
+
 const getEmploymentWindow = (employee, monthStart, monthEnd) => {
   const join = toDayStart(employee?.doj);
-  const last = toDayStart(employee?.lastWorkingDay);
+  const last = getPayrollExitDate(employee);
   if (join && join > monthEnd) return null;
   if (last && last < monthStart) return null;
   const start = laterDay(monthStart, join);
@@ -224,20 +259,39 @@ const computePayablePayrollDays = ({
   };
 };
 
-const scaleSalaryAmount = (amount, payableDays, totalWorkingDays) => {
+const scaleSalaryAmount = (amount, payableDays) => {
   const base = Number(amount);
   const payable = Number(payableDays);
-  const total = Number(totalWorkingDays);
   if (!Number.isFinite(base) || base === 0) return 0;
-  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(payable) || payable <= 0) return 0;
-  return Math.round(((base * payable) / total) * 100) / 100;
+  if (!Number.isFinite(payable) || payable <= 0) return 0;
+  return Math.round(((base * payable) / PAYROLL_MONTH_DAYS) * 100) / 100;
 };
+
+/** Days of the 30-day payroll month that the employee is not paid for. */
+const unpaidPayrollDays = (payableDays) => {
+  const payable = Number(payableDays);
+  if (!Number.isFinite(payable) || payable < 0) return 0;
+  return Math.max(0, PAYROLL_MONTH_DAYS - payable);
+};
+
+/**
+ * Leave / absence deduction for the unpaid part of a payroll month.
+ * Earnings stay at their Employee Master values; this is what reduces net pay.
+ */
+const leaveDeductionAmount = (monthlyGross, payableDays) =>
+  scaleSalaryAmount(monthlyGross, unpaidPayrollDays(payableDays));
 
 module.exports = {
   MONTH_NAMES,
+  PAYROLL_MONTH_DAYS,
   getPayrollPeriod,
+  getEmploymentWindow,
   computePayablePayrollDays,
   scaleSalaryAmount,
+  unpaidPayrollDays,
+  leaveDeductionAmount,
+  leaveMatchesEmployee,
+  unpaidFractionForLeave,
   inclusiveDays,
   dateKey,
   toDayStart,

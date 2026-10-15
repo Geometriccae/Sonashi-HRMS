@@ -6,27 +6,46 @@ import ModalPortal from "../components/ModalPortal";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import DateInput from "../components/DateInput";
 import employeeService from "../services/EmployeeService";
-import leaveRequestService from "../services/LeaveRequestService";
 import styles from "./AnnualVacations.module.css";
 import {
   FaSearch, FaTimes, FaEdit, FaUndoAlt,
   FaFilter, FaSyncAlt, FaChevronDown, FaChevronUp,
-  FaFileExcel, FaFilePdf,
+  FaFileExcel, FaFilePdf, FaChevronLeft, FaChevronRight,
 } from "react-icons/fa";
 import { MdFlightTakeoff, MdBeachAccess, MdFlightLand } from "react-icons/md";
-import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
-  computeExperienceYears,
   formatExperienceLabel,
-  findLeaveForEmployee,
-  buildYetToGoFromLeaves,
+  formatEmployeeMasterExperienceLabel,
+  employeeMasterExperienceAsOf,
 } from "../utils/yetToGoHelpers";
 import { canUpdateVacationReturn } from "../utils/permissions";
 import { writePersistedPath } from "../hooks/usePersistedListPage";
-import { isNonWorkingEmployeeStatus, isWorkingEmployeeStatus } from "../utils/employeeStatusDisplay";
+import {
+  formatVacationStatus,
+  vacationStatusBadgeStyle,
+  VACATION_STATUS,
+  VACATION_STATUS_EDIT_OPTIONS,
+} from "../utils/vacationStatusDisplay";
+import {
+  applyVacationStatusChange,
+  buildVacationDatePrompt,
+  toDateInputValue,
+} from "../utils/vacationStatusUpdate";
+
+const PAGE_SIZE = 20;
+
+const loadXlsx = async () => {
+  const mod = await import("xlsx");
+  return mod.default || mod;
+};
+const loadJsPdf = async () => {
+  const [{ default: jsPDF }, autoTableMod] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  return { jsPDF, autoTable: autoTableMod.default || autoTableMod };
+};
 
 const TAB_STORAGE_KEY = "hrms:listPage:annual-vacations-tab";
 const VALID_TABS = new Set(["onVacation", "yetToGo", "returned"]);
@@ -34,34 +53,34 @@ const VALID_TABS = new Set(["onVacation", "yetToGo", "returned"]);
 // ─── helpers ────────────────────────────────────────────────────────────────
 const fmt = (d) => {
   if (!d) return "—";
-  try { return new Date(d).toLocaleDateString("en-GB"); } catch { return "—"; }
+  try {
+    if (typeof d === "string") {
+      const dateOnly = d.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+    }
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return "—";
+    const day = String(dt.getDate()).padStart(2, "0");
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    const year = dt.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return "—";
+  }
 };
 
 const VACATION_TABS = [
   { key: "onVacation", label: "On Vacation",  icon: <MdBeachAccess />,   color: "#3b82f6", bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", statusVal: "On Vacation",      subLabel: "Currently away",          description: "Employees currently on vacation" },
   { key: "yetToGo",   label: "Yet to Go",     icon: <MdFlightTakeoff />, color: "#8b5cf6", bg: "linear-gradient(135deg,#ede9fe,#ddd6fe)", statusVal: "Vacation Pending",  subLabel: "Approved & pending", description: "Employees with approved or pending leave (any type) who are yet to travel" },
-  { key: "returned",  label: "Returned Back", icon: <MdFlightLand />,    color: "#10b981", bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", statusVal: "Vacation Approved", subLabel: "Last 1 month",            description: "Employees who returned from vacation in the last month" },
+  { key: "returned",  label: "Returned Back", icon: <MdFlightLand />,    color: "#10b981", bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", statusVal: "Vacation Approved", subLabel: "Last 6 months",            description: "Employees who returned from vacation in the last 6 months" },
 ];
 
-const STATUS_LABEL = {
-  "On Vacation": "On Vacation",
-  "Vacation Pending": "Yet to Go",
-  "Vacation Approved": "Returned Back",
-};
-
-const STATUS_CONFIG = {
-  "Onsite":            { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", label: "Onsite" },
-  "On Vacation":       { bg: "linear-gradient(135deg,#dbeafe,#bfdbfe)", color: "#1e3a8a", dot: "#3b82f6", label: "On Vacation" },
-  "Vacation Approved": { bg: "linear-gradient(135deg,#d1fae5,#a7f3d0)", color: "#065f46", dot: "#10b981", label: "Returned Back" },
-  "Vacation Pending":  { bg: "linear-gradient(135deg,#fef9c3,#fde68a)", color: "#713f12", dot: "#f59e0b", label: "Yet to Go" },
-};
-
 function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["Onsite"];
+  const cfg = vacationStatusBadgeStyle(status);
   return (
     <span style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"4px 10px", borderRadius:999, background:cfg.bg, color:cfg.color, fontSize:12, fontWeight:700, border:`1px solid ${cfg.dot}30`, whiteSpace:"nowrap" }}>
       <span style={{ width:7, height:7, borderRadius:"50%", background:cfg.dot, flexShrink:0 }} />
-      {cfg.label}
+      {formatVacationStatus(status) || formatVacationStatus(VACATION_STATUS.ONSITE)}
     </span>
   );
 }
@@ -88,26 +107,6 @@ const DEFAULT_FILTERS = {
   vacationMonth: "", vacationYear: "",
 };
 
-const itemMatchesVacationMonth = (item, monthStr, yearStr) => {
-  if (!monthStr && !yearStr) return true;
-
-  const dates = [item.travellingDate, item.startDate, item.lastWorkingDay].filter(Boolean);
-  if (dates.length === 0) return false;
-
-  const monthIdx = monthStr !== "" ? Number(monthStr) : null;
-  const yearNum = yearStr !== ""
-    ? Number(yearStr)
-    : (monthStr !== "" ? new Date().getFullYear() : null);
-
-  return dates.some((d) => {
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return false;
-    if (monthIdx !== null && dt.getMonth() !== monthIdx) return false;
-    if (yearNum !== null && dt.getFullYear() !== yearNum) return false;
-    return true;
-  });
-};
-
 const getNavEmployeeId = (item) => {
   if (item.linkedEmployeeId) return item.linkedEmployeeId;
   if (item._source === "leave") {
@@ -128,9 +127,9 @@ const buildVacationExportRows = (list, tabKey) =>
           ? "Vacation Pending"
           : "Vacation Approved");
     const expLabel =
-      formatExperienceLabel(item.doj, item.totalYearsExperience) ||
+      formatEmployeeMasterExperienceLabel(item) ||
       (item.experienceYears != null && !Number.isNaN(Number(item.experienceYears))
-        ? formatExperienceLabel(null, item.experienceYears)
+        ? formatExperienceLabel(null, item.experienceYears, employeeMasterExperienceAsOf(item))
         : "");
 
     const base = {
@@ -143,13 +142,13 @@ const buildVacationExportRows = (list, tabKey) =>
       Country: item.nationality || "",
       DOJ: fmt(item.doj),
       Experience: expLabel,
-      Status: STATUS_LABEL[vs] || vs || "",
+      Status: formatVacationStatus(vs) || "",
     };
 
     if (tabKey === "onVacation") {
       return {
         ...base,
-        "Leave End Date": fmt(item.endDate || item.leaveEndDate),
+        "Leave End Date": fmt(item.leaveEndDate || item.endDate),
         "Travelling Date": fmt(item.travellingDate),
         "Last Working Day": fmt(item.lastWorkingDay),
       };
@@ -159,7 +158,7 @@ const buildVacationExportRows = (list, tabKey) =>
         ...base,
         "Last Working Day": displayLastWorkingDay(item),
         "Travelling Date": fmt(item.travellingDate),
-        "Leave End Date": fmt(item.endDate || item.leaveEndDate),
+        "Leave End Date": fmt(item.leaveEndDate || item.endDate),
       };
     }
     return {
@@ -169,62 +168,17 @@ const buildVacationExportRows = (list, tabKey) =>
     };
   });
 
-const getDateConfigForStatus = (status) => {
-  const configs = {
-    "On Vacation": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Pending": {
-      label: "Last Working Day",
-      fieldKey: "lastWorkingDay",
-      secondaryLabel: "Travelling Date",
-      secondaryFieldKey: "travellingDate",
-      tertiaryLabel: "Leave End Date",
-      tertiaryFieldKey: "leaveEndDate",
-    },
-    "Vacation Approved": {
-      label: "Return / Entry Date",
-      fieldKey: "returnDate",
-      secondaryLabel: "First Working Day",
-      secondaryFieldKey: "firstWorkingDay",
-    },
-  };
-  return configs[status] || { label: "Date", fieldKey: "date" };
-};
-
-const toDateInputValue = (value) => {
-  if (!value) return "";
-  try {
-    return new Date(value).toISOString().split("T")[0];
-  } catch {
-    return "";
-  }
-};
-
-const buildEditModalState = (item, status, mode = "date") => {
-  const cfg = getDateConfigForStatus(status);
-  return {
+const buildEditModalState = (item, status, mode = "date") =>
+  buildVacationDatePrompt(item, status, mode) || {
     item,
     newStatus: status,
-    label: cfg.label,
-    fieldKey: cfg.fieldKey,
-    dateValue: toDateInputValue(item[cfg.fieldKey]),
-    secondaryLabel: cfg.secondaryLabel,
-    secondaryFieldKey: cfg.secondaryFieldKey,
-    secondaryDateValue: cfg.secondaryFieldKey ? toDateInputValue(item[cfg.secondaryFieldKey]) : "",
-    tertiaryLabel: cfg.tertiaryLabel,
-    tertiaryFieldKey: cfg.tertiaryFieldKey,
-    tertiaryDateValue: cfg.tertiaryFieldKey
-      ? toDateInputValue(item.endDate || item.leaveEndDate)
-      : "",
+    label: "Date",
+    fieldKey: "date",
+    dateValue: "",
+    secondaryDateValue: "",
+    tertiaryDateValue: "",
     mode,
   };
-};
 
 const getEmployeeIdFromItem = (item) => {
   const navId = getNavEmployeeId(item);
@@ -243,9 +197,11 @@ function AnnualVacations() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [isLoading, setIsLoading]       = useState(true);
-  const [employees, setEmployees]       = useState([]);
-  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [tableLoading, setTableLoading] = useState(false);
   const [counts, setCounts]             = useState({ onVacation: 0, yetToGo: 0, returned: 0 });
+  const [filterOptions, setFilterOptions] = useState({
+    departments: [], roles: [], offices: [], countries: [],
+  });
 
   // Resume last vacation tab via URL (?tab=) + session (same pattern as Leave/Team)
   const activeTab = (() => {
@@ -274,11 +230,14 @@ function AnnualVacations() {
     writePersistedPath("annual-vacations", path);
   }, [setSearchParams]);
 
-  // tabList = full unfiltered category list (rebuilt only when tab or raw data changes)
+  // Server-paginated tab rows (page 1 first — never load full history upfront)
   const [tabList, setTabList]           = useState([]);
+  const [tabTotal, setTabTotal]         = useState(0);
+  const [page, setPage]                 = useState(1);
   const [searchQuery, setSearchQuery]   = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Filters — applied only inside filteredList useMemo
+  // Filters — sent to vacation-tab API
   const [filters, setFilters]           = useState(DEFAULT_FILTERS);
   const [pendingFilters, setPendingFilters] = useState(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen]     = useState(false);
@@ -292,19 +251,23 @@ function AnnualVacations() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
   // ─── Unique dropdown options ─────────────────────────────────────────────
   const options = useMemo(() => {
-    const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
     const currentYear = new Date().getFullYear();
     const years = ["", ...Array.from({ length: currentYear - 2011 }, (_, i) => String(currentYear - i))];
     return {
-      departments: uniq(employees.map(e => e.department)),
-      roles:       uniq(employees.map(e => e.role)),
-      offices:     uniq(employees.map(e => e.office)),
-      countries:   uniq(employees.map(e => e.nationality)),
+      departments: filterOptions.departments || [],
+      roles: filterOptions.roles || [],
+      offices: filterOptions.offices || [],
+      countries: filterOptions.countries || [],
       years,
     };
-  }, [employees]);
+  }, [filterOptions]);
 
   // ─── Active filter count ─────────────────────────────────────────────────
   const activeFilterCount = useMemo(
@@ -312,34 +275,78 @@ function AnnualVacations() {
     [filters]
   );
 
-  // Annual Vacations uses stored employee.vacationStatus as source of truth
-  // (Team/Dashboard status edits). Leave rows only enrich dates / Yet-to-go.
-  const loadVacationData = useCallback(async ({ force = false } = {}) => {
-    const [empRes, leaveRes] = await Promise.all([
-      employeeService.getEmployeesList({ force }),
-      leaveRequestService.getLeaveRequests({ view: "lite" }),
-    ]);
-    const empList = Array.isArray(empRes) ? empRes : empRes?.data || [];
-    const leaveList = Array.isArray(leaveRes) ? leaveRes : leaveRes?.data || [];
-    return { empList, leaveList };
-  }, []);
+  const applySummaryCounts = (summary) => {
+    setCounts({
+      onVacation: summary.onVacation ?? 0,
+      yetToGo: summary.yetToGo ?? summary.upcomingVacation ?? 0,
+      returned: summary.returnedBack ?? summary.vacationReturn ?? 0,
+    });
+    if (summary.filterOptions) {
+      setFilterOptions({
+        departments: summary.filterOptions.departments || [],
+        roles: summary.filterOptions.roles || [],
+        offices: summary.filterOptions.offices || [],
+        countries: summary.filterOptions.countries || [],
+      });
+    }
+  };
 
-  // ─── Fetch Data ──────────────────────────────────────────────────────────
-  const fetchData = useCallback(async () => {
+  // ─── Fetch counts only (cards) ───────────────────────────────────────────
+  const fetchCounts = useCallback(async ({ force = false } = {}) => {
     setIsLoading(true);
     try {
-      const { empList, leaveList } = await loadVacationData();
-      setEmployees(empList);
-      setLeaveRequests(leaveList);
-      computeCounts(empList, leaveList);
+      const summary = await employeeService.getEmployeeStats({ force });
+      applySummaryCounts(summary);
     } catch (err) {
-      console.error("Failed to fetch vacation data:", err);
+      console.error("Failed to fetch vacation counts:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [loadVacationData]); // eslint-disable-line
+  }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const fetchTabPage = useCallback(async () => {
+    if (!activeTab) {
+      setTabList([]);
+      setTabTotal(0);
+      return;
+    }
+    setTableLoading(true);
+    try {
+      const result = await employeeService.getVacationTab({
+        tab: activeTab,
+        page,
+        limit: PAGE_SIZE,
+        search: debouncedSearch,
+        filters,
+      });
+      setTabList(Array.isArray(result?.employees) ? result.employees : []);
+      setTabTotal(Number(result?.total) || 0);
+    } catch (err) {
+      console.error("Failed to fetch vacation tab page:", err);
+      setTabList([]);
+      setTabTotal(0);
+    } finally {
+      setTableLoading(false);
+    }
+  }, [activeTab, page, debouncedSearch, filters]);
+
+  // ─── Fetch Data ──────────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    employeeService.invalidateCache();
+    await fetchCounts({ force: true });
+    if (activeTab) {
+      await fetchTabPage();
+    }
+  }, [fetchCounts, fetchTabPage, activeTab]);
+
+  useEffect(() => { fetchCounts({ force: true }); }, [fetchCounts]);
+
+  useEffect(() => {
+    return employeeService.onEmployeeDataChanged(() => {
+      fetchCounts({ force: true });
+      fetchTabPage();
+    });
+  }, [fetchCounts, fetchTabPage]);
 
   // Keep URL + sidebar path in sync when restoring tab from session
   useEffect(() => {
@@ -360,143 +367,39 @@ function AnnualVacations() {
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Rebuild tab list when returning with a saved tab and data loaded
+  // Load page when tab / page / search / filters change
   useEffect(() => {
-    if (!activeTab || !employees.length) return;
-    setTabList(buildTabList(activeTab, employees, leaveRequests));
-  }, [employees, leaveRequests]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchTabPage();
+  }, [fetchTabPage]);
 
-  // ─── Compute Counts (no filters applied to counts) ──────────────────────
-  // Only the employee's vacationStatus field is authoritative.
-  // Leave-request date ranges are NOT used to inflate counts — the status
-  // dropdown on Team Management / Dashboard is the single source of truth.
-  const computeCounts = (empList, leaveList) => {
-    const working = empList.filter(e => isWorkingEmployeeStatus(e.employeeStatus));
-    const onVacation = working.filter(e => e.vacationStatus === "On Vacation").length;
-    const yetToGo    = buildYetToGoFromLeaves(empList, leaveList)
-      .filter(row => isWorkingEmployeeStatus(row.employeeStatus)).length;
-    const returned   = working.filter(e => e.vacationStatus === "Vacation Approved").length;
-    setCounts({ onVacation, yetToGo, returned });
-  };
+  // Reset to page 1 when tab, search, or filters change
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, debouncedSearch, filters]);
 
-  // ─── Build Tab List (category-only, NO user filters here) ───────────────
-  // Only employees whose vacationStatus matches the tab are shown.
-  // We enrich each row with leave-request dates when available.
-  const buildTabList = useCallback((tabKey, empList, leaveList) => {
-    if (tabKey === "yetToGo") {
-      return buildYetToGoFromLeaves(empList, leaveList);
-    }
-
-    const statusMap = { onVacation: "On Vacation", returned: "Vacation Approved" };
-    const targetStatus = statusMap[tabKey];
-
-    return empList
-      .filter(e => e.vacationStatus === targetStatus)
-      .map(e => {
-        const leave = findLeaveForEmployee(e, leaveList, empList, tabKey);
-        return {
-          ...e,
-          _source: "employee",
-          linkedEmployeeId: e._id,
-          linkedLeaveId: leave?._id || null,
-          startDate: leave?.startDate || null,
-          endDate: leave?.endDate || e.leaveEndDate || null,
-          experienceYears: computeExperienceYears(e.doj, e.totalYearsExperience),
-        };
-      });
-  }, []);
+  // Server already filtered — display as-is
+  const filteredList = tabList;
+  const totalPages = Math.max(1, Math.ceil(tabTotal / PAGE_SIZE));
 
   // ─── Card Click ──────────────────────────────────────────────────────────
   const handleCardClick = (tabKey) => {
-    setActiveTab(tabKey);
     setSearchQuery("");
-    setTabList(buildTabList(tabKey, employees, leaveRequests));
+    setDebouncedSearch("");
+    setPage(1);
+    setActiveTab(tabKey);
   };
-
-  // ─── filteredList — apply search + ALL 6 user filters reactively ─────────
-  // This is a pure useMemo: whenever tabList, searchQuery, or filters change,
-  // it recomputes automatically — no stale closure issues.
-  const filteredList = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-
-    return tabList.filter(item => {
-      // ── Search ──
-      if (q) {
-        const haystack = [
-          item.employeeName || item.name || "",
-          item.employeeId   || "",
-          item.employeeNumber || "",
-          item.department   || "",
-          item.role         || "",
-          item.office       || "",
-          item.nationality  || "",
-        ].join(" ").toLowerCase();
-        if (!haystack.includes(q)) return false;
-      } else if (isNonWorkingEmployeeStatus(item.employeeStatus)) {
-        return false;
-      }
-
-      // ── Department ──
-      if (filters.department) {
-        const dept = item.department || "";
-        if (dept !== filters.department) return false;
-      }
-
-      // ── Role ──
-      if (filters.role) {
-        const role = item.role || "";
-        if (role !== filters.role) return false;
-      }
-
-      // ── Office Location ──
-      if (filters.office) {
-        const office = item.office || "";
-        if (office !== filters.office) return false;
-      }
-
-      // ── Country (Nationality) ──
-      if (filters.country) {
-        const nat = item.nationality || "";
-        if (nat !== filters.country) return false;
-      }
-
-      // ── DOJ Range ──
-      if (filters.dojFrom || filters.dojTo) {
-        const doj = item.doj ? new Date(item.doj) : null;
-        if (!doj) return false;
-        if (filters.dojFrom && doj < new Date(filters.dojFrom)) return false;
-        if (filters.dojTo   && doj > new Date(filters.dojTo))   return false;
-      }
-
-      // ── Years of Experience Range (from DOJ as of today) ──
-      const exp = computeExperienceYears(item.doj, item.totalYearsExperience);
-      if (filters.expMin !== "" && filters.expMin !== null) {
-        if (exp == null || exp < Number(filters.expMin)) return false;
-      }
-      if (filters.expMax !== "" && filters.expMax !== null) {
-        if (exp == null || exp > Number(filters.expMax)) return false;
-      }
-
-      // ── Vacation month / year (travelling date or leave start) ──
-      if (filters.vacationMonth || filters.vacationYear) {
-        if (!itemMatchesVacationMonth(item, filters.vacationMonth, filters.vacationYear)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [tabList, searchQuery, filters]);
 
   // ─── Filter UI Helpers ───────────────────────────────────────────────────
   const handleApplyFilters = () => {
     setFilters({ ...pendingFilters });
+    setPage(1);
     setFilterOpen(false);
   };
 
   const handleResetFilters = () => {
     setFilters(DEFAULT_FILTERS);
     setPendingFilters(DEFAULT_FILTERS);
+    setPage(1);
     setFilterOpen(false);
   };
 
@@ -508,69 +411,104 @@ function AnnualVacations() {
     else updated[key] = "";
     setFilters(updated);
     setPendingFilters(updated);
+    setPage(1);
   };
 
-  const handleExportExcel = () => {
-    if (!activeTab || filteredList.length === 0) {
+  const handleExportExcel = async () => {
+    if (!activeTab) {
       alert("No records to export for this category.");
       return;
     }
-    const tab = getTabConfig(activeTab);
-    const rows = buildVacationExportRows(filteredList, activeTab);
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
-    XLSX.utils.book_append_sheet(wb, ws, (tab?.label || "Report").slice(0, 31));
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
-    });
-    const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
-    saveAs(blob, `Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
+    try {
+      const result = await employeeService.getVacationTab({
+        tab: activeTab,
+        page: 1,
+        search: debouncedSearch,
+        filters,
+        all: true,
+      });
+      const exportList = Array.isArray(result?.employees) ? result.employees : [];
+      if (exportList.length === 0) {
+        alert("No records to export for this category.");
+        return;
+      }
+      const tab = getTabConfig(activeTab);
+      const rows = buildVacationExportRows(exportList, activeTab);
+      const XLSX = await loadXlsx();
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
+      XLSX.utils.book_append_sheet(wb, ws, (tab?.label || "Report").slice(0, 31));
+      const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+      });
+      const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
+      saveAs(blob, `Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
+    } catch (err) {
+      alert(err?.message || "Export failed.");
+    }
   };
 
-  const handleExportPdf = () => {
-    if (!activeTab || filteredList.length === 0) {
+  const handleExportPdf = async () => {
+    if (!activeTab) {
       alert("No records to export for this category.");
       return;
     }
-    const tab = getTabConfig(activeTab);
-    const rows = buildVacationExportRows(filteredList, activeTab);
-    const headers = Object.keys(rows[0]);
-    const body = rows.map((row) => headers.map((h) => (row[h] != null ? String(row[h]) : "")));
+    try {
+      const result = await employeeService.getVacationTab({
+        tab: activeTab,
+        page: 1,
+        search: debouncedSearch,
+        filters,
+        all: true,
+      });
+      const exportList = Array.isArray(result?.employees) ? result.employees : [];
+      if (exportList.length === 0) {
+        alert("No records to export for this category.");
+        return;
+      }
+      const tab = getTabConfig(activeTab);
+      const rows = buildVacationExportRows(exportList, activeTab);
+      const headers = Object.keys(rows[0]);
+      const body = rows.map((row) => headers.map((h) => (row[h] != null ? String(row[h]) : "")));
 
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`Annual Vacations — ${tab?.label || activeTab}`, 14, 15);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.text(
-      `Generated on: ${new Date().toLocaleDateString("en-GB")} | Total Records: ${rows.length}`,
-      14,
-      21
-    );
+      const { jsPDF, autoTable } = await loadJsPdf();
+      const doc = new jsPDF({ orientation: "landscape" });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Annual Vacations — ${tab?.label || activeTab}`, 14, 15);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Generated on: ${new Date().toLocaleDateString("en-GB")} | Total Records: ${rows.length}`,
+        14,
+        21
+      );
 
-    autoTable(doc, {
-      startY: 26,
-      head: [headers],
-      body,
-      theme: "grid",
-      styles: { fontSize: 7.5, cellPadding: 2.5, overflow: "linebreak", valign: "middle" },
-      headStyles: {
-        fillColor: [22, 163, 74],
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 8,
-      },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { top: 25, bottom: 15, left: 10, right: 10 },
-    });
+      autoTable(doc, {
+        startY: 26,
+        head: [headers],
+        body,
+        theme: "grid",
+        styles: { fontSize: 7.5, cellPadding: 2.5, overflow: "linebreak", valign: "middle" },
+        headStyles: {
+          fillColor: [22, 163, 74],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { top: 25, bottom: 15, left: 10, right: 10 },
+      });
 
-    const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
-    doc.save(`Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.pdf`);
+      const slug = (tab?.label || activeTab).replace(/\s+/g, "_");
+      doc.save(`Annual_Vacations_${slug}_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (err) {
+      alert(err?.message || "Export failed.");
+    }
   };
 
   const activePills = useMemo(() => {
@@ -624,18 +562,15 @@ function AnnualVacations() {
         showToast("Employee record not found for this leave.", "error");
         return;
       }
-      await employeeService.markVacationReturn(empId, {
-        returnDate,
-        firstWorkingDay: firstWorkingDay || returnDate,
+      await applyVacationStatusChange({
+        employeeId: empId,
+        newStatus: VACATION_STATUS.RETURNED_BACK,
+        dates: { returnDate, firstWorkingDay: firstWorkingDay || returnDate },
         leaveId: item.linkedLeaveId || null,
       });
       showToast(`${item.employeeName || item.name} return date updated.`);
-      employeeService.invalidateCache();
-      leaveRequestService.invalidateCache();
-      const { empList, leaveList } = await loadVacationData({ force: true });
-      setEmployees(empList); setLeaveRequests(leaveList);
-      computeCounts(empList, leaveList);
-      setTabList(buildTabList(activeTab, empList, leaveList));
+      await fetchCounts({ force: true });
+      await fetchTabPage();
     } catch (err) {
       showToast(err?.message || "Failed to update return date.", "error");
       throw err;
@@ -658,20 +593,20 @@ function AnnualVacations() {
     setEditModalSaving(true);
     try {
       if (newStatus === "Vacation Approved" || mode === "markReturn") {
-        const returnDate = new Date(dateValue).toISOString();
+        const returnDate = toDateInputValue(dateValue);
         const firstWorkingDay = secondaryDateValue
-          ? new Date(secondaryDateValue).toISOString()
+          ? toDateInputValue(secondaryDateValue)
           : returnDate;
         await doMarkReturned(item, returnDate, firstWorkingDay);
       } else {
         const extra = {};
         if (newStatus !== "Onsite") {
-          if (dateValue) extra[fieldKey] = new Date(dateValue).toISOString();
+          if (dateValue) extra[fieldKey] = toDateInputValue(dateValue);
           if (secondaryFieldKey && secondaryDateValue) {
-            extra[secondaryFieldKey] = new Date(secondaryDateValue).toISOString();
+            extra[secondaryFieldKey] = toDateInputValue(secondaryDateValue);
           }
           if (tertiaryFieldKey && tertiaryDateValue) {
-            extra[tertiaryFieldKey] = new Date(tertiaryDateValue).toISOString();
+            extra[tertiaryFieldKey] = toDateInputValue(tertiaryDateValue);
           }
         }
         const empId = getEmployeeIdFromItem(item);
@@ -679,21 +614,15 @@ function AnnualVacations() {
           showToast("Employee record not found for this leave.", "error");
           return;
         }
-        await employeeService.updateEmployee(empId, { vacationStatus: newStatus, ...extra });
-        if (item.linkedLeaveId && tertiaryDateValue) {
-          try {
-            await leaveRequestService.updateLeaveRequest(item.linkedLeaveId, {
-              endDate: new Date(tertiaryDateValue).toISOString(),
-            });
-          } catch (_) { /* employee dates already saved */ }
-        }
+        await applyVacationStatusChange({
+          employeeId: empId,
+          newStatus,
+          dates: extra,
+          leaveId: item.linkedLeaveId || null,
+        });
         showToast("Status updated successfully.");
-        employeeService.invalidateCache();
-        leaveRequestService.invalidateCache();
-        const { empList, leaveList } = await loadVacationData({ force: true });
-        setEmployees(empList); setLeaveRequests(leaveList);
-        computeCounts(empList, leaveList);
-        setTabList(buildTabList(activeTab, empList, leaveList));
+        await fetchCounts({ force: true });
+        await fetchTabPage();
       }
       setEditModal(null);
     } catch (err) {
@@ -927,7 +856,11 @@ function AnnualVacations() {
                       </div>
                     </div>
 
-                    {filteredList.length === 0 ? (
+                    {tableLoading ? (
+                      <div className={styles.emptyState}>
+                        <p>Loading {getTabConfig(activeTab)?.label}…</p>
+                      </div>
+                    ) : filteredList.length === 0 ? (
                       <div className={styles.emptyState}>
                         <span style={{fontSize:40}}>{getTabConfig(activeTab)?.icon}</span>
                         <p>No employees found{activeFilterCount > 0 ? " matching the active filters" : " for this category"}.</p>
@@ -936,7 +869,7 @@ function AnnualVacations() {
                         )}
                       </div>
                     ) : (
-                      <div className={styles.tableWrapper}>
+                      <div className={`${styles.tableWrapper} hrms-table-scroll`}>
                         <table className={styles.table}>
                           <thead>
                             <tr>
@@ -960,7 +893,7 @@ function AnnualVacations() {
                             {filteredList.map((item, idx) => {
                               const empId = item._id || item.id;
                               const vs    = item.vacationStatus || (activeTab === "onVacation" ? "On Vacation" : activeTab === "yetToGo" ? "Vacation Pending" : "Vacation Approved");
-                              const expLabel = formatExperienceLabel(item.doj, item.totalYearsExperience);
+                              const expLabel = formatEmployeeMasterExperienceLabel(item);
                               return (
                                 <tr key={item._source === "leave" ? `leave-${item._id}` : (empId || idx)} className={styles.tableRow}
                                   onClick={() => { const navId = getNavEmployeeId(item); if (navId) navigate(`/teammanagement_salesleads/${navId}`); }}>
@@ -970,7 +903,7 @@ function AnnualVacations() {
                                       <div className={styles.empAvatar} style={{ background:getTabConfig(activeTab)?.bg, color:getTabConfig(activeTab)?.color }}>
                                         {(item.employeeName||item.name||"?")[0].toUpperCase()}
                                       </div>
-                                      <div>
+                                      <div className={styles.empNameWrap}>
                                         <div className={styles.empName}>{item.employeeName||item.name||"N/A"}</div>
                                         {item.role && <div className={styles.empRole}>{item.role}</div>}
                                       </div>
@@ -981,16 +914,16 @@ function AnnualVacations() {
                                   <td>{item.role||"—"}</td>
                                   <td>{item.office||"—"}</td>
                                   <td>{item.nationality||"—"}</td>
-                                  <td>{fmt(item.doj)}</td>
+                                  <td className={styles.tdDate}>{fmt(item.doj)}</td>
                                   <td className={styles.tdCenter}>
                                     {expLabel
                                       ? <span className={styles.expBadge}>{expLabel}</span>
                                       : "—"}
                                   </td>
 
-                                  {activeTab === "onVacation" && <><td>{fmt(item.endDate || item.leaveEndDate)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.lastWorkingDay)}</td></>}
-                                  {activeTab === "yetToGo"   && <><td>{displayLastWorkingDay(item)}</td><td>{fmt(item.travellingDate)}</td><td>{fmt(item.endDate || item.leaveEndDate)}</td></>}
-                                  {activeTab === "returned"  && <><td>{fmt(item.returnDate)}</td><td>{fmt(item.firstWorkingDay)}</td></>}
+                                  {activeTab === "onVacation" && <><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.lastWorkingDay)}</td></>}
+                                  {activeTab === "yetToGo"   && <><td className={styles.tdDate}>{displayLastWorkingDay(item)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td></>}
+                                  {activeTab === "returned"  && <><td className={styles.tdDate}>{fmt(item.returnDate)}</td><td className={styles.tdDate}>{fmt(item.firstWorkingDay)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
                                     {canReturn && item._source === "employee" ? (
@@ -998,10 +931,9 @@ function AnnualVacations() {
                                         <StatusBadge status={vs} />
                                         <select style={{ position:"absolute", inset:0, opacity:0, cursor:"pointer", width:"100%", height:"100%" }}
                                           value={vs} onChange={e => { e.stopPropagation(); handleStatusChange(item, e.target.value); }}>
-                                          <option value="Onsite">Onsite</option>
-                                          <option value="On Vacation">On Vacation</option>
-                                          <option value="Vacation Pending">Yet to Go</option>
-                                          <option value="Vacation Approved">Returned Back</option>
+                                          {VACATION_STATUS_EDIT_OPTIONS.map(opt => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                          ))}
                                         </select>
                                       </div>
                                     ) : <StatusBadge status={vs} />}
@@ -1029,7 +961,32 @@ function AnnualVacations() {
                     )}
 
                     <div className={styles.detailFooter}>
-                      <span className={styles.footerCount}>{filteredList.length} records shown</span>
+                      <span className={styles.footerCount}>
+                        {tabTotal === 0
+                          ? "0 records"
+                          : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, tabTotal)} of ${tabTotal}`}
+                      </span>
+                      {tabTotal > PAGE_SIZE && (
+                        <div className={styles.pagination}>
+                          <button
+                            type="button"
+                            className={styles.pageBtn}
+                            disabled={page <= 1 || tableLoading}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          >
+                            <FaChevronLeft /> Prev
+                          </button>
+                          <span className={styles.pageInfo}>Page {page} of {totalPages}</span>
+                          <button
+                            type="button"
+                            className={styles.pageBtn}
+                            disabled={page >= totalPages || tableLoading}
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          >
+                            Next <FaChevronRight />
+                          </button>
+                        </div>
+                      )}
                       <button className={styles.viewAllBtn} onClick={() => navigate("/leave-requests")}>
                         View All in Leave Management →
                       </button>
@@ -1073,10 +1030,9 @@ function AnnualVacations() {
                     ...buildEditModalState(prev.item, ns, prev.mode),
                   }));
                 }}>
-                <option value="Onsite">Onsite</option>
-                <option value="On Vacation">On Vacation</option>
-                <option value="Vacation Pending">Yet to Go</option>
-                <option value="Vacation Approved">Returned Back</option>
+                {VACATION_STATUS_EDIT_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
             {editModal.newStatus !== "Onsite" && (

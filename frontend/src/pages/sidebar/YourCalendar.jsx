@@ -135,7 +135,7 @@ function YourCalendar() {
           // resolve employee linked to this user
            let linkedEmployee = null;
            try {
-             const employees = await employeeService.getEmployees();
+             const employees = await employeeService.getEmployeesList();
              linkedEmployee = (employees || []).find(emp =>
                String(emp.user) === String(me._id) ||
                (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())
@@ -177,7 +177,7 @@ function YourCalendar() {
           // Other roles - use the same logic as before
            let linkedEmployee = null;
            try {
-             const employees = await employeeService.getEmployees();
+             const employees = await employeeService.getEmployeesList();
              linkedEmployee = (employees || []).find(emp =>
                String(emp.user) === String(me._id) ||
                (emp.emailId && me.emailId && emp.emailId.toLowerCase() === me.emailId.toLowerCase())

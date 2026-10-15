@@ -81,8 +81,6 @@ const CompanyDocument = () => {
         docNumber: formData.docNumber,
         issueDate: formData.issueDate,
         expiryDate: formData.expiryDate,
-        uploadedBy: localStorage.getItem("username") || "",
-        userRole: localStorage.getItem("role") || "",
       });
       showToast("Document added successfully.", "success");
     }
@@ -146,7 +144,7 @@ const CompanyDocument = () => {
 
           {error && <div className={styles.error}>{error}</div>}
 
-          <div className={styles.tableContainer}>
+          <div className={`${styles.tableContainer} hrms-table-scroll`}>
             <table className={styles.table}>
               <thead>
                 <tr>

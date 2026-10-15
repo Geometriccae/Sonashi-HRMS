@@ -27,6 +27,35 @@ const salarySlipSchema = new mongoose.Schema({
     // Legacy field (keeping for backward compatibility)
     deductionsPFTax: { type: Number, default: 0 },
     netSalary: { type: Number, required: true },
+    // Payroll cycle tracking (set by the generator). Slips without
+    // payrollCutoffDate were created before cycle tracking or manually.
+    payrollCutoffDate: { type: Date, default: null },
+    // Included in `leave` above: unpaid days from earlier cycles charged on this slip.
+    carriedForwardLeaveDays: { type: Number, default: 0 },
+    carriedForwardLeaveDeduction: { type: Number, default: 0 },
+    // Every unpaid day charged on this slip, so it is never deducted again.
+    processedLeaveDays: {
+        type: [{
+            _id: false,
+            source: { type: String, enum: ["leave", "attendance"], required: true },
+            sourceId: { type: String, required: true },
+            date: { type: String, required: true },
+            fraction: { type: Number, default: 1 },
+            carried: { type: Boolean, default: false },
+        }],
+        default: [],
+    },
+    // Carried days that did not fit this slip's net pay; picked up by the next cycle.
+    pendingCarryForward: {
+        type: [{
+            _id: false,
+            source: { type: String, enum: ["leave", "attendance"], required: true },
+            sourceId: { type: String, required: true },
+            date: { type: String, required: true },
+            fraction: { type: Number, default: 1 },
+        }],
+        default: [],
+    },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
 }, { timestamps: true });
 

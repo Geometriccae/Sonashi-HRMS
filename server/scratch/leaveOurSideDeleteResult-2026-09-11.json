@@ -1,0 +1,48 @@
+{
+  "performedAt": "2026-09-11T10:21:48.857Z",
+  "recordsBeforeDeletion": 730,
+  "recordsDeleted": 479,
+  "deleteManyAcknowledged": true,
+  "recordsRemaining": 251,
+  "math": "730 - 479 = 251",
+  "expected": {
+    "before": 730,
+    "deleted": 479,
+    "remaining": 251,
+    "keep": 182,
+    "uncertain": 69
+  },
+  "keepStillPresent": 182,
+  "uncertainStillPresent": 69,
+  "protectedStillPresent": [
+    {
+      "id": "6a28031146c7ddf03d6da481",
+      "employeeName": "MELVIN ABRAHAM THOMAS",
+      "leaveType": "Personal Leave",
+      "reason": "Personal",
+      "startDate": "2026-01-31T00:00:00.000Z",
+      "endDate": "2026-02-15T00:00:00.000Z"
+    },
+    {
+      "id": "6a28038146c7ddf03d6da490",
+      "employeeName": "MELVIN ABRAHAM THOMAS",
+      "leaveType": "Annual Leave",
+      "reason": "Annual Vacation",
+      "startDate": "2026-06-20T00:00:00.000Z",
+      "endDate": "2026-08-05T00:00:00.000Z"
+    },
+    {
+      "id": "6a2a7a9c54828137fa01f3fc",
+      "employeeName": "MUHAMMAD MEHTAB MUHAMMAD IRSHAD",
+      "leaveType": "Vacation",
+      "reason": "Annual Vacation",
+      "startDate": "2026-05-04T00:00:00.000Z",
+      "endDate": "2026-07-06T00:00:00.000Z"
+    }
+  ],
+  "protectedMissing": [],
+  "unexpectedlyNotDeleted": [],
+  "otherCollectionDeltas": [],
+  "leaveCollectionDelta": -479,
+  "success": true
+}

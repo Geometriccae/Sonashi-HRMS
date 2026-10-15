@@ -10,6 +10,7 @@ const companyDocumentSchema = new mongoose.Schema(
     filePath: String,
     fileType: String,
     fileSize: Number,
+    uploaderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     uploadedBy: String,
     userRole: String,
   },

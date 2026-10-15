@@ -6,10 +6,12 @@ import InputField from "../InputField";
 import ProfilePhotoUpload from "../ProfilePhotoUpload";
 import editIcon from "../../assets/dashboard/pencil-line-blue.svg";
 import clientService from "../../services/ClientService";
+import { savedRecordDateDefault } from "../../utils/dateFieldReset";
 import config from "../../config/config";
 import Dropdown from "../DropDown";
 
 function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
+  const savedDateDefault = (field) => savedRecordDateDefault(clientData, field);
   const [currentStep, setCurrentStep] = useState(1);
   const [profileImage, setProfileImage] = useState(null);
   const { showToast } = useToast();
@@ -837,6 +839,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
                 placeholder="Start Date"
                 type="date"
                 value={formData.projectTimelineStart}
+                defaultValue={savedDateDefault("projectTimelineStart")}
                 onChange={(e) =>
                   handleInputChange("projectTimelineStart", e.target.value)
                 }
@@ -847,6 +850,7 @@ function EditClientModal({ isOpen, onClose, onSubmit, clientData }) {
                 placeholder="End Date"
                 type="date"
                 value={formData.projectTimelineEnd}
+                defaultValue={savedDateDefault("projectTimelineEnd")}
                 onChange={(e) =>
                   handleInputChange("projectTimelineEnd", e.target.value)
                 }

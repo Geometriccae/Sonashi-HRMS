@@ -33,6 +33,22 @@ const leaveRequestSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    /**
+     * Canonical Team Management Employee._id.
+     * leave.employee may be User._id or Employee._id; this field always points
+     * at the Employee record when known (set on create/update/import; enriched on read).
+     */
+    employeeRecordId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+        default: null,
+        index: true
+    },
+    /** HR employee code (e.g. IDMO-032) — not a Mongo ObjectId */
+    employeeId: {
+        type: String,
+        default: ''
+    },
     employeeName: {
         type: String,
         required: true
@@ -61,6 +77,19 @@ const leaveRequestSchema = new mongoose.Schema({
     endDate: {
         type: Date,
         required: true
+    },
+    /**
+     * Excel / imported day count when it differs from a live date-diff.
+     * Leave totals use this value when present.
+     */
+    leaveDays: {
+        type: Number,
+        default: null
+    },
+    /** excel-master-tracker = imported historical row; live requests leave this empty. */
+    importSource: {
+        type: String,
+        default: ''
     },
     reason: {
         type: String,
@@ -150,6 +179,13 @@ const leaveRequestSchema = new mongoose.Schema({
         default: ''
     }
 }, { timestamps: true });
+
+leaveRequestSchema.index({ status: 1, startDate: 1 });
+leaveRequestSchema.index({ employee: 1, status: 1 });
+leaveRequestSchema.index({ employeeId: 1, status: 1 });
+leaveRequestSchema.index({ status: 1, appliedOn: -1 });
+leaveRequestSchema.index({ department: 1, status: 1 });
+leaveRequestSchema.index({ employeeName: 1 });
 
 module.exports = mongoose.model('LeaveRequest', leaveRequestSchema);
 module.exports.CHANGE_STATUSES = CHANGE_STATUSES;

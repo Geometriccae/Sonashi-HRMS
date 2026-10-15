@@ -34,6 +34,7 @@ const employeeSchema = new mongoose.Schema({
   remarks: { type: String, default: "" },
 
   employeeId: { type: String, required: true, unique: true }, // unique employee code/ID
+  unifiedId: { type: String, default: "" },
   employeeName: { type: String, required: true },
 
   employeeStatus: {
@@ -60,7 +61,13 @@ const employeeSchema = new mongoose.Schema({
     enum: ["Onsite", "On Vacation", "Vacation Approved", "Vacation Pending", "Onboarding"],
     default: "Onsite"
   },
-
+  /** Identifies whether the latest vacation state came from leave approval or an authorized manual update. */
+  vacationStatusSource: {
+    type: String,
+    enum: ["leave", "manual"],
+    default: null
+  },
+  vacationStatusUpdatedAt: { type: Date, default: null },
   attendance: {
     type: String,
     enum: ["Onsite", "Leave"],
@@ -112,12 +119,21 @@ const employeeSchema = new mongoose.Schema({
     bankName: { type: String, default: "" },
     accountNumber: { type: String, default: "" },
     ibanNumber: { type: String, default: "" },
-    bankSortCode: { type: String, default: "" }
+    bankSortCode: { type: String, default: "" },
+    modeOfPay: { type: String, default: "" }
   },
 
   lifeInsurance: { type: Boolean, default: false },
   medicalInsurance: { type: Boolean, default: false },
   airFare: { type: Boolean, default: false },
+
+  /**
+   * Exact yearly leave-taken values from the client Master tracker sheet.
+   * Keys are calendar years as strings ("2010"…"2026"). Null years are omitted.
+   * Used by the central leave calculator; never hardcoded in the UI.
+   */
+  excelLeaveYearTaken: { type: mongoose.Schema.Types.Mixed, default: null },
+  excelLeaveImportedAt: { type: Date, default: null },
 
   assignedProjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Client" }], // multiple projects can be assigned
 
@@ -138,5 +154,14 @@ const employeeSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 employeeSchema.index({ emailId: 1 }, { unique: true, sparse: true });
+employeeSchema.index({ employeeStatus: 1, vacationStatus: 1 });
+employeeSchema.index({ vacationStatus: 1, returnDate: 1 });
+employeeSchema.index({ vacationStatus: 1, firstWorkingDay: 1 });
+employeeSchema.index({ visaExpiryDate: 1 });
+employeeSchema.index({ passportExpiryDate: 1 });
+employeeSchema.index({ employeeStatus: 1, createdAt: -1 });
+employeeSchema.index({ department: 1 });
+employeeSchema.index({ employeeName: 1 });
+employeeSchema.index({ doj: 1 });
 
 module.exports = mongoose.model("Employee", employeeSchema);
