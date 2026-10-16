@@ -49,7 +49,8 @@ class SifService {
     return res.json();
   }
 
-  async previewExport(month, year, { employerId } = {}) {
+  async previewExport(month, year, options = {}) {
+    const employerId = typeof options === "object" ? options.employerId : options;
     const params = new URLSearchParams({ month: String(month), year: String(year) });
     if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
     const res = await fetch(`${this.baseURL}/export/sif/preview?${params}`, {
@@ -59,9 +60,9 @@ class SifService {
     return res.json();
   }
 
-  async exportSif(month, year, { employerId } = {}) {
+  /** Salary Report payroll/WPS rows for a month — the same rows the SIF is built from. */
+  async getSalaryReportRows(month, year) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
-<<<<<<< HEAD
     const res = await fetch(`${this.baseURL}/salary-report?${params}`, {
       headers: this.getAuthHeaders(),
     });
@@ -78,12 +79,10 @@ class SifService {
     return res.json();
   }
 
-  async exportSif(month, year, employerId) {
+  async exportSif(month, year, options = {}) {
+    const employerId = typeof options === "object" ? options.employerId : options;
     const params = new URLSearchParams({ month: String(month), year: String(year) });
-    if (employerId) params.set("employerId", String(employerId));
-=======
     if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
->>>>>>> 636200249e09d00a177ab32de4e245fee7cacfb6
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
       headers: this.getAuthHeaders(false),
     });
