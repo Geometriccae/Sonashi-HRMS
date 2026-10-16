@@ -14,6 +14,10 @@ const {
   yearQueryValue,
 } = require("./generateSalarySlips");
 const { MONTH_NAMES, buildSalaryReportPayrollRow } = require("./sifUtils");
+const {
+  loadCompanyEmployerMap,
+  applyCompanyEmployerMapping,
+} = require("./sifCompanyMapping");
 
 const employeeCodeKey = (value) =>
   String(value || "")
@@ -98,7 +102,13 @@ function matchSlipsToEmployees(slips, employees) {
  */
 async function loadSalaryReportRows({ month, year, payrollEligibleOnly = true }) {
   const period = getPayrollPeriod(month, year);
-  const allEmployees = await Employee.find({}).lean();
+  const [storedEmployees, companyEmployerMap] = await Promise.all([
+    Employee.find({}).lean(),
+    loadCompanyEmployerMap(),
+  ]);
+  const allEmployees = storedEmployees.map((employee) =>
+    applyCompanyEmployerMapping(employee, companyEmployerMap)
+  );
   const employees = payrollEligibleOnly
     ? allEmployees.filter((emp) => isPayrollCandidateForPeriod(emp, period))
     : allEmployees;

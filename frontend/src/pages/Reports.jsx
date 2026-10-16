@@ -404,6 +404,7 @@ function Reports() {
       employerId: id,
       employeeCount: counts.get(id) || 0,
       isSettingsDefault: id === sifSettingsEmployerId,
+      agentRoutingCode: sifEmployers.find((emp) => emp.employerId === id)?.agentRoutingCode || "",
     }));
   }, [sifEmployers, sifSettingsEmployerId]);
 
@@ -1871,7 +1872,7 @@ function Reports() {
                         <option value="">Select Employer ID</option>
                         {sifEmployerOptions.map((emp) => (
                           <option key={emp.employerId} value={emp.employerId}>
-                            {`${emp.employerId} — ${emp.employeeCount} employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}`}
+                            {`${emp.employerId} — ${emp.employeeCount} employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
                           </option>
                         ))}
                       </select>

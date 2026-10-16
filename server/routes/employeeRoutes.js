@@ -24,6 +24,7 @@ const {
   workingStatusFilter,
   nonWorkingStatusFilter,
 } = require('../utils/employeeStatus');
+const { buildEmployeeListFilter } = require('../utils/employeeListFilters');
 const LeaveRequest = require('../models/LeaveRequest');
 const {
   getListCache,
@@ -518,16 +519,31 @@ router.get('/dashboard-category', authMiddleware, async (req, res) => {
 });
 
 // Get all employees (use ?view=list for lightweight table data)
-// Supports server-side pagination: ?page=1&limit=20&search=...&status=Active|InActive
+// Supports server-side pagination and composable Team Members filters.
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const view = String(req.query.view || '').toLowerCase();
     const page = parseInt(req.query.page, 10);
     const limit = parseInt(req.query.limit, 10);
-    const search = String(req.query.search || '').trim();
-    const status = String(req.query.status || '').trim();
     const paginate = !isNaN(page) && page > 0 && !isNaN(limit) && limit > 0;
-    const hasFilters = search || status;
+    const requestedCompanyCode = String(req.query.companyCode || '').trim();
+    let companyFallbackIds = [];
+    if (requestedCompanyCode) {
+      const [employeesWithoutCode, companyCodeMap] = await Promise.all([
+        Employee.find({ $or: [
+          { companyCode: { $exists: false } },
+          { companyCode: null },
+          { companyCode: '' },
+        ] }).select('_id office companyCode').lean(),
+        getCompanyCodeMap(),
+      ]);
+      companyFallbackIds = applyLiveCompanyCodes(employeesWithoutCode, companyCodeMap)
+        .filter((employee) => String(employee.companyCode || '').trim() === requestedCompanyCode)
+        .map((employee) => employee._id);
+    }
+    const filterResult = buildEmployeeListFilter(req.query, { companyFallbackIds });
+    if (filterResult.error) return res.status(400).json({ message: filterResult.error });
+    const { filter, hasFilters } = filterResult;
     const includeVacation =
       String(req.query.includeVacation || '') === '1' ||
       String(req.query.includeVacation || '').toLowerCase() === 'true';
@@ -552,33 +568,6 @@ router.get('/', authMiddleware, async (req, res) => {
         const withCodes = applyLiveCompanyCodes(cached, codeMap);
         const employees = applyEffectiveVacationStatuses(withCodes, approvedLeaves);
         return respondEmployees(employees, approvedLeaves);
-      }
-    }
-
-    let filter = {};
-    if (status === 'Active') Object.assign(filter, workingStatusFilter());
-    else if (status === 'InActive') Object.assign(filter, nonWorkingStatusFilter());
-    else if (status && EMPLOYEE_STATUS_VALUES.includes(status)) filter.employeeStatus = status;
-
-    if (search) {
-      const regex = new RegExp(search, 'i');
-      const searchClause = {
-        $or: [
-          { employeeName: regex },
-          { employeeId: regex },
-          { emailId: regex },
-          { role: regex },
-          { department: regex },
-          { mobile: regex },
-        ],
-      };
-      // Status filter (Active / Ex / All) must stay applied together with search.
-      if (filter.$and) {
-        filter.$and.push(searchClause);
-      } else if (filter.employeeStatus || Object.keys(filter).length) {
-        filter = { $and: [{ ...filter }, searchClause] };
-      } else {
-        Object.assign(filter, searchClause);
       }
     }
 
@@ -636,6 +625,27 @@ router.get('/', authMiddleware, async (req, res) => {
     return respondEmployees(merged, approvedLeaves);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employees', error: error.message });
+  }
+});
+
+// Dynamic filter values for Team Management. Only lightweight fields are read.
+router.get('/filter-options', authMiddleware, async (req, res) => {
+  try {
+    const [storedEmployees, codeMap] = await Promise.all([
+      Employee.find({}).select('office companyCode employeeStatus').lean(),
+      getCompanyCodeMap(),
+    ]);
+    const employees = applyLiveCompanyCodes(storedEmployees, codeMap);
+    const companyCodes = [...new Set(
+      employees.map((employee) => String(employee.companyCode || '').trim()).filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b));
+    const presentStatuses = new Set(
+      employees.map((employee) => String(employee.employeeStatus || '').trim()).filter(Boolean)
+    );
+    const statuses = EMPLOYEE_STATUS_VALUES.filter((value) => presentStatuses.has(value));
+    res.json({ companyCodes, statuses });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching employee filter options', error: error.message });
   }
 });
 

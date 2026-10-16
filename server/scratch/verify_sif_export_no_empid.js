@@ -13,6 +13,12 @@ const {
   employeeToExcelRow,
   excelHeaders,
 } = require("../utils/sifUtils");
+const {
+  buildCompanyEmployerMap,
+  applyCompanyEmployerMapping,
+  resolveEmployeeCompanyMapping,
+} = require("../utils/sifCompanyMapping");
+const { buildSifAudit, validateSifExports } = require("../utils/sifAudit");
 const { buildEmployeeSalarySlip } = require("../utils/generateSalarySlips");
 
 const EMPLOYER = "0000000246878";
@@ -223,6 +229,50 @@ const xrow = employeeToExcelRow(otherEmployer, EMPLOYER);
 assert.strictEqual(xrow.LABOURCARD, "99999999999999");
 assert.strictEqual(xrow.EMPLOYERID, OTHER_EMPLOYER);
 console.log("PASS SIF Excel export carries labour card + the employee's employer ID");
+
+// Company assignment is resolved from the existing Company Documents mapping.
+const companyMap = buildCompanyEmployerMap([
+  { particulars: "Branch Company", docNumber: EMPLOYER },
+]);
+const staleStoredCompany = emp({ office: "Branch Company", companyCode: OTHER_EMPLOYER });
+const mappedEmployee = applyCompanyEmployerMapping(staleStoredCompany, companyMap);
+const mappedRow = rowsFor([{ employee: mappedEmployee, slip: slipFor(mappedEmployee) }])[0];
+assert.strictEqual(mappedRow.employerId, EMPLOYER);
+assert.strictEqual(mappedRow.companyCode, OTHER_EMPLOYER);
+assert.strictEqual(mappedRow.companyMapping.source, "company-document");
+assert.strictEqual(mappedRow.companyMapping.status, "Mismatch");
+const mappedExport = generate([mappedRow]);
+assert.strictEqual(mappedExport.edrCount, 1, "unambiguous company configuration fixes export without rewriting Employee Master");
+
+const conflictMap = buildCompanyEmployerMap([
+  { particulars: "Branch Company", docNumber: EMPLOYER },
+  { particulars: "Branch Company", docNumber: OTHER_EMPLOYER },
+]);
+const conflict = resolveEmployeeCompanyMapping(staleStoredCompany, conflictMap);
+assert.strictEqual(conflict.source, "conflict");
+assert.strictEqual(conflict.employerId, "");
+assert.ok(conflict.issues[0].includes("Conflicting"));
+console.log("PASS company mapping: configured employer wins stale stored code; conflicts are not guessed");
+
+const audit = buildSifAudit([mappedRow, rowsFor([{ employee: noAgent, slip: slipFor(noAgent) }])[0]]);
+assert.strictEqual(audit.summary.eligibleEmployees, 2);
+assert.strictEqual(audit.summary.resolvedCompanyMismatches, 1);
+assert.strictEqual(audit.summary.agentCode.missing, 1);
+assert.ok(audit.records.some((record) => record.validationResult === "Missing Data"));
+const exportAudit = validateSifExports({
+  rows: [mappedRow],
+  audit: buildSifAudit([mappedRow]),
+  scrRouting: [
+    { employerId: EMPLOYER, agentRoutingCode: ROUTING, validationResult: "Pass" },
+    { employerId: OTHER_EMPLOYER, agentRoutingCode: "", validationResult: "Missing Data" },
+  ],
+  month: MONTH,
+  year: YEAR,
+  now: new Date(2026, 8, 26, 16, 47, 0),
+});
+assert.strictEqual(exportAudit[0].edrScrValidation, "Pass");
+assert.strictEqual(exportAudit[1].edrScrValidation, "Missing Data");
+console.log("PASS full-population audit summary reports company mismatch and missing Agent Code");
 
 // ── No valid employees → clear error, no file ───────────────────────────────
 const none = generate(rowsFor([{ employee: noSlip, slip: null }]));

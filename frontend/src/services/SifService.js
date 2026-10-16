@@ -69,6 +69,15 @@ class SifService {
     return res.json();
   }
 
+  async getAudit(month, year) {
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    const res = await fetch(`${this.baseURL}/audit?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to load SIF audit");
+    return res.json();
+  }
+
   async exportSif(month, year, employerId) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
     if (employerId) params.set("employerId", String(employerId));

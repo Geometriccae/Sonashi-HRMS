@@ -7,6 +7,11 @@ const Employee = require("../models/Employee");
 const CompanySifSettings = require("../models/CompanySifSettings");
 const { workingStatusFilter } = require("../utils/employeeStatus");
 const { loadSalaryReportRows } = require("../utils/sifSalaryReportRows");
+const { buildSifAudit, validateSifExports } = require("../utils/sifAudit");
+const {
+  loadCompanyEmployerMap,
+  applyCompanyEmployerMapping,
+} = require("../utils/sifCompanyMapping");
 const {
   MONTH_NAMES,
   generateSifContent,
@@ -59,13 +64,48 @@ function resolveExportEmployerId(req, settings) {
   return requested || settings.employerId || "";
 }
 
+function getEmployerRoutingCodes(settings) {
+  const routes = new Map();
+  (settings?.employerRoutingCodes || []).forEach((entry) => {
+    const employerId = digitsOnly(entry?.employerId);
+    const agentRoutingCode = digitsOnly(entry?.agentRoutingCode);
+    if (employerId.length === 13 && agentRoutingCode.length === 9) {
+      routes.set(employerId, agentRoutingCode);
+    }
+  });
+  const legacyEmployer = digitsOnly(settings?.employerId);
+  const legacyAgent = digitsOnly(settings?.defaultAgentRoutingCode);
+  if (legacyEmployer.length === 13 && legacyAgent.length === 9 && !routes.has(legacyEmployer)) {
+    routes.set(legacyEmployer, legacyAgent);
+  }
+  return routes;
+}
+
+function resolveExportAgentRouting(settings, employerId) {
+  return getEmployerRoutingCodes(settings).get(digitsOnly(employerId)) || "";
+}
+
+async function employersWithRouting(settings) {
+  const routes = getEmployerRoutingCodes(settings);
+  return (await listEmployers()).map((employer) => ({
+    ...employer,
+    agentRoutingCode: routes.get(employer.employerId) || "",
+  }));
+}
+
 async function loadActiveEmployees() {
   return Employee.find(workingStatusFilter()).lean();
 }
 
 /** Employer IDs (company codes) of working employees, for the SIF employer picker. */
 async function listEmployers() {
-  const employees = await Employee.find(workingStatusFilter()).select("companyCode").lean();
+  const [storedEmployees, companyEmployerMap] = await Promise.all([
+    Employee.find(workingStatusFilter()).select("office companyCode").lean(),
+    loadCompanyEmployerMap(),
+  ]);
+  const employees = storedEmployees.map((employee) =>
+    applyCompanyEmployerMapping(employee, companyEmployerMap)
+  );
   const counts = new Map();
   employees.forEach((emp) => {
     const id = getEmployeeEmployerId(emp);
@@ -281,7 +321,7 @@ router.get("/settings", authMiddleware, async (req, res) => {
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
-      employers: await listEmployers(),
+      employers: await employersWithRouting(doc),
     });
   } catch (err) {
     console.error("SIF settings GET error:", err);
@@ -304,11 +344,17 @@ router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, as
     const doc = await getOrCreateSettings();
     doc.employerId = employerId;
     doc.defaultAgentRoutingCode = defaultAgentRoutingCode;
+    const routes = Array.from(doc.employerRoutingCodes || []);
+    const existing = routes.find((entry) => digitsOnly(entry.employerId) === employerId);
+    if (existing) existing.agentRoutingCode = defaultAgentRoutingCode;
+    else routes.push({ employerId, agentRoutingCode: defaultAgentRoutingCode });
+    doc.employerRoutingCodes = routes;
     await doc.save();
 
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      employers: await employersWithRouting(doc),
     });
   } catch (err) {
     console.error("SIF settings PUT error:", err);
@@ -326,10 +372,11 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     const settings = await getOrCreateSettings();
 
     const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
+    const employerId = resolveExportEmployerId(req, settings);
     const result = generateSifContent({
       rows,
-      employerId: resolveExportEmployerId(req, settings),
-      defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
+      employerId,
+      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
       year: parsed.year,
       month: parsed.month,
     });
@@ -379,14 +426,14 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     const result = generateSifContent({
       rows,
       employerId,
-      defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
+      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
       year: parsed.year,
       month: parsed.month,
     });
 
     res.json({
       employerId,
-      defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
+      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
       skipped: result.skipped || [],
@@ -425,6 +472,41 @@ router.get("/salary-report", authMiddleware, async (req, res) => {
   }
 });
 
+// Complete read-only SIF mapping audit for every payroll-eligible employee.
+router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
+  try {
+    const parsed = parseMonthYear(req);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const [rows, settings] = await Promise.all([
+      loadSalaryReportRows({ month: parsed.month, year: parsed.year }),
+      CompanySifSettings.findOne({ key: "default" }).lean(),
+    ]);
+    const audit = buildSifAudit(rows);
+    const routingCodes = getEmployerRoutingCodes(settings);
+    const employerIds = [...new Set(rows.map((row) => row.employerId).filter((id) => /^\d{13}$/.test(id)))];
+    const scrRouting = employerIds.map((employerId) => ({
+      employerId,
+      agentRoutingCode: routingCodes.get(employerId) || "",
+      validationResult: routingCodes.has(employerId) ? "Pass" : "Missing Data",
+    }));
+    audit.summary.scrRoutingConfigured = scrRouting.filter((entry) => entry.validationResult === "Pass").length;
+    audit.summary.scrRoutingMissing = scrRouting.filter((entry) => entry.validationResult !== "Pass").length;
+    const exportValidation = validateSifExports({
+      rows,
+      audit,
+      scrRouting,
+      month: parsed.month,
+      year: parsed.year,
+    });
+    audit.summary.edrScrValidationPass = exportValidation.filter((entry) => entry.edrScrValidation === "Pass").length;
+    audit.summary.edrScrValidationUnresolved = exportValidation.filter((entry) => entry.edrScrValidation !== "Pass").length;
+    res.json({ month: parsed.month, year: parsed.year, ...audit, scrRouting, exportValidation });
+  } catch (err) {
+    console.error("SIF audit error:", err);
+    res.status(500).json({ message: "Failed to build SIF mapping audit" });
+  }
+});
+
 // ── Import SIF ─────────────────────────────────────────────────────────────
 
 router.post(
@@ -442,14 +524,23 @@ router.post(
       const text = req.file.buffer.toString("utf8");
       const { edrs, scr } = parseSifContent(text);
 
-      // If SCR has employer ID and settings empty, optionally save it
+      // Preserve routing by employer; never let one imported company's SCR
+      // silently become the routing code for every other company.
       if (scr?.employerId) {
         const settings = await getOrCreateSettings();
-        if (!settings.employerId) {
+        const employerId = digitsOnly(scr.employerId);
+        const agentRoutingCode = digitsOnly(scr.agentRouting);
+        const routes = Array.from(settings.employerRoutingCodes || []);
+        const hasRoute = routes.some((entry) => digitsOnly(entry.employerId) === employerId);
+        if (!hasRoute && employerId.length === 13 && agentRoutingCode.length === 9) {
+          routes.push({ employerId, agentRoutingCode });
+          settings.employerRoutingCodes = routes;
+        }
+        if (!settings.employerId && employerId.length === 13) {
           settings.employerId = scr.employerId;
           if (scr.agentRouting) settings.defaultAgentRoutingCode = scr.agentRouting;
-          await settings.save();
         }
+        if (settings.isModified()) await settings.save();
       }
 
       const results = await applyEdrUpdates(edrs, { updateSalary: true });
@@ -477,9 +568,13 @@ router.post(
 
 router.get("/export/excel", authMiddleware, async (req, res) => {
   try {
-    const settings = await getOrCreateSettings();
-    const employees = await loadActiveEmployees();
-    const rows = employees.map((e) => employeeToExcelRow(e, settings.employerId));
+    const [employees, companyEmployerMap] = await Promise.all([
+      loadActiveEmployees(),
+      loadCompanyEmployerMap(),
+    ]);
+    const rows = employees.map((employee) =>
+      employeeToExcelRow(applyCompanyEmployerMapping(employee, companyEmployerMap))
+    );
 
     const sheetData = [excelHeaders, ...rows.map((r) => excelHeaders.map((h) => r[h]))];
     const wb = XLSX.utils.book_new();
@@ -517,14 +612,17 @@ router.get("/export/excel", authMiddleware, async (req, res) => {
 // JSON rows for frontend ExcelJS red-header export
 router.get("/export/excel-data", authMiddleware, async (req, res) => {
   try {
-    const settings = await getOrCreateSettings();
-    const employees = await loadActiveEmployees();
-    const rows = employees.map((e) => employeeToExcelRow(e, settings.employerId));
+    const [employees, companyEmployerMap] = await Promise.all([
+      loadActiveEmployees(),
+      loadCompanyEmployerMap(),
+    ]);
+    const rows = employees.map((employee) =>
+      employeeToExcelRow(applyCompanyEmployerMapping(employee, companyEmployerMap))
+    );
     res.json({
       headers: excelHeaders,
       redHeaders: Array.from(RED_HEADERS),
       rows,
-      employerId: settings.employerId || "",
     });
   } catch (err) {
     console.error("SIF excel-data error:", err);

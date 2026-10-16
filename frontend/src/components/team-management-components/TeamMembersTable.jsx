@@ -124,6 +124,18 @@ function TeamMembersTable() {
   const itemsPerPage = Number(searchParams.get("size")) || 20;
   const activeFilter = searchParams.get("filter") || "Active";
   const urlSearch = searchParams.get("q") || "";
+  const appliedName = searchParams.get("name") || "";
+  const appliedDojFrom = searchParams.get("joinFrom") || "";
+  const appliedDojTo = searchParams.get("joinTo") || "";
+  const appliedCompanyCode = searchParams.get("company") || "";
+  const appliedEmployeeStatus = searchParams.get("employeeStatus") || "";
+  const appliedFilters = useMemo(() => ({
+    employeeName: appliedName,
+    dojFrom: appliedDojFrom,
+    dojTo: appliedDojTo,
+    companyCode: appliedCompanyCode,
+    employeeStatus: appliedEmployeeStatus,
+  }), [appliedName, appliedDojFrom, appliedDojTo, appliedCompanyCode, appliedEmployeeStatus]);
   const listReturnPath = useMemo(() => {
     const query = searchParams.toString();
     return query ? `/teammanagement?${query}` : "/teammanagement";
@@ -167,10 +179,10 @@ function TeamMembersTable() {
       Object.entries(updates).forEach(([key, value]) => {
         const normalized = value == null ? "" : String(value).trim();
         const isDefault =
-          (key === "page" && (normalized === "" || normalized === "1")) ||
-          (key === "size" && (normalized === "" || normalized === "20")) ||
-          (key === "filter" && (normalized === "" || normalized === "Active")) ||
-          (key === "q" && normalized === "");
+          normalized === "" ||
+          (key === "page" && normalized === "1") ||
+          (key === "size" && normalized === "20") ||
+          (key === "filter" && normalized === "Active");
 
         if (isDefault) next.delete(key);
         else next.set(key, normalized);
@@ -193,6 +205,8 @@ function TeamMembersTable() {
   const [error, setError] = useState(null);
   const [searchInput, setSearchInput] = useState(urlSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
+  const [filterDraft, setFilterDraft] = useState(appliedFilters);
+  const [filterOptions, setFilterOptions] = useState({ companyCodes: [], statuses: [] });
   const userRole = localStorage.getItem("role") || "";
   const isAdmin = userRole === "admin" || userRole === "hod";
   const canEditEmployees =
@@ -217,14 +231,35 @@ function TeamMembersTable() {
   }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    setFilterDraft(appliedFilters);
+  }, [appliedFilters]);
+
+  const loadFilterOptions = async (force = false) => {
+    try {
+      const options = await employeeService.getEmployeeFilterOptions({ force });
+      setFilterOptions({
+        companyCodes: Array.isArray(options?.companyCodes) ? options.companyCodes : [],
+        statuses: Array.isArray(options?.statuses) ? options.statuses : [],
+      });
+    } catch (err) {
+      console.warn("Failed to load employee filter options:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadFilterOptions();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     fetchEmployees();
-  }, [currentPage, itemsPerPage, activeFilter, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentPage, itemsPerPage, activeFilter, debouncedSearch, appliedFilters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return employeeService.onEmployeeDataChanged?.(() => {
       fetchEmployees({ soft: true });
+      loadFilterOptions(true);
     });
-  }, [currentPage, itemsPerPage, activeFilter, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentPage, itemsPerPage, activeFilter, debouncedSearch, appliedFilters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let socket;
@@ -243,6 +278,7 @@ function TeamMembersTable() {
         if (!employee) return;
         // Refresh current page so counts/order stay correct with server pagination
         fetchEmployees({ soft: true });
+        loadFilterOptions(true);
       };
 
       socket.on('employee-created', onEmployeeCreated);
@@ -279,6 +315,7 @@ function TeamMembersTable() {
         limit: itemsPerPage,
         search: debouncedSearch,
         status,
+        filters: appliedFilters,
       });
       const rows = Array.isArray(result?.employees) ? result.employees : [];
       setEmployees(rows);
@@ -293,6 +330,7 @@ function TeamMembersTable() {
             limit: itemsPerPage,
             search: debouncedSearch,
             status,
+            filters: appliedFilters,
           })
           .catch(() => {});
       }
@@ -302,6 +340,31 @@ function TeamMembersTable() {
     } finally {
       if (!soft) setLoading(false);
     }
+  };
+
+  const handleApplyFilters = () => {
+    if (filterDraft.dojFrom && filterDraft.dojTo && filterDraft.dojFrom > filterDraft.dojTo) {
+      showToast("Joining From Date cannot be after To Date.", "error");
+      return;
+    }
+    patchSearchParams({
+      name: filterDraft.employeeName,
+      joinFrom: filterDraft.dojFrom,
+      joinTo: filterDraft.dojTo,
+      company: filterDraft.companyCode,
+      employeeStatus: filterDraft.employeeStatus,
+    }, { resetPage: true });
+  };
+
+  const handleClearFilters = () => {
+    setFilterDraft({ employeeName: "", dojFrom: "", dojTo: "", companyCode: "", employeeStatus: "" });
+    patchSearchParams({
+      name: undefined,
+      joinFrom: undefined,
+      joinTo: undefined,
+      company: undefined,
+      employeeStatus: undefined,
+    }, { resetPage: true });
   };
 
   const handleSelectAllInListClick = () => {
@@ -614,6 +677,7 @@ function TeamMembersTable() {
     filteredData.length > 0 && filteredData.every((m) => isRowSelected(selectedEmployeeIds, m));
 
   const isInitialLoading = loading && employees.length === 0 && !error;
+  const hasAppliedFilters = Object.values(appliedFilters).some(Boolean);
 
   const columns = [
       {
@@ -929,6 +993,67 @@ function TeamMembersTable() {
         />
       </div>
 
+      <div className={styles.filterPanel} aria-label="Employee filters">
+        <label className={styles.filterField}>
+          <span>Name</span>
+          <Input
+            value={filterDraft.employeeName}
+            placeholder="Employee name"
+            allowClear
+            onChange={(e) => setFilterDraft((prev) => ({ ...prev, employeeName: e.target.value }))}
+            onPressEnter={handleApplyFilters}
+          />
+        </label>
+        <label className={styles.filterField}>
+          <span>Joining From</span>
+          <Input
+            type="date"
+            value={filterDraft.dojFrom}
+            onChange={(e) => setFilterDraft((prev) => ({ ...prev, dojFrom: e.target.value }))}
+          />
+        </label>
+        <label className={styles.filterField}>
+          <span>Joining To</span>
+          <Input
+            type="date"
+            value={filterDraft.dojTo}
+            min={filterDraft.dojFrom || undefined}
+            onChange={(e) => setFilterDraft((prev) => ({ ...prev, dojTo: e.target.value }))}
+          />
+        </label>
+        <label className={styles.filterField}>
+          <span>Company Code</span>
+          <Select
+            value={filterDraft.companyCode || undefined}
+            placeholder="All company codes"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            options={filterOptions.companyCodes.map((code) => ({ value: code, label: code }))}
+            onChange={(value) => setFilterDraft((prev) => ({ ...prev, companyCode: value || "" }))}
+          />
+        </label>
+        <label className={styles.filterField}>
+          <span>Status</span>
+          <Select
+            value={filterDraft.employeeStatus || undefined}
+            placeholder="All statuses"
+            allowClear
+            options={filterOptions.statuses.map((status) => ({ value: status, label: status }))}
+            onChange={(value) => setFilterDraft((prev) => ({ ...prev, employeeStatus: value || "" }))}
+          />
+        </label>
+        <div className={styles.filterActions}>
+          <Typography.Text type="secondary" className={styles.filterCount}>
+            {totalEmployees} {totalEmployees === 1 ? "employee" : "employees"}
+          </Typography.Text>
+          <Button type="primary" onClick={handleApplyFilters}>Apply</Button>
+          <Button onClick={handleClearFilters} disabled={!hasAppliedFilters && !Object.values(filterDraft).some(Boolean)}>
+            Clear filters
+          </Button>
+        </div>
+      </div>
+
       <div className={styles.tableScrollWrap}>
       <Table
         rowKey={(record) => empRowId(record)}
@@ -940,7 +1065,7 @@ function TeamMembersTable() {
           emptyText: (
             <Empty
               description={
-                searchInput ? "No employees match your search." : "No employees found."
+                searchInput || hasAppliedFilters ? "No employees match the current search and filters." : "No employees found."
               }
             />
           ),

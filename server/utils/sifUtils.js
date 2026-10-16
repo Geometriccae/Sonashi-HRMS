@@ -53,7 +53,7 @@ const validateLabourCardNumber = (value) => {
 
 /** Employer (MOHRE establishment) ID the employee is paid under. */
 const getEmployeeEmployerId = (emp) =>
-  String(emp?.companyCode || "").replace(/[\s-]+/g, "").toUpperCase();
+  String(emp?.sifEmployerId || emp?.companyCode || "").replace(/[\s-]+/g, "").toUpperCase();
 
 /** IBAN as stored, or a numeric account / card number zero-padded to 23 characters. */
 const formatSifAccount = (emp) => {
@@ -210,7 +210,9 @@ const buildSalaryReportPayrollRow = ({ employee, slip, year, month }) => {
     employeeName: employee?.employeeName || "",
     staffId,
     employerId,
+    employeeCompany: employee?.office || "",
     companyCode: employee?.companyCode || "",
+    companyMapping: employee?.sifCompanyMapping || null,
     agentCode,
     iban,
     payrollMonth,
@@ -497,14 +499,14 @@ const RED_HEADERS = new Set([
   "BANKACCOUNT",
 ]);
 
-const employeeToExcelRow = (emp, employerId) => {
+const employeeToExcelRow = (emp) => {
   const sal = emp.salaryDetails || {};
   return {
     StaffID: emp.employeeId || "",
     LABOURCARD: getLabourCardNumber(emp),
     EMPID: normalizeEmiratesId(emp.emiratesId),
     EMPNAME: emp.employeeName || "",
-    EMPLOYERID: getEmployeeEmployerId(emp) || digitsOnly(employerId),
+    EMPLOYERID: getEmployeeEmployerId(emp),
     AGENTCODE: digitsOnly(sal.bankSortCode),
     BANKACCOUNT: getBankAccount(emp),
     STATUS: emp.employeeStatus || "",

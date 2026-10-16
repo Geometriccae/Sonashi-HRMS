@@ -93,19 +93,31 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     [showToast]
   );
 
+  const employeeEmployerId = useMemo(
+    () => String(employee?.companyCode || "").replace(/[\s-]+/g, ""),
+    [employee?.companyCode]
+  );
+
   const loadSettings = useCallback(async () => {
     setLoadingSettings(true);
     try {
       const s = await sifService.getSettings();
-      setEmployerId(s.employerId || "");
-      setAgentRouting(s.defaultAgentRoutingCode || "");
-      setEmployers(Array.isArray(s.employers) ? s.employers : []);
+      const loadedEmployers = Array.isArray(s.employers) ? s.employers : [];
+      const selectedEmployer = /^\d{13}$/.test(employeeEmployerId)
+        ? employeeEmployerId
+        : (s.employerId || "");
+      const selectedRouting = loadedEmployers.find(
+        (entry) => entry.employerId === selectedEmployer
+      )?.agentRoutingCode || (selectedEmployer === s.employerId ? s.defaultAgentRoutingCode : "");
+      setEmployerId(selectedEmployer);
+      setAgentRouting(selectedRouting || "");
+      setEmployers(loadedEmployers);
     } catch (err) {
       toast(err.message || "Failed to load SIF settings", "error");
     } finally {
       setLoadingSettings(false);
     }
-  }, [toast]);
+  }, [toast, employeeEmployerId]);
 
   useEffect(() => {
     loadSettings();
@@ -171,6 +183,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       });
       setEmployerId(saved.employerId || "");
       setAgentRouting(saved.defaultAgentRoutingCode || "");
+      setEmployers(Array.isArray(saved.employers) ? saved.employers : employers);
       toast("SIF settings saved.", "success");
     } catch (err) {
       const msg = err.message || "Failed to save SIF settings";
@@ -192,7 +205,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     setPreview(null);
     setImportResult(null);
     try {
-      const result = await sifService.previewExport(month, year);
+      const result = await sifService.previewExport(month, year, employerDigits);
       setPreview(result);
       if (result.error) {
         toast(result.error, "error");
@@ -219,7 +232,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     setBusy("sif");
     setImportResult(null);
     try {
-      const result = await sifService.exportSif(month, year);
+      const result = await sifService.exportSif(month, year, employerDigits);
       const skipped = result.skippedCount || 0;
       setPreview({
         edrCount: result.edrCount,
@@ -362,7 +375,11 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               value={employerId}
               onChange={(e) => {
                 setSettingsError("");
-                setEmployerId(digitsOnly(e.target.value).slice(0, 13));
+                const nextEmployer = digitsOnly(e.target.value).slice(0, 13);
+                setEmployerId(nextEmployer);
+                setAgentRouting(
+                  employers.find((entry) => entry.employerId === nextEmployer)?.agentRoutingCode || ""
+                );
               }}
               disabled={!canManage || saving}
               className={styles.input}
@@ -371,7 +388,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
             <datalist id="employee-sif-employer-options">
               {employers.map((emp) => (
                 <option key={emp.employerId} value={emp.employerId}>
-                  {`${emp.employeeCount} employee(s)`}
+                  {`${emp.employeeCount} employee(s)${emp.agentRoutingCode ? "" : " — SCR routing not configured"}`}
                 </option>
               ))}
             </datalist>
