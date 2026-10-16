@@ -18,7 +18,7 @@ const {
   parseSifContent,
   digitsOnly,
   normalizeEmiratesId,
-  getEmployeeEmployerId,
+  validateEmployerId,
   excelHeaders,
   RED_HEADERS,
   employeeToExcelRow,
@@ -371,12 +371,29 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
 
+<<<<<<< HEAD
     const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
     const employerId = resolveExportEmployerId(req, settings);
     const result = generateSifContent({
       rows,
       employerId,
       defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
+=======
+    // Prefer Employer ID selected in Report UI for this export only.
+    // Do not overwrite CompanySifSettings or employee companyCode.
+    const selectedEmployerId = digitsOnly(req.query.employerId);
+    const employerId = selectedEmployerId || digitsOnly(settings.employerId) || "";
+    const employerErr = validateEmployerId(employerId);
+    if (employerErr) {
+      return res.status(400).json({ message: employerErr });
+    }
+
+    const employees = await loadActiveEmployees();
+    const result = generateSifContent({
+      employees,
+      employerId,
+      defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
+>>>>>>> 636200249e09d00a177ab32de4e245fee7cacfb6
       year: parsed.year,
       month: parsed.month,
     });
@@ -421,19 +438,29 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
-    const employerId = resolveExportEmployerId(req, settings);
-    const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
+    const selectedEmployerId = digitsOnly(req.query.employerId);
+    const employerId =
+      selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
+    const employees = await loadActiveEmployees();
     const result = generateSifContent({
-      rows,
+      employees,
       employerId,
+<<<<<<< HEAD
       defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
+=======
+      defaultAgentRoutingCode: settings.defaultAgentRoutingCode,
+>>>>>>> 636200249e09d00a177ab32de4e245fee7cacfb6
       year: parsed.year,
       month: parsed.month,
     });
 
     res.json({
+<<<<<<< HEAD
       employerId,
       defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
+=======
+      employerId: selectedEmployerId || settings.employerId || "",
+>>>>>>> 636200249e09d00a177ab32de4e245fee7cacfb6
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
       skipped: result.skipped || [],
