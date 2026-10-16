@@ -329,6 +329,8 @@ function Reports() {
   const [sifEmployerId, setSifEmployerId] = useState("");
   const [sifSettingsEmployerId, setSifSettingsEmployerId] = useState("");
   const [sifEmployers, setSifEmployers] = useState([]);
+  const [sifSettingsLoading, setSifSettingsLoading] = useState(true);
+  const [sifSettingsError, setSifSettingsError] = useState("");
   const sifInputRef = useRef(null);
   const [sifImportOpen, setSifImportOpen] = useState(false);
   const [sifDragOver, setSifDragOver] = useState(false);
@@ -367,6 +369,8 @@ function Reports() {
   }, []);
 
   useEffect(() => {
+    setSifSettingsLoading(true);
+    setSifSettingsError("");
     sifService.getSettings()
       .then((s) => {
         const employerId = String(s.employerId || "").replace(/\D/g, "").slice(0, 13);
@@ -374,7 +378,12 @@ function Reports() {
         setSifSettingsEmployerId(employerId);
         setSifEmployers(Array.isArray(s.employers) ? s.employers : []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to load SIF employer assignments:", err);
+        setSifEmployers([]);
+        setSifSettingsError(err?.message || "Failed to load SIF employer assignments.");
+      })
+      .finally(() => setSifSettingsLoading(false));
   }, []);
 
   // SIF Settings EMPLOYERID first, then the 13-digit company codes employees are filed under.
@@ -1768,19 +1777,21 @@ function Reports() {
                 <div className={styles.sifSettingsPanel}>
                   <div className={styles["form-row"]}>
                     <div className={styles["form-label"]}>Employer ID</div>
-                    <div className={styles["form-field"]}>
+                    <div className={`${styles["form-field"]} ${styles.sifEmployerField}`}>
                       <select
                         className={styles["select-field"]}
                         value={sifEmployerId}
                         onChange={(e) => setSifEmployerId(e.target.value)}
+                        disabled={sifSettingsLoading}
                       >
-                        <option value="">Select Employer ID</option>
+                        <option value="">{sifSettingsLoading ? "Loading Employer IDs..." : "Select Employer ID"}</option>
                         {sifEmployerOptions.map((emp) => (
                           <option key={emp.employerId} value={emp.employerId}>
-                            {`${emp.employerId} — ${emp.employeeCount} employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
+                            {`${emp.employerId} — ${emp.employeeCount} eligible employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
                           </option>
                         ))}
                       </select>
+                      {sifSettingsError && <div className={styles.sifSettingsError}>{sifSettingsError}</div>}
                       <div className={styles.sifEmployerHint}>
                         The SIF file includes only employees whose Company Code matches this Employer ID. Generate a separate file for each company.
                       </div>

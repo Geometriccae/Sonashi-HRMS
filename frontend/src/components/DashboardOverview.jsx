@@ -38,6 +38,7 @@ function DashboardOverview() {
     passportExpiry: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
 
   // Modal State
@@ -81,6 +82,7 @@ function DashboardOverview() {
     let isMounted = true;
     const fetchData = async () => {
       setIsLoading(true);
+      setLoadError("");
       try {
         // Counts only — do not fetch all employees / leaves on dashboard open
         const summary = await employeeService.getEmployeeStats({ force: true });
@@ -89,6 +91,7 @@ function DashboardOverview() {
         }
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err);
+        if (isMounted) setLoadError("Dashboard statistics could not be loaded. Please refresh or try again later.");
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -262,6 +265,11 @@ function DashboardOverview() {
   return (
     <>
       <div className={styles.dashboardContainer}>
+        {loadError && (
+          <div role="alert" style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 8, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca" }}>
+            {loadError}
+          </div>
+        )}
         <div className={styles.dashboardGrid}>
           {cards.map((card, index) => (
             <div

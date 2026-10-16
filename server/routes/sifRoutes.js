@@ -24,10 +24,15 @@ const {
 const {
   getCompanyCodeMap,
   applyLiveCompanyCodes,
-  filterEmployeesForEmployer,
   normalizeCompanyCode,
   resolveEmployeeEmployerId,
 } = require("../utils/companyCode");
+const {
+  loadCompanyEmployerMap,
+  applyCompanyEmployerMapping,
+  normalizeEmployerId,
+  isEmployerId,
+} = require("../utils/sifCompanyMapping");
 
 const router = express.Router();
 const upload = multer({
@@ -75,12 +80,94 @@ async function loadEmployeesWithCompanyCodes() {
 }
 
 /**
+ * SIF assignment source of truth: employee office/company resolved through
+ * Company Documents, with Employee.companyCode used only when no configured
+ * company mapping exists. This is the same rule used by the SIF audit.
+ */
+async function loadEmployeesWithSifMappings() {
+  const [employees, companyEmployerMap] = await Promise.all([
+    loadActiveEmployees(),
+    loadCompanyEmployerMap(),
+  ]);
+  return employees.map((employee) =>
+    applyCompanyEmployerMapping(employee, companyEmployerMap)
+  );
+}
+
+/**
  * Load employees for a SIF export scoped to one Employer ID.
  * WPS requires one employer per SIF file — do not mix companies.
  */
 async function loadEmployeesForEmployerExport(employerId) {
-  const employees = await loadEmployeesWithCompanyCodes();
-  return filterEmployeesForEmployer(employees, employerId);
+  const employees = await loadEmployeesWithSifMappings();
+  const target = normalizeEmployerId(employerId);
+  const matched = [];
+  const excluded = [];
+
+  employees.forEach((employee) => {
+    const mappedEmployerId = normalizeEmployerId(employee.sifEmployerId);
+    if (target && mappedEmployerId === target) {
+      matched.push(employee);
+      return;
+    }
+    excluded.push({
+      staffId: employee.employeeId || "",
+      empName: employee.employeeName || "",
+      companyCode: employee.companyCode || "",
+      employerId: mappedEmployerId,
+      reason: !mappedEmployerId
+        ? (employee.sifCompanyMapping?.issues || ["Missing company assignment"]).join("; ")
+        : `Assigned Employer ID ${mappedEmployerId} does not match selected Employer ID ${target}`,
+    });
+  });
+
+  return { matched, excluded, targetEmployerId: target };
+}
+
+function getEmployerRoutingCodes(settings) {
+  const routes = new Map();
+  (settings?.employerRoutingCodes || []).forEach((entry) => {
+    const employerId = digitsOnly(entry?.employerId);
+    const agentRoutingCode = digitsOnly(entry?.agentRoutingCode);
+    if (employerId.length === 13 && agentRoutingCode.length === 9) {
+      routes.set(employerId, agentRoutingCode);
+    }
+  });
+  const defaultEmployer = digitsOnly(settings?.employerId);
+  const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
+  if (defaultEmployer.length === 13 && defaultRouting.length === 9 && !routes.has(defaultEmployer)) {
+    routes.set(defaultEmployer, defaultRouting);
+  }
+  return routes;
+}
+
+function resolveExportAgentRouting(settings, employerId) {
+  const companyRouting = getEmployerRoutingCodes(settings).get(digitsOnly(employerId));
+  if (companyRouting) return companyRouting;
+  const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
+  return defaultRouting.length === 9 ? defaultRouting : "";
+}
+
+/** Employer picker data must use the exact same active population and company mapping as export. */
+async function employersWithRouting(settings) {
+  const employees = await loadEmployeesWithSifMappings();
+  const counts = new Map();
+  employees.forEach((employee) => {
+    const employerId = normalizeEmployerId(employee.sifEmployerId);
+    if (isEmployerId(employerId)) {
+      counts.set(employerId, (counts.get(employerId) || 0) + 1);
+    }
+  });
+  const routes = getEmployerRoutingCodes(settings);
+  const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
+  return Array.from(counts.entries())
+    .map(([employerId, employeeCount]) => ({
+      employerId,
+      employeeCount,
+      agentRoutingCode:
+        routes.get(employerId) || (defaultRouting.length === 9 ? defaultRouting : ""),
+    }))
+    .sort((a, b) => b.employeeCount - a.employeeCount || a.employerId.localeCompare(b.employerId));
 }
 
 async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
@@ -182,6 +269,7 @@ router.get("/settings", authMiddleware, async (req, res) => {
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      employers: await employersWithRouting(doc),
     });
   } catch (err) {
     console.error("SIF settings GET error:", err);
@@ -211,6 +299,7 @@ router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, as
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      employers: await employersWithRouting(doc),
     });
   } catch (err) {
     console.error("SIF settings PUT error:", err);
@@ -249,7 +338,7 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     const result = generateSifContent({
       employees: matched,
       employerId,
-      defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
+      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
       year: parsed.year,
       month: parsed.month,
     });
@@ -301,7 +390,7 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     const result = generateSifContent({
       employees: matched,
       employerId,
-      defaultAgentRoutingCode: settings.defaultAgentRoutingCode,
+      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
       year: parsed.year,
       month: parsed.month,
     });

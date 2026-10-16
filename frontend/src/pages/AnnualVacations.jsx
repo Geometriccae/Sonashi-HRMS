@@ -198,6 +198,7 @@ function AnnualVacations() {
 
   const [isLoading, setIsLoading]       = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
+  const [loadError, setLoadError]       = useState("");
   const [counts, setCounts]             = useState({ onVacation: 0, yetToGo: 0, returned: 0 });
   const [filterOptions, setFilterOptions] = useState({
     departments: [], roles: [], offices: [], countries: [],
@@ -294,11 +295,13 @@ function AnnualVacations() {
   // ─── Fetch counts only (cards) ───────────────────────────────────────────
   const fetchCounts = useCallback(async ({ force = false } = {}) => {
     setIsLoading(true);
+    setLoadError("");
     try {
       const summary = await employeeService.getEmployeeStats({ force });
       applySummaryCounts(summary);
     } catch (err) {
       console.error("Failed to fetch vacation counts:", err);
+      setLoadError("Vacation statistics could not be loaded. Please refresh or try again later.");
     } finally {
       setIsLoading(false);
     }
@@ -311,6 +314,7 @@ function AnnualVacations() {
       return;
     }
     setTableLoading(true);
+    setLoadError("");
     try {
       const result = await employeeService.getVacationTab({
         tab: activeTab,
@@ -325,6 +329,7 @@ function AnnualVacations() {
       console.error("Failed to fetch vacation tab page:", err);
       setTabList([]);
       setTabTotal(0);
+      setLoadError("Vacation records could not be loaded. Please refresh or try again later.");
     } finally {
       setTableLoading(false);
     }
@@ -669,6 +674,12 @@ function AnnualVacations() {
             </div>
 
             {/* ── Filter Panel ── */}
+            {loadError && (
+              <div role="alert" style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 8, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca" }}>
+                {loadError}
+              </div>
+            )}
+
             {filterOpen && (
               <div className={styles.filterPanel}>
                 <div className={styles.filterPanelHeader}>

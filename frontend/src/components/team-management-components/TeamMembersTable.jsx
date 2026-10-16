@@ -316,6 +316,7 @@ function TeamMembersTable() {
         search: debouncedSearch,
         status,
         filters: appliedFilters,
+        includeVacation: true,
       });
       const rows = Array.isArray(result?.employees) ? result.employees : [];
       setEmployees(rows);
@@ -331,6 +332,7 @@ function TeamMembersTable() {
             search: debouncedSearch,
             status,
             filters: appliedFilters,
+            includeVacation: true,
           })
           .catch(() => {});
       }

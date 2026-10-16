@@ -34,6 +34,21 @@ const {
   invalidateApprovedLeavesCache,
 } = require('../utils/employeeListCache');
 const {
+  getDashboardSummary,
+  getVacationTabPage,
+  getDashboardCategoryPage,
+} = require('../utils/vacationDashboardStats');
+const {
+  applyEffectiveVacationStatuses: applySharedVacationStatuses,
+  toCalendarDate: toSharedCalendarDate,
+} = require('../utils/vacationStatusFromDates');
+const {
+  normalizeVacationStatusValue,
+  isAllowedVacationStatus,
+  vacationReturnDatePatch,
+} = require('../utils/vacationStatusWrite');
+const { syncLinkedLeaveDatesFromEmployee } = require('../utils/syncLeaveDatesFromEmployee');
+const {
   getCompanyCodeMap,
   applyLiveCompanyCodes,
   DEFAULT_COMPANY_CODE,
@@ -281,6 +296,7 @@ const EMPLOYEE_LIST_FIELDS = [
   'role', 'department', 'attendance', 'doj', 'totalYearsExperience', 'passportExpiryDate',
   'visaExpiryDate', 'labourCardExpiryDate', 'emiratesIdExpiryDate', 'contractRenewalDate',
   'travellingDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay', 'leaveEndDate',
+  'vacationStatusSource', 'vacationStatusUpdatedAt',
   'noticePeriod', 'provisionPeriod', 'noticePeriodStartDate', 'noticePeriodEndDate',
   'provisionPeriodStartDate', 'provisionPeriodEndDate',
   'reportingManager', 'assignedProjects',
@@ -290,7 +306,7 @@ const EMPLOYEE_LIST_FIELDS = [
 const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const DYNAMIC_VACATION_STATUSES = new Set(['Vacation Pending', 'On Vacation', 'Vacation Approved']);
 const APPROVED_LEAVE_SELECT =
-  'employee employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department';
+  'employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department adminApprovedAt hodApprovedAt createdAt updatedAt';
 
 async function getApprovedLeavesForVacation() {
   const cached = getApprovedLeavesCache();
@@ -299,10 +315,16 @@ async function getApprovedLeavesForVacation() {
     status: { $in: APPROVED_VACATION_LEAVE_STATUSES },
   })
     .select(APPROVED_LEAVE_SELECT)
-    .populate('employee', 'username emailId employeeId')
     .lean();
   setApprovedLeavesCache(rows);
   return rows;
+}
+
+async function withLiveVacationStatus(employees) {
+  const list = Array.isArray(employees) ? employees : employees ? [employees] : [];
+  if (list.length === 0) return Array.isArray(employees) ? [] : employees;
+  const resolved = applySharedVacationStatuses(list, await getApprovedLeavesForVacation());
+  return Array.isArray(employees) ? resolved : resolved[0];
 }
 
 function toCalendarDate(value) {
@@ -470,23 +492,38 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
   });
 }
 
-// Lightweight stats for dashboard / team management cards
+// Lightweight stats for dashboard / team management / annual-vacation cards.
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
-    const [totalEmployees, activeEmployees, inactiveEmployees] = await Promise.all([
-      Employee.countDocuments(),
-      Employee.countDocuments(workingStatusFilter()),
-      Employee.countDocuments(nonWorkingStatusFilter()),
-    ]);
-
-    res.json({
-      totalEmployees,
-      activeEmployees,
-      inactiveEmployees,
-      totalAssignedProjects: 0,
-    });
+    const force = String(req.query.force || '') === '1' || String(req.query.force || '').toLowerCase() === 'true';
+    const basic = String(req.query.basic || '') === '1' || String(req.query.basic || '').toLowerCase() === 'true';
+    if (basic) {
+      const [totalEmployees, activeEmployees, inactiveEmployees] = await Promise.all([
+        Employee.countDocuments(),
+        Employee.countDocuments(workingStatusFilter()),
+        Employee.countDocuments(nonWorkingStatusFilter()),
+      ]);
+      return res.json({ totalEmployees, activeEmployees, inactiveEmployees, totalAssignedProjects: 0 });
+    }
+    res.json(await getDashboardSummary({ force }));
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee stats', error: error.message });
+  }
+});
+
+router.get('/vacation-tab', authMiddleware, async (req, res) => {
+  try {
+    res.json(await getVacationTabPage({ ...req.query }));
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || 'Error fetching vacation tab' });
+  }
+});
+
+router.get('/dashboard-category', authMiddleware, async (req, res) => {
+  try {
+    res.json(await getDashboardCategoryPage({ ...req.query }));
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || 'Error fetching dashboard category' });
   }
 });
 
@@ -543,7 +580,7 @@ router.get('/', authMiddleware, async (req, res) => {
         const [codeMap, approvedLeaves] = await Promise.all([getCompanyCodeMap(), approvedLeavesPromise]);
         const withCodes = applyLiveCompanyCodes(cached, codeMap);
         const employees = includeVacation
-          ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+          ? applySharedVacationStatuses(withCodes, approvedLeaves)
           : withCodes;
         return respondEmployees(employees, approvedLeaves);
       }
@@ -555,7 +592,7 @@ router.get('/', authMiddleware, async (req, res) => {
       const [employees, total] = await Promise.all([
         Employee.find(filter)
           .select(EMPLOYEE_LIST_FIELDS)
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, _id: -1 })
           .skip((page - 1) * limit)
           .limit(limit)
           .lean(),
@@ -563,7 +600,7 @@ router.get('/', authMiddleware, async (req, res) => {
       ]);
       const withCodes = applyLiveCompanyCodes(employees, codeMap);
       const merged = includeVacation
-        ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+        ? applySharedVacationStatuses(withCodes, approvedLeaves)
         : withCodes;
       if (withLeaves && includeVacation) {
         return res.json({
@@ -584,7 +621,7 @@ router.get('/', authMiddleware, async (req, res) => {
       });
     }
 
-    const query = Employee.find(filter).sort({ createdAt: -1 });
+    const query = Employee.find(filter).sort({ createdAt: -1, _id: -1 });
     if (view === 'list') {
       query.select(EMPLOYEE_LIST_FIELDS).lean();
     } else {
@@ -600,7 +637,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const withCodes = applyLiveCompanyCodes(employees, codeMap);
     const merged = includeVacation
-      ? applyEffectiveVacationStatuses(withCodes, approvedLeaves)
+      ? applySharedVacationStatuses(withCodes, approvedLeaves)
       : withCodes;
     return respondEmployees(merged, approvedLeaves);
   } catch (error) {
@@ -971,6 +1008,78 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
     });
   }
 });
+
+// Dedicated vacation-status write path used by Team Management, Dashboard,
+// Annual Vacations, and Employee Details.
+router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user?.role || '').toLowerCase();
+    if (!['admin', 'hod', 'hr', 'authorize_user'].includes(role)) {
+      return res.status(403).json({ message: 'You do not have permission to update vacation status.' });
+    }
+
+    const vacationStatus = normalizeVacationStatusValue(req.body?.vacationStatus);
+    if (!isAllowedVacationStatus(vacationStatus)) {
+      return res.status(400).json({ message: 'Invalid vacation status.' });
+    }
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    const patch = {
+      vacationStatus,
+      vacationStatusSource: 'manual',
+      vacationStatusUpdatedAt: new Date(),
+    };
+    for (const key of ['travellingDate', 'leaveEndDate', 'returnDate', 'firstWorkingDay', 'lastWorkingDay']) {
+      if (!Object.prototype.hasOwnProperty.call(req.body || {}, key)) continue;
+      if (req.body[key] === null || req.body[key] === '') {
+        patch[key] = null;
+      } else {
+        const value = toSharedCalendarDate(req.body[key]);
+        if (!value) return res.status(400).json({ message: `Invalid date for ${key}.` });
+        patch[key] = value;
+      }
+    }
+
+    const [currentLive] = applySharedVacationStatuses(
+      [employee.toObject()],
+      await getApprovedLeavesForVacation()
+    );
+    Object.assign(patch, vacationReturnDatePatch({
+      status: vacationStatus,
+      derivedStatus: currentLive?.vacationStatus,
+      hasReturnDate: patch.returnDate !== undefined,
+      returnDate: patch.returnDate,
+    }));
+    if (vacationStatus === 'Vacation Approved' || vacationStatus === 'Onsite') patch.attendance = 'Onsite';
+
+    Object.assign(employee, patch);
+    await employee.save();
+
+    if (patch.travellingDate !== undefined || patch.leaveEndDate !== undefined) {
+      try {
+        await syncLinkedLeaveDatesFromEmployee(employee, {
+          travellingDate: patch.travellingDate,
+          leaveEndDate: patch.leaveEndDate,
+          actor: req.user?.username || req.user?.emailId || 'System',
+          actorUserId: req.user?.id || req.user?._id || null,
+          leaveId: req.body?.leaveId || null,
+        });
+      } catch (syncError) {
+        console.error('Leave date sync after vacation-status update failed:', syncError);
+      }
+    }
+
+    invalidateListCache();
+    invalidateApprovedLeavesCache();
+    const liveEmployee = await withLiveVacationStatus(employee.toObject());
+    res.json({ message: 'Vacation status updated successfully', employee: liveEmployee });
+  } catch (error) {
+    console.error('Error updating vacation status:', error);
+    res.status(400).json({ message: 'Error updating vacation status', error: error.message });
+  }
+});
 // Update employee
 router.put('/:id', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('profilePhoto'), async (req, res) => {
   try {
@@ -1138,11 +1247,13 @@ router.post('/bulk-delete', authMiddleware, blockViewerWrites, async (req, res) 
 router.get('/by-email/:email', authMiddleware, async (req, res) => {
   try {
     const { email } = req.params;
-    const employee = await Employee.findOne({ emailId: new RegExp(`^${email}$`, 'i') });
+    const employee = await Employee.findOne({ emailId: new RegExp(`^${email}$`, 'i') }).lean();
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
-    res.json(employee);
+    const codeMap = await getCompanyCodeMap();
+    const [enriched] = applyLiveCompanyCodes([employee], codeMap);
+    res.json(await withLiveVacationStatus(enriched));
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee', error: error.message });
   }
@@ -1346,7 +1457,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     }
     const codeMap = await getCompanyCodeMap();
     const [enriched] = applyLiveCompanyCodes([employee], codeMap);
-    res.json(enriched);
+    res.json(await withLiveVacationStatus(enriched));
   } catch (error) {
     res.status(500).json({ message: 'Error fetching employee', error: error.message });
   }

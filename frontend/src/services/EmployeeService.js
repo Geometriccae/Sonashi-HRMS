@@ -78,9 +78,7 @@ class EmployeeService {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        // Both list endpoints now return the same date-derived vacationStatus.
-        this._cache.list = data;
-        this._cache.listWithVacation = data;
+        this._cache[cacheKey] = data;
         this._cache.ts = Date.now();
         return data;
       } catch (error) {
@@ -125,7 +123,6 @@ class EmployeeService {
           leaves: Array.isArray(data?.leaves) ? data.leaves : [],
         };
         this._cache.vacationBundle = bundle;
-        this._cache.list = bundle.employees;
         this._cache.listWithVacation = bundle.employees;
         this._cache.ts = Date.now();
         return bundle;
@@ -140,11 +137,12 @@ class EmployeeService {
   }
 
   // Server-side paginated list for the team members table
-  async getEmployeesListPaginated({ page = 1, limit = 20, search = '', status = '', filters = {} } = {}) {
+  async getEmployeesListPaginated({ page = 1, limit = 20, search = '', status = '', filters = {}, includeVacation = false } = {}) {
     try {
       const params = new URLSearchParams({ view: 'list', page: String(page), limit: String(limit) });
       if (search) params.set('search', search);
       if (status) params.set('status', status);
+      if (includeVacation) params.set('includeVacation', '1');
       ['employeeName', 'dojFrom', 'dojTo', 'companyCode', 'employeeStatus'].forEach((key) => {
         const value = filters?.[key];
         if (value !== undefined && value !== null && String(value).trim()) {
