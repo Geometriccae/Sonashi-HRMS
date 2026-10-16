@@ -375,6 +375,20 @@ function Reports() {
       .catch(() => {});
   }, []);
 
+<<<<<<< HEAD
+  // SIF Settings EMPLOYERID first, then the 13-digit company codes employees are filed under.
+  const sifEmployerOptions = useMemo(() => {
+    const counts = new Map(sifEmployers.map((emp) => [emp.employerId, emp.employeeCount]));
+    const ids = [sifSettingsEmployerId, ...sifEmployers.map((emp) => emp.employerId)]
+      .filter((id) => /^\d{13}$/.test(String(id || "")));
+    return [...new Set(ids)].map((id) => ({
+      employerId: id,
+      employeeCount: counts.get(id) || 0,
+      isSettingsDefault: id === sifSettingsEmployerId,
+      agentRoutingCode: sifEmployers.find((emp) => emp.employerId === id)?.agentRoutingCode || "",
+    }));
+  }, [sifEmployers, sifSettingsEmployerId]);
+=======
   useEffect(() => {
     CompanyDocumentService.getAll()
       .then((data) => {
@@ -409,6 +423,7 @@ function Reports() {
 
     return Array.from(byCode.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [companyDocuments, employeeList, sifEmployerId]);
+>>>>>>> 636200249e09d00a177ab32de4e245fee7cacfb6
 
   // Employees Master Data: default Status=Active, then auto-load / refresh preview
   const masterDataReadyRef = useRef(false);
@@ -1792,8 +1807,15 @@ function Reports() {
                         onChange={(e) => setSifEmployerId(e.target.value)}
                       >
                         <option value="">Select Employer ID</option>
+<<<<<<< HEAD
+                        {sifEmployerOptions.map((emp) => (
+                          <option key={emp.employerId} value={emp.employerId}>
+                            {`${emp.employerId} — ${emp.employeeCount} employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
+                          </option>
+=======
                         {sifEmployerIdOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
+>>>>>>> 636200249e09d00a177ab32de4e245fee7cacfb6
                         ))}
                       </select>
                       <div className={styles.sifEmployerHint}>

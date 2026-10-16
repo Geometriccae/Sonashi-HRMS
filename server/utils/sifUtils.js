@@ -319,7 +319,7 @@ const RED_HEADERS = new Set([
   "BANKACCOUNT",
 ]);
 
-const employeeToExcelRow = (emp, employerId) => {
+const employeeToExcelRow = (emp) => {
   const sal = emp.salaryDetails || {};
   // Prefer the employee's own companyCode (Employer ID); fall back to caller-supplied value.
   const rowEmployerId =

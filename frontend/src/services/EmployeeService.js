@@ -18,7 +18,7 @@ class EmployeeService {
 
     this.baseURL = `${apiRoot}/employees`;
     this.attendanceURL = `${apiRoot}/attendance`;
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, filterOptions: null, filterOptionsTs: 0, ts: 0 };
     this._inflight = {};
   }
 
@@ -27,7 +27,7 @@ class EmployeeService {
   }
 
   invalidateCache() {
-    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, ts: 0 };
+    this._cache = { list: null, listWithVacation: null, vacationBundle: null, full: null, metrics: null, stats: null, statsBasic: null, filterOptions: null, filterOptionsTs: 0, ts: 0 };
     this._inflight = {};
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       window.dispatchEvent(new CustomEvent('hrms:employee-data-changed', { detail: { ts: Date.now() } }));
@@ -140,11 +140,17 @@ class EmployeeService {
   }
 
   // Server-side paginated list for the team members table
-  async getEmployeesListPaginated({ page = 1, limit = 20, search = '', status = '' } = {}) {
+  async getEmployeesListPaginated({ page = 1, limit = 20, search = '', status = '', filters = {} } = {}) {
     try {
       const params = new URLSearchParams({ view: 'list', page: String(page), limit: String(limit) });
       if (search) params.set('search', search);
       if (status) params.set('status', status);
+      ['employeeName', 'dojFrom', 'dojTo', 'companyCode', 'employeeStatus'].forEach((key) => {
+        const value = filters?.[key];
+        if (value !== undefined && value !== null && String(value).trim()) {
+          params.set(key, String(value).trim());
+        }
+      });
       const response = await fetch(`${this.baseURL}?${params}`, {
         method: 'GET',
         headers: this.getAuthHeaders(),
@@ -162,6 +168,30 @@ class EmployeeService {
       console.error('Error fetching paginated employee list:', error);
       throw error;
     }
+  }
+
+  async getEmployeeFilterOptions({ force = false } = {}) {
+    if (!force && this._cache.filterOptions &&
+      Date.now() - Number(this._cache.filterOptionsTs || 0) < CACHE_TTL_MS) {
+      return this._cache.filterOptions;
+    }
+    if (!force && this._inflight.filterOptions) return this._inflight.filterOptions;
+    this._inflight.filterOptions = (async () => {
+      try {
+        const response = await fetch(`${this.baseURL}/filter-options`, {
+          method: 'GET',
+          headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        this._cache.filterOptions = data;
+        this._cache.filterOptionsTs = Date.now();
+        return data;
+      } finally {
+        delete this._inflight.filterOptions;
+      }
+    })();
+    return this._inflight.filterOptions;
   }
 
   // Stats only — counts for dashboard / annual vacation cards

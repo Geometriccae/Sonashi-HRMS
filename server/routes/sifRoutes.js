@@ -211,6 +211,7 @@ router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, as
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      employers: await employersWithRouting(doc),
     });
   } catch (err) {
     console.error("SIF settings PUT error:", err);
@@ -339,14 +340,23 @@ router.post(
       const text = req.file.buffer.toString("utf8");
       const { edrs, scr } = parseSifContent(text);
 
-      // If SCR has employer ID and settings empty, optionally save it
+      // Preserve routing by employer; never let one imported company's SCR
+      // silently become the routing code for every other company.
       if (scr?.employerId) {
         const settings = await getOrCreateSettings();
-        if (!settings.employerId) {
+        const employerId = digitsOnly(scr.employerId);
+        const agentRoutingCode = digitsOnly(scr.agentRouting);
+        const routes = Array.from(settings.employerRoutingCodes || []);
+        const hasRoute = routes.some((entry) => digitsOnly(entry.employerId) === employerId);
+        if (!hasRoute && employerId.length === 13 && agentRoutingCode.length === 9) {
+          routes.push({ employerId, agentRoutingCode });
+          settings.employerRoutingCodes = routes;
+        }
+        if (!settings.employerId && employerId.length === 13) {
           settings.employerId = scr.employerId;
           if (scr.agentRouting) settings.defaultAgentRoutingCode = scr.agentRouting;
-          await settings.save();
         }
+        if (settings.isModified()) await settings.save();
       }
 
       const results = await applyEdrUpdates(edrs, { updateSalary: true });

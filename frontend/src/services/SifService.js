@@ -62,7 +62,29 @@ class SifService {
 
   async exportSif(month, year, { employerId } = {}) {
     const params = new URLSearchParams({ month: String(month), year: String(year) });
+<<<<<<< HEAD
+    const res = await fetch(`${this.baseURL}/salary-report?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to load salary report payroll data");
+    return res.json();
+  }
+
+  async getAudit(month, year) {
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    const res = await fetch(`${this.baseURL}/audit?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to load SIF audit");
+    return res.json();
+  }
+
+  async exportSif(month, year, employerId) {
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    if (employerId) params.set("employerId", String(employerId));
+=======
     if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
+>>>>>>> 636200249e09d00a177ab32de4e245fee7cacfb6
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
       headers: this.getAuthHeaders(false),
     });
