@@ -1351,6 +1351,13 @@ main {
   background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
 }
 
+.sifEmployerHint {
+  margin-top: 0.45rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #92400e;
+}
+
 .sifRedHeader {
   color: #dc2626 !important;
   background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%) !important;

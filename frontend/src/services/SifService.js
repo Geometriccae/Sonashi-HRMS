@@ -1,4 +1,5 @@
 import config, { getApiBaseUrl } from "../config/config";
+import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 class SifService {
@@ -110,9 +111,20 @@ class SifService {
       fileName,
       edrCount: Number(res.headers.get("X-SIF-Edr-Count") || 0),
       skippedCount: Number(res.headers.get("X-SIF-Skipped") || 0),
+      excludedByCompany: Number(res.headers.get("X-SIF-Excluded-Company") || 0),
       totalSalary: Number(res.headers.get("X-SIF-Total") || 0),
       skipped,
     };
+  }
+
+  async auditMappings() {
+    const res = await fetch(`${this.baseURL}/audit`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!res.ok) {
+      throw new Error((await res.json().catch(() => ({}))).message || "SIF audit failed");
+    }
+    return res.json();
   }
 
   async importSif(file) {
@@ -139,7 +151,6 @@ class SifService {
     const { headers, redHeaders, rows } = await res.json();
     const redSet = new Set(redHeaders || []);
 
-    const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("SIF");
     sheet.addRow(headers);
