@@ -211,7 +211,6 @@ router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, as
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
-      employers: await employersWithRouting(doc),
     });
   } catch (err) {
     console.error("SIF settings PUT error:", err);
@@ -228,14 +227,6 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
 
-<<<<<<< HEAD
-    const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
-    const employerId = resolveExportEmployerId(req, settings);
-    const result = generateSifContent({
-      rows,
-      employerId,
-      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
-=======
     // Prefer Employer ID selected in Report UI for this export only.
     // Do not overwrite CompanySifSettings or employee companyCode.
     const selectedEmployerId = digitsOnly(req.query.employerId);
@@ -259,7 +250,6 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       employees: matched,
       employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
->>>>>>> af461d668d83e0315716d64d8813fe72c38a9d91
       year: parsed.year,
       month: parsed.month,
     });
@@ -304,14 +294,6 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
-<<<<<<< HEAD
-    const employerId = resolveExportEmployerId(req, settings);
-    const rows = await loadSalaryReportRows({ month: parsed.month, year: parsed.year });
-    const result = generateSifContent({
-      rows,
-      employerId,
-      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
-=======
     const selectedEmployerId = digitsOnly(req.query.employerId);
     const employerId =
       selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
@@ -320,18 +302,12 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
       employees: matched,
       employerId,
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode,
->>>>>>> af461d668d83e0315716d64d8813fe72c38a9d91
       year: parsed.year,
       month: parsed.month,
     });
 
     res.json({
-<<<<<<< HEAD
-      employerId,
-      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
-=======
       employerId: selectedEmployerId || settings.employerId || "",
->>>>>>> af461d668d83e0315716d64d8813fe72c38a9d91
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
       skipped: [...(result.skipped || []), ...excluded],

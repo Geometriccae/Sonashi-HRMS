@@ -549,23 +549,6 @@ router.get('/', authMiddleware, async (req, res) => {
       }
     }
 
-    const filter = {};
-    if (status === 'Active') Object.assign(filter, workingStatusFilter());
-    else if (status === 'InActive') Object.assign(filter, nonWorkingStatusFilter());
-    else if (status && EMPLOYEE_STATUS_VALUES.includes(status)) filter.employeeStatus = status;
-
-    if (search) {
-      const regex = new RegExp(search, 'i');
-      filter.$or = [
-        { employeeName: regex },
-        { employeeId: regex },
-        { emailId: regex },
-        { role: regex },
-        { department: regex },
-        { mobile: regex },
-      ];
-    }
-
     const [codeMap, approvedLeaves] = await Promise.all([getCompanyCodeMap(), approvedLeavesPromise]);
 
     if (paginate && view === 'list') {
