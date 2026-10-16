@@ -1358,6 +1358,19 @@ main {
   color: #92400e;
 }
 
+.sifEmployerField {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.sifSettingsError {
+  margin-top: 0.45rem;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
 .sifRedHeader {
   color: #dc2626 !important;
   background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%) !important;

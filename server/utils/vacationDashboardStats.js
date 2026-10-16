@@ -549,18 +549,10 @@ async function buildTabRows(tabKey) {
   const resolved = applyEffectiveVacationStatuses(empList, leaveList);
   const working = resolved.filter((e) => isWorkingEmployeeStatus(e.employeeStatus));
   if (tabKey === 'yetToGo') {
-    return enrichEmployeeRows(
-      working.filter((e) => e.vacationStatus === 'Vacation Pending'),
-      leaveList,
-      'yetToGo'
-    );
+    return buildYetToGoTabRows(working, leaveList);
   }
   if (tabKey === 'returned') {
-    return enrichEmployeeRows(
-      working.filter((e) => e.vacationStatus === 'Vacation Approved'),
-      leaveList,
-      'returned'
-    );
+    return buildReturnedTabRows(working, leaveList);
   }
   return enrichEmployeeRows(
     working.filter((e) => e.vacationStatus === 'On Vacation'),
@@ -685,7 +677,8 @@ async function getDashboardSummary({ force = false } = {}) {
   );
   const onVacation = resolved.filter((e) => e.vacationStatus === 'On Vacation').length;
   const yetToGo = resolved.filter((e) => e.vacationStatus === 'Vacation Pending').length;
-  const returnedBack = resolved.filter((e) => e.vacationStatus === 'Vacation Approved').length;
+  const returnedBack = buildReturnedTabRows(resolved, leaveList, now).length;
+  const onsite = resolved.filter((e) => e.vacationStatus === 'Onsite').length;
 
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
   const filterOptions = {
@@ -702,6 +695,7 @@ async function getDashboardSummary({ force = false } = {}) {
     onVacation,
     yetToGo,
     returnedBack,
+    onsite,
     /** Alias used by Dashboard card state */
     vacationReturn: returnedBack,
     upcomingVacation: yetToGo,
