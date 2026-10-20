@@ -10,94 +10,70 @@ const isEmployerId = (value) => /^\d{13}$/.test(normalizeEmployerId(value));
 
 /**
  * Company Documents is the existing company-name -> company-code configuration.
- * Keep every distinct code so conflicting documents are reported instead of
+ * Keep every distinct company code so conflicting documents are reported instead of
  * silently choosing whichever document happened to be edited last.
  */
 function buildCompanyEmployerMap(documents = []) {
   const map = new Map();
   documents.forEach((document) => {
-    const companyKey = normalizeCompanyName(document?.particulars);
-    const employerId = normalizeEmployerId(document?.docNumber);
-    if (!companyKey || !employerId) return;
-    if (!map.has(companyKey)) map.set(companyKey, new Set());
-    map.get(companyKey).add(employerId);
+    const companyCode = normalizeEmployerId(document?.docNumber);
+    const employerId = normalizeEmployerId(document?.employerId);
+    if (!companyCode) return;
+    if (!map.has(companyCode)) map.set(companyCode, new Set());
+    if (employerId) map.get(companyCode).add(employerId);
   });
   return map;
 }
 
 async function loadCompanyEmployerMap() {
-  const documents = await CompanyDocument.find({})
-    .select("particulars docNumber")
+  const documents = await CompanyDocument.find({ recordType: "company" })
+    .select("particulars docNumber employerId")
     .lean();
   return buildCompanyEmployerMap(documents);
 }
 
 /**
  * Resolve an employee's SIF employer without changing Employee Master data.
- * A single Company Documents mapping is authoritative for the assigned office;
- * otherwise the employee's stored companyCode remains the source. Ambiguous
- * company configuration is never guessed.
+ * Employee.companyCode is authoritative. Company Codes are normalized to the
+ * 13-digit Employer ID format only for SIF output; the stored assignment is not
+ * changed and an empty assignment remains empty.
  */
 function resolveEmployeeCompanyMapping(employee, companyEmployerMap = new Map()) {
   const employeeCompany = String(employee?.office || "").trim();
   const storedCompanyCode = normalizeEmployerId(employee?.companyCode);
   const configuredCodes = Array.from(
-    companyEmployerMap.get(normalizeCompanyName(employeeCompany)) || []
+    companyEmployerMap.get(storedCompanyCode) || []
   );
-  const validConfigured = configuredCodes.filter(isEmployerId);
-  const invalidConfigured = configuredCodes.filter((code) => !isEmployerId(code));
   const issues = [];
 
-  if (validConfigured.length > 1) {
-    issues.push(
-      `Conflicting Company Documents codes for ${employeeCompany || "unassigned company"}: ${validConfigured.join(", ")}`
-    );
-    return {
-      employeeCompany,
-      storedCompanyCode,
-      employerId: "",
-      source: "conflict",
-      status: "Mismatch",
-      configuredCodes,
-      issues,
-    };
-  }
-
-  if (invalidConfigured.length) {
-    issues.push(
-      `Invalid Company Documents code for ${employeeCompany || "unassigned company"}: ${invalidConfigured.join(", ")}`
-    );
-  }
-
-  if (validConfigured.length === 1) {
-    const employerId = validConfigured[0];
-    if (storedCompanyCode && storedCompanyCode !== employerId) {
+  if (storedCompanyCode) {
+    if (configuredCodes.length !== 1) {
       issues.push(
-        `Stored Company Code ${storedCompanyCode} differs from configured Employer ID ${employerId}`
+        configuredCodes.length > 1
+          ? `Conflicting Employer IDs configured for Company Code ${storedCompanyCode}`
+          : `Missing SIF Employer ID configuration for Company Code ${storedCompanyCode}`
       );
     }
+    const employerId = configuredCodes.length === 1 ? configuredCodes[0] : "";
     return {
       employeeCompany,
       storedCompanyCode,
       employerId,
-      source: "company-document",
-      status: issues.length ? "Mismatch" : "Pass",
+      source: employerId ? "company-configuration" : "missing",
+      status: isEmployerId(employerId) ? "Pass" : "Missing Data",
       configuredCodes,
       issues,
     };
   }
 
-  if (!storedCompanyCode) issues.push("Missing Company Code / Employer ID");
-  else if (!isEmployerId(storedCompanyCode)) {
-    issues.push("Stored Company Code is not a 13-digit Employer ID");
-  }
+  issues.push("Missing Company Code / Employer ID");
 
   return {
     employeeCompany,
     storedCompanyCode,
-    employerId: storedCompanyCode,
-    source: "employee",
-    status: issues.length ? (storedCompanyCode ? "Mismatch" : "Missing Data") : "Pass",
+    employerId: "",
+    source: "missing",
+    status: "Missing Data",
     configuredCodes,
     issues,
   };

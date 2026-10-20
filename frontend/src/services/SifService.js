@@ -50,6 +50,15 @@ class SifService {
     return res.json();
   }
 
+  async deleteCompanySettings(companyCode) {
+    const res = await fetch(`${this.baseURL}/settings/company/${encodeURIComponent(companyCode)}`, {
+      method: "DELETE",
+      headers: this.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to delete Company SIF configuration");
+    return res.json();
+  }
+
   async previewExport(month, year, options = {}) {
     const employerId = typeof options === "object" ? options.employerId : options;
     const params = new URLSearchParams({ month: String(month), year: String(year) });

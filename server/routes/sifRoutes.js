@@ -4,6 +4,7 @@ const XLSX = require("xlsx");
 const authMiddleware = require("../middleware/authMiddleware");
 const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
 const Employee = require("../models/Employee");
+const CompanyDocument = require("../models/CompanyDocument");
 const CompanySifSettings = require("../models/CompanySifSettings");
 const { workingStatusFilter } = require("../utils/employeeStatus");
 const {
@@ -21,12 +22,6 @@ const {
   normalizeExcelHeader,
   HEADER_ALIASES,
 } = require("../utils/sifUtils");
-const {
-  getCompanyCodeMap,
-  applyLiveCompanyCodes,
-  normalizeCompanyCode,
-  resolveEmployeeEmployerId,
-} = require("../utils/companyCode");
 const {
   loadCompanyEmployerMap,
   applyCompanyEmployerMapping,
@@ -70,19 +65,9 @@ async function loadActiveEmployees() {
   return Employee.find(workingStatusFilter()).lean();
 }
 
-/** Active employees with live companyCode filled for empty records (read-only). */
-async function loadEmployeesWithCompanyCodes() {
-  const [employees, codeMap] = await Promise.all([
-    loadActiveEmployees(),
-    getCompanyCodeMap(),
-  ]);
-  return applyLiveCompanyCodes(employees, codeMap);
-}
-
 /**
- * SIF assignment source of truth: employee office/company resolved through
- * Company Documents, with Employee.companyCode used only when no configured
- * company mapping exists. This is the same rule used by the SIF audit.
+ * SIF assignment source of truth: Employee.companyCode resolved through the
+ * matching company record's configured Employer ID. This is also used by audit.
  */
 async function loadEmployeesWithSifMappings() {
   const [employees, companyEmployerMap] = await Promise.all([
@@ -144,8 +129,11 @@ function getEmployerRoutingCodes(settings) {
 function resolveExportAgentRouting(settings, employerId) {
   const companyRouting = getEmployerRoutingCodes(settings).get(digitsOnly(employerId));
   if (companyRouting) return companyRouting;
-  const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
-  return defaultRouting.length === 9 ? defaultRouting : "";
+  if (digitsOnly(settings?.employerId) === digitsOnly(employerId)) {
+    const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
+    return defaultRouting.length === 9 ? defaultRouting : "";
+  }
+  return "";
 }
 
 /** Employer picker data must use the exact same active population and company mapping as export. */
@@ -159,13 +147,24 @@ async function employersWithRouting(settings) {
     }
   });
   const routes = getEmployerRoutingCodes(settings);
-  const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
-  return Array.from(counts.entries())
-    .map(([employerId, employeeCount]) => ({
+  const companies = await CompanyDocument.find({
+    recordType: "company",
+    employerId: { $exists: true, $nin: [null, ""] },
+  }).select("particulars docNumber employerId").lean();
+  const configured = new Map();
+  companies.forEach((company) => {
+    const employerId = digitsOnly(company.employerId);
+    if (employerId.length === 13 && !configured.has(employerId)) {
+      configured.set(employerId, company);
+    }
+  });
+  return Array.from(configured.entries())
+    .map(([employerId, company]) => ({
       employerId,
-      employeeCount,
-      agentRoutingCode:
-        routes.get(employerId) || (defaultRouting.length === 9 ? defaultRouting : ""),
+      companyCode: company.docNumber || "",
+      companyName: company.particulars || "",
+      employeeCount: counts.get(employerId) || 0,
+      agentRoutingCode: routes.get(employerId) || "",
     }))
     .sort((a, b) => b.employeeCount - a.employeeCount || a.employerId.localeCompare(b.employerId));
 }
@@ -281,6 +280,7 @@ router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, as
   try {
     const employerId = digitsOnly(req.body.employerId);
     const defaultAgentRoutingCode = digitsOnly(req.body.defaultAgentRoutingCode);
+    const companyCode = normalizeEmployerId(req.body.companyCode);
 
     if (employerId && employerId.length !== 13) {
       return res.status(400).json({ message: "Employer ID must be exactly 13 digits" });
@@ -290,20 +290,84 @@ router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, as
     }
 
     const doc = await getOrCreateSettings();
-    if (req.body.employerId !== undefined) doc.employerId = employerId;
-    if (req.body.defaultAgentRoutingCode !== undefined) {
-      doc.defaultAgentRoutingCode = defaultAgentRoutingCode;
+    if (companyCode) {
+      const company = await CompanyDocument.findOne({ recordType: "company", docNumber: companyCode });
+      if (!company) return res.status(404).json({ message: "Company configuration not found" });
+
+      const duplicateEmployer = employerId
+        ? await CompanyDocument.exists({
+            recordType: "company",
+            employerId,
+            _id: { $ne: company._id },
+          })
+        : null;
+      if (duplicateEmployer) {
+        return res.status(409).json({ message: "Employer ID is already configured for another company" });
+      }
+
+      const previousEmployerId = digitsOnly(company.employerId);
+      company.employerId = employerId;
+      await company.save();
+
+      const routes = Array.from(doc.employerRoutingCodes || []).filter((entry) => {
+        const routeEmployerId = digitsOnly(entry.employerId);
+        return routeEmployerId !== employerId && routeEmployerId !== previousEmployerId;
+      });
+      if (employerId && defaultAgentRoutingCode) {
+        routes.push({ employerId, agentRoutingCode: defaultAgentRoutingCode });
+      }
+      doc.employerRoutingCodes = routes;
+    } else {
+      if (req.body.employerId !== undefined) doc.employerId = employerId;
+      if (req.body.defaultAgentRoutingCode !== undefined) {
+        doc.defaultAgentRoutingCode = defaultAgentRoutingCode;
+      }
     }
     await doc.save();
 
     res.json({
       employerId: doc.employerId || "",
       defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      selectedEmployerId: companyCode ? employerId : (doc.employerId || ""),
+      selectedAgentRoutingCode: companyCode ? defaultAgentRoutingCode : (doc.defaultAgentRoutingCode || ""),
       employers: await employersWithRouting(doc),
     });
   } catch (err) {
     console.error("SIF settings PUT error:", err);
     res.status(500).json({ message: "Failed to save SIF settings" });
+  }
+});
+
+router.delete("/settings/company/:companyCode", authMiddleware, blockViewerWrites, requireAdminOrHod, async (req, res) => {
+  try {
+    const companyCode = normalizeEmployerId(req.params.companyCode);
+    const company = await CompanyDocument.findOne({ recordType: "company", docNumber: companyCode });
+    if (!company) return res.status(404).json({ message: "Company configuration not found" });
+
+    const employerId = digitsOnly(company.employerId);
+    company.employerId = "";
+    await company.save();
+
+    const doc = await getOrCreateSettings();
+    if (employerId) {
+      doc.employerRoutingCodes = Array.from(doc.employerRoutingCodes || []).filter(
+        (entry) => digitsOnly(entry.employerId) !== employerId
+      );
+      if (digitsOnly(doc.employerId) === employerId) {
+        doc.employerId = "";
+        doc.defaultAgentRoutingCode = "";
+      }
+      await doc.save();
+    }
+
+    res.json({
+      message: "Company SIF configuration deleted successfully",
+      employerId: doc.employerId || "",
+      defaultAgentRoutingCode: doc.defaultAgentRoutingCode || "",
+      employers: await employersWithRouting(doc),
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message || "Failed to delete Company SIF configuration" });
   }
 });
 
@@ -384,8 +448,7 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
     const selectedEmployerId = digitsOnly(req.query.employerId);
-    const employerId =
-      selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
+    const employerId = selectedEmployerId || digitsOnly(settings.employerId);
     const { matched, excluded } = await loadEmployeesForEmployerExport(employerId);
     const result = generateSifContent({
       employees: matched,
@@ -474,15 +537,12 @@ router.get("/export/excel", authMiddleware, async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
     const selectedEmployerId = digitsOnly(req.query.employerId);
-    let employees = await loadEmployeesWithCompanyCodes();
+    let employees = await loadEmployeesWithSifMappings();
     if (selectedEmployerId) {
       const { matched } = filterEmployeesForEmployer(employees, selectedEmployerId);
       employees = matched;
     }
-    // EMPLOYERID column comes from each employee's companyCode (see employeeToExcelRow).
-    const rows = employees.map((e) =>
-      employeeToExcelRow(e, e.companyCode || settings.employerId)
-    );
+    const rows = employees.map((e) => employeeToExcelRow(e));
 
     const sheetData = [excelHeaders, ...rows.map((r) => excelHeaders.map((h) => r[h]))];
     const wb = XLSX.utils.book_new();
@@ -522,14 +582,12 @@ router.get("/export/excel-data", authMiddleware, async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
     const selectedEmployerId = digitsOnly(req.query.employerId);
-    let employees = await loadEmployeesWithCompanyCodes();
+    let employees = await loadEmployeesWithSifMappings();
     if (selectedEmployerId) {
       const { matched } = filterEmployeesForEmployer(employees, selectedEmployerId);
       employees = matched;
     }
-    const rows = employees.map((e) =>
-      employeeToExcelRow(e, e.companyCode || settings.employerId)
-    );
+    const rows = employees.map((e) => employeeToExcelRow(e));
     res.json({
       headers: excelHeaders,
       redHeaders: Array.from(RED_HEADERS),
@@ -650,8 +708,8 @@ router.post(
 router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
-    const settingsEmployerId = normalizeCompanyCode(settings.employerId);
-    const employees = await loadEmployeesWithCompanyCodes();
+    const settingsEmployerId = digitsOnly(settings.employerId);
+    const employees = await loadEmployeesWithSifMappings();
 
     const byEmployer = {};
     const rows = [];
@@ -663,12 +721,12 @@ router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
     let agentInvalid = 0;
 
     employees.forEach((emp) => {
-      const employerId = resolveEmployeeEmployerId(emp);
+      const employerId = normalizeEmployerId(emp.sifEmployerId);
       const storedCode = String(emp.companyCode || "").trim();
       const agentRaw = digitsOnly(emp.salaryDetails?.bankSortCode);
       const agentErr = agentRaw ? validateAgentCode(agentRaw) : "AGENTCODE missing";
       const bank = getBankAccount(emp) || "";
-      const empid = normalizeEmiratesId(emp.emiratesId);
+      const empid = digitsOnly(emp.workPermitNo);
       const salary = getFixedIncome(emp);
 
       const issues = [];
@@ -677,7 +735,7 @@ router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
         issues.push(`Employer ID / company code must be 13 digits (got ${employerId.length})`);
       }
       if (!empid || empid.length < 14 || empid.length > 15) {
-        issues.push("Missing/invalid Emirates ID (Person Code)");
+        issues.push("Missing/invalid Labour Card / Person Code");
       }
       if (!bank) issues.push("Missing IBAN / bank account");
       if (agentErr) issues.push(agentErr);

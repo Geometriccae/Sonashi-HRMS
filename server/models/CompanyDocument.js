@@ -4,6 +4,13 @@ const companyDocumentSchema = new mongoose.Schema(
   {
     particulars: { type: String, required: true, trim: true },
     docNumber: { type: String, trim: true, default: "" },
+    recordType: {
+      type: String,
+      enum: ["document", "company"],
+      default: "document",
+      index: true,
+    },
+    employerId: { type: String, trim: true, default: "" },
     issueDate: { type: Date, default: null },
     expiryDate: { type: Date, default: null },
     fileName: String,
@@ -15,6 +22,15 @@ const companyDocumentSchema = new mongoose.Schema(
     userRole: String,
   },
   { timestamps: true }
+);
+
+companyDocumentSchema.index(
+  { docNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { recordType: "company" },
+    name: "unique_company_code",
+  }
 );
 
 module.exports = mongoose.model("CompanyDocument", companyDocumentSchema);

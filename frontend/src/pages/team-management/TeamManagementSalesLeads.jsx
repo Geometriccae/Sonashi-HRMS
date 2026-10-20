@@ -1624,6 +1624,7 @@ function TeamManagementSalesLeads() {
         isOpen={isEditEmployeeModalOpen}
         onClose={handleEditEmployeeClose}
         onSubmit={handleEditEmployeeSubmit}
+        canManageCompanies={isAdmin}
         employee={employee}
       />
 
