@@ -11,14 +11,11 @@ const Employee = require("../models/Employee");
 const CompanySifSettings = require("../models/CompanySifSettings");
 const { workingStatusFilter } = require("../utils/employeeStatus");
 const {
-  getCompanyCodeMap,
-  applyLiveCompanyCodes,
-  resolveEmployeeEmployerId,
-  normalizeCompanyCode,
-} = require("../utils/companyCode");
+  loadCompanyEmployerMap,
+  applyCompanyEmployerMapping,
+} = require("../utils/sifCompanyMapping");
 const {
   digitsOnly,
-  normalizeEmiratesId,
   validateAgentCode,
   getBankAccount,
   getFixedIncome,
@@ -34,12 +31,14 @@ async function main() {
 
   const settings =
     (await CompanySifSettings.findOne({ key: "default" }).lean()) || {};
-  const settingsEmployerId = normalizeCompanyCode(settings.employerId);
-  const [raw, codeMap] = await Promise.all([
+  const settingsEmployerId = digitsOnly(settings.employerId);
+  const [raw, companyEmployerMap] = await Promise.all([
     Employee.find(workingStatusFilter()).lean(),
-    getCompanyCodeMap(),
+    loadCompanyEmployerMap(),
   ]);
-  const employees = applyLiveCompanyCodes(raw, codeMap);
+  const employees = raw.map((employee) =>
+    applyCompanyEmployerMapping(employee, companyEmployerMap)
+  );
 
   const byEmployer = {};
   const rows = [];
@@ -48,19 +47,21 @@ async function main() {
   let agentInvalid = 0;
 
   for (const emp of employees) {
-    const employerId = resolveEmployeeEmployerId(emp);
+    const employerId = emp.sifEmployerId || "";
     const agentRaw = digitsOnly(emp.salaryDetails?.bankSortCode);
     const agentErr = agentRaw ? validateAgentCode(agentRaw) : "AGENTCODE missing";
     const bank = getBankAccount(emp) || "";
-    const empid = normalizeEmiratesId(emp.emiratesId);
+    const empid = digitsOnly(emp.workPermitNo);
 
     const issues = [];
-    if (!employerId) issues.push("Missing Employer ID / company code");
+    if (!employerId) {
+      issues.push(...(emp.sifCompanyMapping?.issues || ["Missing Employer ID / company code"]));
+    }
     else if (employerId.length !== 13) {
       issues.push(`Employer ID length ${employerId.length} (expected 13)`);
     }
     if (!empid || empid.length < 14 || empid.length > 15) {
-      issues.push("Missing/invalid Emirates ID");
+      issues.push("Missing/invalid Labour Card / Person Code");
     }
     if (!bank) issues.push("Missing IBAN / bank account");
     if (agentErr) issues.push(agentErr);
@@ -94,6 +95,9 @@ async function main() {
       office: emp.office || "",
       companyCode: emp.companyCode || "",
       employerId,
+      expectedEmployerId: employerId,
+      employerMappingStatus: emp.sifCompanyMapping?.status || "Missing Data",
+      employerMappingSource: emp.sifCompanyMapping?.source || "missing",
       agentCode: agentRaw,
       labourCard: emp.labourCardNumber || "",
       emiratesId: empid,
@@ -117,13 +121,25 @@ async function main() {
       employerId: settings.employerId || "",
       defaultAgentRoutingCode: settings.defaultAgentRoutingCode || "",
     },
-    summary: { pass, missingData, mismatch, unresolvedForReview: unresolved.length },
+    summary: {
+      pass,
+      missingData,
+      mismatch,
+      correctEmployerId: rows.filter((r) => r.employerMappingStatus === "Pass").length,
+      missingEmployerId: rows.filter((r) => !r.employerId).length,
+      conflictingEmployerConfiguration: rows.filter((r) =>
+        r.issues.some((issue) => issue.includes("Conflicting Employer IDs"))
+      ).length,
+      unresolvedForReview: unresolved.length,
+    },
     agentCode: { ok9Digits: agentOk, missing: agentMissing, invalidLength: agentInvalid },
     byEmployerId: byEmployer,
     unresolved: unresolved.map((r) => ({
       employeeId: r.employeeId,
       employeeName: r.employeeName,
       employerId: r.employerId,
+      expectedEmployerId: r.expectedEmployerId,
+      assignedCompany: r.office,
       companyCode: r.companyCode,
       agentCode: r.agentCode,
       validation: r.validation,

@@ -34,6 +34,37 @@ const getAll = async () => {
   return parseResponse(response);
 };
 
+const getCompanies = async () => {
+  const response = await fetch(`${baseUrl}/companies`, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  return parseResponse(response);
+};
+
+const createCompany = async ({ particulars, companyCode, employerId }) => {
+  const response = await fetch(`${baseUrl}/companies`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ particulars, companyCode, employerId }),
+  });
+  const company = await parseResponse(response);
+  window.dispatchEvent(new Event("companies-changed"));
+  return company;
+};
+
+const deleteCompany = async (companyId) => {
+  const response = await fetch(`${baseUrl}/companies/${companyId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  const result = await parseResponse(response);
+  window.dispatchEvent(new Event("companies-changed"));
+  return result;
+};
+
 const upload = async (file, { particulars, docNumber, issueDate, expiryDate } = {}) => {
   const formData = new FormData();
   formData.append("particulars", particulars || "");
@@ -75,5 +106,13 @@ const remove = async (docId) => {
   return parseResponse(response);
 };
 
-const CompanyDocumentService = { getAll, upload, update, remove };
+const CompanyDocumentService = {
+  getAll,
+  getCompanies,
+  createCompany,
+  deleteCompany,
+  upload,
+  update,
+  remove,
+};
 export default CompanyDocumentService;

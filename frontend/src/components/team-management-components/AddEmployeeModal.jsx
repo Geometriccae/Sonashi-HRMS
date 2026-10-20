@@ -153,7 +153,7 @@ function AddEmployeeModal({ isOpen, onClose, onSubmit }) {
 
   const fetchCompanyDocuments = async () => {
     try {
-      const data = await CompanyDocumentService.getAll();
+      const data = await CompanyDocumentService.getCompanies();
       const docs = Array.isArray(data) ? data : [];
       setCompanyDocuments(docs);
       setFormData((prev) => {

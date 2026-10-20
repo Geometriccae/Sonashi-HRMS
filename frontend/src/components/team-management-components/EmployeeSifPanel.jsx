@@ -93,8 +93,8 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     [showToast]
   );
 
-  const employeeEmployerId = useMemo(
-    () => String(employee?.companyCode || "").replace(/[\s-]+/g, ""),
+  const employeeCompanyCode = useMemo(
+    () => String(employee?.companyCode || "").trim().toUpperCase(),
     [employee?.companyCode]
   );
 
@@ -103,9 +103,9 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     try {
       const s = await sifService.getSettings();
       const loadedEmployers = Array.isArray(s.employers) ? s.employers : [];
-      const selectedEmployer = /^\d{13}$/.test(employeeEmployerId)
-        ? employeeEmployerId
-        : (s.employerId || "");
+      const selectedEmployer = loadedEmployers.find(
+        (entry) => String(entry.companyCode || "").trim().toUpperCase() === employeeCompanyCode
+      )?.employerId || "";
       const selectedRouting = loadedEmployers.find(
         (entry) => entry.employerId === selectedEmployer
       )?.agentRoutingCode || (selectedEmployer === s.employerId ? s.defaultAgentRoutingCode : "");
@@ -117,7 +117,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     } finally {
       setLoadingSettings(false);
     }
-  }, [toast, employeeEmployerId]);
+  }, [toast, employeeCompanyCode]);
 
   useEffect(() => {
     loadSettings();
@@ -133,14 +133,18 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     const bank = getBankAccount(employee);
     const pay = getFixedIncome(employee);
     const labourCard = String(employee.workPermitNo || "").replace(/[\s-]+/g, "");
-    const employer = String(employee.companyCode || "").replace(/[\s-]+/g, "");
+    const employer = employers.find(
+      (entry) =>
+        String(entry.companyCode || "").trim().toUpperCase() ===
+        String(employee.companyCode || "").trim().toUpperCase()
+    )?.employerId || "";
     const missing = [];
     if (!/^\d{14}$/.test(labourCard)) missing.push("Staff ID / Labour Card No. (Person Code, 14 digits)");
     if (agent.length !== 9) missing.push("AGENTCODE");
     if (!bank) missing.push("Bank account / IBAN");
     if (!/^\d{13}$/.test(employer)) missing.push("Company Code (13-digit Employer ID)");
     return {
-      staffId: employee.employeeId || "—",
+      employeeId: employee.employeeId || "—",
       labourCard: labourCard || "—",
       employerId: employer || "—",
       agentCode: agent || "—",
@@ -149,7 +153,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       ready: missing.length === 0,
       missing,
     };
-  }, [employee]);
+  }, [employee, employers]);
 
   const validateSettingsLocal = () => {
     if (employerDigits.length !== 13) {
@@ -178,15 +182,38 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     setSaving(true);
     try {
       const saved = await sifService.saveSettings({
+        companyCode: employeeCompanyCode,
         employerId: employerDigits,
         defaultAgentRoutingCode: agentDigits,
       });
-      setEmployerId(saved.employerId || "");
-      setAgentRouting(saved.defaultAgentRoutingCode || "");
+      setEmployerId(saved.selectedEmployerId || "");
+      setAgentRouting(saved.selectedAgentRoutingCode || "");
       setEmployers(Array.isArray(saved.employers) ? saved.employers : employers);
+      window.dispatchEvent(new Event("companies-changed"));
       toast("SIF settings saved.", "success");
     } catch (err) {
       const msg = err.message || "Failed to save SIF settings";
+      setSettingsError(msg);
+      toast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSettings = async () => {
+    if (!employeeCompanyCode || !employerDigits) return;
+    if (!window.confirm("Delete this company's SIF configuration? Employee and payroll records will not be deleted.")) return;
+    setSaving(true);
+    setSettingsError("");
+    try {
+      const saved = await sifService.deleteCompanySettings(employeeCompanyCode);
+      setEmployerId("");
+      setAgentRouting("");
+      setEmployers(Array.isArray(saved.employers) ? saved.employers : []);
+      window.dispatchEvent(new Event("companies-changed"));
+      toast("Company SIF configuration deleted.", "success");
+    } catch (err) {
+      const msg = err.message || "Failed to delete Company SIF configuration";
       setSettingsError(msg);
       toast(msg, "error");
     } finally {
@@ -322,8 +349,8 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
           <>
             <div className={styles.previewGrid}>
               <div>
-                <span className={styles.label}>STAFFID</span>
-                <span className={styles.value}>{employeePreview.staffId}</span>
+                <span className={styles.label}>EMPLOYEE ID</span>
+                <span className={styles.value}>{employeePreview.employeeId}</span>
               </div>
               <div>
                 <span className={styles.label}>LABOUR CARD NO.</span>
@@ -416,14 +443,26 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
             )}
           </label>
           {canManage && (
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              onClick={handleSaveSettings}
-              disabled={saving || Boolean(busy)}
-            >
-              {saving ? "Saving…" : "Save Settings"}
-            </button>
+            <>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                onClick={handleSaveSettings}
+                disabled={saving || Boolean(busy) || !employeeCompanyCode}
+              >
+                {saving ? "Saving…" : "Save Settings"}
+              </button>
+              {employerDigits && (
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  onClick={handleDeleteSettings}
+                  disabled={saving || Boolean(busy)}
+                >
+                  Delete Configuration
+                </button>
+              )}
+            </>
           )}
         </div>
         {settingsError && <p className={styles.warnBlock}>{settingsError}</p>}
