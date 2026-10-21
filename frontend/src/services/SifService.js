@@ -101,6 +101,10 @@ class SifService {
       throw new Error(err.message || "SIF export failed");
     }
     const blob = await res.blob();
+    const sifText = await blob.text();
+    const fileEdrCount = sifText
+      .split(/\r?\n/)
+      .filter((line) => line.trim().startsWith("EDR,")).length;
     const disposition = res.headers.get("Content-Disposition") || "";
     const match = disposition.match(/filename="?([^"]+)"?/i);
     const fileName = match?.[1] || `export_${year}_${month}.SIF`;
@@ -117,7 +121,7 @@ class SifService {
     }
     return {
       fileName,
-      edrCount: Number(res.headers.get("X-SIF-Edr-Count") || 0),
+      edrCount: Number(res.headers.get("X-SIF-Edr-Count") || fileEdrCount),
       skippedCount: Number(res.headers.get("X-SIF-Skipped") || 0),
       excludedByCompany: Number(res.headers.get("X-SIF-Excluded-Company") || 0),
       totalSalary: Number(res.headers.get("X-SIF-Total") || 0),
