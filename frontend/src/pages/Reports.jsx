@@ -397,8 +397,7 @@ function Reports() {
     const byEmployer = new Map();
     sifEmployers.forEach((company) => {
       const id = String(company?.employerId || "");
-      const routing = String(company?.agentRoutingCode || "");
-      if (/^\d{13}$/.test(id) && /^\d{9}$/.test(routing) && !byEmployer.has(id)) {
+      if (/^\d{13}$/.test(id) && !byEmployer.has(id)) {
         byEmployer.set(id, {
           ...company,
           employerId: id,
