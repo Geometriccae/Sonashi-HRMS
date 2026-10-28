@@ -112,8 +112,11 @@ async function loadEmployeesForEmployerExport(employerId) {
 async function loadSingleEmployeeForExport(employeeId, requestedEmployerId) {
   const employees = await loadEmployeesWithSifMappings();
   const targetId = String(employeeId || "").trim();
+  const targetLower = targetId.toLowerCase();
   const employee = employees.find(
-    (e) => String(e._id) === targetId || String(e.employeeId).trim() === targetId
+    (e) =>
+      String(e._id) === targetId ||
+      String(e.employeeId || "").trim().toLowerCase() === targetLower
   );
 
   if (!employee) {
@@ -436,13 +439,23 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
     const selectedEmployeeId = String(req.query.employeeId || "").trim();
-    const isIndividual = Boolean(selectedEmployeeId);
+    const isExplicitIndividual =
+      req.query.mode === "individual" ||
+      req.query.isIndividual === "true" ||
+      req.query.employeeId !== undefined;
+    const isIndividual = isExplicitIndividual || Boolean(selectedEmployeeId);
 
     let matched = [];
     let excluded = [];
     let employerId = "";
 
     if (isIndividual) {
+      if (!selectedEmployeeId) {
+        return res.status(400).json({
+          message: "Employee ID is required for individual SIF export.",
+          skipped: [],
+        });
+      }
       const loadRes = await loadSingleEmployeeForExport(selectedEmployeeId, req.query.employerId);
       if (loadRes.error) {
         return res.status(400).json({
@@ -534,15 +547,24 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
-<<<<<<< HEAD
     const selectedEmployeeId = String(req.query.employeeId || "").trim();
-    const isIndividual = Boolean(selectedEmployeeId);
+    const isExplicitIndividual =
+      req.query.mode === "individual" ||
+      req.query.isIndividual === "true" ||
+      req.query.employeeId !== undefined;
+    const isIndividual = isExplicitIndividual || Boolean(selectedEmployeeId);
 
     let matched = [];
     let excluded = [];
     let employerId = "";
 
     if (isIndividual) {
+      if (!selectedEmployeeId) {
+        return res.status(400).json({
+          message: "Employee ID is required for individual SIF export.",
+          skipped: [],
+        });
+      }
       const loadRes = await loadSingleEmployeeForExport(selectedEmployeeId, req.query.employerId);
       if (loadRes.error) {
         return res.status(400).json({
@@ -556,17 +578,15 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     } else {
       const selectedEmployerId = digitsOnly(req.query.employerId);
       employerId =
-        selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
+        selectedEmployerId || digitsOnly(settings.employerId) || "";
+      const employerErr = validateEmployerId(employerId);
+      if (employerErr) {
+        return res.status(400).json({ message: employerErr });
+      }
       const loadRes = await loadEmployeesForEmployerExport(employerId);
       matched = loadRes.matched;
       excluded = loadRes.excluded;
     }
-
-=======
-    const selectedEmployerId = digitsOnly(req.query.employerId);
-    const employerId = selectedEmployerId || digitsOnly(settings.employerId);
-    const { matched, excluded } = await loadEmployeesForEmployerExport(employerId);
->>>>>>> c545bc2b2c1aa818a1495fe2b7f0bb64302d85a7
     const result = generateSifContent({
       employees: matched,
       employerId,

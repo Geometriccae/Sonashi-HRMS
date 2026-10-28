@@ -222,17 +222,24 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
   };
 
   const handlePreview = async () => {
-    const settingsMsg = validateSettingsLocal();
-    if (settingsMsg) {
-      setSettingsError(settingsMsg);
-      toast(settingsMsg, "error");
+    if (!employee) {
+      toast("No employee loaded", "error");
+      return;
+    }
+    const empId = String(employee.employeeId || employee._id || "").trim();
+    if (!empId) {
+      toast("Cannot preview: Selected employee has no valid employee ID.", "error");
       return;
     }
     setBusy("preview");
     setPreview(null);
     setImportResult(null);
     try {
-      const result = await sifService.previewExport(month, year, employerDigits);
+      const result = await sifService.previewExport(month, year, {
+        employerId: employerDigits,
+        employeeId: empId,
+        mode: "individual",
+      });
       setPreview(result);
       if (result.error) {
         toast(result.error, "error");
@@ -254,6 +261,11 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       toast("No employee loaded", "error");
       return;
     }
+    const empId = String(employee.employeeId || employee._id || "").trim();
+    if (!empId) {
+      toast("Cannot export individual SIF: Selected employee has no valid employee ID.", "error");
+      return;
+    }
     const agent = digitsOnly(employee.salaryDetails?.agentCode || employee.salaryDetails?.bankSortCode);
     if (agent.length !== 9) {
       toast(`Cannot export individual SIF: Employee's Agent Code must be exactly 9 digits (current: "${agent || "missing"}").`, "error");
@@ -262,10 +274,10 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     setBusy("individualSif");
     setImportResult(null);
     try {
-      const empId = employee.employeeId || employee._id;
       const result = await sifService.exportSif(month, year, {
         employerId: employerDigits,
         employeeId: empId,
+        mode: "individual",
       });
       setPreview({
         edrCount: result.edrCount,

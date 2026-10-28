@@ -263,3 +263,143 @@ test("Authoritative company mapping preserves Employer ID and employee assignmen
   assert.equal(emp3.sifEmployerId, "0000002795780");
   assert.equal(emp3.sifCompanyMapping.source, "employee");
 });
+
+test("Individual employee export contains only the selected employee and excludes all other employees", () => {
+  const companyEmployerId = "0000000172509";
+  const defaultRouting = "302620122";
+
+  const empA = {
+    _id: "emp-a",
+    employeeId: "EMP-001",
+    employeeName: "Alice Smith",
+    emiratesId: "784199012345671",
+    companyCode: companyEmployerId,
+    salaryDetails: {
+      agentCode: "600310101",
+      bankSortCode: "600310101",
+      ibanNumber: "AE012345678901234567890",
+      totalSalary: 5000,
+    },
+  };
+
+  const empB = {
+    _id: "emp-b",
+    employeeId: "EMP-002",
+    employeeName: "Bob Jones",
+    emiratesId: "784199012345672",
+    companyCode: companyEmployerId,
+    salaryDetails: {
+      agentCode: "740810000",
+      bankSortCode: "740810000",
+      ibanNumber: "AE987654321098765432109",
+      totalSalary: 8000,
+    },
+  };
+
+  // Export for Emp A only
+  const sifResultA = generateSifContent({
+    employees: [empA],
+    employerId: companyEmployerId,
+    defaultAgentRoutingCode: defaultRouting,
+    year: 2026,
+    month: 10,
+    isIndividual: true,
+  });
+
+  assert.equal(sifResultA.edrCount, 1);
+  assert.equal(sifResultA.totalSalary, 5000);
+  const { edrs: edrsA, scr: scrA } = parseSifContent(sifResultA.content);
+  assert.equal(edrsA.length, 1);
+  assert.equal(edrsA[0].empId, "784199012345671");
+  assert.equal(edrsA[0].agentCode, "600310101");
+  assert.equal(scrA.edrCount, 1);
+  assert.equal(scrA.totalSalary, 5000);
+  assert.equal(scrA.agentRouting, "600310101");
+
+  // Export for Emp B only
+  const sifResultB = generateSifContent({
+    employees: [empB],
+    employerId: companyEmployerId,
+    defaultAgentRoutingCode: defaultRouting,
+    year: 2026,
+    month: 10,
+    isIndividual: true,
+  });
+
+  assert.equal(sifResultB.edrCount, 1);
+  assert.equal(sifResultB.totalSalary, 8000);
+  const { edrs: edrsB, scr: scrB } = parseSifContent(sifResultB.content);
+  assert.equal(edrsB.length, 1);
+  assert.equal(edrsB[0].empId, "784199012345672");
+  assert.equal(edrsB[0].agentCode, "740810000");
+  assert.equal(scrB.edrCount, 1);
+  assert.equal(scrB.totalSalary, 8000);
+  assert.equal(scrB.agentRouting, "740810000");
+});
+
+test("Company-wise SIF export includes all eligible employees belonging to that company without mixing", () => {
+  const company1 = "0000000172509";
+  const company2 = "0000000246878";
+  const defaultRouting = "302620122";
+
+  const emp1 = {
+    _id: "emp-1",
+    employeeId: "EMP-001",
+    employeeName: "Alice Smith",
+    emiratesId: "784199012345671",
+    sifEmployerId: company1,
+    salaryDetails: {
+      agentCode: "600310101",
+      ibanNumber: "AE012345678901234567890",
+      totalSalary: 5000,
+    },
+  };
+
+  const emp2 = {
+    _id: "emp-2",
+    employeeId: "EMP-002",
+    employeeName: "Bob Jones",
+    emiratesId: "784199012345672",
+    sifEmployerId: company1,
+    salaryDetails: {
+      agentCode: "740810000",
+      ibanNumber: "AE987654321098765432109",
+      totalSalary: 8000,
+    },
+  };
+
+  const emp3 = {
+    _id: "emp-3",
+    employeeId: "EMP-003",
+    employeeName: "Charlie Other",
+    emiratesId: "784199012345673",
+    sifEmployerId: company2,
+    salaryDetails: {
+      agentCode: "123456789",
+      ibanNumber: "AE111111111111111111111",
+      totalSalary: 7000,
+    },
+  };
+
+  const allEmployees = [emp1, emp2, emp3];
+  // Scoped to company1
+  const company1Employees = allEmployees.filter(e => e.sifEmployerId === company1);
+  assert.equal(company1Employees.length, 2);
+
+  const sifResult = generateSifContent({
+    employees: company1Employees,
+    employerId: company1,
+    defaultAgentRoutingCode: defaultRouting,
+    year: 2026,
+    month: 10,
+    isIndividual: false,
+  });
+
+  assert.equal(sifResult.edrCount, 2);
+  assert.equal(sifResult.totalSalary, 13000);
+  const { edrs, scr } = parseSifContent(sifResult.content);
+  assert.equal(edrs.length, 2);
+  assert.equal(edrs.some(e => e.empId === "784199012345673"), false, "Employee from Company 2 must not be included");
+  assert.equal(scr.employerId, company1);
+  assert.equal(scr.agentRouting, defaultRouting);
+});

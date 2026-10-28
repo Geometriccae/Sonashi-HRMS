@@ -61,10 +61,18 @@ class SifService {
 
   async previewExport(month, year, options = {}) {
     const employerId = typeof options === "object" ? options.employerId : options;
+    const isExplicitIndividual =
+      typeof options === "object" &&
+      (options.mode === "individual" || options.isIndividual || "employeeId" in options);
     const employeeId = typeof options === "object" ? options.employeeId : null;
     const params = new URLSearchParams({ month: String(month), year: String(year) });
     if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
-    if (employeeId) params.set("employeeId", String(employeeId).trim());
+    if (isExplicitIndividual) {
+      params.set("mode", "individual");
+      if (employeeId != null) params.set("employeeId", String(employeeId).trim());
+    } else if (employeeId) {
+      params.set("employeeId", String(employeeId).trim());
+    }
     const res = await fetch(`${this.baseURL}/export/sif/preview?${params}`, {
       headers: this.getAuthHeaders(),
     });
@@ -93,10 +101,18 @@ class SifService {
 
   async exportSif(month, year, options = {}) {
     const employerId = typeof options === "object" ? options.employerId : options;
+    const isExplicitIndividual =
+      typeof options === "object" &&
+      (options.mode === "individual" || options.isIndividual || "employeeId" in options);
     const employeeId = typeof options === "object" ? options.employeeId : null;
     const params = new URLSearchParams({ month: String(month), year: String(year) });
     if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
-    if (employeeId) params.set("employeeId", String(employeeId).trim());
+    if (isExplicitIndividual) {
+      params.set("mode", "individual");
+      if (employeeId != null) params.set("employeeId", String(employeeId).trim());
+    } else if (employeeId) {
+      params.set("employeeId", String(employeeId).trim());
+    }
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
       headers: this.getAuthHeaders(false),
     });

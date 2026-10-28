@@ -1134,6 +1134,7 @@ function Reports() {
       const exportOptions = { employerId };
       if (isIndividual) {
         exportOptions.employeeId = filterEmployee;
+        exportOptions.mode = "individual";
       }
 
       const result = await sifService.exportSif(m, y, exportOptions);

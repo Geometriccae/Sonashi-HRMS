@@ -86,13 +86,8 @@ const buildEdrPayload = (employees, year, month) => {
   let totalSalary = 0;
 
   employees.forEach((emp) => {
-<<<<<<< HEAD
-    const empid = normalizeEmiratesId(emp.emiratesId);
+    const empid = normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo);
     const agent = digitsOnly(emp.salaryDetails?.agentCode || emp.salaryDetails?.bankSortCode);
-=======
-    const empid = digitsOnly(emp.workPermitNo);
-    const agent = digitsOnly(emp.salaryDetails?.bankSortCode);
->>>>>>> c545bc2b2c1aa818a1495fe2b7f0bb64302d85a7
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
 
@@ -221,7 +216,6 @@ const generateSifContent = ({
   const fileTime = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}`;
   const fileRef = buildFileReference(safeEmployerId, now);
 
-<<<<<<< HEAD
   let scrAgent = "";
   if (isIndividual) {
     // For individual employee SIF export: use the selected employee's own Agent Code
@@ -236,9 +230,6 @@ const generateSifContent = ({
   if (scrAgent.length !== 9) {
     scrAgent = pad(scrAgent || "0", 9).slice(-9);
   }
-=======
-  const scrAgent = digitsOnly(defaultAgentRoutingCode);
->>>>>>> c545bc2b2c1aa818a1495fe2b7f0bb64302d85a7
 
   const scr = buildScrLine({
     employerId: safeEmployerId,
@@ -347,10 +338,10 @@ const RED_HEADERS = new Set([
 
 const employeeToExcelRow = (emp) => {
   const sal = emp.salaryDetails || {};
-  const rowEmployerId = digitsOnly(emp.sifEmployerId);
+  const rowEmployerId = digitsOnly(emp.sifEmployerId || emp.companyCode);
   return {
     StaffID: emp.employeeId || "",
-    EMPID: digitsOnly(emp.workPermitNo),
+    EMPID: normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo),
     EMPNAME: emp.employeeName || "",
     EMPLOYERID: rowEmployerId,
     AGENTCODE: digitsOnly(sal.agentCode || sal.bankSortCode),
