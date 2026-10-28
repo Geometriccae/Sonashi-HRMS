@@ -37,3 +37,4 @@ export const fmtDate = (d) => {
  * @returns {string}
  */
 export const displayLastWorkingDay = (item) => fmtDate(item?.lastWorkingDay);
+
