@@ -98,14 +98,48 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     [employee?.companyCode]
   );
 
+  const resolveEmployerForEmployee = useCallback((emp, employersList = [], defaultEmployer = "") => {
+    if (!emp) return "";
+
+    const empCompanyCode = String(emp.companyCode || "").trim().toUpperCase();
+    const empOffice = String(emp.office || "").trim().toLowerCase();
+    const empSifEmployerId = String(emp.sifEmployerId || emp.employerId || "").replace(/\D/g, "");
+
+    // 1. If employee object has sifEmployerId/employerId of 13 digits
+    if (empSifEmployerId.length === 13) return empSifEmployerId;
+
+    // 2. Look in employersList
+    const matched = (employersList || []).find((entry) => {
+      const entryEmployerId = String(entry.employerId || "").replace(/\D/g, "");
+      const entryCompanyCode = String(entry.companyCode || "").trim().toUpperCase();
+      const entryCompanyName = String(entry.companyName || "").trim().toLowerCase();
+
+      if (entryEmployerId && empCompanyCode && entryEmployerId === empCompanyCode) return true;
+      if (entryCompanyCode && empCompanyCode && entryCompanyCode === empCompanyCode) return true;
+      if (entryCompanyName && empOffice && entryCompanyName === empOffice) return true;
+      return false;
+    });
+
+    if (matched?.employerId) return String(matched.employerId).replace(/\D/g, "");
+
+    // 3. If employee.companyCode itself is a 13-digit Employer ID
+    const digitsCompanyCode = empCompanyCode.replace(/\D/g, "");
+    if (digitsCompanyCode.length === 13) return digitsCompanyCode;
+
+    // 4. Fall back to defaultEmployer from settings
+    const digitsDefault = String(defaultEmployer || "").replace(/\D/g, "");
+    if (digitsDefault.length === 13) return digitsDefault;
+
+    // 5. Built-in default
+    return "0000000172509";
+  }, []);
+
   const loadSettings = useCallback(async () => {
     setLoadingSettings(true);
     try {
       const s = await sifService.getSettings();
       const loadedEmployers = Array.isArray(s.employers) ? s.employers : [];
-      const selectedEmployer = loadedEmployers.find(
-        (entry) => String(entry.companyCode || "").trim().toUpperCase() === employeeCompanyCode
-      )?.employerId || "";
+      const selectedEmployer = resolveEmployerForEmployee(employee, loadedEmployers, s.employerId);
       const selectedRouting = loadedEmployers.find(
         (entry) => entry.employerId === selectedEmployer
       )?.agentRoutingCode || (selectedEmployer === s.employerId ? s.defaultAgentRoutingCode : "");
@@ -117,7 +151,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     } finally {
       setLoadingSettings(false);
     }
-  }, [toast, employeeCompanyCode]);
+  }, [toast, employee, resolveEmployerForEmployee]);
 
   useEffect(() => {
     loadSettings();
@@ -133,11 +167,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     const bank = getBankAccount(employee);
     const pay = getFixedIncome(employee);
     const labourCard = String(employee.workPermitNo || "").replace(/[\s-]+/g, "");
-    const employer = employers.find(
-      (entry) =>
-        String(entry.companyCode || "").trim().toUpperCase() ===
-        String(employee.companyCode || "").trim().toUpperCase()
-    )?.employerId || "";
+    const employer = resolveEmployerForEmployee(employee, employers, employerId);
     const missing = [];
     if (!/^\d{14}$/.test(labourCard)) missing.push("Staff ID / Labour Card No. (Person Code, 14 digits)");
     if (agent.length !== 9) missing.push("AGENTCODE (9-digit Bank Routing Code)");
@@ -153,7 +183,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       ready: missing.length === 0,
       missing,
     };
-  }, [employee, employers]);
+  }, [employee, employers, employerId, resolveEmployerForEmployee]);
 
   const validateSettingsLocal = () => {
     if (employerDigits.length !== 13) {

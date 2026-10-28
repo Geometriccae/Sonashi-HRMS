@@ -202,17 +202,44 @@ async function employersWithRouting(settings) {
     }
   });
   const routes = getEmployerRoutingCodes(settings);
+
   const companies = await CompanyDocument.find({
-    recordType: "company",
-    employerId: { $exists: true, $nin: [null, ""] },
-  }).select("particulars docNumber employerId").lean();
+    $or: [{ recordType: "company" }, { recordType: { $exists: false } }],
+  })
+    .select("particulars docNumber employerId")
+    .lean();
+
   const configured = new Map();
   companies.forEach((company) => {
-    const employerId = digitsOnly(company.employerId);
-    if (employerId.length === 13 && !configured.has(employerId)) {
-      configured.set(employerId, company);
+    const empId = digitsOnly(company.employerId) || digitsOnly(company.docNumber);
+    if (empId.length === 13 && !configured.has(empId)) {
+      configured.set(empId, {
+        particulars: company.particulars || "",
+        docNumber: company.docNumber || "",
+        employerId: empId,
+      });
     }
   });
+
+  const defaultEmpId = digitsOnly(settings?.employerId);
+  if (defaultEmpId.length === 13 && !configured.has(defaultEmpId)) {
+    configured.set(defaultEmpId, {
+      particulars: "Default Employer",
+      docNumber: "",
+      employerId: defaultEmpId,
+    });
+  }
+
+  counts.forEach((count, empId) => {
+    if (empId.length === 13 && !configured.has(empId)) {
+      configured.set(empId, {
+        particulars: "",
+        docNumber: "",
+        employerId: empId,
+      });
+    }
+  });
+
   return Array.from(configured.entries())
     .map(([employerId, company]) => ({
       employerId,

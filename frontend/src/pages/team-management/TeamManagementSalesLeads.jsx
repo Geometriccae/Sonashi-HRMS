@@ -1185,6 +1185,7 @@ function TeamManagementSalesLeads() {
                         <div className={styles.column5}><span className={styles.text9}>Company Code</span><span className={styles.text10}>{employee.companyCode || "Not provided"}</span></div>
                       </div>
                       <div className={styles.row_view6}>
+                        <div className={styles.column4}><span className={styles.text9}>Employer ID</span><span className={styles.text10}>{employee.employerId || employee.sifEmployerId || (/^\d{13}$/.test(String(employee.companyCode || "").replace(/\D/g, "")) ? String(employee.companyCode).replace(/\D/g, "") : "0000000172509")}</span></div>
                         <div className={styles.column4}><span className={styles.text9}>IBAN Number</span><span className={styles.text10}>{employee?.salaryDetails?.ibanNumber || "Not provided"}</span></div>
                         <div className={styles.column5}><span className={styles.text9}>Agent Code</span><span className={styles.text10}>{employee?.salaryDetails?.agentCode || employee?.salaryDetails?.bankSortCode || "Not provided"}</span></div>
                       </div>
