@@ -1119,15 +1119,26 @@ function Reports() {
         return;
       }
       // Pass selected Employer ID for this export only.
-      // Agent Code continues from existing SIF Settings on the server.
-      const result = await sifService.exportSif(m, y, { employerId });
-      const companyNote = result.excludedByCompany > 0
-        ? ` ${result.excludedByCompany} employee(s) excluded (different company code).`
-        : "";
-      const skipNote = result.skippedCount > result.excludedByCompany
-        ? ` ${result.skippedCount - result.excludedByCompany} skipped due to missing data.`
-        : "";
-      alert(`SIF exported (${result.edrCount} records for Employer ID ${employerId}).${companyNote}${skipNote}`);
+      // Agent Code is employee-specific.
+      const isIndividual = filterEmployee && filterEmployee !== "All";
+      const exportOptions = { employerId };
+      if (isIndividual) {
+        exportOptions.employeeId = filterEmployee;
+      }
+
+      const result = await sifService.exportSif(m, y, exportOptions);
+      if (isIndividual) {
+        const empLabel = employeeOptions.find(o => o.value === filterEmployee)?.label || filterEmployee;
+        alert(`Individual SIF exported for ${empLabel} (Employer ID ${employerId}) using their own Agent Code.`);
+      } else {
+        const companyNote = result.excludedByCompany > 0
+          ? ` ${result.excludedByCompany} employee(s) excluded (different company code).`
+          : "";
+        const skipNote = result.skippedCount > result.excludedByCompany
+          ? ` ${result.skippedCount - result.excludedByCompany} skipped due to missing data.`
+          : "";
+        alert(`Company SIF exported (${result.edrCount} records for Employer ID ${employerId}).${companyNote}${skipNote}`);
+      }
       return;
     }
 

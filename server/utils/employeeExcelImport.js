@@ -142,6 +142,9 @@ const HEADER_ALIASES = {
   'bank sort code': 'bankSortCode',
   'sort code': 'bankSortCode',
   sortcode: 'bankSortCode',
+  agentcode: 'agentCode',
+  'agent code': 'agentCode',
+  'bank agent code': 'agentCode',
 };
 
 function rowToNormMap(row) {
@@ -287,7 +290,8 @@ function buildEmployeePayload(row, nameToId) {
       bankName: String(pickRaw(map, 'bankName') || '').trim(),
       accountNumber: String(pickRaw(map, 'accountNumber') || '').trim(),
       ibanNumber: String(pickRaw(map, 'ibanNumber') || '').trim(),
-      bankSortCode: String(pickRaw(map, 'bankSortCode') || '').trim(),
+      bankSortCode: String(pickRaw(map, 'agentCode') || pickRaw(map, 'bankSortCode') || '').trim(),
+      agentCode: String(pickRaw(map, 'agentCode') || pickRaw(map, 'bankSortCode') || '').trim(),
       basicSalary: 0, // placeholders for required structure
       houseRent: 0,
       travelExp: 0,

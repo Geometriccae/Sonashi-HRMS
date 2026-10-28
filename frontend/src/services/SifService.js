@@ -52,8 +52,10 @@ class SifService {
 
   async previewExport(month, year, options = {}) {
     const employerId = typeof options === "object" ? options.employerId : options;
+    const employeeId = typeof options === "object" ? options.employeeId : null;
     const params = new URLSearchParams({ month: String(month), year: String(year) });
     if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
+    if (employeeId) params.set("employeeId", String(employeeId).trim());
     const res = await fetch(`${this.baseURL}/export/sif/preview?${params}`, {
       headers: this.getAuthHeaders(),
     });
@@ -82,8 +84,10 @@ class SifService {
 
   async exportSif(month, year, options = {}) {
     const employerId = typeof options === "object" ? options.employerId : options;
+    const employeeId = typeof options === "object" ? options.employeeId : null;
     const params = new URLSearchParams({ month: String(month), year: String(year) });
     if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
+    if (employeeId) params.set("employeeId", String(employeeId).trim());
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
       headers: this.getAuthHeaders(false),
     });
@@ -112,6 +116,9 @@ class SifService {
       skippedCount: Number(res.headers.get("X-SIF-Skipped") || 0),
       excludedByCompany: Number(res.headers.get("X-SIF-Excluded-Company") || 0),
       totalSalary: Number(res.headers.get("X-SIF-Total") || 0),
+      isIndividual: res.headers.get("X-SIF-Is-Individual") === "true",
+      employeeId: res.headers.get("X-SIF-Employee-Id") || null,
+      agentCode: res.headers.get("X-SIF-Agent-Code") || null,
       skipped,
     };
   }

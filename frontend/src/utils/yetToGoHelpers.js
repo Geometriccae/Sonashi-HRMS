@@ -273,7 +273,7 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     totalYearsExperience: linked?.totalYearsExperience ?? null,
     experienceYears: computeEmployeeMasterExperienceYears(linked),
     travellingDate: dates.travellingDate,
-    lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
+    lastWorkingDay: linked?.lastWorkingDay || null,
     returnDate: (() => {
       const leaveReturn = req.returnDate || req.firstWorkingDay || null;
       if (leaveReturn) return leaveReturn;

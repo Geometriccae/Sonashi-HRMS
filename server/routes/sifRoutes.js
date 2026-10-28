@@ -124,6 +124,58 @@ async function loadEmployeesForEmployerExport(employerId) {
   return { matched, excluded, targetEmployerId: target };
 }
 
+async function loadSingleEmployeeForExport(employeeId, requestedEmployerId) {
+  const employees = await loadEmployeesWithSifMappings();
+  const targetId = String(employeeId || "").trim();
+  const employee = employees.find(
+    (e) => String(e._id) === targetId || String(e.employeeId).trim() === targetId
+  );
+
+  if (!employee) {
+    return {
+      error: `Employee "${targetId}" not found or not active.`,
+      matched: [],
+      excluded: [],
+      targetEmployerId: "",
+    };
+  }
+
+  const mappedEmployerId = normalizeEmployerId(employee.sifEmployerId);
+  const target = normalizeEmployerId(requestedEmployerId) || mappedEmployerId;
+
+  if (requestedEmployerId && mappedEmployerId && normalizeEmployerId(requestedEmployerId) !== mappedEmployerId) {
+    return {
+      error: `Selected employee belongs to Employer ID ${mappedEmployerId}, but export was requested for Employer ID ${requestedEmployerId}.`,
+      matched: [],
+      excluded: [{
+        staffId: employee.employeeId || "",
+        empName: employee.employeeName || "",
+        companyCode: employee.companyCode || "",
+        employerId: mappedEmployerId,
+        reason: `Assigned Employer ID ${mappedEmployerId} does not match selected Employer ID ${requestedEmployerId}`,
+      }],
+      targetEmployerId: target,
+    };
+  }
+
+  if (!target) {
+    return {
+      error: (employee.sifCompanyMapping?.issues || ["Missing company assignment"]).join("; "),
+      matched: [],
+      excluded: [{
+        staffId: employee.employeeId || "",
+        empName: employee.employeeName || "",
+        companyCode: employee.companyCode || "",
+        employerId: "",
+        reason: (employee.sifCompanyMapping?.issues || ["Missing company assignment"]).join("; "),
+      }],
+      targetEmployerId: "",
+    };
+  }
+
+  return { matched: [employee], excluded: [], targetEmployerId: target, employee };
+}
+
 function getEmployerRoutingCodes(settings) {
   const routes = new Map();
   (settings?.employerRoutingCodes || []).forEach((entry) => {
@@ -218,7 +270,11 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
 
       if (empId) emp.emiratesId = empId;
       if (!emp.salaryDetails) emp.salaryDetails = {};
-      if (edr.agentCode) emp.salaryDetails.bankSortCode = digitsOnly(edr.agentCode);
+      if (edr.agentCode) {
+        const code = digitsOnly(edr.agentCode);
+        emp.salaryDetails.bankSortCode = code;
+        emp.salaryDetails.agentCode = code;
+      }
 
       const bank = String(edr.bankAccount || "").trim();
       if (bank) {
@@ -315,24 +371,48 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
+    const selectedEmployeeId = String(req.query.employeeId || "").trim();
+    const isIndividual = Boolean(selectedEmployeeId);
 
-    // Prefer Employer ID selected in Report UI for this export only.
-    // Do not overwrite CompanySifSettings or employee companyCode.
-    const selectedEmployerId = digitsOnly(req.query.employerId);
-    const employerId = selectedEmployerId || digitsOnly(settings.employerId) || "";
+    let matched = [];
+    let excluded = [];
+    let employerId = "";
+
+    if (isIndividual) {
+      const loadRes = await loadSingleEmployeeForExport(selectedEmployeeId, req.query.employerId);
+      if (loadRes.error) {
+        return res.status(400).json({
+          message: loadRes.error,
+          skipped: loadRes.excluded,
+        });
+      }
+      matched = loadRes.matched;
+      excluded = loadRes.excluded;
+      employerId = loadRes.targetEmployerId;
+    } else {
+      const selectedEmployerId = digitsOnly(req.query.employerId);
+      employerId = selectedEmployerId || digitsOnly(settings.employerId) || "";
+      const employerErr = validateEmployerId(employerId);
+      if (employerErr) {
+        return res.status(400).json({ message: employerErr });
+      }
+
+      const loadRes = await loadEmployeesForEmployerExport(employerId);
+      matched = loadRes.matched;
+      excluded = loadRes.excluded;
+      if (matched.length === 0) {
+        return res.status(400).json({
+          message:
+            "No employees found with company code matching the selected Employer ID.",
+          skipped: excluded.slice(0, 100),
+          excludedByCompany: excluded.length,
+        });
+      }
+    }
+
     const employerErr = validateEmployerId(employerId);
     if (employerErr) {
       return res.status(400).json({ message: employerErr });
-    }
-
-    const { matched, excluded } = await loadEmployeesForEmployerExport(employerId);
-    if (matched.length === 0) {
-      return res.status(400).json({
-        message:
-          "No employees found with company code matching the selected Employer ID.",
-        skipped: excluded.slice(0, 100),
-        excludedByCompany: excluded.length,
-      });
     }
 
     const result = generateSifContent({
@@ -341,6 +421,7 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
       year: parsed.year,
       month: parsed.month,
+      isIndividual,
     });
 
     if (result.error) {
@@ -362,6 +443,12 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     res.setHeader("X-SIF-Skipped", String(allSkipped.length));
     res.setHeader("X-SIF-Excluded-Company", String(excluded.length));
     res.setHeader("X-SIF-Total", String(result.totalSalary));
+    res.setHeader("X-SIF-Is-Individual", isIndividual ? "true" : "false");
+    if (isIndividual && matched[0]) {
+      res.setHeader("X-SIF-Employee-Id", String(matched[0].employeeId || ""));
+      const empAgent = digitsOnly(matched[0].salaryDetails?.agentCode || matched[0].salaryDetails?.bankSortCode);
+      if (empAgent) res.setHeader("X-SIF-Agent-Code", empAgent);
+    }
     // Expose skip summary via custom header (JSON) for UI — keep body as pure SIF
     if (allSkipped.length) {
       res.setHeader(
@@ -383,20 +470,48 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     const settings = await getOrCreateSettings();
-    const selectedEmployerId = digitsOnly(req.query.employerId);
-    const employerId =
-      selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
-    const { matched, excluded } = await loadEmployeesForEmployerExport(employerId);
+    const selectedEmployeeId = String(req.query.employeeId || "").trim();
+    const isIndividual = Boolean(selectedEmployeeId);
+
+    let matched = [];
+    let excluded = [];
+    let employerId = "";
+
+    if (isIndividual) {
+      const loadRes = await loadSingleEmployeeForExport(selectedEmployeeId, req.query.employerId);
+      if (loadRes.error) {
+        return res.status(400).json({
+          message: loadRes.error,
+          skipped: loadRes.excluded,
+        });
+      }
+      matched = loadRes.matched;
+      excluded = loadRes.excluded;
+      employerId = loadRes.targetEmployerId;
+    } else {
+      const selectedEmployerId = digitsOnly(req.query.employerId);
+      employerId =
+        selectedEmployerId || digitsOnly(settings.employerId) || "0000000000000";
+      const loadRes = await loadEmployeesForEmployerExport(employerId);
+      matched = loadRes.matched;
+      excluded = loadRes.excluded;
+    }
+
     const result = generateSifContent({
       employees: matched,
       employerId,
       defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
       year: parsed.year,
       month: parsed.month,
+      isIndividual,
     });
 
     res.json({
-      employerId: selectedEmployerId || settings.employerId || "",
+      employerId: employerId || "",
+      isIndividual,
+      employeeId: isIndividual && matched[0] ? matched[0].employeeId : undefined,
+      employeeName: isIndividual && matched[0] ? matched[0].employeeName : undefined,
+      agentCode: isIndividual && matched[0] ? digitsOnly(matched[0].salaryDetails?.agentCode || matched[0].salaryDetails?.bankSortCode) : undefined,
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
       skipped: [...(result.skipped || []), ...excluded],
@@ -665,7 +780,7 @@ router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
     employees.forEach((emp) => {
       const employerId = resolveEmployeeEmployerId(emp);
       const storedCode = String(emp.companyCode || "").trim();
-      const agentRaw = digitsOnly(emp.salaryDetails?.bankSortCode);
+      const agentRaw = digitsOnly(emp.salaryDetails?.agentCode || emp.salaryDetails?.bankSortCode);
       const agentErr = agentRaw ? validateAgentCode(agentRaw) : "AGENTCODE missing";
       const bank = getBankAccount(emp) || "";
       const empid = normalizeEmiratesId(emp.emiratesId);

@@ -87,7 +87,7 @@ const buildEdrPayload = (employees, year, month) => {
 
   employees.forEach((emp) => {
     const empid = normalizeEmiratesId(emp.emiratesId);
-    const agent = digitsOnly(emp.salaryDetails?.bankSortCode);
+    const agent = digitsOnly(emp.salaryDetails?.agentCode || emp.salaryDetails?.bankSortCode);
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
 
@@ -181,6 +181,7 @@ const generateSifContent = ({
   year,
   month,
   now = new Date(),
+  isIndividual = false,
 }) => {
   // Allow empty Employer ID / Agent Code — pad with zeros for a valid file shape
   const safeEmployerId = pad(digitsOnly(employerId) || "0", 13).slice(-13);
@@ -193,7 +194,9 @@ const generateSifContent = ({
 
   if (edrLines.length === 0) {
     return {
-      error: "No employees found for SIF export.",
+      error: isIndividual
+        ? (skipped[0]?.reason || "Employee is not eligible for SIF export.")
+        : "No employees found for SIF export.",
       skipped,
     };
   }
@@ -206,10 +209,17 @@ const generateSifContent = ({
   const fileTime = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}`;
   const fileRef = buildFileReference(safeEmployerId, now);
 
-  let scrAgent = digitsOnly(defaultAgentRoutingCode);
-  if (scrAgent.length !== 9 && edrRecords[0]) {
-    scrAgent = digitsOnly(edrRecords[0].agentCode);
+  let scrAgent = "";
+  if (isIndividual) {
+    // For individual employee SIF export: use the selected employee's own Agent Code
+    const empAgent = edrRecords[0]?.agentCode || digitsOnly(employees[0]?.salaryDetails?.agentCode || employees[0]?.salaryDetails?.bankSortCode);
+    scrAgent = empAgent || digitsOnly(defaultAgentRoutingCode);
+  } else {
+    // For company-wide SIF export: use company's defaultAgentRoutingCode
+    // Do NOT substitute another employee's value
+    scrAgent = digitsOnly(defaultAgentRoutingCode);
   }
+
   if (scrAgent.length !== 9) {
     scrAgent = pad(scrAgent || "0", 9).slice(-9);
   }
@@ -329,7 +339,7 @@ const employeeToExcelRow = (emp) => {
     EMPID: normalizeEmiratesId(emp.emiratesId),
     EMPNAME: emp.employeeName || "",
     EMPLOYERID: rowEmployerId,
-    AGENTCODE: digitsOnly(sal.bankSortCode),
+    AGENTCODE: digitsOnly(sal.agentCode || sal.bankSortCode),
     BANKACCOUNT: getBankAccount(emp),
     STATUS: emp.employeeStatus || "",
     BASIC: Number(sal.basicSalary) || 0,
