@@ -368,7 +368,7 @@ function Reports() {
     loadEmployees();
   }, []);
 
-  useEffect(() => {
+  const loadSifCompanyOptions = useCallback(() => {
     setSifSettingsLoading(true);
     setSifSettingsError("");
     sifService.getSettings()
@@ -386,17 +386,27 @@ function Reports() {
       .finally(() => setSifSettingsLoading(false));
   }, []);
 
-  // SIF Settings EMPLOYERID first, then the 13-digit company codes employees are filed under.
+  useEffect(() => {
+    loadSifCompanyOptions();
+    window.addEventListener("companies-changed", loadSifCompanyOptions);
+    return () => window.removeEventListener("companies-changed", loadSifCompanyOptions);
+  }, [loadSifCompanyOptions]);
+
+  // Configured companies with a valid SIF Employer ID.
   const sifEmployerOptions = useMemo(() => {
-    const counts = new Map(sifEmployers.map((emp) => [emp.employerId, emp.employeeCount]));
-    const ids = [sifSettingsEmployerId, ...sifEmployers.map((emp) => emp.employerId)]
-      .filter((id) => /^\d{13}$/.test(String(id || "")));
-    return [...new Set(ids)].map((id) => ({
-      employerId: id,
-      employeeCount: counts.get(id) || 0,
-      isSettingsDefault: id === sifSettingsEmployerId,
-      agentRoutingCode: sifEmployers.find((emp) => emp.employerId === id)?.agentRoutingCode || "",
-    }));
+    const byEmployer = new Map();
+    sifEmployers.forEach((company) => {
+      const id = String(company?.employerId || "");
+      if (/^\d{13}$/.test(id) && !byEmployer.has(id)) {
+        byEmployer.set(id, {
+          ...company,
+          employerId: id,
+          employeeCount: company.employeeCount || 0,
+          isSettingsDefault: id === sifSettingsEmployerId,
+        });
+      }
+    });
+    return [...byEmployer.values()];
   }, [sifEmployers, sifSettingsEmployerId]);
 
   // Employees Master Data: default Status=Active, then auto-load / refresh preview
@@ -1798,7 +1808,7 @@ function Reports() {
                         <option value="">{sifSettingsLoading ? "Loading Employer IDs..." : "Select Employer ID"}</option>
                         {sifEmployerOptions.map((emp) => (
                           <option key={emp.employerId} value={emp.employerId}>
-                            {`${emp.employerId} — ${emp.employeeCount} eligible employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
+                            {`${emp.companyName ? `${emp.companyName} — ` : ""}${emp.employerId} — ${emp.employeeCount} eligible employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
                           </option>
                         ))}
                       </select>

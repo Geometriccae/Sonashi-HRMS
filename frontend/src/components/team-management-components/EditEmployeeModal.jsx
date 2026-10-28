@@ -40,7 +40,7 @@ import { formatEmployeeMasterExperienceLabel } from "../../utils/yetToGoHelpers"
 import { savedRecordDateDefault } from "../../utils/dateFieldReset";
 import { isPlaceholderEmployeeEmail } from "../../utils/employeeEmailDisplay";
 
-function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
+function EditEmployeeModal({ isOpen, onClose, onSubmit, employee, canManageCompanies = false }) {
   const savedDateDefault = (field) => savedRecordDateDefault(employee, field);
   const loadedEmployeeRef = useRef(null);
   const [currentStep, setCurrentStep] = useState(1);
@@ -192,7 +192,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
 
   const fetchCompanyDocuments = async () => {
     try {
-      const data = await CompanyDocumentService.getAll();
+      const data = await CompanyDocumentService.getCompanies();
       const docs = Array.isArray(data) ? data : [];
       setCompanyDocuments(docs);
       setFormData((prev) => {
@@ -208,6 +208,49 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
     } catch (err) {
       console.error("Failed to fetch company documents:", err);
       setCompanyDocuments([]);
+    }
+  };
+
+  const handleCompanyAdd = async (companyName) => {
+    const companyCode = window.prompt("Enter Company Code:");
+    if (companyCode === null) return;
+    const employerId = window.prompt(
+      "Enter the 13-digit SIF Employer ID, or leave blank if SIF configuration is not available:"
+    );
+    if (employerId === null) return;
+    try {
+      const created = await CompanyDocumentService.createCompany({
+        particulars: companyName,
+        companyCode,
+        employerId,
+      });
+      await fetchCompanyDocuments();
+      setFormData((prev) => ({
+        ...prev,
+        office: created.particulars,
+        companyCode: created.docNumber,
+      }));
+      addToast(
+        created.employerId
+          ? `Company "${created.particulars}" added successfully`
+          : `Company "${created.particulars}" added. Complete its SIF Employer ID configuration before SIF generation.`,
+        "success"
+      );
+    } catch (err) {
+      addToast(err.message || "Failed to add company", "error");
+      throw err;
+    }
+  };
+
+  const handleCompanyDelete = async (option) => {
+    if (!option?.companyId) return;
+    try {
+      await CompanyDocumentService.deleteCompany(option.companyId);
+      await fetchCompanyDocuments();
+      addToast(`Company "${option.label}" deleted`, "success");
+    } catch (err) {
+      addToast(err.message || "Failed to delete company", "error");
+      throw err;
     }
   };
 
@@ -878,10 +921,13 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee }) {
               />
 
               <Dropdown
+                id="edit-employee-company"
                 label="Company"
                 placeholder="Select company"
                 options={companyOptions}
                 value={formData.office || DEFAULT_COMPANY_NAME}
+                onAdd={canManageCompanies ? handleCompanyAdd : undefined}
+                onDelete={canManageCompanies ? handleCompanyDelete : undefined}
                 onChange={(e) => handleCompanyChange(e.target.value)}
               />
 

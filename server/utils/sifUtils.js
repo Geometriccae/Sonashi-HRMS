@@ -55,7 +55,7 @@ const validateEmployerId = (employerId) => {
 const validateEmpId = (empid) => {
   const d = digitsOnly(empid);
   if (d.length < 14 || d.length > 15) {
-    return "EMPID (Emirates ID) must be 14–15 digits";
+    return "EMPID (Labour Card / Person Code) must be 14–15 digits";
   }
   return null;
 };
@@ -86,8 +86,13 @@ const buildEdrPayload = (employees, year, month) => {
   let totalSalary = 0;
 
   employees.forEach((emp) => {
+<<<<<<< HEAD
     const empid = normalizeEmiratesId(emp.emiratesId);
     const agent = digitsOnly(emp.salaryDetails?.agentCode || emp.salaryDetails?.bankSortCode);
+=======
+    const empid = digitsOnly(emp.workPermitNo);
+    const agent = digitsOnly(emp.salaryDetails?.bankSortCode);
+>>>>>>> c545bc2b2c1aa818a1495fe2b7f0bb64302d85a7
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
 
@@ -183,8 +188,15 @@ const generateSifContent = ({
   now = new Date(),
   isIndividual = false,
 }) => {
-  // Allow empty Employer ID / Agent Code — pad with zeros for a valid file shape
-  const safeEmployerId = pad(digitsOnly(employerId) || "0", 13).slice(-13);
+  const safeEmployerId = digitsOnly(employerId);
+  const employerErr = validateEmployerId(safeEmployerId);
+  const routingErr = validateAgentCode(defaultAgentRoutingCode);
+  if (employerErr || routingErr) {
+    return {
+      error: [employerErr, routingErr].filter(Boolean).join("; "),
+      skipped: [],
+    };
+  }
 
   const { edrLines, edrRecords, skipped, totalSalary } = buildEdrPayload(
     employees,
@@ -209,6 +221,7 @@ const generateSifContent = ({
   const fileTime = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}`;
   const fileRef = buildFileReference(safeEmployerId, now);
 
+<<<<<<< HEAD
   let scrAgent = "";
   if (isIndividual) {
     // For individual employee SIF export: use the selected employee's own Agent Code
@@ -223,6 +236,9 @@ const generateSifContent = ({
   if (scrAgent.length !== 9) {
     scrAgent = pad(scrAgent || "0", 9).slice(-9);
   }
+=======
+  const scrAgent = digitsOnly(defaultAgentRoutingCode);
+>>>>>>> c545bc2b2c1aa818a1495fe2b7f0bb64302d85a7
 
   const scr = buildScrLine({
     employerId: safeEmployerId,
@@ -331,12 +347,10 @@ const RED_HEADERS = new Set([
 
 const employeeToExcelRow = (emp) => {
   const sal = emp.salaryDetails || {};
-  // Prefer the employee's own companyCode (Employer ID); fall back to caller-supplied value.
-  const rowEmployerId =
-    digitsOnly(emp.companyCode) || digitsOnly(employerId);
+  const rowEmployerId = digitsOnly(emp.sifEmployerId);
   return {
     StaffID: emp.employeeId || "",
-    EMPID: normalizeEmiratesId(emp.emiratesId),
+    EMPID: digitsOnly(emp.workPermitNo),
     EMPNAME: emp.employeeName || "",
     EMPLOYERID: rowEmployerId,
     AGENTCODE: digitsOnly(sal.agentCode || sal.bankSortCode),
