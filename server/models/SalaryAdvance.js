@@ -77,3 +77,4 @@ salaryAdvanceSchema.index({ employee: 1, status: 1 });
 salaryAdvanceSchema.index({ employeeEmail: 1, status: 1 });
 
 module.exports = mongoose.model('SalaryAdvance', salaryAdvanceSchema);
+

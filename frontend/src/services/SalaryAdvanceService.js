@@ -99,3 +99,4 @@ class SalaryAdvanceService {
 
 const salaryAdvanceService = new SalaryAdvanceService();
 export default salaryAdvanceService;
+
