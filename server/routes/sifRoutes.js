@@ -521,10 +521,13 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       return res.status(400).json({ message: employerErr });
     }
 
+    const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
+    const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
+
     const result = generateSifContent({
       employees: matched,
       employerId,
-      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
+      defaultAgentRoutingCode: effectiveRoutingCode,
       year: parsed.year,
       month: parsed.month,
       isIndividual,
@@ -616,10 +619,13 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
       matched = loadRes.matched;
       excluded = loadRes.excluded;
     }
+    const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
+    const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
+
     const result = generateSifContent({
       employees: matched,
       employerId,
-      defaultAgentRoutingCode: resolveExportAgentRouting(settings, employerId),
+      defaultAgentRoutingCode: effectiveRoutingCode,
       year: parsed.year,
       month: parsed.month,
       isIndividual,

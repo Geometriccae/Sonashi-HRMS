@@ -140,11 +140,27 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       const s = await sifService.getSettings();
       const loadedEmployers = Array.isArray(s.employers) ? s.employers : [];
       const selectedEmployer = resolveEmployerForEmployee(employee, loadedEmployers, s.employerId);
-      const selectedRouting = loadedEmployers.find(
+      const companyRouting = loadedEmployers.find(
         (entry) => entry.employerId === selectedEmployer
       )?.agentRoutingCode || (selectedEmployer === s.employerId ? s.defaultAgentRoutingCode : "");
+
+      const empAgent = String(
+        employee?.salaryDetails?.agentCode ||
+        employee?.salaryDetails?.bankSortCode ||
+        employee?.agentCode ||
+        employee?.bankSortCode ||
+        employee?.salaryDetails?.cif ||
+        employee?.salaryDetails?.cifNumber ||
+        employee?.cif ||
+        employee?.cifNumber ||
+        ""
+      ).trim().replace(/[^A-Za-z0-9]/g, "");
+
+      // For an employee in Team Management, fetch Agent Code from the employee's details in basic info.
+      // If the employee does not have an Agent Code saved, fall back to company routing.
+      const routingToUse = empAgent || companyRouting || "";
       setEmployerId(selectedEmployer);
-      setAgentRouting(selectedRouting || "");
+      setAgentRouting(routingToUse);
       setEmployers(loadedEmployers);
     } catch (err) {
       toast(err.message || "Failed to load SIF settings", "error");
@@ -158,7 +174,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
   }, [loadSettings]);
 
   const employerDigits = digitsOnly(employerId);
-  const agentDigits = digitsOnly(agentRouting);
+  const agentDigits = String(agentRouting || "").trim().replace(/[^A-Za-z0-9]/g, "");
   const settingsReady = employerDigits.length === 13 && agentDigits.length === 9;
 
   const employeePreview = useMemo(() => {
@@ -523,7 +539,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               value={agentRouting}
               onChange={(e) => {
                 setSettingsError("");
-                setAgentRouting(digitsOnly(e.target.value).slice(0, 9));
+                setAgentRouting(String(e.target.value || '').trim().replace(/[^A-Za-z0-9]/g, '').slice(0, 9));
               }}
               disabled={!canManage || saving}
               className={styles.input}

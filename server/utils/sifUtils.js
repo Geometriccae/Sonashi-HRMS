@@ -207,7 +207,10 @@ const generateSifContent = ({
 }) => {
   const safeEmployerId = digitsOnly(employerId);
   const employerErr = validateEmployerId(safeEmployerId);
-  const routingErr = validateAgentCode(defaultAgentRoutingCode);
+  const routingCodeToValidate = isIndividual && employees && employees[0]
+    ? (cleanAgentCode(defaultAgentRoutingCode) || getAgentCode(employees[0]))
+    : cleanAgentCode(defaultAgentRoutingCode);
+  const routingErr = validateAgentCode(routingCodeToValidate);
   if (employerErr || routingErr) {
     return {
       error: [employerErr, routingErr].filter(Boolean).join("; "),
