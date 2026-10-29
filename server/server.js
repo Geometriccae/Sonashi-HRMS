@@ -40,6 +40,7 @@ const expenseRoutes = require('./routes/expenseRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const sifRoutes = require('./routes/sifRoutes');
 const { initExpiryCron } = require('./services/expiryService');
+const { initVacationStatusCron } = require('./services/vacationStatusService');
 const Employee = require('./models/Employee');
 
 
@@ -422,6 +423,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔌 Socket.io is enabled and listening for connections`);
   initExpiryCron(io);
+  initVacationStatusCron(io);
 });
 
 module.exports = { app, server, io };

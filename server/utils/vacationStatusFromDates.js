@@ -157,10 +157,10 @@ function effectiveReturnForStatus(travel, end, returnDay) {
 function statusFromTravelEndAndReturn(travel, end, returnDay, today) {
   if (!today || !travel) return null;
   if (today < travel) return 'Vacation Pending';
-  if (returnDay && today >= returnDay) return 'Vacation Approved';
-  if (end) {
-    if (today <= end) return 'On Vacation';
-    return 'Vacation Approved';
+  const applicableReturn = returnDay || end;
+  if (applicableReturn) {
+    if (today <= applicableReturn) return 'On Vacation';
+    return 'Onsite';
   }
   return 'On Vacation';
 }
@@ -198,14 +198,13 @@ function statusFromEmployeeDates(employee, todayValue) {
 }
 
 /**
- * Progress order of the three date-driven stages of a trip.
- * 'Onsite' is deliberately unranked: it means "no vacation data applies", not a
- * later stage, so it must never make a manual status look overtaken.
+ * Progress order of the date-driven stages of a trip.
  */
 const STATUS_PROGRESS = {
   'Vacation Pending': 0,
   'On Vacation': 1,
   'Vacation Approved': 2,
+  'Onsite': 3,
 };
 
 /**
@@ -225,8 +224,11 @@ function employeeDateStage(employee, todayValue) {
 
   const end = toCalendarDate(employee?.leaveEndDate);
   const tripReturn = tripReturnForEmployee(employee, travel, end);
-  if (tripReturn && today >= tripReturn) return 'Vacation Approved';
-  if (end && today > end) return 'Vacation Approved';
+  const applicableReturn = tripReturn || end;
+  if (applicableReturn) {
+    if (today <= applicableReturn) return 'On Vacation';
+    return 'Onsite';
+  }
   return 'On Vacation';
 }
 
@@ -239,7 +241,7 @@ function employeeDateStage(employee, todayValue) {
  * with a return date still ahead is treated as planned, so the live stage is
  * shown until that day. Onsite remains a true override and does not snap back.
  */
-function manualStatusSurvives(manualStatus, dateDrivenStatus) {
+function manualStatusSurvives(manualStatus, dateDrivenStatus, employee, today) {
   if (!dateDrivenStatus || dateDrivenStatus === manualStatus) return true;
   const pinned = STATUS_PROGRESS[manualStatus];
   const live = STATUS_PROGRESS[dateDrivenStatus];
@@ -248,7 +250,10 @@ function manualStatusSurvives(manualStatus, dateDrivenStatus) {
   if (live > pinned) return false;
   // Returned Back with a return date still ahead (or a new trip still pending)
   // is a planned date, not an early return. Show the live stage until that day.
-  if (manualStatus === 'Vacation Approved' && live < pinned) return false;
+  if (manualStatus === 'Vacation Approved' && live < pinned) {
+    const returnDay = toCalendarDate(employee?.returnDate);
+    if (!returnDay || (today && returnDay > today)) return false;
+  }
   return true;
 }
 
@@ -272,6 +277,7 @@ function pickLeaveDrivenStatus(rows) {
   if (rows.some((row) => row.status === 'On Vacation')) return 'On Vacation';
   if (rows.some((row) => row.status === 'Vacation Pending')) return 'Vacation Pending';
   if (rows.some((row) => row.status === 'Vacation Approved')) return 'Vacation Approved';
+  if (rows.some((row) => row.status === 'Onsite')) return 'Onsite';
   return null;
 }
 
@@ -295,10 +301,13 @@ function manualVacationStatusHolds(employee, leaveRequests, todayValue) {
     employee.vacationStatus === 'Vacation Approved' &&
     (fromLeave === 'On Vacation' || fromLeave === 'Vacation Pending')
   ) {
-    return false;
+    const returnDay = toCalendarDate(employee.returnDate);
+    if (!returnDay || returnDay > today) {
+      return false;
+    }
   }
   const dateDriven = employeeDateStage(employee, today) || fromLeave;
-  return manualStatusSurvives(employee.vacationStatus, dateDriven);
+  return manualStatusSurvives(employee.vacationStatus, dateDriven, employee, today);
 }
 
 function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
@@ -354,7 +363,21 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
     return fromLeaveStatus;
   }
 
-  if (employeeDateStatus) return employeeDateStatus;
+  if (fromLeaveStatus === 'Onsite') {
+    if (employeeDateStatus === 'On Vacation' || employeeDateStatus === 'Vacation Pending') {
+      const empTravel = toCalendarDate(employee?.travellingDate);
+      const latestLeaveEnd = fromLeaves.reduce((latest, row) => {
+        if (!row.end) return latest;
+        if (!latest || row.end > latest) return row.end;
+        return latest;
+      }, null);
+      if (empTravel && latestLeaveEnd && empTravel > latestLeaveEnd) {
+        return employeeDateStatus;
+      }
+    }
+    return 'Onsite';
+  }
+
   if (employeeDateStatus) return employeeDateStatus;
 
   if (employee?.vacationStatus === 'Onboarding') return 'Onboarding';
