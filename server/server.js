@@ -39,6 +39,7 @@ const salarySlipRoutes = require('./routes/salarySlipRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const sifRoutes = require('./routes/sifRoutes');
+const salaryAdvanceRoutes = require('./routes/salaryAdvanceRoutes');
 const { initExpiryCron } = require('./services/expiryService');
 const { initVacationStatusCron } = require('./services/vacationStatusService');
 const Employee = require('./models/Employee');
@@ -333,6 +334,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/options', optionRoutes);
 app.use('/api/sif', sifRoutes);
+app.use('/api/salary-advances', salaryAdvanceRoutes);
 
 
 // ====== DATABASE CONNECTION ======

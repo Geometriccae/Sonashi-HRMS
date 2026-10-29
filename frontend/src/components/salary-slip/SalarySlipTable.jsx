@@ -9,6 +9,7 @@ import employeeService from "../../services/EmployeeService";
 import SalarySlipBulkImportModal from "./SalarySlipBulkImportModal";
 import SalarySlipManualAddModal from "./SalarySlipManualAddModal";
 import SalarySlipEditModal from "./SalarySlipEditModal";
+import SalaryAdvanceModal from "./SalaryAdvanceModal";
 import DateInput from "../DateInput";
 import { formatAed } from "../../utils/currency";
 import { isPlaceholderEmployeeEmail } from "../../utils/employeeEmailDisplay";
@@ -411,6 +412,7 @@ function SalarySlipTable({ userRole }) {
     const [isManualAddModalOpen, setIsManualAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [slipToEdit, setSlipToEdit] = useState(null);
+    const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
 
     // Expense modal state (for employees only)
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -972,6 +974,10 @@ function SalarySlipTable({ userRole }) {
                                 <img src={plus} alt="" className={styles.addBtnIcon} />
                                 <span>Create Salary Slip</span>
                             </button>
+                            <button onClick={() => setIsAdvanceModalOpen(true)} className={styles.addBtn} style={{background:"#0f766e"}}>
+                                <img src={plus} alt="" className={styles.addBtnIcon} />
+                                <span>Create Advance</span>
+                            </button>
                             <button 
                                 onClick={handleGenerateBulk} 
                                 className={styles.generateBtn}
@@ -1409,6 +1415,12 @@ function SalarySlipTable({ userRole }) {
                 }}
                 onSuccess={fetchData}
                 salarySlip={slipToEdit}
+            />
+
+            <SalaryAdvanceModal
+                isOpen={isAdvanceModalOpen}
+                onClose={() => setIsAdvanceModalOpen(false)}
+                onSuccess={fetchData}
             />
 
             {/* Create Expense Modal for Employees */}

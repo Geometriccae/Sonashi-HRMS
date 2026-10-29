@@ -1,0 +1,138 @@
+/* SalaryAdvanceModal.module.css */
+
+.advanceModal {
+  max-width: 680px;
+  width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.hint {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 16px 0;
+}
+
+.rowsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.employeeCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cardIndex {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.removeRowBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ef4444;
+  padding: 4px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.removeRowBtn:hover {
+  background: #fee2e2;
+}
+
+.select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+  color: #1e293b;
+  transition: border-color 0.2s;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #4ade80;
+}
+
+.empInfo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 12px;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0 12px;
+}
+
+.empInfo span strong {
+  color: #0f172a;
+}
+
+.amountInput {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+  color: #1e293b;
+  transition: border-color 0.2s;
+}
+
+.amountInput:focus {
+  outline: none;
+  border-color: #4ade80;
+}
+
+.addRowBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1.5px dashed #4ade80;
+  border-radius: 6px;
+  background: transparent;
+  color: #16a34a;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  margin-bottom: 20px;
+}
+
+.addRowBtn:hover {
+  background: #f0fdf4;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

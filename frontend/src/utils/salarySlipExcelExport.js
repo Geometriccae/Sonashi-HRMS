@@ -25,7 +25,8 @@ export const salarySlipToExcelRow = (slip) => {
   const staffLoan = num(slip.staffLoan);
   const profTax = num(slip.profTax);
   const incomeTaxTDS = num(slip.incomeTaxTDS);
-  const hasBreakdown = advance + leave + staffLoan + profTax + incomeTaxTDS > 0;
+  const salaryAdvanceDeduction = num(slip.salaryAdvanceDeduction);
+  const hasBreakdown = advance + leave + staffLoan + profTax + incomeTaxTDS + salaryAdvanceDeduction > 0;
   const legacyDeduction = num(slip.deductionsPFTax || slip.totalDeduction);
   if (!hasBreakdown && legacyDeduction > 0) advance = legacyDeduction;
 
@@ -57,6 +58,7 @@ export const salarySlipToExcelRow = (slip) => {
     "Staff Loan (AED)": staffLoan,
     "Prof. Tax (AED)": profTax,
     "Income Tax / TDS (AED)": incomeTaxTDS,
+    "Salary Advance Deduction (AED)": salaryAdvanceDeduction,
     "Total Deduction (AED)": totalDeduction,
     "Net Salary (AED)": netSalary,
   };
