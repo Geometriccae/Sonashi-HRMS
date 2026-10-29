@@ -163,7 +163,13 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
 
   const employeePreview = useMemo(() => {
     if (!employee) return null;
-    const agent = digitsOnly(employee.salaryDetails?.agentCode || employee.salaryDetails?.bankSortCode);
+    const agent = String(
+      employee.salaryDetails?.agentCode ||
+      employee.salaryDetails?.bankSortCode ||
+      employee.agentCode ||
+      employee.bankSortCode ||
+      ""
+    ).trim().replace(/[^A-Za-z0-9]/g, "");
     const bank = getBankAccount(employee);
     const pay = getFixedIncome(employee);
     const labourCard = String(employee.workPermitNo || "").replace(/[\s-]+/g, "");
@@ -296,7 +302,13 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       toast("Cannot export individual SIF: Selected employee has no valid employee ID.", "error");
       return;
     }
-    const agent = digitsOnly(employee.salaryDetails?.agentCode || employee.salaryDetails?.bankSortCode);
+    const agent = String(
+      employee.salaryDetails?.agentCode ||
+      employee.salaryDetails?.bankSortCode ||
+      employee.agentCode ||
+      employee.bankSortCode ||
+      ""
+    ).trim().replace(/[^A-Za-z0-9]/g, "");
     if (agent.length !== 9) {
       toast(`Cannot export individual SIF: Employee's Agent Code must be exactly 9 digits (current: "${agent || "missing"}").`, "error");
       return;

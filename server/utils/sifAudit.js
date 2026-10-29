@@ -83,7 +83,7 @@ function buildSifAudit(rows = []) {
   const unresolvedCompanyMappings = records.filter(
     (record) => !/^\d{13}$/.test(record.employerId || "")
   ).length;
-  const validAgents = records.filter((record) => /^\d{9}$/.test(record.agentCode || "")).length;
+  const validAgents = records.filter((record) => /^[A-Za-z0-9]{9}$/.test(record.agentCode || "")).length;
 
   return {
     generatedAt: new Date().toISOString(),

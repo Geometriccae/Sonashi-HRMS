@@ -11,6 +11,8 @@ const {
   generateSifContent,
   parseSifContent,
   digitsOnly,
+  cleanAgentCode,
+  getAgentCode,
   normalizeEmiratesId,
   validateEmployerId,
   validateAgentCode,
@@ -300,7 +302,7 @@ async function applyEdrUpdates(edrs, { updateSalary = true } = {}) {
       if (empId) emp.emiratesId = empId;
       if (!emp.salaryDetails) emp.salaryDetails = {};
       if (edr.agentCode) {
-        const code = digitsOnly(edr.agentCode);
+        const code = cleanAgentCode(edr.agentCode);
         emp.salaryDetails.bankSortCode = code;
         emp.salaryDetails.agentCode = code;
       }
@@ -550,7 +552,7 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     res.setHeader("X-SIF-Is-Individual", isIndividual ? "true" : "false");
     if (isIndividual && matched[0]) {
       res.setHeader("X-SIF-Employee-Id", String(matched[0].employeeId || ""));
-      const empAgent = digitsOnly(matched[0].salaryDetails?.agentCode || matched[0].salaryDetails?.bankSortCode);
+      const empAgent = getAgentCode(matched[0]);
       if (empAgent) res.setHeader("X-SIF-Agent-Code", empAgent);
     }
     // Expose skip summary via custom header (JSON) for UI — keep body as pure SIF
@@ -628,7 +630,7 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
       isIndividual,
       employeeId: isIndividual && matched[0] ? matched[0].employeeId : undefined,
       employeeName: isIndividual && matched[0] ? matched[0].employeeName : undefined,
-      agentCode: isIndividual && matched[0] ? digitsOnly(matched[0].salaryDetails?.agentCode || matched[0].salaryDetails?.bankSortCode) : undefined,
+      agentCode: isIndividual && matched[0] ? getAgentCode(matched[0]) : undefined,
       edrCount: result.edrCount || 0,
       totalSalary: result.totalSalary || 0,
       skipped: [...(result.skipped || []), ...excluded],
@@ -818,7 +820,7 @@ router.post(
         return {
           staffId: String(mapped.StaffID || "").trim(),
           empId: normalizeEmiratesId(mapped.EMPID),
-          agentCode: digitsOnly(mapped.AGENTCODE),
+          agentCode: cleanAgentCode(mapped.AGENTCODE),
           bankAccount: String(mapped.BANKACCOUNT || "").trim(),
           fixedIncome:
             mapped.TOTA !== "" && mapped.TOTA != null
@@ -892,7 +894,7 @@ router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
     employees.forEach((emp) => {
       const employerId = normalizeEmployerId(emp.sifEmployerId);
       const storedCode = String(emp.companyCode || "").trim();
-      const agentRaw = digitsOnly(emp.salaryDetails?.agentCode || emp.salaryDetails?.bankSortCode);
+      const agentRaw = getAgentCode(emp);
       const agentErr = agentRaw ? validateAgentCode(agentRaw) : "AGENTCODE missing";
       const bank = getBankAccount(emp) || "";
       const empid = digitsOnly(emp.workPermitNo);

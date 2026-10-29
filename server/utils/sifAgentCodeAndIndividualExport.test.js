@@ -6,6 +6,8 @@ const {
   generateSifContent,
   parseSifContent,
   digitsOnly,
+  cleanAgentCode,
+  getAgentCode,
   validateAgentCode,
   employeeToExcelRow,
 } = require("./sifUtils");
@@ -402,4 +404,160 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
   assert.equal(edrs.some(e => e.empId === "784199012345673"), false, "Employee from Company 2 must not be included");
   assert.equal(scr.employerId, company1);
   assert.equal(scr.agentRouting, defaultRouting);
+});
+
+test("Agent Code with leading zeros retains zeros in SIF export, preview, and Excel", () => {
+  const companyEmployerId = "0000000172509";
+  const empWithZeros = {
+    _id: "emp-zeros",
+    employeeId: "EMP-Z01",
+    employeeName: "Zero Leader",
+    emiratesId: "784199012345681",
+    companyCode: companyEmployerId,
+    salaryDetails: {
+      agentCode: "009710001",
+      bankSortCode: "009710001",
+      ibanNumber: "AE012345678901234567891",
+      totalSalary: 6000,
+    },
+  };
+
+  assert.equal(getAgentCode(empWithZeros), "009710001");
+  assert.equal(validateAgentCode(getAgentCode(empWithZeros)), null);
+
+  const excelRow = employeeToExcelRow(empWithZeros);
+  assert.equal(excelRow.AGENTCODE, "009710001");
+
+  const sifResult = generateSifContent({
+    employees: [empWithZeros],
+    employerId: companyEmployerId,
+    defaultAgentRoutingCode: "302620122",
+    year: 2026,
+    month: 10,
+    isIndividual: true,
+  });
+
+  assert.equal(sifResult.edrCount, 1);
+  const { edrs, scr } = parseSifContent(sifResult.content);
+  assert.equal(edrs[0].agentCode, "009710001");
+  assert.equal(scr.agentRouting, "009710001");
+});
+
+test("Agent Code with alphanumeric value retains the original value in SIF export, preview, and Excel", () => {
+  const companyEmployerId = "0000000172509";
+  const empAlpha = {
+    _id: "emp-alpha",
+    employeeId: "EMP-A01",
+    employeeName: "Alpha User",
+    emiratesId: "784199012345682",
+    companyCode: companyEmployerId,
+    salaryDetails: {
+      agentCode: "CBUE00001",
+      bankSortCode: "CBUE00001",
+      ibanNumber: "AE012345678901234567892",
+      totalSalary: 7500,
+    },
+  };
+
+  assert.equal(getAgentCode(empAlpha), "CBUE00001");
+  assert.equal(validateAgentCode(getAgentCode(empAlpha)), null);
+
+  const excelRow = employeeToExcelRow(empAlpha);
+  assert.equal(excelRow.AGENTCODE, "CBUE00001");
+
+  const sifResult = generateSifContent({
+    employees: [empAlpha],
+    employerId: companyEmployerId,
+    defaultAgentRoutingCode: "302620122",
+    year: 2026,
+    month: 10,
+    isIndividual: true,
+  });
+
+  assert.equal(sifResult.edrCount, 1);
+  const { edrs, scr } = parseSifContent(sifResult.content);
+  assert.equal(edrs[0].agentCode, "CBUE00001");
+  assert.equal(scr.agentRouting, "CBUE00001");
+});
+
+test("Two employees with the same legitimate Agent Code export without being treated as duplicates", () => {
+  const companyEmployerId = "0000000172509";
+  const emp1 = {
+    _id: "emp-s1",
+    employeeId: "EMP-S01",
+    employeeName: "Shared Code One",
+    emiratesId: "784199012345683",
+    companyCode: companyEmployerId,
+    salaryDetails: {
+      agentCode: "740810000",
+      ibanNumber: "AE012345678901234567893",
+      totalSalary: 4500,
+    },
+  };
+  const emp2 = {
+    _id: "emp-s2",
+    employeeId: "EMP-S02",
+    employeeName: "Shared Code Two",
+    emiratesId: "784199012345684",
+    companyCode: companyEmployerId,
+    salaryDetails: {
+      agentCode: "740810000",
+      ibanNumber: "AE012345678901234567894",
+      totalSalary: 5500,
+    },
+  };
+
+  const sifResult = generateSifContent({
+    employees: [emp1, emp2],
+    employerId: companyEmployerId,
+    defaultAgentRoutingCode: "302620122",
+    year: 2026,
+    month: 10,
+    isIndividual: false,
+  });
+
+  assert.equal(sifResult.edrCount, 2);
+  assert.equal(sifResult.skipped.length, 0);
+  const { edrs } = parseSifContent(sifResult.content);
+  assert.equal(edrs[0].agentCode, "740810000");
+  assert.equal(edrs[1].agentCode, "740810000");
+  assert.equal(edrs[0].empId, "784199012345683");
+  assert.equal(edrs[1].empId, "784199012345684");
+});
+
+test("Authoritative fallback to bankSortCode or root agentCode when salaryDetails.agentCode is empty", () => {
+  const empSort = {
+    employeeId: "EMP-BS",
+    salaryDetails: {
+      agentCode: "",
+      bankSortCode: "600310101",
+    },
+  };
+  assert.equal(getAgentCode(empSort), "600310101");
+
+  const empRoot = {
+    employeeId: "EMP-RT",
+    agentCode: "302620122",
+    salaryDetails: {
+      agentCode: "",
+      bankSortCode: "",
+    },
+  };
+  assert.equal(getAgentCode(empRoot), "302620122");
+
+  const empRootSort = {
+    employeeId: "EMP-RTS",
+    bankSortCode: "102320150",
+  };
+  assert.equal(getAgentCode(empRootSort), "102320150");
+
+  const empNone = {
+    employeeId: "EMP-NO",
+    salaryDetails: {
+      agentCode: "",
+      bankSortCode: "",
+    },
+  };
+  assert.equal(getAgentCode(empNone), "");
+  assert.equal(validateAgentCode(getAgentCode(empNone)), "AGENTCODE must be exactly 9 digits");
 });

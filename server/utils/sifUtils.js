@@ -60,9 +60,31 @@ const validateEmpId = (empid) => {
   return null;
 };
 
+const cleanAgentCode = (value) => {
+  if (value == null) return "";
+  const s = String(value).trim();
+  return s.replace(/[^A-Za-z0-9]/g, "");
+};
+
+const getAgentCode = (emp) => {
+  if (!emp) return "";
+  const sal = emp.salaryDetails || {};
+  const raw =
+    sal.agentCode ||
+    sal.bankSortCode ||
+    emp.agentCode ||
+    emp.bankSortCode ||
+    sal.cif ||
+    sal.cifNumber ||
+    emp.cif ||
+    emp.cifNumber ||
+    "";
+  return cleanAgentCode(raw);
+};
+
 const validateAgentCode = (code) => {
-  const d = digitsOnly(code);
-  if (d.length !== 9) {
+  const s = cleanAgentCode(code);
+  if (!s || s.length !== 9 || !/^[A-Za-z0-9]{9}$/.test(s)) {
     return "AGENTCODE must be exactly 9 digits";
   }
   return null;
@@ -87,7 +109,7 @@ const buildEdrPayload = (employees, year, month) => {
 
   employees.forEach((emp) => {
     const empid = normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo);
-    const agent = digitsOnly(emp.salaryDetails?.agentCode || emp.salaryDetails?.bankSortCode);
+    const agent = getAgentCode(emp);
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
 
@@ -152,7 +174,7 @@ const buildScrLine = ({
   return [
     "SCR",
     digitsOnly(employerId),
-    digitsOnly(agentRouting),
+    cleanAgentCode(agentRouting),
     fileDate,
     fileTime,
     mmYYYY,
@@ -219,12 +241,12 @@ const generateSifContent = ({
   let scrAgent = "";
   if (isIndividual) {
     // For individual employee SIF export: use the selected employee's own Agent Code
-    const empAgent = edrRecords[0]?.agentCode || digitsOnly(employees[0]?.salaryDetails?.agentCode || employees[0]?.salaryDetails?.bankSortCode);
-    scrAgent = empAgent || digitsOnly(defaultAgentRoutingCode);
+    const empAgent = edrRecords[0]?.agentCode || getAgentCode(employees[0]);
+    scrAgent = empAgent;
   } else {
     // For company-wide SIF export: use company's defaultAgentRoutingCode
     // Do NOT substitute another employee's value
-    scrAgent = digitsOnly(defaultAgentRoutingCode);
+    scrAgent = cleanAgentCode(defaultAgentRoutingCode);
   }
 
   if (scrAgent.length !== 9) {
@@ -279,7 +301,7 @@ const parseSifContent = (text) => {
       }
       edrs.push({
         empId: digitsOnly(parts[1]),
-        agentCode: digitsOnly(parts[2]),
+        agentCode: cleanAgentCode(parts[2]),
         bankAccount: String(parts[3] || "").trim(),
         startDate: parts[4],
         endDate: parts[5],
@@ -292,7 +314,7 @@ const parseSifContent = (text) => {
     } else if (type === "SCR") {
       scr = {
         employerId: digitsOnly(parts[1]),
-        agentRouting: digitsOnly(parts[2]),
+        agentRouting: cleanAgentCode(parts[2]),
         fileDate: parts[3],
         fileTime: parts[4],
         monthYear: parts[5],
@@ -344,7 +366,7 @@ const employeeToExcelRow = (emp) => {
     EMPID: normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo),
     EMPNAME: emp.employeeName || "",
     EMPLOYERID: rowEmployerId,
-    AGENTCODE: digitsOnly(sal.agentCode || sal.bankSortCode),
+    AGENTCODE: getAgentCode(emp),
     BANKACCOUNT: getBankAccount(emp),
     STATUS: emp.employeeStatus || "",
     BASIC: Number(sal.basicSalary) || 0,
@@ -395,6 +417,8 @@ module.exports = {
   validateEmployerId,
   validateEmpId,
   validateAgentCode,
+  cleanAgentCode,
+  getAgentCode,
   validateBankAccount,
   buildEdrPayload,
   buildScrLine,
