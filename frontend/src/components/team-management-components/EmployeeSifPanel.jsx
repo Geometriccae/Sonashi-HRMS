@@ -140,6 +140,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       const s = await sifService.getSettings();
       const loadedEmployers = Array.isArray(s.employers) ? s.employers : [];
       const selectedEmployer = resolveEmployerForEmployee(employee, loadedEmployers, s.employerId);
+      const selectedRouting = loadedEmployers.find(
       const companyRouting = loadedEmployers.find(
         (entry) => entry.employerId === selectedEmployer
       )?.agentRoutingCode || (selectedEmployer === s.employerId ? s.defaultAgentRoutingCode : "");
@@ -160,6 +161,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       // If the employee does not have an Agent Code saved, fall back to company routing.
       const routingToUse = empAgent || companyRouting || "";
       setEmployerId(selectedEmployer);
+      setAgentRouting(selectedRouting || "");
       setAgentRouting(routingToUse);
       setEmployers(loadedEmployers);
     } catch (err) {
@@ -174,6 +176,7 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
   }, [loadSettings]);
 
   const employerDigits = digitsOnly(employerId);
+  const agentDigits = digitsOnly(agentRouting);
   const agentDigits = String(agentRouting || "").trim().replace(/[^A-Za-z0-9]/g, "");
   const settingsReady = employerDigits.length === 13 && agentDigits.length === 9;
 
