@@ -13,6 +13,7 @@ import clientService from "../services/ClientService";
 import employeeService from "../services/EmployeeService";
 import leaveRequestService from "../services/LeaveRequestService";
 import sifService from "../services/SifService";
+import SalaryReportSifImportModal from "../components/salary-slip/SalaryReportSifImportModal";
 import { buildYearList } from "../utils/yearOptions";
 import { calculateLeaveDays } from "../utils/leaveCalculator";
 import {
@@ -332,6 +333,7 @@ function Reports() {
   const [sifSettingsLoading, setSifSettingsLoading] = useState(true);
   const [sifSettingsError, setSifSettingsError] = useState("");
   const sifInputRef = useRef(null);
+  const [salaryReportSifModalOpen, setSalaryReportSifModalOpen] = useState(false);
   const [sifImportOpen, setSifImportOpen] = useState(false);
   const [sifDragOver, setSifDragOver] = useState(false);
   const [sifImporting, setSifImporting] = useState(false);
@@ -565,7 +567,7 @@ function Reports() {
 
   const reportTypes = REPORT_TYPES;
   const formats = reportType === "Salary report"
-    ? ["Excel", "PDF", "SIF"]
+    ? ["Excel", "PDF", "SIF", "SIF Summary PDF"]
     : ["Excel", "PDF"];
 
   const leadTypeOptions = ["All", "Lead", "Client"];
@@ -1121,6 +1123,29 @@ function Reports() {
       : now.getMonth() + 1;
     const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
 
+    if (format === "SIF Summary PDF") {
+      const employerId = digitsOnly(sifEmployerId);
+      if (!employerId || employerId.length !== 13) {
+        setError("Please select a valid 13-digit Employer ID.");
+        alert("Please select a valid 13-digit Employer ID.");
+        return;
+      }
+      const isIndividual = filterEmployee && filterEmployee !== "All";
+      const exportOptions = { employerId };
+      if (isIndividual) {
+        exportOptions.employeeId = filterEmployee;
+        exportOptions.mode = "individual";
+      }
+      await sifService.downloadSifPdf(m, y, exportOptions);
+      if (isIndividual) {
+        const empLabel = employeeOptions.find(o => o.value === filterEmployee)?.label || filterEmployee;
+        alert(`Individual SIF Summary PDF exported for ${empLabel} (Employer ID ${employerId}).`);
+      } else {
+        alert(`Company SIF Summary PDF exported for Employer ID ${employerId}.`);
+      }
+      return;
+    }
+
     if (format === "SIF") {
       const employerId = digitsOnly(sifEmployerId);
       if (!employerId || employerId.length !== 13) {
@@ -1457,13 +1482,11 @@ function Reports() {
                     className={styles["import-sif-button"]}
                     onClick={() => {
                       setError("");
-                      setSifPreviewRows([]);
-                      setSifPreviewFile(null);
-                      setSifImportOpen(true);
+                      setSalaryReportSifModalOpen(true);
                     }}
                     disabled={loading}
                   >
-                    Import SIF / Excel
+                    Import Salary Report / SIF
                   </button>
                 )}
                 <input
@@ -1814,6 +1837,47 @@ function Reports() {
                         ))}
                       </select>
                       {sifSettingsError && <div className={styles.sifSettingsError}>{sifSettingsError}</div>}
+                      
+                      <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className={styles["generate-button"]}
+                          style={{ background: "#0284c7", padding: "6px 12px", fontSize: "13px" }}
+                          onClick={() => {
+                            setFormat("SIF");
+                            handleGenerateReport();
+                          }}
+                          disabled={loading}
+                        >
+                          Download SIF
+                        </button>
+                        <button
+                          type="button"
+                          className={styles["generate-button"]}
+                          style={{ background: "#4f46e5", padding: "6px 12px", fontSize: "13px" }}
+                          onClick={async () => {
+                            const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                            const now = new Date();
+                            const m = filterMonth !== "All" ? monthNames.indexOf(filterMonth) + 1 : now.getMonth() + 1;
+                            const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
+                            const employerId = digitsOnly(sifEmployerId);
+                            if (!employerId || employerId.length !== 13) {
+                              alert("Please select a valid 13-digit Employer ID.");
+                              return;
+                            }
+                            const isIndividual = filterEmployee && filterEmployee !== "All";
+                            const exportOptions = { employerId };
+                            if (isIndividual) {
+                              exportOptions.employeeId = filterEmployee;
+                              exportOptions.mode = "individual";
+                            }
+                            await sifService.downloadSifPdf(m, y, exportOptions);
+                          }}
+                          disabled={loading}
+                        >
+                          Download Employee Details & SIF Summary PDF
+                        </button>
+                      </div>
                       <div className={styles.sifEmployerHint}>
                         The SIF file includes only employees whose Company Code matches this Employer ID. Generate a separate file for each company.
                       </div>

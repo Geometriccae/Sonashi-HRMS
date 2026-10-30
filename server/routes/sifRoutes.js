@@ -6,6 +6,13 @@ const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
 const Employee = require("../models/Employee");
 const CompanyDocument = require("../models/CompanyDocument");
 const CompanySifSettings = require("../models/CompanySifSettings");
+const SalaryImportBatch = require("../models/SalaryImportBatch");
+const { generateSifPdf } = require("../utils/sifPdfGenerator");
+const {
+  parseImportFile,
+  buildImportRecords,
+  applyBatchToEmployees,
+} = require("../utils/sifImportBatchUtils");
 const { workingStatusFilter } = require("../utils/employeeStatus");
 const {
   generateSifContent,
@@ -573,6 +580,136 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
 });
 
 // Preview / dry-run export metadata (JSON)
+
+// ── Export Supporting SIF PDF (Section A + Section B) ───────────────────────
+
+router.get("/export/pdf", authMiddleware, async (req, res) => {
+  try {
+    const parsed = parseMonthYear(req);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+
+    const settings = await getOrCreateSettings();
+    const selectedEmployeeId = String(req.query.employeeId || "").trim();
+    const isExplicitIndividual =
+      req.query.mode === "individual" ||
+      req.query.isIndividual === "true" ||
+      req.query.employeeId !== undefined;
+    const isIndividual = isExplicitIndividual || Boolean(selectedEmployeeId);
+
+    let matched = [];
+    let excluded = [];
+    let employerId = "";
+
+    if (isIndividual) {
+      if (!selectedEmployeeId) {
+        return res.status(400).json({
+          message: "Employee ID is required for individual SIF PDF export.",
+          skipped: [],
+        });
+      }
+      const loadRes = await loadSingleEmployeeForExport(
+        selectedEmployeeId,
+        req.query.employerId
+      );
+      if (loadRes.error) {
+        return res.status(400).json({
+          message: loadRes.error,
+          skipped: loadRes.excluded,
+        });
+      }
+      matched = loadRes.matched;
+      excluded = loadRes.excluded;
+      employerId = loadRes.targetEmployerId;
+    } else {
+      const selectedEmployerId = digitsOnly(req.query.employerId);
+      employerId = selectedEmployerId || digitsOnly(settings.employerId) || "";
+      const employerErr = validateEmployerId(employerId);
+      if (employerErr) {
+        return res.status(400).json({ message: employerErr });
+      }
+
+      const loadRes = await loadEmployeesForEmployerExport(employerId);
+      matched = loadRes.matched;
+      excluded = loadRes.excluded;
+      if (matched.length === 0) {
+        return res.status(400).json({
+          message:
+            "No employees found with company code matching the selected Employer ID.",
+          skipped: excluded.slice(0, 100),
+          excludedByCompany: excluded.length,
+        });
+      }
+    }
+
+    const employerErr = validateEmployerId(employerId);
+    if (employerErr) {
+      return res.status(400).json({ message: employerErr });
+    }
+
+    const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
+    const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
+
+    const sifResult = generateSifContent({
+      employees: matched,
+      employerId,
+      defaultAgentRoutingCode: effectiveRoutingCode,
+      year: parsed.year,
+      month: parsed.month,
+      isIndividual,
+    });
+
+    if (sifResult.error) {
+      return res.status(400).json({
+        message: sifResult.error,
+        skipped: sifResult.skipped || [],
+        excludedByCompany: excluded.length,
+      });
+    }
+
+    let companyName = "";
+    let companyCode = "";
+    const compDoc = await CompanyDocument.findOne({
+      $or: [{ employerId }, { docNumber: employerId }],
+    }).lean();
+    if (compDoc) {
+      companyName = compDoc.particulars || "";
+      companyCode = compDoc.docNumber || "";
+    } else if (matched[0]) {
+      companyName = matched[0].office || "";
+      companyCode = matched[0].companyCode || "";
+    }
+
+    const pdfBuffer = generateSifPdf({
+      employees: matched,
+      employerId,
+      companyCode,
+      companyName,
+      defaultAgentRoutingCode: effectiveRoutingCode,
+      year: parsed.year,
+      month: parsed.month,
+      isIndividual,
+      skipped: sifResult.skipped || [],
+      excludedByCompany: excluded.length,
+      fileRef: sifResult.fileRef,
+      fileName: sifResult.fileName,
+    });
+
+    const pdfFileName = isIndividual && matched[0]
+      ? `SIF_Summary_${matched[0].employeeId || "Employee"}_${parsed.year}_${parsed.month}.pdf`
+      : `SIF_Summary_${employerId || "Company"}_${parsed.year}_${parsed.month}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${pdfFileName}"`);
+    res.setHeader("X-SIF-Edr-Count", String(sifResult.edrCount));
+    res.setHeader("X-SIF-Total", String(sifResult.totalSalary));
+    res.setHeader("X-SIF-Is-Individual", isIndividual ? "true" : "false");
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error("SIF PDF export error:", err);
+    res.status(500).json({ message: "Failed to export SIF PDF file" });
+  }
+});
+
 router.get("/export/sif/preview", authMiddleware, async (req, res) => {
   try {
     const parsed = parseMonthYear(req);
@@ -1004,6 +1141,351 @@ router.get("/audit", authMiddleware, requireAdminOrHod, async (req, res) => {
   } catch (err) {
     console.error("SIF audit error:", err);
     res.status(500).json({ message: "Failed to run SIF mapping audit" });
+  }
+});
+
+
+// ── Import Salary Report / SIF Batches (Workflow & Staged Approval) ─────────
+
+router.post(
+  "/import-batch/upload",
+  authMiddleware,
+  blockViewerWrites,
+  requireAdminOrHod,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Excel or SIF file is required" });
+      }
+
+      const fileName = req.file.originalname || "salary_import.xlsx";
+      const parsedFile = parseImportFile(req.file.buffer, fileName);
+
+      const parsedMonthYear = parseMonthYear(req);
+      const month = parsedFile.month || (!parsedMonthYear.error ? parsedMonthYear.month : new Date().getMonth() + 1);
+      const year = parsedFile.year || (!parsedMonthYear.error ? parsedMonthYear.year : new Date().getFullYear());
+      const employerId = digitsOnly(req.query.employerId || req.body.employerId || parsedFile.employerId || "");
+
+      // Load all employees with authoritative SIF company mapping
+      const allEmployees = await loadEmployeesWithSifMappings();
+
+      const { records, summary } = buildImportRecords({
+        rawRows: parsedFile.rows,
+        existingEmployees: allEmployees,
+        targetEmployerId: employerId,
+      });
+
+      const batchId = `BATCH-${year}${String(month).padStart(2, "0")}-${Date.now().toString(36).toUpperCase()}`;
+      const uploaderName = req.user?.username || req.user?.name || req.user?.role || "Administrator";
+
+      // Save staged batch WITHOUT modifying any Employee database documents
+      const batch = await SalaryImportBatch.create({
+        batchId,
+        fileName,
+        fileType: parsedFile.fileType,
+        month,
+        year,
+        employerId,
+        companyCode: req.body.companyCode || "",
+        uploadedBy: uploaderName,
+        uploaderId: req.user?._id || null,
+        uploadedAt: new Date(),
+        status: "Pending",
+        summary,
+        records,
+        auditLog: [
+          {
+            action: "Uploaded & Staged for Review",
+            performedBy: uploaderName,
+            timestamp: new Date(),
+            details: `Uploaded ${summary.totalRecords} record(s): ${summary.validCount} valid, ${summary.warningCount} warning(s), ${summary.invalidCount} invalid.`,
+          },
+        ],
+      });
+
+      res.status(201).json({
+        message: "File uploaded and staged for review. No database records have been modified.",
+        batch,
+      });
+    } catch (err) {
+      console.error("Salary report import staging error:", err);
+      res.status(400).json({ message: err.message || "Failed to process uploaded file" });
+    }
+  }
+);
+
+router.get("/import-batch", authMiddleware, requireAdminOrHod, async (req, res) => {
+  try {
+    const batches = await SalaryImportBatch.find()
+      .sort({ createdAt: -1 })
+      .select("-records.issues -records.changes")
+      .lean();
+    res.json(batches);
+  } catch (err) {
+    console.error("Error loading import batches:", err);
+    res.status(500).json({ message: "Failed to load import batches" });
+  }
+});
+
+router.get("/import-batch/:batchId", authMiddleware, requireAdminOrHod, async (req, res) => {
+  try {
+    const batch = await SalaryImportBatch.findOne({
+      $or: [{ batchId: req.params.batchId }, { _id: req.params.batchId.match(/^[0-9a-fA-F]{24}$/) ? req.params.batchId : null }],
+    }).lean();
+
+    if (!batch) {
+      return res.status(404).json({ message: "Import batch not found" });
+    }
+    res.json(batch);
+  } catch (err) {
+    console.error("Error loading import batch:", err);
+    res.status(500).json({ message: "Failed to load import batch" });
+  }
+});
+
+router.post(
+  "/import-batch/:batchId/approve",
+  authMiddleware,
+  blockViewerWrites,
+  requireAdminOrHod,
+  async (req, res) => {
+    try {
+      const batch = await SalaryImportBatch.findOne({
+        $or: [{ batchId: req.params.batchId }, { _id: req.params.batchId.match(/^[0-9a-fA-F]{24}$/) ? req.params.batchId : null }],
+      });
+
+      if (!batch) {
+        return res.status(404).json({ message: "Import batch not found" });
+      }
+
+      if (batch.status === "Approved" || batch.status === "Applied") {
+        return res.status(400).json({ message: "This import batch has already been approved and applied." });
+      }
+      if (batch.status === "Rejected") {
+        return res.status(400).json({ message: "Cannot approve an import batch that has been rejected." });
+      }
+
+      const approverName = req.user?.username || req.user?.name || req.user?.role || "Authorized Approver";
+      const { updatedCount, errors } = await applyBatchToEmployees(batch, Employee);
+
+      batch.status = "Approved";
+      batch.approvedBy = approverName;
+      batch.approverId = req.user?._id || null;
+      batch.approvedAt = new Date();
+      batch.appliedAt = new Date();
+      batch.auditLog.push({
+        action: "Authorized Approval",
+        performedBy: approverName,
+        timestamp: new Date(),
+        details: `Approved and applied ${updatedCount} employee salary record(s).${errors.length ? ` Errors: ${errors.join("; ")}` : ""}`,
+      });
+
+      await batch.save();
+
+      res.json({
+        message: `Successfully approved and applied ${updatedCount} employee record(s).`,
+        batch,
+        updatedCount,
+        errors,
+      });
+    } catch (err) {
+      console.error("Error approving import batch:", err);
+      res.status(400).json({ message: err.message || "Failed to approve import batch" });
+    }
+  }
+);
+
+router.post(
+  "/import-batch/:batchId/reject",
+  authMiddleware,
+  blockViewerWrites,
+  requireAdminOrHod,
+  async (req, res) => {
+    try {
+      const batch = await SalaryImportBatch.findOne({
+        $or: [{ batchId: req.params.batchId }, { _id: req.params.batchId.match(/^[0-9a-fA-F]{24}$/) ? req.params.batchId : null }],
+      });
+
+      if (!batch) {
+        return res.status(404).json({ message: "Import batch not found" });
+      }
+
+      if (batch.status === "Approved" || batch.status === "Applied") {
+        return res.status(400).json({ message: "Cannot reject an import batch that has already been approved and applied." });
+      }
+
+      const rejectorName = req.user?.username || req.user?.name || req.user?.role || "Authorized Approver";
+      const reason = String(req.body.reason || "Rejected by authorized reviewer").trim();
+
+      batch.status = "Rejected";
+      batch.rejectedBy = rejectorName;
+      batch.rejectedAt = new Date();
+      batch.rejectionReason = reason;
+      batch.auditLog.push({
+        action: "Import Rejected",
+        performedBy: rejectorName,
+        timestamp: new Date(),
+        details: `Rejected with reason: ${reason}. No employee database records were modified.`,
+      });
+
+      await batch.save();
+
+      res.json({
+        message: "Import batch rejected. No employee records were updated.",
+        batch,
+      });
+    } catch (err) {
+      console.error("Error rejecting import batch:", err);
+      res.status(400).json({ message: err.message || "Failed to reject import batch" });
+    }
+  }
+);
+
+router.get("/import-batch/:batchId/export-sif", authMiddleware, async (req, res) => {
+  try {
+    const batch = await SalaryImportBatch.findOne({
+      $or: [{ batchId: req.params.batchId }, { _id: req.params.batchId.match(/^[0-9a-fA-F]{24}$/) ? req.params.batchId : null }],
+    }).lean();
+
+    if (!batch) {
+      return res.status(404).json({ message: "Import batch not found" });
+    }
+
+    if (batch.status !== "Approved" && batch.status !== "Applied") {
+      return res.status(400).json({
+        message: "Cannot export SIF from an unapproved import. Please ensure the batch is approved first.",
+      });
+    }
+
+    const eligibleRecords = (batch.records || []).filter((r) => r.validationStatus !== "Invalid");
+    if (!eligibleRecords.length) {
+      return res.status(400).json({ message: "No eligible records found in this approved import batch." });
+    }
+
+    const settings = await getOrCreateSettings();
+    const employerId = digitsOnly(batch.employerId || settings.employerId || "0000000172509");
+    const routing = resolveExportAgentRouting(settings, employerId) || eligibleRecords[0]?.uploaded?.agentCode || "740810000";
+
+    const syntheticEmployees = eligibleRecords.map((r) => ({
+      employeeId: r.employeeId,
+      employeeName: r.empName,
+      emiratesId: r.emiratesId,
+      workPermitNo: r.workPermitNo,
+      companyCode: r.companyCode,
+      office: r.companyCode,
+      salaryDetails: {
+        basicSalary: r.uploaded.basicSalary,
+        houseRent: r.uploaded.houseRent,
+        travelExp: r.uploaded.travelExp,
+        other: r.uploaded.other,
+        deduction: r.uploaded.deduction,
+        totalSalary: r.uploaded.totalSalary,
+        agentCode: r.uploaded.agentCode,
+        bankSortCode: r.uploaded.agentCode,
+        ibanNumber: r.uploaded.bankAccount,
+        accountNumber: r.uploaded.bankAccount,
+      },
+    }));
+
+    const result = generateSifContent({
+      employees: syntheticEmployees,
+      employerId,
+      defaultAgentRoutingCode: routing,
+      year: batch.year,
+      month: batch.month,
+      isIndividual: syntheticEmployees.length === 1,
+    });
+
+    if (result.error) {
+      return res.status(400).json({ message: result.error });
+    }
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    res.setHeader("X-SIF-Edr-Count", String(result.edrCount));
+    res.setHeader("X-SIF-Total", String(result.totalSalary));
+    res.send(result.content);
+  } catch (err) {
+    console.error("Approved SIF export error:", err);
+    res.status(500).json({ message: "Failed to export SIF from approved batch" });
+  }
+});
+
+router.get("/import-batch/:batchId/export-pdf", authMiddleware, async (req, res) => {
+  try {
+    const batch = await SalaryImportBatch.findOne({
+      $or: [{ batchId: req.params.batchId }, { _id: req.params.batchId.match(/^[0-9a-fA-F]{24}$/) ? req.params.batchId : null }],
+    }).lean();
+
+    if (!batch) {
+      return res.status(404).json({ message: "Import batch not found" });
+    }
+
+    if (batch.status !== "Approved" && batch.status !== "Applied") {
+      return res.status(400).json({
+        message: "Cannot export PDF from an unapproved import. Please ensure the batch is approved first.",
+      });
+    }
+
+    const eligibleRecords = (batch.records || []).filter((r) => r.validationStatus !== "Invalid");
+    if (!eligibleRecords.length) {
+      return res.status(400).json({ message: "No eligible records found in this approved import batch." });
+    }
+
+    const settings = await getOrCreateSettings();
+    const employerId = digitsOnly(batch.employerId || settings.employerId || "0000000172509");
+    const routing = resolveExportAgentRouting(settings, employerId) || eligibleRecords[0]?.uploaded?.agentCode || "740810000";
+
+    const syntheticEmployees = eligibleRecords.map((r) => ({
+      employeeId: r.employeeId,
+      employeeName: r.empName,
+      emiratesId: r.emiratesId,
+      workPermitNo: r.workPermitNo,
+      department: r.department,
+      designation: r.designation,
+      companyCode: r.companyCode,
+      office: r.companyCode,
+      salaryDetails: {
+        basicSalary: r.uploaded.basicSalary,
+        houseRent: r.uploaded.houseRent,
+        travelExp: r.uploaded.travelExp,
+        other: r.uploaded.other,
+        deduction: r.uploaded.deduction,
+        totalSalary: r.uploaded.totalSalary,
+        agentCode: r.uploaded.agentCode,
+        bankSortCode: r.uploaded.agentCode,
+        ibanNumber: r.uploaded.bankAccount,
+        accountNumber: r.uploaded.bankAccount,
+      },
+    }));
+
+    const pdfBuffer = generateSifPdf({
+      employees: syntheticEmployees,
+      employerId,
+      companyCode: batch.companyCode || "",
+      companyName: batch.companyCode || "Sonashi General Trading LLC",
+      defaultAgentRoutingCode: routing,
+      year: batch.year,
+      month: batch.month,
+      isIndividual: syntheticEmployees.length === 1,
+      skipped: (batch.records || []).filter((r) => r.validationStatus === "Invalid").map((r) => ({
+        staffId: r.employeeId,
+        empName: r.empName,
+        empId: r.emiratesId || r.workPermitNo,
+        reason: (r.issues || []).join("; ") || "Invalid data",
+      })),
+      fileRef: `BATCH-${batch.batchId}`,
+      fileName: `SIF_Approved_${batch.batchId}.pdf`,
+    });
+
+    const pdfFileName = `SIF_Approved_${batch.batchId}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${pdfFileName}"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error("Approved SIF PDF export error:", err);
+    res.status(500).json({ message: "Failed to export PDF from approved batch" });
   }
 });
 

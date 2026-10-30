@@ -140,7 +140,6 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       const s = await sifService.getSettings();
       const loadedEmployers = Array.isArray(s.employers) ? s.employers : [];
       const selectedEmployer = resolveEmployerForEmployee(employee, loadedEmployers, s.employerId);
-      const selectedRouting = loadedEmployers.find(
       const companyRouting = loadedEmployers.find(
         (entry) => entry.employerId === selectedEmployer
       )?.agentRoutingCode || (selectedEmployer === s.employerId ? s.defaultAgentRoutingCode : "");
@@ -161,7 +160,6 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       // If the employee does not have an Agent Code saved, fall back to company routing.
       const routingToUse = empAgent || companyRouting || "";
       setEmployerId(selectedEmployer);
-      setAgentRouting(selectedRouting || "");
       setAgentRouting(routingToUse);
       setEmployers(loadedEmployers);
     } catch (err) {
@@ -176,7 +174,6 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
   }, [loadSettings]);
 
   const employerDigits = digitsOnly(employerId);
-  const agentDigits = digitsOnly(agentRouting);
   const agentDigits = String(agentRouting || "").trim().replace(/[^A-Za-z0-9]/g, "");
   const settingsReady = employerDigits.length === 13 && agentDigits.length === 9;
 
@@ -354,6 +351,51 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       );
     } catch (err) {
       toast(err.message || "Individual SIF export failed", "error");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleExportIndividualPdf = async () => {
+    if (!employee) {
+      toast("No employee loaded", "error");
+      return;
+    }
+    const empId = String(employee.employeeId || employee._id || "").trim();
+    if (!empId) {
+      toast("Cannot export individual PDF: Selected employee has no valid employee ID.", "error");
+      return;
+    }
+    setBusy("individualPdf");
+    try {
+      const result = await sifService.downloadSifPdf(month, year, {
+        employerId: employerDigits,
+        employeeId: empId,
+        mode: "individual",
+      });
+      toast(`Individual SIF Summary PDF downloaded (${result.fileName}).`, "success");
+    } catch (err) {
+      toast(err.message || "Individual SIF PDF export failed", "error");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleExportCompanyPdf = async () => {
+    const settingsMsg = validateSettingsLocal();
+    if (settingsMsg) {
+      setSettingsError(settingsMsg);
+      toast(settingsMsg, "error");
+      return;
+    }
+    setBusy("companyPdf");
+    try {
+      const result = await sifService.downloadSifPdf(month, year, {
+        employerId: employerDigits,
+      });
+      toast(`Company SIF Summary PDF downloaded (${result.fileName}).`, "success");
+    } catch (err) {
+      toast(err.message || "Company SIF PDF export failed", "error");
     } finally {
       setBusy("");
     }
@@ -637,11 +679,29 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
           <button
             type="button"
             className={styles.secondaryBtn}
+            onClick={handleExportIndividualPdf}
+            disabled={Boolean(busy)}
+            title="Download Employee Details and SIF Summary PDF for this individual employee"
+          >
+            {busy === "individualPdf" ? "Exporting…" : "Download Employee SIF PDF"}
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
             onClick={handleExportCompanySif}
             disabled={Boolean(busy)}
             title="Export company-wide SIF for all employees matching this Employer ID"
           >
             {busy === "companySif" ? "Exporting…" : "Export Company .SIF"}
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            onClick={handleExportCompanyPdf}
+            disabled={Boolean(busy)}
+            title="Download Company-wide Employee Details and SIF Summary PDF"
+          >
+            {busy === "companyPdf" ? "Exporting…" : "Download Company SIF PDF"}
           </button>
           <button
             type="button"

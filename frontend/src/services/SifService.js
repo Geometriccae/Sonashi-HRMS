@@ -237,6 +237,130 @@ class SifService {
     if (!res.ok) throw new Error(data.message || "Excel import failed");
     return data;
   }
+
+  async downloadSifPdf(month, year, options = {}) {
+    const employerId = typeof options === "object" ? options.employerId : options;
+    const isExplicitIndividual =
+      typeof options === "object" &&
+      (options.mode === "individual" || options.isIndividual || "employeeId" in options);
+    const employeeId = typeof options === "object" ? options.employeeId : null;
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
+    if (isExplicitIndividual) {
+      params.set("mode", "individual");
+      if (employeeId != null) params.set("employeeId", String(employeeId).trim());
+    } else if (employeeId) {
+      params.set("employeeId", String(employeeId).trim());
+    }
+    const res = await fetch(`${this.baseURL}/export/pdf?${params}`, {
+      headers: this.getAuthHeaders(false),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "SIF PDF export failed");
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    const fileName = match?.[1] || `SIF_Summary_${year}_${month}.pdf`;
+    saveAs(blob, fileName);
+    return {
+      fileName,
+      edrCount: Number(res.headers.get("X-SIF-Edr-Count") || 0),
+      totalSalary: Number(res.headers.get("X-SIF-Total") || 0),
+    };
+  }
+
+  async uploadImportBatch(file, options = {}) {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (options.employerId) formData.append("employerId", options.employerId);
+    if (options.companyCode) formData.append("companyCode", options.companyCode);
+    const params = new URLSearchParams();
+    if (options.month) params.set("month", String(options.month));
+    if (options.year) params.set("year", String(options.year));
+    if (options.employerId) params.set("employerId", String(options.employerId));
+
+    const res = await fetch(`${this.baseURL}/import-batch/upload?${params}`, {
+      method: "POST",
+      headers: this.getAuthHeaders(false),
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Failed to upload and stage import file");
+    return data;
+  }
+
+  async getImportBatches() {
+    const res = await fetch(`${this.baseURL}/import-batch`, {
+      headers: this.getAuthHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Failed to load import batches");
+    return data;
+  }
+
+  async getImportBatch(batchId) {
+    const res = await fetch(`${this.baseURL}/import-batch/${encodeURIComponent(batchId)}`, {
+      headers: this.getAuthHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Failed to load import batch details");
+    return data;
+  }
+
+  async approveImportBatch(batchId) {
+    const res = await fetch(`${this.baseURL}/import-batch/${encodeURIComponent(batchId)}/approve`, {
+      method: "POST",
+      headers: this.getAuthHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Failed to approve import batch");
+    return data;
+  }
+
+  async rejectImportBatch(batchId, reason = "") {
+    const res = await fetch(`${this.baseURL}/import-batch/${encodeURIComponent(batchId)}/reject`, {
+      method: "POST",
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Failed to reject import batch");
+    return data;
+  }
+
+  async downloadApprovedBatchSif(batchId) {
+    const res = await fetch(`${this.baseURL}/import-batch/${encodeURIComponent(batchId)}/export-sif`, {
+      headers: this.getAuthHeaders(false),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to export SIF from approved batch");
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    const fileName = match?.[1] || `SIF_Approved_${batchId}.SIF`;
+    saveAs(blob, fileName);
+    return { fileName };
+  }
+
+  async downloadApprovedBatchPdf(batchId) {
+    const res = await fetch(`${this.baseURL}/import-batch/${encodeURIComponent(batchId)}/export-pdf`, {
+      headers: this.getAuthHeaders(false),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to export PDF from approved batch");
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    const fileName = match?.[1] || `SIF_Approved_${batchId}.pdf`;
+    saveAs(blob, fileName);
+    return { fileName };
+  }
 }
 
 const sifService = new SifService();
