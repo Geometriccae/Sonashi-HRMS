@@ -120,6 +120,7 @@ const employeeSchema = new mongoose.Schema({
     accountNumber: { type: String, default: "" },
     ibanNumber: { type: String, default: "" },
     bankSortCode: { type: String, default: "" },
+    agentCode: { type: String, default: "" },
     modeOfPay: { type: String, default: "" }
   },
 

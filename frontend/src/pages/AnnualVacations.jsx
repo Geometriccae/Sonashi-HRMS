@@ -32,6 +32,7 @@ import {
   buildVacationDatePrompt,
   toDateInputValue,
 } from "../utils/vacationStatusUpdate";
+import { fmtDate, displayLastWorkingDay } from "../utils/vacationDisplayHelpers";
 
 const PAGE_SIZE = 20;
 
@@ -115,7 +116,7 @@ const getNavEmployeeId = (item) => {
   return item._id || item.id || null;
 };
 
-const displayLastWorkingDay = (item) => fmt(item.lastWorkingDay || item.startDate);
+// displayLastWorkingDay is imported from ../utils/vacationDisplayHelpers
 
 const buildVacationExportRows = (list, tabKey) =>
   (list || []).map((item, idx) => {

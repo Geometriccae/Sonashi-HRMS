@@ -142,8 +142,9 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   const staffLoan = slip.staffLoan || 0;
   const profTax = slip.profTax || 0;
   const incomeTaxTDS = slip.incomeTaxTDS || 0;
+  const salaryAdvanceDeductionRaw = slip.salaryAdvanceDeduction || 0;
 
-  const hasBreakdown = advance + leave + staffLoan + profTax + incomeTaxTDS > 0;
+  const hasBreakdown = advance + leave + staffLoan + profTax + incomeTaxTDS + salaryAdvanceDeductionRaw > 0;
   const legacyDeduction = slip.deductionsPFTax || slip.totalDeduction || 0;
   if (!hasBreakdown && legacyDeduction > 0) {
     advance = legacyDeduction;
@@ -167,6 +168,7 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   const staffLoanAed = Number(staffLoan) || 0;
   const profTaxAed = Number(profTax) || 0;
   const incomeTaxTDSAed = Number(incomeTaxTDS) || 0;
+  const salaryAdvanceDeductionAed = Number(salaryAdvanceDeductionRaw) || 0;
 
   // Full-page branded letterhead from the HQ Joint Ven template (user-supplied).
   // Contains header, watermark, green border, and Sonashi footer logo.
@@ -335,6 +337,7 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
     ["Staff Loan", staffLoanAed.toFixed(2)],
     ["Prof. Tax", profTaxAed.toFixed(2)],
     ["Income Tax / TDS", incomeTaxTDSAed.toFixed(2)],
+    ...(salaryAdvanceDeductionAed > 0 ? [["Salary Advance", salaryAdvanceDeductionAed.toFixed(2)]] : []),
   ];
 
   const maxRows = Math.max(earningsData.length, deductionsData.length);

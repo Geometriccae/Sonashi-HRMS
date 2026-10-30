@@ -130,6 +130,7 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee, canManageCompa
     accountNumber: "",
     ibanNumber: "",
     bankSortCode: "",
+    agentCode: "",
     modeOfPay: "",
   });
 
@@ -439,7 +440,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee, canManageCompa
         bankName: record.salaryDetails?.bankName || "",
         accountNumber: record.salaryDetails?.accountNumber || "",
         ibanNumber: record.salaryDetails?.ibanNumber || "",
-        bankSortCode: record.salaryDetails?.bankSortCode || "",
+        bankSortCode: record.salaryDetails?.agentCode || record.salaryDetails?.bankSortCode || "",
+        agentCode: record.salaryDetails?.agentCode || record.salaryDetails?.bankSortCode || "",
         modeOfPay: record.salaryDetails?.modeOfPay || "",
       });
 
@@ -735,7 +737,8 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee, canManageCompa
           bankName: formData.bankName || "",
           accountNumber: formData.accountNumber || "",
           ibanNumber: formData.ibanNumber || "",
-          bankSortCode: formData.bankSortCode || "",
+          bankSortCode: formData.agentCode || formData.bankSortCode || "",
+          agentCode: formData.agentCode || formData.bankSortCode || "",
           modeOfPay: formData.modeOfPay || "",
         },
         emergencyContact: {
@@ -943,10 +946,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee, canManageCompa
               />
 
               <InputField
-                label="Bank Sort Code"
-                placeholder="Enter Bank Sort Code"
-                value={formData.bankSortCode}
-                onChange={(e) => handleInputChange("bankSortCode", e.target.value)}
+                label="Agent Code (Bank Routing / Sort Code)"
+                placeholder="Enter 9-digit Agent Code"
+                maxLength={9}
+                value={formData.agentCode || formData.bankSortCode || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleInputChange("bankSortCode", val);
+                  handleInputChange("agentCode", val);
+                }}
               />
 
               <InputField
@@ -1583,10 +1591,15 @@ function EditEmployeeModal({ isOpen, onClose, onSubmit, employee, canManageCompa
                 onChange={(e) => handleInputChange("ibanNumber", e.target.value)}
               />
               <InputField
-                label="Bank Sort Code"
-                placeholder="Enter Bank Sort Code"
-                value={formData.bankSortCode}
-                onChange={(e) => handleInputChange("bankSortCode", e.target.value)}
+                label="Agent Code (Bank Routing / Sort Code)"
+                placeholder="Enter 9-digit Agent Code"
+                maxLength={9}
+                value={formData.agentCode || formData.bankSortCode || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleInputChange("bankSortCode", val);
+                  handleInputChange("agentCode", val);
+                }}
               />
             </div>
           </div>

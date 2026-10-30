@@ -5,7 +5,9 @@
  *
  *   today < travel/start                         → Vacation Pending (Yet to go)
  *   travel/start ≤ today ≤ end (not yet returned) → On Vacation
- *   today > end  OR  today >= actual return       → Vacation Approved (Returned)
+ *   today > end  AND returnDate exists AND
+ *     today is within one calendar month of returnDate → Vacation Approved (Returned Back)
+ *   one full calendar month after returnDate has elapsed → Onsite
  *
  * LeaveRequest.startDate / travellingDate = vacation start (not appliedOn).
  * LeaveRequest.endDate = planned vacation end.
@@ -13,6 +15,22 @@
  * to this trip (on or after travel start). A leftover return dated before the
  * current Leave Management end date is ignored so extending the leave cannot
  * keep the employee on Returned Back.
+ *
+ * ONE-MONTH RULE
+ * --------------
+ * After the applicable return date (or leave end, when no return is recorded),
+ * the employee enters "Returned Back" (Vacation Approved) status.
+ * Only after one full calendar month has elapsed since that return date does the
+ * system automatically advance the employee to Onsite.
+ *
+ * Examples:
+ *   Return date Sep 25 → Returned Back until Oct 25 passes → Onsite from Oct 26
+ *   Return date Sep 29 → Returned Back until Oct 29 passes → Onsite from Oct 30
+ *   Return date Oct 1  → Returned Back until Nov 1 passes  → Onsite from Nov 2
+ *   Return date Oct 31 → Returned Back until Nov 30 passes → Onsite from Dec 1
+ *                        (if Nov only has 30 days, clamp to last day of Nov)
+ *
+ * A manually set Onsite by an authorized user is never reversed by this rule.
  */
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
@@ -38,6 +56,49 @@ function toCalendarDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
+ * Returns the calendar date that is exactly one full calendar month after
+ * the given returnDate. This is the first date on which the employee should
+ * automatically become Onsite (i.e., the transition happens on the day AFTER
+ * the one-month period completes).
+ *
+ * Rule: add one month to the returnDate. If the resulting day overshoots the
+ * target month (e.g. Jan 31 → Feb 28/29), clamp to the last day of that month.
+ *
+ * Examples:
+ *   Sep 25 → Oct 25  (Onsite from Oct 26)
+ *   Sep 29 → Oct 29  (Onsite from Oct 30)
+ *   Oct 31 → Nov 30  (Onsite from Dec 1, Nov only has 30 days)
+ *   Jan 31 → Feb 28  (Onsite from Mar 1, Feb has 28/29 days)
+ */
+function oneMonthAfterReturnDate(returnDate) {
+  if (!returnDate) return null;
+  const d = new Date(returnDate.getFullYear(), returnDate.getMonth() + 1, returnDate.getDate());
+  // If the day overshot (e.g. Feb 31 → Mar 3), step back to last day of target month.
+  const targetMonth = returnDate.getMonth() + 1; // 0-based: returnDate.getMonth() + 1
+  if (d.getMonth() !== targetMonth % 12) {
+    // Went past target month — set to last day of target month
+    d.setDate(0); // day 0 of current month = last day of previous month
+  }
+  return d;
+}
+
+/**
+ * After the applicable return (or leave end), the employee is "Returned Back".
+ * They remain Returned Back until one full calendar month after the return date has
+ * elapsed (i.e., today > oneMonthAfterReturnDate). Only then do they become Onsite.
+ *
+ * If no return date and no end date are available the employee stays On Vacation.
+ */
+function statusAfterReturn(applicableReturn, today) {
+  if (!applicableReturn || !today) return 'On Vacation';
+  if (today <= applicableReturn) return 'On Vacation'; // still on trip / return day itself
+  // Between return date + 1 day up to one calendar month after return: Returned Back
+  const onsiteDate = oneMonthAfterReturnDate(applicableReturn);
+  if (!onsiteDate || today <= onsiteDate) return 'Vacation Approved'; // Returned Back
+  return 'Onsite'; // one month has fully elapsed
 }
 
 function normalizeName(value) {
@@ -154,13 +215,21 @@ function effectiveReturnForStatus(travel, end, returnDay) {
   return returnDay;
 }
 
+/**
+ * Derive status from travel, end, return, and today, applying the one-month rule.
+ *
+ * today < travel                    → Vacation Pending
+ * travel ≤ today ≤ applicableReturn → On Vacation
+ * today > applicableReturn AND
+ *   today ≤ one month after return  → Vacation Approved (Returned Back)
+ * today > one month after return    → Onsite
+ */
 function statusFromTravelEndAndReturn(travel, end, returnDay, today) {
   if (!today || !travel) return null;
   if (today < travel) return 'Vacation Pending';
-  if (returnDay && today >= returnDay) return 'Vacation Approved';
-  if (end) {
-    if (today <= end) return 'On Vacation';
-    return 'Vacation Approved';
+  const applicableReturn = returnDay || end;
+  if (applicableReturn) {
+    return statusAfterReturn(applicableReturn, today);
   }
   return 'On Vacation';
 }
@@ -198,14 +267,13 @@ function statusFromEmployeeDates(employee, todayValue) {
 }
 
 /**
- * Progress order of the three date-driven stages of a trip.
- * 'Onsite' is deliberately unranked: it means "no vacation data applies", not a
- * later stage, so it must never make a manual status look overtaken.
+ * Progress order of the date-driven stages of a trip.
  */
 const STATUS_PROGRESS = {
   'Vacation Pending': 0,
   'On Vacation': 1,
   'Vacation Approved': 2,
+  'Onsite': 3,
 };
 
 /**
@@ -219,15 +287,19 @@ const STATUS_PROGRESS = {
  */
 function employeeDateStage(employee, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
+  if (!today) return null;
   const travel = toCalendarDate(employee?.travellingDate);
-  if (!today || !travel) return null;
-  if (today < travel) return 'Vacation Pending';
+  if (travel && today < travel) return 'Vacation Pending';
 
   const end = toCalendarDate(employee?.leaveEndDate);
-  const tripReturn = tripReturnForEmployee(employee, travel, end);
-  if (tripReturn && today >= tripReturn) return 'Vacation Approved';
-  if (end && today > end) return 'Vacation Approved';
-  return 'On Vacation';
+  const returnDay = toCalendarDate(employee?.returnDate || employee?.firstWorkingDay);
+  const tripReturn = travel ? tripReturnForEmployee(employee, travel, end) : returnDay;
+  const applicableReturn = tripReturn || end;
+  if (applicableReturn) {
+    return statusAfterReturn(applicableReturn, today);
+  }
+  if (travel) return 'On Vacation';
+  return null;
 }
 
 /**
@@ -239,7 +311,7 @@ function employeeDateStage(employee, todayValue) {
  * with a return date still ahead is treated as planned, so the live stage is
  * shown until that day. Onsite remains a true override and does not snap back.
  */
-function manualStatusSurvives(manualStatus, dateDrivenStatus) {
+function manualStatusSurvives(manualStatus, dateDrivenStatus, employee, today) {
   if (!dateDrivenStatus || dateDrivenStatus === manualStatus) return true;
   const pinned = STATUS_PROGRESS[manualStatus];
   const live = STATUS_PROGRESS[dateDrivenStatus];
@@ -248,7 +320,10 @@ function manualStatusSurvives(manualStatus, dateDrivenStatus) {
   if (live > pinned) return false;
   // Returned Back with a return date still ahead (or a new trip still pending)
   // is a planned date, not an early return. Show the live stage until that day.
-  if (manualStatus === 'Vacation Approved' && live < pinned) return false;
+  if (manualStatus === 'Vacation Approved' && live < pinned) {
+    const returnDay = toCalendarDate(employee?.returnDate);
+    if (!returnDay || (today && returnDay > today)) return false;
+  }
   return true;
 }
 
@@ -272,6 +347,7 @@ function pickLeaveDrivenStatus(rows) {
   if (rows.some((row) => row.status === 'On Vacation')) return 'On Vacation';
   if (rows.some((row) => row.status === 'Vacation Pending')) return 'Vacation Pending';
   if (rows.some((row) => row.status === 'Vacation Approved')) return 'Vacation Approved';
+  if (rows.some((row) => row.status === 'Onsite')) return 'Onsite';
   return null;
 }
 
@@ -295,10 +371,13 @@ function manualVacationStatusHolds(employee, leaveRequests, todayValue) {
     employee.vacationStatus === 'Vacation Approved' &&
     (fromLeave === 'On Vacation' || fromLeave === 'Vacation Pending')
   ) {
-    return false;
+    const returnDay = toCalendarDate(employee.returnDate);
+    if (!returnDay || returnDay > today) {
+      return false;
+    }
   }
   const dateDriven = employeeDateStage(employee, today) || fromLeave;
-  return manualStatusSurvives(employee.vacationStatus, dateDriven);
+  return manualStatusSurvives(employee.vacationStatus, dateDriven, employee, today);
 }
 
 function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
@@ -354,7 +433,21 @@ function resolveEmployeeVacationStatus(employee, leaveRequests, todayValue) {
     return fromLeaveStatus;
   }
 
-  if (employeeDateStatus) return employeeDateStatus;
+  if (fromLeaveStatus === 'Onsite') {
+    if (employeeDateStatus === 'On Vacation' || employeeDateStatus === 'Vacation Pending') {
+      const empTravel = toCalendarDate(employee?.travellingDate);
+      const latestLeaveEnd = fromLeaves.reduce((latest, row) => {
+        if (!row.end) return latest;
+        if (!latest || row.end > latest) return row.end;
+        return latest;
+      }, null);
+      if (empTravel && latestLeaveEnd && empTravel > latestLeaveEnd) {
+        return employeeDateStatus;
+      }
+    }
+    return 'Onsite';
+  }
+
   if (employeeDateStatus) return employeeDateStatus;
 
   if (employee?.vacationStatus === 'Onboarding') return 'Onboarding';
@@ -387,10 +480,12 @@ module.exports = {
   APPROVED_LEAVE_STATUSES,
   MANUAL_VACATION_STATUSES,
   toCalendarDate,
+  oneMonthAfterReturnDate,
   leaveBelongsToEmployee,
   employeeTripDatesApplyToLeave,
   getLeaveTravelStartDate,
   getTripReturnDate,
+  statusAfterReturn,
   statusFromLeaveDates,
   statusFromEmployeeDates,
   employeeDateStage,

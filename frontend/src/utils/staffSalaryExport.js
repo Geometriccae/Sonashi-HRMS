@@ -146,8 +146,8 @@ export function buildStaffSalarySummaryRows(employees, options = {}) {
 const WPS_COLUMNS = [
   ["STAFF ID /", "LABOUR CARD", (p) => p.staffId],
   ["EMPLOYER", "ID", (p) => p.employerId],
-  ["COMPANY", "CODE", (p, e) => p.companyCode || e.companyCode],
-  ["BANK AGENT", "CODE", (p) => p.agentCode],
+  ["COMPANY", "CODE", (p, e) => p.companyCode || e?.companyCode],
+  ["BANK AGENT", "CODE", (p, e) => p.agentCode || e?.salaryDetails?.agentCode || e?.salaryDetails?.bankSortCode || ""],
   ["IBAN", "NUMBER", (p) => p.iban],
 ];
 

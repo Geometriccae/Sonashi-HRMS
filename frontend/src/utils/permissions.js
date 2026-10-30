@@ -11,7 +11,7 @@ export const getUserRole = () => localStorage.getItem("role") || "";
 export const isViewer = (role = getUserRole()) => role === ROLES.VIEWER;
 
 export const isAuthorizeUser = (role = getUserRole()) =>
-  role === ROLES.AUTHORIZE_USER;
+  String(role || "").toLowerCase().trim().replace(/\s+/g, "_") === ROLES.AUTHORIZE_USER;
 
 /** Viewer + Authorize User: leave approve/reject + view; no employee/payroll edits */
 export const isReadOnlyRole = (role = getUserRole()) =>

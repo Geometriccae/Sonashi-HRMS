@@ -216,6 +216,16 @@ function tripDisplayDates(emp, leave) {
   };
 }
 
+export const oneMonthAfterReturnDate = (returnDate) => {
+  if (!returnDate) return null;
+  const d = new Date(returnDate.getFullYear(), returnDate.getMonth() + 1, returnDate.getDate());
+  const targetMonth = returnDate.getMonth() + 1;
+  if (d.getMonth() !== targetMonth % 12) {
+    d.setDate(0);
+  }
+  return d;
+};
+
 export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new Date()) => {
   if (!APPROVED_LEAVE_STATUSES.includes(req?.status)) return null;
 
@@ -248,10 +258,14 @@ export const getEffectiveVacationStatus = (req, linkedEmployee, todayValue = new
   const tripReturn = actualReturn && actualReturn >= travelDate ? actualReturn : null;
 
   if (today < travelDate) return "Vacation Pending";
-  if (tripReturn && today >= tripReturn) return "Vacation Approved";
+  if (tripReturn && today >= tripReturn) {
+    const ret = oneMonthAfterReturnDate(tripReturn);
+    return !ret || today <= ret ? "Vacation Approved" : "Onsite";
+  }
   if (leaveEndDate) {
     if (today <= leaveEndDate) return "On Vacation";
-    return "Vacation Approved";
+    const ret = oneMonthAfterReturnDate(leaveEndDate);
+    return !ret || today <= ret ? "Vacation Approved" : "Onsite";
   }
   return "On Vacation";
 };
@@ -273,7 +287,7 @@ export const mapLeaveRow = (req, empList, targetStatus) => {
     totalYearsExperience: linked?.totalYearsExperience ?? null,
     experienceYears: computeEmployeeMasterExperienceYears(linked),
     travellingDate: dates.travellingDate,
-    lastWorkingDay: linked?.lastWorkingDay || req.lastWorkingDay || null,
+    lastWorkingDay: linked?.lastWorkingDay || null,
     returnDate: (() => {
       const leaveReturn = req.returnDate || req.firstWorkingDay || null;
       if (leaveReturn) return leaveReturn;

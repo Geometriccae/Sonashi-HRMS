@@ -60,9 +60,31 @@ const validateEmpId = (empid) => {
   return null;
 };
 
+const cleanAgentCode = (value) => {
+  if (value == null) return "";
+  const s = String(value).trim();
+  return s.replace(/[^A-Za-z0-9]/g, "");
+};
+
+const getAgentCode = (emp) => {
+  if (!emp) return "";
+  const sal = emp.salaryDetails || {};
+  const raw =
+    sal.agentCode ||
+    sal.bankSortCode ||
+    emp.agentCode ||
+    emp.bankSortCode ||
+    sal.cif ||
+    sal.cifNumber ||
+    emp.cif ||
+    emp.cifNumber ||
+    "";
+  return cleanAgentCode(raw);
+};
+
 const validateAgentCode = (code) => {
-  const d = digitsOnly(code);
-  if (d.length !== 9) {
+  const s = cleanAgentCode(code);
+  if (!s || s.length !== 9 || !/^[A-Za-z0-9]{9}$/.test(s)) {
     return "AGENTCODE must be exactly 9 digits";
   }
   return null;
@@ -86,8 +108,8 @@ const buildEdrPayload = (employees, year, month) => {
   let totalSalary = 0;
 
   employees.forEach((emp) => {
-    const empid = digitsOnly(emp.workPermitNo);
-    const agent = digitsOnly(emp.salaryDetails?.bankSortCode);
+    const empid = normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo);
+    const agent = getAgentCode(emp);
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
 
@@ -152,7 +174,7 @@ const buildScrLine = ({
   return [
     "SCR",
     digitsOnly(employerId),
-    digitsOnly(agentRouting),
+    cleanAgentCode(agentRouting),
     fileDate,
     fileTime,
     mmYYYY,
@@ -181,10 +203,14 @@ const generateSifContent = ({
   year,
   month,
   now = new Date(),
+  isIndividual = false,
 }) => {
   const safeEmployerId = digitsOnly(employerId);
   const employerErr = validateEmployerId(safeEmployerId);
-  const routingErr = validateAgentCode(defaultAgentRoutingCode);
+  const routingCodeToValidate = isIndividual && employees && employees[0]
+    ? (cleanAgentCode(defaultAgentRoutingCode) || getAgentCode(employees[0]))
+    : cleanAgentCode(defaultAgentRoutingCode);
+  const routingErr = validateAgentCode(routingCodeToValidate);
   if (employerErr || routingErr) {
     return {
       error: [employerErr, routingErr].filter(Boolean).join("; "),
@@ -200,7 +226,9 @@ const generateSifContent = ({
 
   if (edrLines.length === 0) {
     return {
-      error: "No employees found for SIF export.",
+      error: isIndividual
+        ? (skipped[0]?.reason || "Employee is not eligible for SIF export.")
+        : "No employees found for SIF export.",
       skipped,
     };
   }
@@ -213,7 +241,20 @@ const generateSifContent = ({
   const fileTime = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}`;
   const fileRef = buildFileReference(safeEmployerId, now);
 
-  const scrAgent = digitsOnly(defaultAgentRoutingCode);
+  let scrAgent = "";
+  if (isIndividual) {
+    // For individual employee SIF export: use the selected employee's own Agent Code
+    const empAgent = edrRecords[0]?.agentCode || getAgentCode(employees[0]);
+    scrAgent = empAgent;
+  } else {
+    // For company-wide SIF export: use company's defaultAgentRoutingCode
+    // Do NOT substitute another employee's value
+    scrAgent = cleanAgentCode(defaultAgentRoutingCode);
+  }
+
+  if (scrAgent.length !== 9) {
+    scrAgent = pad(scrAgent || "0", 9).slice(-9);
+  }
 
   const scr = buildScrLine({
     employerId: safeEmployerId,
@@ -263,7 +304,7 @@ const parseSifContent = (text) => {
       }
       edrs.push({
         empId: digitsOnly(parts[1]),
-        agentCode: digitsOnly(parts[2]),
+        agentCode: cleanAgentCode(parts[2]),
         bankAccount: String(parts[3] || "").trim(),
         startDate: parts[4],
         endDate: parts[5],
@@ -276,7 +317,7 @@ const parseSifContent = (text) => {
     } else if (type === "SCR") {
       scr = {
         employerId: digitsOnly(parts[1]),
-        agentRouting: digitsOnly(parts[2]),
+        agentRouting: cleanAgentCode(parts[2]),
         fileDate: parts[3],
         fileTime: parts[4],
         monthYear: parts[5],
@@ -322,13 +363,13 @@ const RED_HEADERS = new Set([
 
 const employeeToExcelRow = (emp) => {
   const sal = emp.salaryDetails || {};
-  const rowEmployerId = digitsOnly(emp.sifEmployerId);
+  const rowEmployerId = digitsOnly(emp.sifEmployerId || emp.companyCode);
   return {
     StaffID: emp.employeeId || "",
-    EMPID: digitsOnly(emp.workPermitNo),
+    EMPID: normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo),
     EMPNAME: emp.employeeName || "",
     EMPLOYERID: rowEmployerId,
-    AGENTCODE: digitsOnly(sal.bankSortCode),
+    AGENTCODE: getAgentCode(emp),
     BANKACCOUNT: getBankAccount(emp),
     STATUS: emp.employeeStatus || "",
     BASIC: Number(sal.basicSalary) || 0,
@@ -379,6 +420,8 @@ module.exports = {
   validateEmployerId,
   validateEmpId,
   validateAgentCode,
+  cleanAgentCode,
+  getAgentCode,
   validateBankAccount,
   buildEdrPayload,
   buildScrLine,

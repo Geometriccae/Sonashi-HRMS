@@ -2,6 +2,7 @@ const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const SalarySlip = require('../models/SalarySlip');
+const SalaryAdvance = require('../models/SalaryAdvance');
 require('../models/User');
 const {
   isWorkingEmployeeStatus,
@@ -22,6 +23,8 @@ const {
   applyCarryForwardDeduction,
   payrollCycleDataRange,
 } = require('./payrollCycle');
+
+const roundAed = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
 
 const payrollEmailForEmployee = (emp) => {
   const email = String(emp?.emailId || '').trim().toLowerCase();
@@ -133,6 +136,87 @@ function buildEmployeeSalarySlip({
 }
 
 /**
+ * Apply active salary advance recovery for one employee's slip.
+ *
+ * Idempotency: each advance checks whether a `recoveryHistory` entry with
+ * `slipKey = month|year|email` already exists before deducting.  On
+ * regeneration we reuse the previously recorded amount, so the slip total
+ * stays consistent without double-deducting.
+ *
+ * @param {string}   email
+ * @param {string}   month
+ * @param {string}   yearStr
+ * @param {number}   baseNetSalary  netSalary before advance recovery
+ * @returns {{ salaryAdvanceDeduction: number, salaryAdvanceIds: string[], netSalary: number }}
+ */
+async function applyAdvanceRecovery({ email, month, yearStr, baseNetSalary, savedSlipId }) {
+  const slipKey = `${month}|${yearStr}|${email}`;
+
+  // Only active advances with outstanding balance
+  const advances = await SalaryAdvance.find({
+    employeeEmail: email,
+    status: 'active',
+    outstandingBalance: { $gt: 0 },
+  }).sort({ createdAt: 1 }); // oldest first
+
+  if (!advances.length) {
+    return { salaryAdvanceDeduction: 0, salaryAdvanceIds: [], netSalary: baseNetSalary };
+  }
+
+  let remainingNet = baseNetSalary;
+  let totalAdvanceDeduction = 0;
+  const advanceIds = [];
+  const dbOps = [];
+
+  for (const adv of advances) {
+    // Check idempotency: already processed for this slip key?
+    const existing = adv.recoveryHistory.find((h) => h.slipKey === slipKey);
+
+    if (existing) {
+      // Reuse previously recorded deduction — do not modify the advance record
+      totalAdvanceDeduction = roundAed(totalAdvanceDeduction + existing.amountDeducted);
+      remainingNet = roundAed(remainingNet - existing.amountDeducted);
+      advanceIds.push(adv._id);
+      continue;
+    }
+
+    // How much can we recover this cycle without making net salary negative?
+    const canDeduct = roundAed(Math.min(adv.outstandingBalance, Math.max(0, remainingNet)));
+    if (canDeduct <= 0) continue;
+
+    const newRecovered = roundAed(adv.recoveredAmount + canDeduct);
+    const newBalance = roundAed(adv.originalAmount - newRecovered);
+
+    adv.recoveredAmount = newRecovered;
+    adv.outstandingBalance = newBalance;
+    if (newBalance <= 0) adv.status = 'fully_recovered';
+
+    adv.recoveryHistory.push({
+      slipKey,
+      slipId: savedSlipId || null,
+      month,
+      year: yearStr,
+      amountDeducted: canDeduct,
+      balanceAfter: newBalance,
+    });
+
+    totalAdvanceDeduction = roundAed(totalAdvanceDeduction + canDeduct);
+    remainingNet = roundAed(remainingNet - canDeduct);
+    advanceIds.push(adv._id);
+
+    dbOps.push(adv.save());
+  }
+
+  if (dbOps.length) await Promise.all(dbOps);
+
+  return {
+    salaryAdvanceDeduction: totalAdvanceDeduction,
+    salaryAdvanceIds: advanceIds,
+    netSalary: roundAed(baseNetSalary - totalAdvanceDeduction),
+  };
+}
+
+/**
  * Generate/update salary slips for every eligible employee in a payroll month.
  * Each employee is evaluated independently for that month/year only.
  */
@@ -217,7 +301,8 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
       const slipData = built.slipData;
       if (uploadedBy) slipData.uploadedBy = uploadedBy;
 
-      await SalarySlip.findOneAndUpdate(
+      // ── Step 1: save the payroll-cycle slip (without advance recovery yet) ──
+      const savedSlip = await SalarySlip.findOneAndUpdate(
         {
           emailId: email,
           month: { $regex: new RegExp(`^${month}$`, 'i') },
@@ -227,11 +312,36 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
         { upsert: true, new: true }
       );
 
+      // ── Step 2: apply salary advance recovery ──
+      const advResult = await applyAdvanceRecovery({
+        email,
+        month,
+        yearStr,
+        baseNetSalary: slipData.netSalary,
+        savedSlipId: savedSlip._id,
+      });
+
+      if (advResult.salaryAdvanceDeduction > 0) {
+        const newTotalDeduction = roundAed(
+          (slipData.totalDeduction || 0) + advResult.salaryAdvanceDeduction
+        );
+        await SalarySlip.findByIdAndUpdate(savedSlip._id, {
+          $set: {
+            salaryAdvanceDeduction: advResult.salaryAdvanceDeduction,
+            salaryAdvanceIds: advResult.salaryAdvanceIds,
+            totalDeduction: newTotalDeduction,
+            deductionsPFTax: newTotalDeduction,
+            netSalary: advResult.netSalary,
+          },
+        });
+      }
+
       results.push({
         email,
         name: emp.employeeName,
         payableDays: slipData.payableDays,
-        netSalary: slipData.netSalary,
+        netSalary: advResult.netSalary,
+        salaryAdvanceDeduction: advResult.salaryAdvanceDeduction,
         carriedForwardLeaveDays: slipData.carriedForwardLeaveDays,
         carriedForwardLeaveDeduction: slipData.carriedForwardLeaveDeduction,
       });

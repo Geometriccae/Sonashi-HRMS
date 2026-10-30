@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styles from "./DashboardOverview.module.css";
 import employeeService from "../services/EmployeeService";
+import leaveRequestService from "../services/LeaveRequestService";
 import {
   FaUsers,
   FaUserCheck,
@@ -13,7 +14,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import ModalPortal from "./ModalPortal";
 import DateInput from "./DateInput";
-import { canUpdateVacationReturn } from "../utils/permissions";
+import { canUpdateVacationReturn, isAuthorizeUser, getUserRole } from "../utils/permissions";
 import {
   formatVacationStatus,
   VACATION_STATUS_EDIT_OPTIONS,
@@ -23,10 +24,12 @@ import {
   buildVacationDatePrompt,
   toDateInputValue,
 } from "../utils/vacationStatusUpdate";
-import { annualVacationsPath, teamManagementPath } from "../utils/cardNavigation";
+import { annualVacationsPath, teamManagementPath, leaveManagementPath } from "../utils/cardNavigation";
 
-function DashboardOverview() {
+function DashboardOverview({ userRole: propRole } = {}) {
   const navigate = useNavigate();
+  const effectiveRole = propRole || getUserRole();
+  const isAuthUser = isAuthorizeUser(effectiveRole);
   const [counts, setCounts] = useState({
     total: 0,
     active: 0,
@@ -35,7 +38,8 @@ function DashboardOverview() {
     upcomingVacation: 0,
     vacationReturn: 0,
     visaExpiry: 0,
-    passportExpiry: 0
+    passportExpiry: 0,
+    pendingLeave: null,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -73,9 +77,20 @@ function DashboardOverview() {
   });
 
   const refreshSummary = async ({ force = false } = {}) => {
-    const summary = await employeeService.getEmployeeStats({ force });
-    setCounts(applySummaryToCounts(summary));
-    return summary;
+    try {
+      const summaryPromise = employeeService.getEmployeeStats({ force });
+      const pendingPromise = isAuthUser
+        ? leaveRequestService.getPendingLeaveCount({ force })
+        : Promise.resolve(null);
+      const [summary, pendingCount] = await Promise.all([summaryPromise, pendingPromise]);
+      setCounts({
+        ...applySummaryToCounts(summary),
+        pendingLeave: isAuthUser ? (pendingCount ?? 0) : null,
+      });
+      return summary;
+    } catch (err) {
+      console.error("Failed to refresh dashboard statistics:", err);
+    }
   };
 
   useEffect(() => {
@@ -85,9 +100,17 @@ function DashboardOverview() {
       setLoadError("");
       try {
         // Counts only — do not fetch all employees / leaves on dashboard open
-        const summary = await employeeService.getEmployeeStats({ force: true });
+        const summaryPromise = employeeService.getEmployeeStats({ force: true });
+        const pendingPromise = isAuthUser
+          ? leaveRequestService.getPendingLeaveCount({ force: true })
+          : Promise.resolve(null);
+
+        const [summary, pendingCount] = await Promise.all([summaryPromise, pendingPromise]);
         if (isMounted) {
-          setCounts(applySummaryToCounts(summary));
+          setCounts({
+            ...applySummaryToCounts(summary),
+            pendingLeave: isAuthUser ? (pendingCount ?? 0) : null,
+          });
         }
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err);
@@ -98,14 +121,23 @@ function DashboardOverview() {
     };
 
     fetchData();
-    const unsubscribe = employeeService.onEmployeeDataChanged?.(() => {
+    const unsubscribeEmp = employeeService.onEmployeeDataChanged?.(() => {
       refreshSummary({ force: true });
     });
+    const handleLeaveChange = () => {
+      refreshSummary({ force: true });
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("hrms:leave-data-changed", handleLeaveChange);
+    }
     return () => {
       isMounted = false;
-      unsubscribe?.();
+      unsubscribeEmp?.();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("hrms:leave-data-changed", handleLeaveChange);
+      }
     };
-  }, []);
+  }, [isAuthUser]);
 
   const handleMarkAsReturned = (item) => {
     if (!canUpdateVacationReturn()) return;
@@ -246,6 +278,20 @@ function DashboardOverview() {
     { label: "Total Employees", value: counts.total, icon: <FaUsers />, color: "#4f46e5", trend: "+3 this month", path: teamManagementPath("All") },
     { label: "Active Employees", value: counts.active, icon: <FaUserCheck />, color: "#10b981", trend: "Steady", path: teamManagementPath("Active") },
     { label: "Inactive Employees", value: counts.inactive, icon: <FaUserTimes />, color: "#64748b", path: teamManagementPath("Inactive") },
+    ...(isAuthUser
+      ? [
+          {
+            label: "Pending Leave",
+            value: counts.pendingLeave != null ? counts.pendingLeave : "--",
+            icon: <FaCalendarAlt />,
+            color: "#f97316",
+            sub: "Requires approval",
+            alert: Boolean(counts.pendingLeave && counts.pendingLeave > 0),
+            tooltip: "Leave requests pending approval. Click to view in Leave Management.",
+            path: leaveManagementPath({ status: "Pending", year: "All" }),
+          },
+        ]
+      : []),
     { label: "On vacation", value: counts.onVacation, icon: <FaPlane />, color: "#3b82f6", trend: "Live", path: annualVacationsPath("onVacation") },
     { label: "Yet to go", value: counts.upcomingVacation, icon: <FaCalendarAlt />, color: "#8b5cf6", sub: "All upcoming", tooltip: "All employees with approved or pending leave (any type) who are yet to travel (no date limit)", path: annualVacationsPath("yetToGo") },
     { label: "Returned back from vacation", value: counts.vacationReturn, icon: <FaCalendarAlt />, color: "#ec4899", sub: "Last 6 months", tooltip: "Employees who returned from vacation in the last 6 months", path: annualVacationsPath("returned") },
