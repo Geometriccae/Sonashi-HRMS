@@ -7,6 +7,7 @@ const Employee = require("../models/Employee");
 const CompanyDocument = require("../models/CompanyDocument");
 const CompanySifSettings = require("../models/CompanySifSettings");
 const SalaryImportBatch = require("../models/SalaryImportBatch");
+const SalarySlip = require("../models/SalarySlip");
 const { generateSifPdf } = require("../utils/sifPdfGenerator");
 const {
   parseImportFile,
@@ -116,6 +117,158 @@ async function loadEmployeesForEmployerExport(employerId) {
   });
 
   return { matched, excluded, targetEmployerId: target };
+}
+
+
+async function attachPayslipNetSalaries(employees, monthNum, yearNum) {
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const monthName = monthNames[Number(monthNum) - 1];
+  if (!monthName || !employees || !employees.length) return employees;
+
+  const emails = employees
+    .map((e) => String(e.emailId || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (!emails.length) return employees;
+
+  const slips = await SalarySlip.find({
+    emailId: { $in: emails },
+    month: { $regex: new RegExp(`^${monthName}const express = require("express");
+const multer = require("multer");
+const XLSX = require("xlsx");
+const authMiddleware = require("../middleware/authMiddleware");
+const { blockViewerWrites } = require("../middleware/permissionsMiddleware");
+const Employee = require("../models/Employee");
+const CompanyDocument = require("../models/CompanyDocument");
+const CompanySifSettings = require("../models/CompanySifSettings");
+const SalaryImportBatch = require("../models/SalaryImportBatch");
+const SalarySlip = require("../models/SalarySlip");
+const { generateSifPdf } = require("../utils/sifPdfGenerator");
+const {
+  parseImportFile,
+  buildImportRecords,
+  applyBatchToEmployees,
+} = require("../utils/sifImportBatchUtils");
+const { workingStatusFilter } = require("../utils/employeeStatus");
+const {
+  generateSifContent,
+  parseSifContent,
+  digitsOnly,
+  cleanAgentCode,
+  getAgentCode,
+  normalizeEmiratesId,
+  validateEmployerId,
+  validateAgentCode,
+  getBankAccount,
+  getFixedIncome,
+  excelHeaders,
+  RED_HEADERS,
+  employeeToExcelRow,
+  normalizeExcelHeader,
+  HEADER_ALIASES,
+} = require("../utils/sifUtils");
+const {
+  loadCompanyEmployerMap,
+  applyCompanyEmployerMapping,
+  normalizeEmployerId,
+  isEmployerId,
+} = require("../utils/sifCompanyMapping");
+
+const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+const requireAdminOrHod = (req, res, next) => {
+  const role = String(req.user?.role || "").toLowerCase();
+  if (role === "admin" || role === "hod") return next();
+  return res.status(403).json({ message: "Admin or HOD access required" });
+};
+
+async function getOrCreateSettings() {
+  let doc = await CompanySifSettings.findOne({ key: "default" });
+  if (!doc) {
+    doc = await CompanySifSettings.create({ key: "default" });
+  }
+  return doc;
+}
+
+function parseMonthYear(req) {
+  const month = Number(req.query.month || req.body?.month);
+  const year = Number(req.query.year || req.body?.year);
+  if (!month || month < 1 || month > 12) {
+    return { error: "Valid month (1–12) is required" };
+  }
+  if (!year || year < 2000 || year > 2100) {
+    return { error: "Valid year is required" };
+  }
+  return { month, year };
+}
+
+async function loadActiveEmployees() {
+  return Employee.find(workingStatusFilter()).lean();
+}
+
+/**
+ * SIF assignment source of truth: Employee.companyCode resolved through the
+ * matching company record's configured Employer ID. This is also used by audit.
+ */
+async function loadEmployeesWithSifMappings() {
+  const [employees, companyEmployerMap] = await Promise.all([
+    loadActiveEmployees(),
+    loadCompanyEmployerMap(),
+  ]);
+  return employees.map((employee) =>
+    applyCompanyEmployerMapping(employee, companyEmployerMap)
+  );
+}
+
+/**
+ * Load employees for a SIF export scoped to one Employer ID.
+ * WPS requires one employer per SIF file — do not mix companies.
+ */
+async function loadEmployeesForEmployerExport(employerId) {
+  const employees = await loadEmployeesWithSifMappings();
+  const target = normalizeEmployerId(employerId);
+  const matched = [];
+  const excluded = [];
+
+  employees.forEach((employee) => {
+    const mappedEmployerId = normalizeEmployerId(employee.sifEmployerId);
+    if (target && mappedEmployerId === target) {
+      matched.push(employee);
+      return;
+    }
+    excluded.push({
+      staffId: employee.employeeId || "",
+      empName: employee.employeeName || "",
+      companyCode: employee.companyCode || "",
+      employerId: mappedEmployerId,
+      reason: !mappedEmployerId
+        ? (employee.sifCompanyMapping?.issues || ["Missing company assignment"]).join("; ")
+        : `Assigned Employer ID ${mappedEmployerId} does not match selected Employer ID ${target}`,
+    });
+  });
+
+  return { matched, excluded, targetEmployerId: target };
+}
+
+, "i") },
+    year: { $in: [String(yearNum), Number(yearNum)] },
+  }).lean();
+
+  if (!slips.length) return employees;
+
+  const slipMap = new Map();
+  slips.forEach((s) => slipMap.set(String(s.emailId || "").toLowerCase(), s));
+
+  return employees.map((emp) => {
+    const slip = slipMap.get(String(emp.emailId || "").toLowerCase());
+    if (slip && slip.netSalary != null && Number(slip.netSalary) >= 0) {
+      return { ...emp, customTransferAmount: Number(slip.netSalary) };
+    }
+    return emp;
+  });
 }
 
 async function loadSingleEmployeeForExport(employeeId, requestedEmployerId) {
@@ -516,6 +669,8 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
     const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
 
+    matched = await attachPayslipNetSalaries(matched, parsed.month, parsed.year);
+
     const result = generateSifContent({
       employees: matched,
       employerId,
@@ -638,6 +793,8 @@ router.get("/export/pdf", authMiddleware, async (req, res) => {
     const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
     const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
 
+    matched = await attachPayslipNetSalaries(matched, parsed.month, parsed.year);
+
     const sifResult = generateSifContent({
       employees: matched,
       employerId,
@@ -747,6 +904,8 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
     }
     const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
     const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
+
+    matched = await attachPayslipNetSalaries(matched, parsed.month, parsed.year);
 
     const result = generateSifContent({
       employees: matched,

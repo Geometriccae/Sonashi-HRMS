@@ -993,7 +993,7 @@ function SalarySlipTable({ userRole }) {
                             </button>
                             <button onClick={() => setIsAdvanceModalOpen(true)} className={styles.addBtn} style={{background:"#0f766e"}}>
                                 <img src={plus} alt="" className={styles.addBtnIcon} />
-                                <span>Create Advance</span>
+                                <span>Create Salary Advance</span>
                             </button>
                             <button 
                                 onClick={handleGenerateBulk} 

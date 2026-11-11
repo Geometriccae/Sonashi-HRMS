@@ -245,7 +245,10 @@ app.use(cors({
     'X-SIF-Is-Individual',
     'X-SIF-Employee-Id',
     'X-SIF-Agent-Code',
-    'X-SIF-Skip-Summary'
+    'X-SIF-Skip-Summary',
+    'X-SIF-Batch-Id',
+    'X-SIF-Type',
+    'X-SIF-Employer-Id'
   ]
 }));
 

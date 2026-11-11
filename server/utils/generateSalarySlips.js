@@ -152,12 +152,22 @@ function buildEmployeeSalarySlip({
 async function applyAdvanceRecovery({ email, month, yearStr, baseNetSalary, savedSlipId }) {
   const slipKey = `${month}|${yearStr}|${email}`;
 
-  // Only active advances with outstanding balance
-  const advances = await SalaryAdvance.find({
+  const period = getPayrollPeriod(month, yearStr);
+  const periodEnd = period ? new Date(period.end) : null;
+  if (periodEnd) periodEnd.setHours(23, 59, 59, 999);
+
+  // Only active/in-progress advances (never commissions) with outstanding balance
+  const advanceFilter = {
     employeeEmail: email,
-    status: 'active',
+    type: 'advance',
+    status: { $in: ['active', 'sif_generated', 'processed', 'partially_recovered'] },
     outstandingBalance: { $gt: 0 },
-  }).sort({ createdAt: 1 }); // oldest first
+  };
+  if (periodEnd) {
+    advanceFilter.advanceDate = { $lte: periodEnd };
+  }
+
+  const advances = await SalaryAdvance.find(advanceFilter).sort({ advanceDate: 1, createdAt: 1 }); // oldest first
 
   if (!advances.length) {
     return { salaryAdvanceDeduction: 0, salaryAdvanceIds: [], netSalary: baseNetSalary };
@@ -189,7 +199,7 @@ async function applyAdvanceRecovery({ email, month, yearStr, baseNetSalary, save
 
     adv.recoveredAmount = newRecovered;
     adv.outstandingBalance = newBalance;
-    if (newBalance <= 0) adv.status = 'fully_recovered';
+    adv.status = newBalance <= 0 ? 'fully_recovered' : 'partially_recovered';
 
     adv.recoveryHistory.push({
       slipKey,
@@ -321,20 +331,19 @@ async function generateSalarySlipsForMonth({ month, year, uploadedBy = null } = 
         savedSlipId: savedSlip._id,
       });
 
-      if (advResult.salaryAdvanceDeduction > 0) {
-        const newTotalDeduction = roundAed(
-          (slipData.totalDeduction || 0) + advResult.salaryAdvanceDeduction
-        );
-        await SalarySlip.findByIdAndUpdate(savedSlip._id, {
-          $set: {
-            salaryAdvanceDeduction: advResult.salaryAdvanceDeduction,
-            salaryAdvanceIds: advResult.salaryAdvanceIds,
-            totalDeduction: newTotalDeduction,
-            deductionsPFTax: newTotalDeduction,
-            netSalary: advResult.netSalary,
-          },
-        });
-      }
+      const finalAdvanceDeduction = advResult.salaryAdvanceDeduction || 0;
+      const newTotalDeduction = roundAed(
+        (slipData.totalDeduction || 0) + finalAdvanceDeduction
+      );
+      await SalarySlip.findByIdAndUpdate(savedSlip._id, {
+        $set: {
+          salaryAdvanceDeduction: finalAdvanceDeduction,
+          salaryAdvanceIds: advResult.salaryAdvanceIds || [],
+          totalDeduction: newTotalDeduction,
+          deductionsPFTax: newTotalDeduction,
+          netSalary: advResult.netSalary,
+        },
+      });
 
       results.push({
         email,

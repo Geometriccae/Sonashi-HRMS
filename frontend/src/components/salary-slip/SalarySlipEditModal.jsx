@@ -23,6 +23,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
         otherAllowance: '',
         // Deductions
         advance: '',
+        salaryAdvanceDeduction: '',
         leave: '',
         staffLoan: '',
         profTax: '',
@@ -47,9 +48,10 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
             const staffLoan = salarySlip.staffLoan || 0;
             const profTax = salarySlip.profTax || 0;
             const incomeTaxTDS = salarySlip.incomeTaxTDS || 0;
+            const salaryAdvanceDeduction = salarySlip.salaryAdvanceDeduction || 0;
 
             // If we have a total/legacy deduction but no breakdown, put it in 'advance' so it's visible
-            const hasBreakdown = (advance + leave + staffLoan + profTax + incomeTaxTDS) > 0;
+            const hasBreakdown = (advance + leave + staffLoan + profTax + incomeTaxTDS + salaryAdvanceDeduction) > 0;
             const legacyDeduction = salarySlip.deductionsPFTax || salarySlip.totalDeduction || 0;
             if (!hasBreakdown && legacyDeduction > 0) {
                 advance = legacyDeduction;
@@ -60,7 +62,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                 : (basicPay + hra + conveyanceAllowance + otherAllowance);
             const totalDeduction = salarySlip.totalDeduction != null
                 ? Number(salarySlip.totalDeduction)
-                : ((advance + leave + staffLoan + profTax + incomeTaxTDS) || legacyDeduction || 0);
+                : ((advance + leave + staffLoan + profTax + incomeTaxTDS + salaryAdvanceDeduction) || legacyDeduction || 0);
             const netSalary = salarySlip.netSalary != null
                 ? Number(salarySlip.netSalary)
                 : (grossSalary - totalDeduction);
@@ -78,6 +80,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                 conveyanceAllowance: conveyanceAllowance.toString(),
                 otherAllowance: otherAllowance.toString(),
                 advance: advance.toString(),
+                salaryAdvanceDeduction: salaryAdvanceDeduction.toString(),
                 leave: leave.toString(),
                 staffLoan: staffLoan.toString(),
                 profTax: profTax.toString(),
@@ -100,7 +103,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
 
             // Auto-calculate Gross Salary, Total Deduction, and Net Salary
             const earningFields = ['basicPay', 'hra', 'conveyanceAllowance', 'otherAllowance'];
-            const deductionFields = ['advance', 'leave', 'staffLoan', 'profTax', 'incomeTaxTDS'];
+            const deductionFields = ['advance', 'salaryAdvanceDeduction', 'leave', 'staffLoan', 'profTax', 'incomeTaxTDS'];
 
             if (earningFields.includes(name) || deductionFields.includes(name)) {
                 // Calculate Gross Salary (sum of all earnings)
@@ -116,7 +119,8 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                 const staffLoan = parseFloat(updated.staffLoan) || 0;
                 const profTax = parseFloat(updated.profTax) || 0;
                 const incomeTaxTDS = parseFloat(updated.incomeTaxTDS) || 0;
-                const totalDeduction = advance + leave + staffLoan + profTax + incomeTaxTDS;
+                const salaryAdvanceDeduction = parseFloat(updated.salaryAdvanceDeduction) || 0;
+                const totalDeduction = advance + salaryAdvanceDeduction + leave + staffLoan + profTax + incomeTaxTDS;
 
                 // Calculate Net Payable
                 const netSalary = grossSalary - totalDeduction;
@@ -148,6 +152,7 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                 grossSalary: parseFloat(formData.grossSalary) || 0,
                 // Deductions
                 advance: parseFloat(formData.advance) || 0,
+                salaryAdvanceDeduction: parseFloat(formData.salaryAdvanceDeduction) || 0,
                 leave: parseFloat(formData.leave) || 0,
                 staffLoan: parseFloat(formData.staffLoan) || 0,
                 profTax: parseFloat(formData.profTax) || 0,
@@ -270,9 +275,15 @@ function SalarySlipEditModal({ isOpen, onClose, onSuccess, salarySlip }) {
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td>Advance</td>
+                                        <td>Advance (Fixed)</td>
                                         <td>
                                             <input type="number" name="advance" value={formData.advance} onChange={handleChange} placeholder="0.00" step="0.01" min="0" />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Salary Advance Recovery</td>
+                                        <td>
+                                            <input type="number" name="salaryAdvanceDeduction" value={formData.salaryAdvanceDeduction} onChange={handleChange} placeholder="0.00" step="0.01" min="0" />
                                         </td>
                                     </tr>
                                     <tr>
