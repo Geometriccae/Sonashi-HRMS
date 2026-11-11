@@ -235,7 +235,18 @@ app.use(cors({
     console.warn('HTTP CORS blocked origin:', origin);
     return cb(new Error('Not allowed by CORS'), false);
   },
-  credentials: true
+  credentials: true,
+  exposedHeaders: [
+    'Content-Disposition',
+    'X-SIF-Edr-Count',
+    'X-SIF-Skipped',
+    'X-SIF-Excluded-Company',
+    'X-SIF-Total',
+    'X-SIF-Is-Individual',
+    'X-SIF-Employee-Id',
+    'X-SIF-Agent-Code',
+    'X-SIF-Skip-Summary'
+  ]
 }));
 
 // ====== MIDDLEWARE ======

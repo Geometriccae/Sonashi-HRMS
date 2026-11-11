@@ -138,22 +138,7 @@ async function loadSingleEmployeeForExport(employeeId, requestedEmployerId) {
   }
 
   const mappedEmployerId = normalizeEmployerId(employee.sifEmployerId);
-  const target = normalizeEmployerId(requestedEmployerId) || mappedEmployerId;
-
-  if (requestedEmployerId && mappedEmployerId && normalizeEmployerId(requestedEmployerId) !== mappedEmployerId) {
-    return {
-      error: `Selected employee belongs to Employer ID ${mappedEmployerId}, but export was requested for Employer ID ${requestedEmployerId}.`,
-      matched: [],
-      excluded: [{
-        staffId: employee.employeeId || "",
-        empName: employee.employeeName || "",
-        companyCode: employee.companyCode || "",
-        employerId: mappedEmployerId,
-        reason: `Assigned Employer ID ${mappedEmployerId} does not match selected Employer ID ${requestedEmployerId}`,
-      }],
-      targetEmployerId: target,
-    };
-  }
+  const target = mappedEmployerId || normalizeEmployerId(requestedEmployerId);
 
   if (!target) {
     return {
@@ -548,7 +533,7 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       });
     }
 
-    const allSkipped = [...(result.skipped || []), ...excluded];
+    const allSkipped = result.skipped || [];
 
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader(
@@ -565,11 +550,15 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       const empAgent = getAgentCode(matched[0]);
       if (empAgent) res.setHeader("X-SIF-Agent-Code", empAgent);
     }
-    // Expose skip summary via custom header (JSON) for UI — keep body as pure SIF
+    // Expose skip summary via custom header (JSON) for UI — keep compact to prevent proxy buffer overflow
     if (allSkipped.length) {
+      const compactSummary = allSkipped.slice(0, 10).map((s) => ({
+        staffId: s.staffId || "",
+        reason: s.reason || "",
+      }));
       res.setHeader(
         "X-SIF-Skip-Summary",
-        Buffer.from(JSON.stringify(allSkipped.slice(0, 50))).toString("base64")
+        Buffer.from(JSON.stringify(compactSummary)).toString("base64")
       );
     }
     res.send(result.content);

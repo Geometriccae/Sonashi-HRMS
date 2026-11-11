@@ -10,10 +10,28 @@ const digitsOnly = (value) => String(value ?? "").replace(/\D/g, "");
 
 const normalizeEmiratesId = (value) => digitsOnly(value);
 
+const normalizeEmpId = (value) => {
+  const d = digitsOnly(value);
+  if (!d) return "";
+  if (d.length >= 14 && d.length <= 15) return d;
+  if (d.length >= 6 && d.length < 14) return d.padStart(14, "0");
+  return d;
+};
+
 const getBankAccount = (emp) => {
-  const sal = emp.salaryDetails || {};
-  const iban = String(sal.ibanNumber || "").trim();
-  const account = String(sal.accountNumber || "").trim();
+  const sal = emp?.salaryDetails || {};
+  const iban = String(
+    sal.ibanNumber || emp?.ibanNumber || sal.iban || emp?.iban || ""
+  ).trim();
+  const account = String(
+    sal.accountNumber ||
+      emp?.accountNumber ||
+      sal.bankAccount ||
+      emp?.bankAccount ||
+      sal.accountNo ||
+      emp?.accountNo ||
+      ""
+  ).trim();
   if (iban) return iban.replace(/\s+/g, "");
   return account.replace(/\s+/g, "");
 };
@@ -108,7 +126,13 @@ const buildEdrPayload = (employees, year, month) => {
   let totalSalary = 0;
 
   employees.forEach((emp) => {
-    const empid = normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo);
+    const empidRaw =
+      normalizeEmiratesId(emp.emiratesId) ||
+      digitsOnly(emp.workPermitNo) ||
+      digitsOnly(emp.labourCardNumber) ||
+      digitsOnly(emp.unifiedId) ||
+      digitsOnly(emp.personCode);
+    const empid = normalizeEmpId(empidRaw);
     const agent = getAgentCode(emp);
     const bank = getBankAccount(emp) || "";
     const fixed = getFixedIncome(emp);
@@ -364,9 +388,15 @@ const RED_HEADERS = new Set([
 const employeeToExcelRow = (emp) => {
   const sal = emp.salaryDetails || {};
   const rowEmployerId = digitsOnly(emp.sifEmployerId || emp.companyCode);
+  const empidRaw =
+    normalizeEmiratesId(emp.emiratesId) ||
+    digitsOnly(emp.workPermitNo) ||
+    digitsOnly(emp.labourCardNumber) ||
+    digitsOnly(emp.unifiedId) ||
+    digitsOnly(emp.personCode);
   return {
     StaffID: emp.employeeId || "",
-    EMPID: normalizeEmiratesId(emp.emiratesId) || digitsOnly(emp.workPermitNo),
+    EMPID: normalizeEmpId(empidRaw),
     EMPNAME: emp.employeeName || "",
     EMPLOYERID: rowEmployerId,
     AGENTCODE: getAgentCode(emp),
@@ -412,6 +442,7 @@ module.exports = {
   pad,
   digitsOnly,
   normalizeEmiratesId,
+  normalizeEmpId,
   getBankAccount,
   getFixedIncome,
   formatMoney,

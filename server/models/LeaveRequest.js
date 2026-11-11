@@ -177,6 +177,25 @@ const leaveRequestSchema = new mongoose.Schema({
     requesterRole: {
         type: String,
         default: ''
+    },
+    // User who originally submitted the leave request
+    submittedByUser: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    // Admin leave email notification tracking & duplicate protection
+    adminLeaveNotifications: {
+        submissionEmailSent: { type: Boolean, default: false },
+        submissionEmailSentAt: { type: Date, default: null },
+        submissionEmailRecipient: { type: String, default: '' },
+        approvalEmailSent: { type: Boolean, default: false },
+        approvalEmailSentAt: { type: Date, default: null },
+        approvalEmailRecipient: { type: String, default: '' },
+        rejectionEmailSent: { type: Boolean, default: false },
+        rejectionEmailSentAt: { type: Date, default: null },
+        rejectionEmailRecipient: { type: String, default: '' },
+        lastError: { type: String, default: '' }
     }
 }, { timestamps: true });
 
