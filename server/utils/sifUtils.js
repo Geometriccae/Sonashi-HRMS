@@ -135,7 +135,12 @@ const buildEdrPayload = (employees, year, month) => {
     const empid = normalizeEmpId(empidRaw);
     const agent = getAgentCode(emp);
     const bank = getBankAccount(emp) || "";
-    const fixed = getFixedIncome(emp);
+    const fixed =
+      emp.customTransferAmount != null
+        ? Number(emp.customTransferAmount)
+        : getFixedIncome(emp);
+    const variable =
+      emp.customVariableAmount != null ? Number(emp.customVariableAmount) : 0;
 
     const reasons = [];
     const empErr = validateEmpId(empid);
@@ -164,7 +169,7 @@ const buildEdrPayload = (employees, year, month) => {
       end,
       daysField,
       formatMoney(fixed),
-      "0.00",
+      formatMoney(variable),
       "0000",
     ].join(",");
 
