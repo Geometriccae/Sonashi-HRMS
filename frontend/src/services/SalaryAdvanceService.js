@@ -147,7 +147,12 @@ class SalaryAdvanceService {
       if (response.ok) {
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
-          return response.json();
+          const jsonResult = await response.json();
+          // If JSON returned with a single employer or multiple, use client-side single file generator
+          if (options.batch?.items?.length || options.items?.length || options.rows?.length) {
+            return this.generateSifClientSide(options);
+          }
+          return jsonResult;
         }
 
         const blob = await response.blob();

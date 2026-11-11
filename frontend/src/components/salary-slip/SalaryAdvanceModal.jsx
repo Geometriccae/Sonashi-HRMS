@@ -408,11 +408,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
         employees,
       });
 
-      if (res.multipleEmployers) {
-        showToast(res.message, 'info');
-      } else {
-        showToast(`SIF exported successfully: ${res.fileName}`, 'success');
-      }
+      showToast(`SIF exported successfully: ${res.fileName}`, 'success');
       fetchBatches();
     } catch (err) {
       console.error('SIF export error:', err);
@@ -436,11 +432,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
         batch,
         employees,
       });
-      if (result.multipleEmployers) {
-        showToast(result.message, 'info');
-      } else {
-        showToast(`SIF downloaded for ${batch.batchId}`, 'success');
-      }
+      showToast(`SIF downloaded for ${batch.batchId}`, 'success');
       fetchBatches();
     } catch (err) {
       showToast(err.message || 'Failed to export SIF', 'error');

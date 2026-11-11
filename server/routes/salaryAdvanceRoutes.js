@@ -386,10 +386,30 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
     const defaultSettings = await CompanySifSettings.findOne().lean();
     const defaultEmployerId = digitsOnly(defaultSettings?.employerId) || '0000000172509';
 
-    // Group items by resolved 13-digit Employer ID
-    const groupedByEmployer = new Map();
-
+    // Collect available employer IDs from matched employees
+    const availableEmployers = [];
     records.forEach((rec) => {
+      const emp =
+        empById.get(String(rec.employee)) ||
+        (rec.employeeId ? empByCode.get(String(rec.employeeId).trim().toLowerCase()) : null);
+      const mappedId = digitsOnly(emp?.sifEmployerId || emp?.companyCode || '');
+      if (mappedId.length === 13 && !availableEmployers.includes(mappedId)) {
+        availableEmployers.push(mappedId);
+      }
+    });
+
+    // Single unified Employer ID for this batch: use requested, primary matched, or default
+    const targetEmployerId = requestedEmployerId
+      ? digitsOnly(requestedEmployerId)
+      : availableEmployers[0] || defaultEmployerId;
+
+    const defaultAgentRoutingCode = await resolveRoutingCodeForEmployer(
+      targetEmployerId,
+      records[0] ? empById.get(String(records[0].employee)) : null
+    );
+
+    // Prepare ALL employees in this batch for one single combined SIF file
+    const employerEmployees = records.map((rec) => {
       let emp =
         empById.get(String(rec.employee)) ||
         (rec.employeeId ? empByCode.get(String(rec.employeeId).trim().toLowerCase()) : null);
@@ -399,80 +419,24 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
           _id: rec.employee || rec._id,
           employeeId: rec.employeeId || 'EMP',
           employeeName: rec.employeeName || 'Employee',
-          sifEmployerId: defaultEmployerId,
-          companyCode: defaultEmployerId,
+          sifEmployerId: targetEmployerId,
+          companyCode: targetEmployerId,
           salaryDetails: {
             basicSalary: rec.originalAmount,
           },
         };
       }
 
-      let mappedEmployerId = digitsOnly(emp.sifEmployerId || emp.companyCode || '');
-      if (mappedEmployerId.length !== 13) {
-        mappedEmployerId = defaultEmployerId;
-      }
-
-      if (!groupedByEmployer.has(mappedEmployerId)) {
-        groupedByEmployer.set(mappedEmployerId, []);
-      }
-      groupedByEmployer.get(mappedEmployerId).push({ record: rec, employee: emp });
-    });
-
-    const availableEmployers = Array.from(groupedByEmployer.keys()).filter((id) => id && id.length === 13);
-    if (!availableEmployers.length) {
-      return res.status(400).json({
-        message: 'No valid 13-digit Employer IDs mapped for the employees in this batch.',
-      });
-    }
-
-    let targetEmployerId = requestedEmployerId ? digitsOnly(requestedEmployerId) : '';
-    if (!targetEmployerId || !groupedByEmployer.has(targetEmployerId)) {
-      if (availableEmployers.length === 1) {
-        targetEmployerId = availableEmployers[0];
-      } else {
-        const employerSummaries = availableEmployers.map((empId) => {
-          const list = groupedByEmployer.get(empId) || [];
-          const total = list.reduce((sum, item) => sum + (item.record.originalAmount || 0), 0);
-          return {
-            employerId: empId,
-            count: list.length,
-            totalAmount: roundAed(total),
-          };
-        });
-        return res.status(200).json({
-          multipleEmployers: true,
-          batchId: batchId || '',
-          type: targetType,
-          employers: employerSummaries,
-          message: 'This batch spans multiple companies. Please choose an Employer ID to export.',
-        });
-      }
-    }
-
-    const itemsForEmployer = groupedByEmployer.get(targetEmployerId);
-    if (!itemsForEmployer || !itemsForEmployer.length) {
-      return res.status(400).json({
-        message: `No transactions found for Employer ID ${targetEmployerId} in this batch.`,
-      });
-    }
-
-    const defaultAgentRoutingCode = await resolveRoutingCodeForEmployer(
-      targetEmployerId,
-      itemsForEmployer[0]?.employee
-    );
-
-    // Prepare employees with their exact off-cycle payment amount and guaranteed routing code
-    const employerEmployees = itemsForEmployer.map(({ record, employee }) => {
-      const empAgent = cleanAgentCode(getAgentCode(employee));
+      const empAgent = cleanAgentCode(getAgentCode(emp));
       return {
-        ...employee,
+        ...emp,
         agentCode: empAgent && empAgent.length === 9 ? empAgent : defaultAgentRoutingCode,
-        customTransferAmount: record.originalAmount,
+        customTransferAmount: rec.originalAmount,
       };
     });
 
-    const sampleDate = itemsForEmployer[0].record.advanceDate
-      ? new Date(itemsForEmployer[0].record.advanceDate)
+    const sampleDate = records[0]?.advanceDate
+      ? new Date(records[0].advanceDate)
       : new Date();
     const year = sampleDate.getFullYear();
     const month = sampleDate.getMonth() + 1;
@@ -498,7 +462,7 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
     }
 
     // Mark transactions as sifExported = true, sifFileName, and status = 'sif_generated'
-    const processedIds = itemsForEmployer.map((item) => item.record._id);
+    const processedIds = records.map((item) => item._id);
     await SalaryAdvance.updateMany(
       { _id: { $in: processedIds } },
       {
