@@ -57,11 +57,27 @@ function applyLiveCompanyCodes(employees, codeMap) {
   if (!Array.isArray(employees)) return employees;
   return employees.map((e) => {
     const stored = String(e.companyCode || "").trim();
-    if (stored) return e;
     const key = String(e.office || "").trim().toLowerCase();
-    const live = key && codeMap ? codeMap[key] : "";
-    if (live) return { ...e, companyCode: live };
-    return { ...e, companyCode: DEFAULT_COMPANY_CODE };
+    const live = key && codeMap ? (typeof codeMap[key] === 'object' ? codeMap[key].companyCode || codeMap[key].employerId : codeMap[key]) : "";
+    const effectiveCompanyCode = stored || live || DEFAULT_COMPANY_CODE;
+
+    let effectiveEmployerId = String(e.employerId || e.sifEmployerId || "").trim();
+    if (!effectiveEmployerId) {
+      if (/^\d{13}$/.test(effectiveCompanyCode)) {
+        effectiveEmployerId = effectiveCompanyCode;
+      } else if (live && /^\d{13}$/.test(live)) {
+        effectiveEmployerId = live;
+      } else {
+        effectiveEmployerId = DEFAULT_COMPANY_CODE;
+      }
+    }
+
+    return {
+      ...e,
+      companyCode: effectiveCompanyCode,
+      employerId: effectiveEmployerId,
+      sifEmployerId: effectiveEmployerId,
+    };
   });
 }
 

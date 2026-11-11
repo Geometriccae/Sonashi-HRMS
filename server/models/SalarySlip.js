@@ -18,12 +18,17 @@ const salarySlipSchema = new mongoose.Schema({
     otherAllowance: { type: Number, default: 0 },
     grossSalary: { type: Number, default: 0 },
     // Deductions
-    advance: { type: Number, default: 0 },
+    advance: { type: Number, default: 0 },       // fixed deduction from Employee Master (salaryDetails.deduction)
     leave: { type: Number, default: 0 },
     staffLoan: { type: Number, default: 0 },
     profTax: { type: Number, default: 0 },
     incomeTaxTDS: { type: Number, default: 0 },
     totalDeduction: { type: Number, default: 0 },
+    // Salary advance recovery applied this month.
+    // Separate from 'advance' (which is the legacy fixed deduction from Employee Master).
+    salaryAdvanceDeduction: { type: Number, default: 0 },
+    // SalaryAdvance _ids used for this slip — prevents double-deduction on regeneration.
+    salaryAdvanceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SalaryAdvance' }],
     // Legacy field (keeping for backward compatibility)
     deductionsPFTax: { type: Number, default: 0 },
     netSalary: { type: Number, required: true },

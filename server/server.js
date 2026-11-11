@@ -39,7 +39,9 @@ const salarySlipRoutes = require('./routes/salarySlipRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const sifRoutes = require('./routes/sifRoutes');
+const salaryAdvanceRoutes = require('./routes/salaryAdvanceRoutes');
 const { initExpiryCron } = require('./services/expiryService');
+const { initVacationStatusCron } = require('./services/vacationStatusService');
 const Employee = require('./models/Employee');
 
 
@@ -233,7 +235,18 @@ app.use(cors({
     console.warn('HTTP CORS blocked origin:', origin);
     return cb(new Error('Not allowed by CORS'), false);
   },
-  credentials: true
+  credentials: true,
+  exposedHeaders: [
+    'Content-Disposition',
+    'X-SIF-Edr-Count',
+    'X-SIF-Skipped',
+    'X-SIF-Excluded-Company',
+    'X-SIF-Total',
+    'X-SIF-Is-Individual',
+    'X-SIF-Employee-Id',
+    'X-SIF-Agent-Code',
+    'X-SIF-Skip-Summary'
+  ]
 }));
 
 // ====== MIDDLEWARE ======
@@ -332,6 +345,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/options', optionRoutes);
 app.use('/api/sif', sifRoutes);
+app.use('/api/salary-advances', salaryAdvanceRoutes);
 
 
 // ====== DATABASE CONNECTION ======
@@ -422,6 +436,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔌 Socket.io is enabled and listening for connections`);
   initExpiryCron(io);
+  initVacationStatusCron(io);
 });
 
 module.exports = { app, server, io };

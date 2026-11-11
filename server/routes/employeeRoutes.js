@@ -48,6 +48,7 @@ const {
   vacationReturnDatePatch,
 } = require('../utils/vacationStatusWrite');
 const { syncLinkedLeaveDatesFromEmployee } = require('../utils/syncLeaveDatesFromEmployee');
+const { autoUpdateVacationStatuses } = require('../services/vacationStatusService');
 const {
   getCompanyCodeMap,
   applyLiveCompanyCodes,
@@ -1011,6 +1012,21 @@ router.post('/', authMiddleware, blockViewerWrites, uploadProfilePhoto.single('p
 
 // Dedicated vacation-status write path used by Team Management, Dashboard,
 // Annual Vacations, and Employee Details.
+router.post('/auto-update-vacation-status', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user?.role || '').toLowerCase();
+    if (!['admin', 'hod', 'hr', 'authorize_user'].includes(role)) {
+      return res.status(403).json({ message: 'You do not have permission to trigger vacation status update.' });
+    }
+    const io = req.app.get('io');
+    const result = await autoUpdateVacationStatuses(new Date(), io);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error in /auto-update-vacation-status:', error);
+    return res.status(500).json({ message: 'Server error updating vacation statuses' });
+  }
+});
+
 router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
   try {
     const role = String(req.user?.role || '').toLowerCase();

@@ -9,6 +9,8 @@ import employeeService from "../../services/EmployeeService";
 import SalarySlipBulkImportModal from "./SalarySlipBulkImportModal";
 import SalarySlipManualAddModal from "./SalarySlipManualAddModal";
 import SalarySlipEditModal from "./SalarySlipEditModal";
+import SalaryAdvanceModal from "./SalaryAdvanceModal";
+import SalaryReportSifImportModal from "./SalaryReportSifImportModal";
 import DateInput from "../DateInput";
 import { formatAed } from "../../utils/currency";
 import { isPlaceholderEmployeeEmail } from "../../utils/employeeEmailDisplay";
@@ -411,6 +413,8 @@ function SalarySlipTable({ userRole }) {
     const [isManualAddModalOpen, setIsManualAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [slipToEdit, setSlipToEdit] = useState(null);
+    const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+    const [isSalaryReportSifImportOpen, setIsSalaryReportSifImportOpen] = useState(false);
 
     // Expense modal state (for employees only)
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -972,6 +976,25 @@ function SalarySlipTable({ userRole }) {
                                 <img src={plus} alt="" className={styles.addBtnIcon} />
                                 <span>Create Salary Slip</span>
                             </button>
+                            
+                            <button 
+                                type="button"
+                                onClick={() => setIsSalaryReportSifImportOpen(true)} 
+                                className={styles.excelBtn}
+                                style={{ background: "#4f46e5", borderColor: "#4f46e5", color: "#ffffff" }}
+                                title="Import edited Salary Report Excel or SIF file with validation and review"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <span>Import Salary Report / SIF</span>
+                            </button>
+                            <button onClick={() => setIsAdvanceModalOpen(true)} className={styles.addBtn} style={{background:"#0f766e"}}>
+                                <img src={plus} alt="" className={styles.addBtnIcon} />
+                                <span>Create Advance</span>
+                            </button>
                             <button 
                                 onClick={handleGenerateBulk} 
                                 className={styles.generateBtn}
@@ -1409,6 +1432,22 @@ function SalarySlipTable({ userRole }) {
                 }}
                 onSuccess={fetchData}
                 salarySlip={slipToEdit}
+            />
+
+            
+            <SalaryReportSifImportModal
+                isOpen={isSalaryReportSifImportOpen}
+                onClose={() => setIsSalaryReportSifImportOpen(false)}
+                onSuccess={fetchData}
+                defaultMonth={selectedMonth === 'All' ? new Date().getMonth() + 1 : MONTH_NAMES.indexOf(selectedMonth) + 1}
+                defaultYear={selectedYear === 'All' ? new Date().getFullYear() : Number(selectedYear)}
+                canManage={canManageSlips}
+                showToast={showToast}
+            />
+            <SalaryAdvanceModal
+                isOpen={isAdvanceModalOpen}
+                onClose={() => setIsAdvanceModalOpen(false)}
+                onSuccess={fetchData}
             />
 
             {/* Create Expense Modal for Employees */}

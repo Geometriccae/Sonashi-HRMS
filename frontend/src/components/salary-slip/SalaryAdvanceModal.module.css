@@ -1,0 +1,289 @@
+/* SalaryAdvanceModal.module.css */
+
+/* ── Modal sizing ───────────────────────────── */
+.advanceModal {
+  max-width: 700px;
+  width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.hint {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+/* ── Employee cards ─────────────────────────── */
+.rowsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.employeeCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  background: #f8fafc;
+  position: relative;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cardIndex {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.removeRowBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ef4444;
+  padding: 4px 7px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.removeRowBtn:hover {
+  background: #fee2e2;
+}
+
+/* ── Searchable Employee Picker ─────────────── */
+.pickerWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.pickerInputRow {
+  display: flex;
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 8px;
+  gap: 6px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.pickerInputRow:focus-within {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15);
+}
+
+.pickerSearchIcon {
+  color: #94a3b8;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.pickerInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 9px 0;
+  font-size: 14px;
+  color: #1e293b;
+  background: transparent;
+  min-width: 0;
+}
+.pickerInput::placeholder {
+  color: #94a3b8;
+}
+
+.pickerClearBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 2px 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.pickerClearBtn:hover {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+.pickerToggleBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.pickerToggleBtn:hover {
+  color: #0f172a;
+}
+
+.pickerDropdown {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.pickerList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.pickerItem {
+  display: flex;
+  flex-direction: column;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid #f1f5f9;
+}
+.pickerItem:last-child {
+  border-bottom: none;
+}
+.pickerItem:hover {
+  background: #f0fdf4;
+}
+.pickerItemSelected {
+  background: #dcfce7;
+}
+.pickerItemSelected:hover {
+  background: #bbf7d0;
+}
+
+.pickerEmpName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.pickerEmpMeta {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.pickerEmpty {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.pickerMore {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  background: #f8fafc;
+  text-align: center;
+  font-style: italic;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* ── Employee info chips ────────────────────── */
+.empInfo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 12px;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0 12px;
+}
+.empInfo span strong {
+  color: #0f172a;
+  margin-right: 3px;
+}
+
+/* ── Amount input ───────────────────────────── */
+.amountInput {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+  color: #1e293b;
+  transition: border-color 0.2s;
+}
+.amountInput:focus {
+  outline: none;
+  border-color: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15);
+}
+
+/* ── Add-row button ─────────────────────────── */
+.addRowBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1.5px dashed #4ade80;
+  border-radius: 7px;
+  background: transparent;
+  color: #16a34a;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  margin-bottom: 20px;
+}
+.addRowBtn:hover:not(:disabled) {
+  background: #f0fdf4;
+}
+.addRowBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Loading pill ───────────────────────────── */
+.loadingPill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+/* ── Spinner animation ──────────────────────── */
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

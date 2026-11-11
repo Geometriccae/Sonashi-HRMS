@@ -5,6 +5,7 @@ import DashboardOverview from "../components/DashboardOverview";
 import CheckIn from "../components/CheckIn";
 import MobileBottomNavigation from "../components/MobileBottomNavigation";
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
+import { isAuthorizeUser } from "../utils/permissions";
 
 function Dashboard() {
     const [userRole, setUserRole] = useState("");
@@ -53,7 +54,7 @@ function Dashboard() {
         />
 
         <PageBody as="section" className={styles["main-content"]}>
-          <DashboardOverview />
+          <DashboardOverview userRole={userRole} />
         </PageBody>
       </main>
 

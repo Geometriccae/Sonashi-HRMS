@@ -12,6 +12,11 @@ const {
     getPendingLeaveRecipients,
 } = require('../services/pendingLeaveEmailService');
 const {
+    sendAdminLeaveSubmittedEmail,
+    sendAdminLeaveApprovedEmail,
+    sendAdminLeaveRejectedEmail,
+} = require('../services/adminLeaveEmailService');
+const {
     patchListCacheEmployee,
     invalidateListCache,
     invalidateApprovedLeavesCache,
@@ -915,6 +920,7 @@ router.post('/', authMiddleware, async (req, res) => {
             adminApprovedAt: isPastLeave ? new Date() : undefined,
             requestAirfare: req.body.requestAirfare === true || req.body.requestAirfare === 'true',
             requesterRole,
+            submittedByUser: req.user?.id || req.user?._id || null,
             changeStatus: createEntry.changeStatus,
             changedBy: createEntry.changedBy,
             changedByUser: createEntry.changedByUser,
@@ -945,14 +951,25 @@ router.post('/', authMiddleware, async (req, res) => {
             appliedOn: savedRequest.appliedOn,
             status: savedRequest.status,
         };
-        sendLeaveRequestToHodAndAdmin(leaveSnapshot)
-            .then(() => console.log('[Leave] HOD/Admin email sent'))
-            .catch(e => console.error('[Leave] HOD/Admin email error:', e));
+        const isAdminLeave = String(requesterRole || '').toLowerCase() === 'admin';
 
-        // Once per new Pending request (not on page loads, edits, or status changes).
-        if (savedRequest.status === 'Pending') {
-            sendPendingLeaveNotification(savedRequest.toObject(), { transporter: getLeaveTransporter() })
-                .catch((e) => console.error('[Leave] Pending leave email error:', e?.message || e));
+        if (isAdminLeave) {
+            if (savedRequest.status === 'Pending') {
+                sendAdminLeaveSubmittedEmail(savedRequest.toObject ? savedRequest.toObject() : savedRequest, {
+                    transporter: getLeaveTransporter(),
+                    submitter: req.user,
+                }).catch(e => console.error('[AdminLeave] Email to manager error:', e?.message || e));
+            }
+        } else {
+            sendLeaveRequestToHodAndAdmin(leaveSnapshot)
+                .then(() => console.log('[Leave] HOD/Admin email sent'))
+                .catch(e => console.error('[Leave] HOD/Admin email error:', e));
+
+            // Once per new Pending request (not on page loads, edits, or status changes).
+            if (savedRequest.status === 'Pending') {
+                sendPendingLeaveNotification(savedRequest.toObject(), { transporter: getLeaveTransporter() })
+                    .catch((e) => console.error('[Leave] Pending leave email error:', e?.message || e));
+            }
         }
 
         if (!isPastLeave) {
@@ -977,6 +994,13 @@ router.put('/:id', authMiddleware, async (req, res) => {
         if (!oldRequest) {
             return res.status(404).json({ message: 'Leave request not found' });
         }
+
+        let requesterRole = String(oldRequest.requesterRole || '').toLowerCase();
+        if (!requesterRole && oldRequest.employee) {
+            const ownerUser = await User.findById(oldRequest.employee).select('role').lean();
+            requesterRole = String(ownerUser?.role || '').toLowerCase();
+        }
+        const isAdminLeave = requesterRole === 'admin';
 
         if (req.user.role === 'viewer' || req.user.role === 'authorize_user') {
             const hasFieldEdits = employeeId || employeeName || company || leaveType || startDate || endDate || reason
@@ -1008,13 +1032,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
                 });
             }
 
-            // Resolve whether this leave belongs to an Admin user
-            let requesterRole = String(oldRequest.requesterRole || '').toLowerCase();
-            if (!requesterRole && oldRequest.employee) {
-                const ownerUser = await User.findById(oldRequest.employee).select('role').lean();
-                requesterRole = String(ownerUser?.role || '').toLowerCase();
-            }
-            const isAdminLeave = requesterRole === 'admin';
+            // (isAdminLeave already resolved above)
 
             // Admin leave requests can ONLY be finalized by Authorize Users
             if (
@@ -1274,9 +1292,25 @@ router.put('/:id', authMiddleware, async (req, res) => {
         await syncEmployeeVacationStatus(updatedRequest);
 
         if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
-            sendLeaveStatusToEmployee(updatedRequest, updateData.status)
-                .then(() => console.log('[Leave] Employee status email sent'))
-                .catch(e => console.error('[Leave] Employee status email error:', e));
+            if (isAdminLeave) {
+                if (updateData.status === 'Approved') {
+                    sendAdminLeaveApprovedEmail(updatedRequest.toObject ? updatedRequest.toObject() : updatedRequest, {
+                        manager: req.user,
+                        remarks: auditRemarks,
+                        transporter: getLeaveTransporter(),
+                    }).catch(e => console.error('[AdminLeave] Approved email error:', e?.message || e));
+                } else if (updateData.status === 'Rejected') {
+                    sendAdminLeaveRejectedEmail(updatedRequest.toObject ? updatedRequest.toObject() : updatedRequest, {
+                        manager: req.user,
+                        remarks: auditRemarks,
+                        transporter: getLeaveTransporter(),
+                    }).catch(e => console.error('[AdminLeave] Rejected email error:', e?.message || e));
+                }
+            } else {
+                sendLeaveStatusToEmployee(updatedRequest, updateData.status)
+                    .then(() => console.log('[Leave] Employee status email sent'))
+                    .catch(e => console.error('[Leave] Employee status email error:', e));
+            }
 
             const io = req.app.get('io');
             notifyLeaveStatusChange(io, updatedRequest, updateData.status, req.user.role)

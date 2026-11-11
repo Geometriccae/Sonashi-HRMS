@@ -30,6 +30,9 @@ const invalidateLeaveCache = () => {
     _cacheGen += 1;
     _cache = { data: null, key: "", ts: 0 };
     _inflight = {};
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("hrms:leave-data-changed", { detail: { ts: Date.now() } }));
+    }
 };
 
 const invalidateLeaveAndEmployeeCache = () => {
@@ -92,8 +95,26 @@ const deleteLeaveRequest = async (id) => {
     return response.data;
 };
 
+const getPendingLeaveCount = async ({ force = false } = {}) => {
+    const data = await getLeaveRequests({
+        status: "Pending",
+        page: 1,
+        limit: 1,
+        ...(force ? { force: true } : {}),
+    });
+    if (data && typeof data.total === "number") {
+        return data.total;
+    }
+    if (data?.metrics && typeof data.metrics.pending === "number") {
+        return data.metrics.pending;
+    }
+    const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+    return list.filter((r) => r.status === "Pending").length;
+};
+
 const leaveRequestService = {
     getLeaveRequests,
+    getPendingLeaveCount,
     createLeaveRequest,
     updateLeaveRequest,
     deleteLeaveRequest,
