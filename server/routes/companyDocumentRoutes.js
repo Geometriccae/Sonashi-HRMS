@@ -192,11 +192,6 @@ router.put("/:docId", authMiddleware, blockViewerWrites, upload.single("file"), 
     if (!doc) {
       return res.status(404).json({ error: "Document not found" });
     }
-    if (doc.recordType === "company") {
-      return res.status(409).json({
-        message: "Manage company records from the Employee Details Company dropdown.",
-      });
-    }
 
     const particulars = req.body.particulars ? String(req.body.particulars).trim() : "";
     if (!particulars) {
@@ -206,8 +201,16 @@ router.put("/:docId", authMiddleware, blockViewerWrites, upload.single("file"), 
     const issueDate = req.body.issueDate ? new Date(req.body.issueDate) : null;
     const expiryDate = req.body.expiryDate ? new Date(req.body.expiryDate) : null;
 
+    const oldParticulars = doc.particulars;
+    const oldDocNumber = doc.docNumber;
+
     doc.particulars = particulars;
-    doc.docNumber = req.body.docNumber ? String(req.body.docNumber).trim() : "";
+    if (req.body.docNumber !== undefined) {
+      doc.docNumber = req.body.docNumber ? String(req.body.docNumber).trim() : "";
+    }
+    if (req.body.employerId !== undefined) {
+      doc.employerId = normalizeEmployerId(req.body.employerId);
+    }
     doc.issueDate = issueDate && !Number.isNaN(issueDate.getTime()) ? issueDate : null;
     doc.expiryDate = expiryDate && !Number.isNaN(expiryDate.getTime()) ? expiryDate : null;
 
@@ -230,9 +233,20 @@ router.put("/:docId", authMiddleware, blockViewerWrites, upload.single("file"), 
     }
 
     await doc.save();
+
+    // If company details changed, keep employee assignments in sync
+    if (doc.recordType === "company") {
+      if (oldDocNumber && doc.docNumber && oldDocNumber !== doc.docNumber) {
+        await Employee.updateMany({ companyCode: oldDocNumber }, { companyCode: doc.docNumber });
+      }
+      if (oldParticulars && doc.particulars && oldParticulars !== doc.particulars) {
+        await Employee.updateMany({ office: oldParticulars }, { office: doc.particulars });
+      }
+    }
+
     res.json(doc);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || "Failed to update company document" });
   }
 });
 
@@ -242,10 +256,16 @@ router.delete("/:docId", authMiddleware, blockViewerWrites, async (req, res) => 
     if (!doc) {
       return res.status(404).json({ error: "Document not found" });
     }
+
     if (doc.recordType === "company") {
-      return res.status(409).json({
-        message: "Manage company records from the Employee Details Company dropdown.",
-      });
+        const employeeCount = await Employee.countDocuments({
+          $or: [{ companyCode: doc.docNumber }, { office: doc.particulars }],
+        });
+        if(employeeCount > 0) {
+        return res.status(409).json({
+          message: `Company is assigned to ${employeeCount} employee(s). Reassign them before deleting it.`,
+        });
+      }
     }
 
     if (doc.filePath) {

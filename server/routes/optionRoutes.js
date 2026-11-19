@@ -96,6 +96,31 @@ router.post('/:type', authMiddleware, async (req, res) => {
   }
 });
 
+// Update an option
+router.put('/:type/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id, type } = req.params;
+    const { label } = req.body;
+    if (!label || !label.trim()) {
+      return res.status(400).json({ message: 'Label is required' });
+    }
+    const value = label.trim();
+    console.log(`[API] Updating option - ID: ${id}, Type: ${type}, New Label: ${value}`);
+    const updated = await Option.findOneAndUpdate(
+      { _id: id, type },
+      { label: value, value },
+      { new: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ message: 'Option not found' });
+    }
+    res.json(updated);
+  } catch (error) {
+    console.error(`[API] Error updating option:`, error);
+    res.status(500).json({ message: 'Error updating option', error: error.message });
+  }
+});
+
 // Delete an option
 router.delete('/:type/:id', authMiddleware, async (req, res) => {
   try {

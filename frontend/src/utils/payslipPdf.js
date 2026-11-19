@@ -140,82 +140,88 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   let advance = slip.advance || 0;
   const leave = slip.leave || 0;
   const staffLoan = slip.staffLoan || 0;
-  const profTax = slip.profTax || 0;
-  const incomeTaxTDS = slip.incomeTaxTDS || 0;
   const salaryAdvanceDeductionRaw = slip.salaryAdvanceDeduction || 0;
-
-  const hasBreakdown = advance + leave + staffLoan + profTax + incomeTaxTDS + salaryAdvanceDeductionRaw > 0;
-  const legacyDeduction = slip.deductionsPFTax || slip.totalDeduction || 0;
-  if (!hasBreakdown && legacyDeduction > 0) {
-    advance = legacyDeduction;
-  }
-
-  const grossSalary =
-    slip.grossSalary || basicPay + hra + conveyanceAllowance + otherAllowance;
-  const totalDeduction =
-    slip.totalDeduction ||
-    advance + leave + staffLoan + profTax + incomeTaxTDS ||
-    slip.deductionsPFTax ||
-    0;
-  const netSalary = slip.netSalary || grossSalary - totalDeduction;
 
   const basicPayAed = Number(basicPay) || 0;
   const hraAed = Number(hra) || 0;
   const conveyanceAllowanceAed = Number(conveyanceAllowance) || 0;
   const otherAllowanceAed = Number(otherAllowance) || 0;
-  const advanceAed = Number(advance) || 0;
+  let advanceAed = Number(advance) || 0;
   const leaveAed = Number(leave) || 0;
   const staffLoanAed = Number(staffLoan) || 0;
-  const profTaxAed = Number(profTax) || 0;
-  const incomeTaxTDSAed = Number(incomeTaxTDS) || 0;
   const salaryAdvanceDeductionAed = Number(salaryAdvanceDeductionRaw) || 0;
 
-  // Full-page branded letterhead from the HQ Joint Ven template (user-supplied).
-  // Contains header, watermark, green border, and Sonashi footer logo.
-  try {
-    await addHighQualityImage(doc, "/letterhead_full.jpg", 0, 0, pageWidth, pageHeight, "JPEG");
-  } catch (error) {
-    console.error("HQ letterhead failed, falling back to header strip:", error);
-    try {
-      const letterheadImg = await loadImage("/letterhead_header.png");
-      const imgProps = doc.getImageProperties(letterheadImg);
-      const imgWidth = pageWidth - 20;
-      const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-      doc.addImage(letterheadImg, "PNG", 10, 8, imgWidth, imgHeight, undefined, "NONE");
-      doc.setDrawColor(76, 175, 80);
-      doc.setLineWidth(0.8);
-      doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
-    } catch (fallbackErr) {
-      console.error("Strict Mode Error: Failed to load letterhead header image.");
-    }
+  const hasBreakdown = advanceAed + leaveAed + staffLoanAed + salaryAdvanceDeductionAed > 0;
+  const legacyDeduction = Number(slip.deductionsPFTax || slip.totalDeduction || 0);
+  if (!hasBreakdown && legacyDeduction > 0) {
+    advanceAed = legacyDeduction;
   }
 
-  // Content starts below the letterhead header band (~18% of page).
-  let currentY = pageHeight * 0.18;
+  const grossSalary =
+    slip.grossSalary || (basicPayAed + hraAed + conveyanceAllowanceAed + otherAllowanceAed);
+
+  // Exclude Income Tax and Professional Tax from deductions per statutory requirement
+  const totalDeduction = advanceAed + leaveAed + staffLoanAed + salaryAdvanceDeductionAed;
+  const netSalary = Math.max(0, grossSalary - totalDeduction);
+
+  // ─── Header: HD-Quality Company Letterhead (Arabic + Logo + English) ─────────
+  let headerBottom = 12;
+  const headerWidth = pageWidth - margin * 2;
+  try {
+    let headerImg = null;
+    try {
+      headerImg = await loadImage("/letterhead.png");
+    } catch {
+      headerImg = await loadImage("/letterhead_header.png");
+    }
+
+    if (headerImg) {
+      const imgProps = doc.getImageProperties(headerImg);
+      const imgHeight = (imgProps.height * headerWidth) / imgProps.width;
+      doc.addImage(headerImg, "PNG", margin, 10, headerWidth, imgHeight, undefined, "FAST");
+      headerBottom = 10 + imgHeight;
+    }
+  } catch (error) {
+    console.warn("Letterhead image failed to load, falling back to text banner:", error);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text("SONASHI GENERAL TRADING LLC", pageWidth / 2, 18, { align: "center" });
+    headerBottom = 22;
+  }
+
+  // Clean black divider line under letterhead
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.line(margin, headerBottom + 3, pageWidth - margin, headerBottom + 3);
+
+  // ─── Title: Clean Black & White ──────────────────────────────────────────────
+  let currentY = headerBottom + 11;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(0, 0, 0);
   doc.text("SALARY SLIP", pageWidth / 2, currentY, { align: "center" });
 
-  currentY += 8;
+  currentY += 6;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(51, 65, 85);
+  doc.setFontSize(10);
+  doc.setTextColor(40, 40, 40);
   doc.text(`For the Month of: ${slip.month} ${slip.year}`, pageWidth / 2, currentY, {
     align: "center",
   });
 
-  currentY += 12;
+  currentY += 8;
   const employeeDetails = slipEmployeeDetails || payslipEmployeeFallback(slip);
 
-  const infoRowHeight = 5.4;
+  const infoRowHeight = 5.2;
   const infoBoxHeight = PAYSLIP_EMPLOYEE_ROWS.length * infoRowHeight + 3;
   const photoStripWidth = 24;
 
-  doc.setDrawColor(203, 213, 225);
+  // Clean Black & White employee info box
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
-  doc.setFillColor(248, 250, 252);
-  doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, "FD");
+  doc.setFillColor(255, 255, 255);
+  doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, "D");
 
   const infoBoxTop = currentY;
   const fieldsWidth = pageWidth - margin * 2 - photoStripWidth;
@@ -234,7 +240,7 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
     doc.setFontSize(8);
   };
 
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(0, 0, 0);
   PAYSLIP_EMPLOYEE_ROWS.forEach((row, rowIndex) => {
     const baseline = infoBoxTop + 5 + rowIndex * infoRowHeight;
     row.forEach(([label, key], columnIndex) => {
@@ -296,57 +302,63 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
     }
   }
 
+  // ─── Earnings & Deductions Table: Clean Black & White ────────────────────────
   currentY = infoBoxTop + infoBoxHeight + 6;
   const halfWidth = (pageWidth - margin * 2) / 2;
 
-  doc.setFillColor(226, 232, 240);
-  doc.rect(margin, currentY, halfWidth, 10, "FD");
-  doc.rect(margin + halfWidth, currentY, halfWidth, 10, "FD");
+  // Header band
+  doc.setFillColor(240, 240, 240);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, currentY, halfWidth, 9, "FD");
+  doc.rect(margin + halfWidth, currentY, halfWidth, 9, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Earnings", margin + 5, currentY + 7);
-  doc.text("Deductions", margin + halfWidth + 5, currentY + 7);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Earnings", margin + 5, currentY + 6.2);
+  doc.text("Deductions", margin + halfWidth + 5, currentY + 6.2);
 
-  currentY += 10;
-  doc.setFillColor(248, 250, 252);
-  doc.rect(margin, currentY, halfWidth / 2 + 10, 8, "FD");
-  doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 8, "FD");
-  doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 8, "FD");
-  doc.rect(margin + halfWidth + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 8, "FD");
+  currentY += 9;
+  doc.setFillColor(250, 250, 250);
+  doc.rect(margin, currentY, halfWidth / 2 + 10, 7.5, "FD");
+  doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 7.5, "FD");
+  doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 7.5, "FD");
+  doc.rect(margin + halfWidth + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 7.5, "FD");
 
-  doc.setFontSize(9);
-  doc.text("Description", margin + 5, currentY + 5.5);
-  doc.text("Amount (AED)", margin + halfWidth - 5, currentY + 5.5, { align: "right" });
-  doc.text("Description", margin + halfWidth + 5, currentY + 5.5);
-  doc.text("Amount (AED)", margin + halfWidth * 2 - 5, currentY + 5.5, {
-    align: "right",
-  });
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Description", margin + 5, currentY + 5.2);
+    doc.text("Amount (AED)", margin + halfWidth - 5, currentY + 5.2, { align: "right" });
+    doc.text("Description", margin + halfWidth + 5, currentY + 5.2);
+    doc.text("Amount (AED)", margin + halfWidth * 2 - 5, currentY + 5.2, {
+      align: "right",
+    });
 
-  const earningsData = [
-    ["Basic Pay", basicPayAed.toFixed(2)],
-    ["HRA", hraAed.toFixed(2)],
-    ["Conveyance Allowance", conveyanceAllowanceAed.toFixed(2)],
-    ["Other Allowance", otherAllowanceAed.toFixed(2)],
-  ];
+    const earningsData = [
+      ["Basic Pay", basicPayAed.toFixed(2)],
+      ["HRA", hraAed.toFixed(2)],
+      ["Conveyance Allowance", conveyanceAllowanceAed.toFixed(2)],
+      ["Other Allowance", otherAllowanceAed.toFixed(2)],
+    ];
 
-  const deductionsData = [
-    ["Advance", advanceAed.toFixed(2)],
-    ["Leave", leaveAed.toFixed(2)],
-    ["Staff Loan", staffLoanAed.toFixed(2)],
-    ["Prof. Tax", profTaxAed.toFixed(2)],
-    ["Income Tax / TDS", incomeTaxTDSAed.toFixed(2)],
-    ...(salaryAdvanceDeductionAed > 0 ? [["Salary Advance", salaryAdvanceDeductionAed.toFixed(2)]] : []),
-  ];
+    // Income Tax and Professional Tax REMOVED from deductions
+    const deductionsData = [
+      ["Advance", advanceAed.toFixed(2)],
+      ["Leave", leaveAed.toFixed(2)],
+      ["Staff Loan", staffLoanAed.toFixed(2)],
+      ...(salaryAdvanceDeductionAed > 0 ? [["Salary Advance", salaryAdvanceDeductionAed.toFixed(2)]] : []),
+    ];
 
-  const maxRows = Math.max(earningsData.length, deductionsData.length);
-  const rowHeight = 8;
-  currentY += 8;
+    const maxRows = Math.max(earningsData.length, deductionsData.length);
+    const rowHeight = 7.5;
+    currentY += 7.5;
 
-  doc.setFont("helvetica", "normal");
-  for (let i = 0; i < maxRows; i++) {
-    doc.setDrawColor(203, 213, 225);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    for(let i = 0; i<maxRows; i++) {
+    doc.setDrawColor(210, 210, 210);
+    doc.setLineWidth(0.25);
     doc.rect(margin, currentY, halfWidth / 2 + 10, rowHeight);
     doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, rowHeight);
     doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, rowHeight);
@@ -358,94 +370,101 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
     );
 
     if (earningsData[i]) {
-      doc.text(earningsData[i][0], margin + 2, currentY + 5.5);
-      doc.text(earningsData[i][1], margin + halfWidth - 3, currentY + 5.5, {
-        align: "right",
-      });
-    }
+        doc.text(earningsData[i][0], margin + 4, currentY + 5.2);
+        doc.text(earningsData[i][1], margin + halfWidth - 4, currentY + 5.2, {
+          align: "right",
+        });
+      }
 
     if (deductionsData[i]) {
-      doc.text(deductionsData[i][0], margin + halfWidth + 2, currentY + 5.5);
-      doc.text(deductionsData[i][1], margin + halfWidth * 2 - 3, currentY + 5.5, {
-        align: "right",
-      });
-    }
+          doc.text(deductionsData[i][0], margin + halfWidth + 4, currentY + 5.2);
+          doc.text(deductionsData[i][1], margin + halfWidth * 2 - 4, currentY + 5.2, {
+            align: "right",
+          });
+        }
 
     currentY += rowHeight;
-  }
+      }
 
-  doc.setLineWidth(0.5);
-  doc.setFillColor(241, 245, 249);
+      // Gross Salary & Total Deductions Summary Row
+      doc.setLineWidth(0.4);
+      doc.setDrawColor(0, 0, 0);
+      doc.setFillColor(245, 245, 245);
 
-  doc.rect(margin, currentY, halfWidth / 2 + 10, 10, "FD");
-  doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 10, "FD");
-  doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 10, "FD");
-  doc.rect(
-    margin + halfWidth + halfWidth / 2 + 10,
-    currentY,
-    halfWidth / 2 - 10,
-    10,
-    "FD"
-  );
+      doc.rect(margin, currentY, halfWidth / 2 + 10, 9, "FD");
+      doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 9, "FD");
+      doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 9, "FD");
+      doc.rect(
+        margin + halfWidth + halfWidth / 2 + 10,
+        currentY,
+        halfWidth / 2 - 10,
+        9,
+        "FD"
+      );
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text("Gross Salary", margin + 5, currentY + 7);
-  doc.text(Number(grossSalary).toFixed(2), margin + halfWidth - 3, currentY + 7, {
-    align: "right",
-  });
+      doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text("Gross Salary", margin + 4, currentY + 6.2);
+        doc.text(Number(grossSalary).toFixed(2), margin + halfWidth - 4, currentY + 6.2, {
+          align: "right",
+        });
 
-  doc.text("Total Deductions", margin + halfWidth + 5, currentY + 7);
-  doc.text(Number(totalDeduction).toFixed(2), margin + halfWidth * 2 - 3, currentY + 7, {
-    align: "right",
-  });
+          doc.text("Total Deductions", margin + halfWidth + 4, currentY + 6.2);
+          doc.text(Number(totalDeduction).toFixed(2), margin + halfWidth * 2 - 4, currentY + 6.2, {
+            align: "right",
+          });
 
-  currentY += 14;
-  doc.setFillColor(226, 232, 240);
-  doc.setDrawColor(148, 163, 184);
-  doc.rect(margin, currentY, pageWidth - margin * 2, 12, "FD");
+          // Net Payable Box
+          currentY += 14;
+          doc.setFillColor(255, 255, 255);
+          doc.setDrawColor(0, 0, 0);
+          doc.setLineWidth(0.6);
+          doc.rect(margin, currentY, pageWidth - margin * 2, 12, "FD");
 
-  doc.setFontSize(12);
-  doc.text("Net Payable:", margin + halfWidth + 5, currentY + 8);
-  doc.text(`AED ${Number(netSalary).toFixed(2)}`, pageWidth - margin - 5, currentY + 8, {
-    align: "right",
-  });
+          doc.setFontSize(11);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(0, 0, 0);
+          doc.text("Net Payable:", margin + halfWidth + 5, currentY + 8);
+            doc.text(`AED ${Number(netSalary).toFixed(2)}`, pageWidth - margin - 6, currentY + 8, {
+              align: "right",
+            });
 
-  currentY += 30;
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(148, 163, 184);
-  doc.text(
-    "This is a system generated payslip, Signature not required",
-    pageWidth / 2,
-    pageHeight - 22,
-    { align: "center" }
-  );
+            // Footer: System generated note
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(90, 90, 90);
+            doc.text(
+              "This is a system generated payslip, Signature not required",
+              pageWidth / 2,
+              pageHeight - 20,
+              { align: "center" }
+            );
 
-  const fileName = `Payslip_${String(slip.employeeName || "Unknown").replace(/[^a-zA-Z0-9]/g, "_")}_${slip.month}_${slip.year}.pdf`;
-  return { doc, fileName };
-}
+            const fileName = `Payslip_${String(slip.employeeName || "Unknown").replace(/[^a-zA-Z0-9]/g, "_")}_${slip.month}_${slip.year}.pdf`;
+            return { doc, fileName };
+          }
 
 /** Fetch employee details then build PDF (same path as individual download). */
 export async function buildPayslipPdfForSlip(slip) {
-  let slipEmployeeDetails = null;
-  try {
-    slipEmployeeDetails = await salarySlipService.getPayslipEmployeeDetails(slip._id);
-  } catch (detailsError) {
-    console.error("Payslip employee details not loaded:", detailsError);
-  }
+          let slipEmployeeDetails = null;
+          try {
+            slipEmployeeDetails = await salarySlipService.getPayslipEmployeeDetails(slip._id);
+          } catch(detailsError) {
+            console.error("Payslip employee details not loaded:", detailsError);
+          }
   return buildPayslipPdfDoc(slip, slipEmployeeDetails);
-}
+        }
 
 export async function downloadPayslipPdf(slip) {
-  const { doc, fileName } = await buildPayslipPdfForSlip(slip);
-  doc.save(fileName);
-  return fileName;
-}
+        const { doc, fileName } = await buildPayslipPdfForSlip(slip);
+        doc.save(fileName);
+        return fileName;
+      }
 
 /** PDF as Blob for ZIP packaging (same template as individual download). */
 export async function buildPayslipPdfBlob(slip) {
-  const { doc, fileName } = await buildPayslipPdfForSlip(slip);
-  const blob = doc.output("blob");
-  return { blob, fileName };
-}
+        const { doc, fileName } = await buildPayslipPdfForSlip(slip);
+        const blob = doc.output("blob");
+        return { blob, fileName };
+      }

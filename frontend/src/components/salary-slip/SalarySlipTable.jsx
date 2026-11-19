@@ -90,9 +90,9 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
                 <p className={styles.dialogMessage}>{message}</p>
                 <div className={styles.dialogActions}>
                     <button className={styles.dialogCancelBtn} onClick={onClose}>Cancel</button>
-                    <button 
-                        className={styles.dialogDeleteBtn} 
-                        style={{ backgroundColor: confirmColor }} 
+                    <button
+                        className={styles.dialogDeleteBtn}
+                        style={{ backgroundColor: confirmColor }}
                         onClick={onConfirm}
                     >
                         {confirmText}
@@ -181,7 +181,7 @@ const CreateExpenseModal = ({ isOpen, onClose, onSuccess, showToast }) => {
             submitFormData.append('expenseAmount', formData.expenseAmount);
             submitFormData.append('expenseDate', formData.expenseDate);
             submitFormData.append('expenseCategory', formData.expenseCategory.join(', '));
-            
+
             // Append file if selected
             if (selectedFile) {
                 submitFormData.append('document', selectedFile);
@@ -368,7 +368,7 @@ function SalarySlipTable({ userRole }) {
     const isAdminRole = currentRole === "admin";
     const isHR = currentRole === "hr";
     const isViewer =
-      currentRole === "viewer" || currentRole === "authorize_user";
+        currentRole === "viewer" || currentRole === "authorize_user";
     const isAdmin = isAdminRole || isHOD || isHR || isViewer;
     const canManageSlips = (isAdminRole || isHOD) && !isViewer;
     const { showToast } = useToast();
@@ -474,7 +474,7 @@ function SalarySlipTable({ userRole }) {
             showToast(error.message || 'Failed to reject expense.', 'error');
         }
     };
-    
+
     // Fetch unique departments from employees
     useEffect(() => {
         const fetchDepartments = async () => {
@@ -549,14 +549,14 @@ function SalarySlipTable({ userRole }) {
             : salarySlips;
 
     const filteredSalarySlips = periodFilteredSlips.filter(slip => {
-        const matchesSearch = slip.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                             slip.emailId?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = slip.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            slip.emailId?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesDept = selectedDepartment === "All" || slip.department === selectedDepartment;
         return matchesSearch && matchesDept;
     });
 
-    const filteredExpenses = expenses.filter(exp => 
-        exp.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const filteredExpenses = expenses.filter(exp =>
+        exp.employeeName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         exp.employeeEmail?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -774,8 +774,8 @@ function SalarySlipTable({ userRole }) {
             }
             fetchData();
         } catch (error) {
-            const errorMsg = error.message.includes('Unexpected token') 
-                ? "Backend error. Please check your server." 
+            const errorMsg = error.message.includes('Unexpected token')
+                ? "Backend error. Please check your server."
                 : error.message;
             showToast(errorMsg || "Failed to generate slips.", "error");
         } finally {
@@ -909,9 +909,9 @@ function SalarySlipTable({ userRole }) {
                                         {departments.map(d => <option key={d} value={d}>{d}</option>)}
                                     </select>
                                     <div className={styles.searchContainer}>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Search Employee..." 
+                                        <input
+                                            type="text"
+                                            placeholder="Search Employee..."
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             className={styles.searchInput}
@@ -958,9 +958,9 @@ function SalarySlipTable({ userRole }) {
                             )}
                             {reportType === 'expense' && (
                                 <div className={styles.searchContainer}>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Search Employee..." 
+                                    <input
+                                        type="text"
+                                        placeholder="Search Employee..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         className={styles.searchInput}
@@ -976,10 +976,10 @@ function SalarySlipTable({ userRole }) {
                                 <img src={plus} alt="" className={styles.addBtnIcon} />
                                 <span>Create Salary Slip</span>
                             </button>
-                            
-                            <button 
+
+                            <button
                                 type="button"
-                                onClick={() => setIsSalaryReportSifImportOpen(true)} 
+                                onClick={() => setIsSalaryReportSifImportOpen(true)}
                                 className={styles.excelBtn}
                                 style={{ background: "#4f46e5", borderColor: "#4f46e5", color: "#ffffff" }}
                                 title="Import edited Salary Report Excel or SIF file with validation and review"
@@ -991,229 +991,322 @@ function SalarySlipTable({ userRole }) {
                                 </svg>
                                 <span>Import Salary Report / SIF</span>
                             </button>
-                            <button onClick={() => setIsAdvanceModalOpen(true)} className={styles.addBtn} style={{background:"#0f766e"}}>
-                                <img src={plus} alt="" className={styles.addBtnIcon} />
-                                <span>Create Salary Advance</span>
-                            </button>
-                            <button 
-                                onClick={handleGenerateBulk} 
-                                className={styles.generateBtn}
-                                disabled={isGenerating}
-                            >
-                                {isGenerating ? (
-                                    <div className={styles.spinner}></div>
-                                ) : (
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M21 2v6h-6"></path>
-                                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
-                                        <path d="M3 22v-6h6"></path>
-                                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
-                                    </svg>
-                                )}
-                                <span>{isGenerating ? 'Generating...' : 'Auto-Generate for All'}</span>
-                            </button>
-                            {/* <div className={styles.importWrapper}>
+                                <button
+                                    onClick={() => setIsAdvanceModalOpen(true)}
+                                    className={styles.addBtn}
+                                    style={{
+                                        background: "#0284c7",
+                                        borderColor: "#0284c7",
+                                        color: "#ffffff"
+                                    }}
+                                    title="Create Salary Advance or Commission Payout"
+                                >
+                                    <img src={plus} alt="" className={styles.addBtnIcon} style={{ filter: "brightness(0) invert(1)" }} />
+                                    <span>Create Salary Advance</span>
+                                </button>
+                                <button
+                                    onClick={handleGenerateBulk}
+                                    className={styles.generateBtn}
+                                    disabled={isGenerating}
+                                >
+                                    {isGenerating ? (
+                                        <div className={styles.spinner}></div>
+                                    ) : (
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M21 2v6h-6"></path>
+                                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                                            <path d="M3 22v-6h6"></path>
+                                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                                        </svg>
+                                    )}
+                                    <span>{isGenerating ? 'Generating...' : 'Auto-Generate for All'}</span>
+                                </button>
+                                {/* <div className={styles.importWrapper}>
                                 </button>
                             </div> */}
-                            {selectedSlips.length > 0 && (
-                                <button
-                                    onClick={() => setBulkDeleteConfirmOpen(true)}
-                                    className={styles.bulkDeleteBtn}
-                                >
-                                    <TrashIcon />
-                                    <span>Delete Selected ({selectedSlips.length})</span>
+                                {selectedSlips.length > 0 && (
+                                    <button
+                                        onClick={() => setBulkDeleteConfirmOpen(true)}
+                                        className={styles.bulkDeleteBtn}
+                                    >
+                                        <TrashIcon />
+                                        <span>Delete Selected ({selectedSlips.length})</span>
+                                    </button>
+                                )}
+                            </>
+                    )}
+                            {!isAdmin && (employeeTab === 'expense') && (
+                                <button onClick={() => setIsExpenseModalOpen(true)} className={styles.expenseBtn}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                    <span>Create Expense</span>
                                 </button>
                             )}
-                        </>
-                    )}
-                    {!isAdmin && (employeeTab === 'expense') && (
-                        <button onClick={() => setIsExpenseModalOpen(true)} className={styles.expenseBtn}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="12" y1="1" x2="12" y2="23"></line>
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                            </svg>
-                            <span>Create Expense</span>
-                        </button>
-                    )}
+                        </div>
                 </div>
-            </div>
 
-            {/* Employee Tab Controls */}
-            {!isAdmin && (
-                <div className={styles.tabControls}>
-                    <div className={styles.tabButtons}>
-                        <button
-                            className={`${styles.tabButton} ${employeeTab === 'salary' ? styles.tabButtonActive : ''}`}
-                            onClick={() => setEmployeeTab('salary')}
-                        >
-                            Salary Slip
-                        </button>
-                        <button
-                            className={`${styles.tabButton} ${employeeTab === 'expense' ? styles.tabButtonActive : ''}`}
-                            onClick={() => setEmployeeTab('expense')}
-                        >
-                            Expense
-                        </button>
+                {/* Employee Tab Controls */}
+                {!isAdmin && (
+                    <div className={styles.tabControls}>
+                        <div className={styles.tabButtons}>
+                            <button
+                                className={`${styles.tabButton} ${employeeTab === 'salary' ? styles.tabButtonActive : ''}`}
+                                onClick={() => setEmployeeTab('salary')}
+                            >
+                                Salary Slip
+                            </button>
+                            <button
+                                className={`${styles.tabButton} ${employeeTab === 'expense' ? styles.tabButtonActive : ''}`}
+                                onClick={() => setEmployeeTab('expense')}
+                            >
+                                Expense
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
-
-            <div className={`${styles.tableWrapper} hrms-table-scroll`}>
-                {/* Salary Slips Table */}
-                {((isAdmin && reportType === 'salary') || (!isAdmin && (employeeTab === 'salary'))) && (
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                {canManageSlips && (
-                                    <th className={styles.checkboxColumn}>
-                                        <input
-                                            type="checkbox"
-                                            className={styles.checkbox}
-                                            checked={currentSlips.length > 0 && selectedSlips.length === currentSlips.length}
-                                            onChange={handleSelectAll}
-                                        />
-                                    </th>
-                                )}
-                                <th>Employee Name</th>
-                                {isAdmin && <th>Email ID</th>}
-                                <th>Designation</th>
-                                {isAdmin && <th>Month</th>}
-                                {isAdmin && <th>Year</th>}
-                                {!isAdmin && <th>Month & Year</th>}
-                                <th>BASIC (AED)</th>
-                                <th>HOUSE RENT (AED)</th>
-                                <th>TRAVEL EXP (AED)</th>
-                                <th>OTHER (AED)</th>
-                                <th>DEDUCTION (AED)</th>
-                                <th>Net Salary (AED)</th>
-                                <th className={styles.actionsColumn}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {currentSlips.length > 0 ? (
-                                currentSlips.map((slip) => (
-                                    <tr key={slip._id} className={selectedSlips.includes(slip._id) ? styles.selectedRow : ""}>
-                                        {canManageSlips && (
-                                            <td className={styles.checkboxColumn}>
-                                                <input
-                                                    type="checkbox"
-                                                    className={styles.checkbox}
-                                                    checked={selectedSlips.includes(slip._id)}
-                                                    onChange={() => handleSelectRow(slip._id)}
-                                                />
-                                            </td>
-                                        )}
-                                        <td className={styles.empName}>{slip.employeeName}</td>
-                                        {isAdmin && (
-                                            <td>
-                                                {(slip.emailId && !slip.emailId.includes('import.hrms.placeholder')) 
-                                                    ? slip.emailId 
-                                                    : '-'}
-                                            </td>
-                                        )}
-                                        <td>{slip.designation}</td>
-                                        {isAdmin && <td>{slip.month}</td>}
-                                        {isAdmin && <td>{slip.year}</td>}
-                                        {!isAdmin && <td className={styles.monthYear}>{slip.month} {slip.year}</td>}
-                                        <td>{Number(slip.basicPay ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td>{Number(slip.hra ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td>{Number(slip.conveyanceAllowance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td>{Number(slip.otherAllowance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td>{Number(slip.deductionsPFTax ?? slip.totalDeduction ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td><span className={styles.netSal}>{formatAed(slip.netSalary ?? 0)}</span></td>
-                                        <td>
-                                            <div className={styles.rowActions}>
-                                                <button
-                                                    className={styles.downloadBtn}
-                                                    onClick={() => handleDownload(slip)}
-                                                    title="Download PDF"
-                                                >
-                                                    <DownloadIcon />
-                                                    {!isAdmin && <span>Download</span>}
-                                                </button>
-                                                {canManageSlips && (
-                                                    <button
-                                                        className={styles.editBtn}
-                                                        onClick={() => {
-                                                            setSlipToEdit(slip);
-                                                            setIsEditModalOpen(true);
-                                                        }}
-                                                        title="Edit Record"
-                                                    >
-                                                        <EditIcon />
-                                                    </button>
-                                                )}
-                                                {canManageSlips && (
-                                                    <button
-                                                        className={styles.deleteBtn}
-                                                        onClick={() => openDeleteDialog(slip)}
-                                                        title="Delete Record"
-                                                    >
-                                                        <TrashIcon />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={isAdmin ? 14 : 9} className={styles.noData}>
-                                        No salary slips found for the selected period.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
                 )}
 
-                {/* Expense Reports Table (Admin Only) */}
-                {isAdmin && reportType === 'expense' && (
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                <th>Employee Name</th>
-                                <th>Email ID</th>
-                                <th>Expense Title</th>
-                                <th>Category</th>
-                                <th>Amount (AED)</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                                <th className={styles.actionsColumn}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {currentExpenses.length > 0 ? (
-                                currentExpenses.map((expense) => (
-                                    <tr key={expense._id}>
-                                        <td className={styles.empName}>{expense.employeeName}</td>
-                                        <td>{expense.employeeEmail}</td>
-                                        <td>{expense.expenseTitle}</td>
-                                        <td>
-                                            <span className={styles.categoryBadge}>{expense.expenseCategory}</span>
+                <div className={`${styles.tableWrapper} hrms-table-scroll`}>
+                    {/* Salary Slips Table */}
+                    {((isAdmin && reportType === 'salary') || (!isAdmin && (employeeTab === 'salary'))) && (
+                        <table className={styles.table}>
+                            <thead>
+                                <tr>
+                                    {canManageSlips && (
+                                        <th className={styles.checkboxColumn}>
+                                            <input
+                                                type="checkbox"
+                                                className={styles.checkbox}
+                                                checked={currentSlips.length > 0 && selectedSlips.length === currentSlips.length}
+                                                onChange={handleSelectAll}
+                                            />
+                                        </th>
+                                    )}
+                                    <th>Employee Name</th>
+                                    {isAdmin && <th>Email ID</th>}
+                                    <th>Designation</th>
+                                    {isAdmin && <th>Month</th>}
+                                    {isAdmin && <th>Year</th>}
+                                    {!isAdmin && <th>Month & Year</th>}
+                                    <th>BASIC (AED)</th>
+                                    <th>HOUSE RENT (AED)</th>
+                                    <th>TRAVEL EXP (AED)</th>
+                                    <th>OTHER (AED)</th>
+                                    <th>DEDUCTION (AED)</th>
+                                    <th>Net Salary (AED)</th>
+                                    <th className={styles.actionsColumn}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {currentSlips.length > 0 ? (
+                                    currentSlips.map((slip) => (
+                                        <tr key={slip._id} className={selectedSlips.includes(slip._id) ? styles.selectedRow : ""}>
+                                            {canManageSlips && (
+                                                <td className={styles.checkboxColumn}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className={styles.checkbox}
+                                                        checked={selectedSlips.includes(slip._id)}
+                                                        onChange={() => handleSelectRow(slip._id)}
+                                                    />
+                                                </td>
+                                            )}
+                                            <td className={styles.empName}>{slip.employeeName}</td>
+                                            {isAdmin && (
+                                                <td>
+                                                    {(slip.emailId && !slip.emailId.includes('import.hrms.placeholder'))
+                                                        ? slip.emailId
+                                                        : '-'}
+                                                </td>
+                                            )}
+                                            <td>{slip.designation}</td>
+                                            {isAdmin && <td>{slip.month}</td>}
+                                            {isAdmin && <td>{slip.year}</td>}
+                                            {!isAdmin && <td className={styles.monthYear}>{slip.month} {slip.year}</td>}
+                                            <td>{Number(slip.basicPay ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td>{Number(slip.hra ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td>{Number(slip.conveyanceAllowance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td>{Number(slip.otherAllowance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td>{Number(slip.deductionsPFTax ?? slip.totalDeduction ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td><span className={styles.netSal}>{formatAed(slip.netSalary ?? 0)}</span></td>
+                                            <td>
+                                                <div className={styles.rowActions}>
+                                                    <button
+                                                        className={styles.downloadBtn}
+                                                        onClick={() => handleDownload(slip)}
+                                                        title="Download PDF"
+                                                    >
+                                                        <DownloadIcon />
+                                                        {!isAdmin && <span>Download</span>}
+                                                    </button>
+                                                    {canManageSlips && (
+                                                        <button
+                                                            className={styles.editBtn}
+                                                            onClick={() => {
+                                                                setSlipToEdit(slip);
+                                                                setIsEditModalOpen(true);
+                                                            }}
+                                                            title="Edit Record"
+                                                        >
+                                                            <EditIcon />
+                                                        </button>
+                                                    )}
+                                                    {canManageSlips && (
+                                                        <button
+                                                            className={styles.deleteBtn}
+                                                            onClick={() => openDeleteDialog(slip)}
+                                                            title="Delete Record"
+                                                        >
+                                                            <TrashIcon />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={isAdmin ? 14 : 9} className={styles.noData}>
+                                            No salary slips found for the selected period.
                                         </td>
-                                        <td><span className={styles.expenseAmount}>{formatAed(expense.expenseAmount)}</span></td>
-                                        <td>{new Date(expense.expenseDate).toLocaleDateString('en-IN')}</td>
-                                        <td>
-                                            <span className={`${styles.statusBadge} ${styles[`status${expense.status?.replace(/\s/g, '')}`]}`}>
-                                                {expense.status}
-                                            </span>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+
+                    {/* Expense Reports Table (Admin Only) */}
+                    {isAdmin && reportType === 'expense' && (
+                        <table className={styles.table}>
+                            <thead>
+                                <tr>
+                                    <th>Employee Name</th>
+                                    <th>Email ID</th>
+                                    <th>Expense Title</th>
+                                    <th>Category</th>
+                                    <th>Amount (AED)</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th className={styles.actionsColumn}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {currentExpenses.length > 0 ? (
+                                    currentExpenses.map((expense) => (
+                                        <tr key={expense._id}>
+                                            <td className={styles.empName}>{expense.employeeName}</td>
+                                            <td>{expense.employeeEmail}</td>
+                                            <td>{expense.expenseTitle}</td>
+                                            <td>
+                                                <span className={styles.categoryBadge}>{expense.expenseCategory}</span>
+                                            </td>
+                                            <td><span className={styles.expenseAmount}>{formatAed(expense.expenseAmount)}</span></td>
+                                            <td>{new Date(expense.expenseDate).toLocaleDateString('en-IN')}</td>
+                                            <td>
+                                                <span className={`${styles.statusBadge} ${styles[`status${expense.status?.replace(/\s/g, '')}`]}`}>
+                                                    {expense.status}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className={styles.rowActions}>
+                                                    <button
+                                                        className={styles.viewBtn}
+                                                        onClick={() => {
+                                                            showToast(`Description: ${expense.expenseDescription}`, 'info');
+                                                        }}
+                                                        title="View Details"
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                            <circle cx="12" cy="12" r="3"></circle>
+                                                        </svg>
+                                                    </button>
+                                                    {expense.receiptUrl && (
+                                                        <button
+                                                            className={styles.downloadBtn}
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await expenseService.downloadDocument(expense._id, expense.expenseTitle);
+                                                                    showToast('Document downloaded successfully', 'success');
+                                                                } catch (error) {
+                                                                    showToast(error.message || 'Failed to download document', 'error');
+                                                                }
+                                                            }}
+                                                            title="Download Document"
+                                                        >
+                                                            <DownloadIcon />
+                                                        </button>
+                                                    )}
+                                                    {canApproveExpense(expense) ? (
+                                                        <>
+                                                            <button
+                                                                className={styles.approveBtn}
+                                                                onClick={() => handleApproveExpense(expense)}
+                                                                title={isHOD ? "Approve (Send to HR Admin)" : "Final Approve"}
+                                                            >
+                                                                <CheckIcon />
+                                                            </button>
+                                                            <button
+                                                                className={styles.rejectBtn}
+                                                                onClick={() => handleRejectExpense(expense)}
+                                                                title="Reject"
+                                                            >
+                                                                <XIcon />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        expense.status !== 'Pending' && expense.status !== 'HOD Approved' && (
+                                                            <span className={styles.noAction}>—</span>
+                                                        )
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={8} className={styles.noData}>
+                                            No expense reports found.
                                         </td>
-                                        <td>
-                                            <div className={styles.rowActions}>
-                                                <button
-                                                    className={styles.viewBtn}
-                                                    onClick={() => {
-                                                        showToast(`Description: ${expense.expenseDescription}`, 'info');
-                                                    }}
-                                                    title="View Details"
-                                                >
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                                        <circle cx="12" cy="12" r="3"></circle>
-                                                    </svg>
-                                                </button>
-                                                {expense.receiptUrl && (
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+
+                    {/* Employee Expenses Table */}
+                    {!isAdmin && (employeeTab === 'expense') && (
+                        <table className={styles.table}>
+                            <thead>
+                                <tr>
+                                    <th>Expense Title</th>
+                                    <th>Category</th>
+                                    <th>Amount (AED)</th>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Document</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {currentMyExpenses.length > 0 ? (
+                                    currentMyExpenses.map((expense) => (
+                                        <tr key={expense._id}>
+                                            <td className={styles.empName}>{expense.expenseTitle}</td>
+                                            <td>
+                                                <span className={styles.categoryBadge}>{expense.expenseCategory}</span>
+                                            </td>
+                                            <td><span className={styles.expenseAmount}>{formatAed(expense.expenseAmount)}</span></td>
+                                            <td>{new Date(expense.expenseDate).toLocaleDateString('en-IN')}</td>
+                                            <td className={styles.descriptionCell}>{expense.expenseDescription}</td>
+                                            <td>
+                                                <span className={`${styles.statusBadge} ${styles[`status${expense.status?.replace(/\s/g, '')}`]}`}>
+                                                    {expense.status}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {expense.receiptUrl ? (
                                                     <button
                                                         className={styles.downloadBtn}
                                                         onClick={async () => {
@@ -1228,238 +1321,154 @@ function SalarySlipTable({ userRole }) {
                                                     >
                                                         <DownloadIcon />
                                                     </button>
-                                                )}
-                                                {canApproveExpense(expense) ? (
-                                                    <>
-                                                        <button
-                                                            className={styles.approveBtn}
-                                                            onClick={() => handleApproveExpense(expense)}
-                                                            title={isHOD ? "Approve (Send to HR Admin)" : "Final Approve"}
-                                                        >
-                                                            <CheckIcon />
-                                                        </button>
-                                                        <button
-                                                            className={styles.rejectBtn}
-                                                            onClick={() => handleRejectExpense(expense)}
-                                                            title="Reject"
-                                                        >
-                                                            <XIcon />
-                                                        </button>
-                                                    </>
                                                 ) : (
-                                                    expense.status !== 'Pending' && expense.status !== 'HOD Approved' && (
-                                                        <span className={styles.noAction}>—</span>
-                                                    )
+                                                    <span className={styles.noDocument}>—</span>
                                                 )}
-                                            </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={7} className={styles.noData}>
+                                            No expense requests found.
                                         </td>
                                     </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={8} className={styles.noData}>
-                                        No expense reports found.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                )}
-
-                {/* Employee Expenses Table */}
-                {!isAdmin && (employeeTab === 'expense') && (
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                <th>Expense Title</th>
-                                <th>Category</th>
-                                <th>Amount (AED)</th>
-                                <th>Date</th>
-                                <th>Description</th>
-                                <th>Status</th>
-                                <th>Document</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {currentMyExpenses.length > 0 ? (
-                                currentMyExpenses.map((expense) => (
-                                    <tr key={expense._id}>
-                                        <td className={styles.empName}>{expense.expenseTitle}</td>
-                                        <td>
-                                            <span className={styles.categoryBadge}>{expense.expenseCategory}</span>
-                                        </td>
-                                        <td><span className={styles.expenseAmount}>{formatAed(expense.expenseAmount)}</span></td>
-                                        <td>{new Date(expense.expenseDate).toLocaleDateString('en-IN')}</td>
-                                        <td className={styles.descriptionCell}>{expense.expenseDescription}</td>
-                                        <td>
-                                            <span className={`${styles.statusBadge} ${styles[`status${expense.status?.replace(/\s/g, '')}`]}`}>
-                                                {expense.status}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {expense.receiptUrl ? (
-                                                <button
-                                                    className={styles.downloadBtn}
-                                                    onClick={async () => {
-                                                        try {
-                                                            await expenseService.downloadDocument(expense._id, expense.expenseTitle);
-                                                            showToast('Document downloaded successfully', 'success');
-                                                        } catch (error) {
-                                                            showToast(error.message || 'Failed to download document', 'error');
-                                                        }
-                                                    }}
-                                                    title="Download Document"
-                                                >
-                                                    <DownloadIcon />
-                                                </button>
-                                            ) : (
-                                                <span className={styles.noDocument}>—</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={7} className={styles.noData}>
-                                        No expense requests found.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className={styles.pagination}>
-                    <div className={styles.paginationInfo}>
-                        Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} entries
-                    </div>
-                    <div className={styles.paginationControls}>
-                        <button
-                            className={styles.pageBtn}
-                            onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={currentPage === 1}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="15 18 9 12 15 6"></polyline>
-                            </svg>
-                        </button>
-
-                        {getPageNumbers().map((page, index) => (
-                            page === '...' ? (
-                                <span key={`ellipsis-${index}`} className={styles.pageEllipsis}>...</span>
-                            ) : (
-                                <button
-                                    key={page}
-                                    className={`${styles.pageBtn} ${currentPage === page ? styles.pageBtnActive : ''}`}
-                                    onClick={() => handlePageChange(page)}
-                                >
-                                    {page}
-                                </button>
-                            )
-                        ))}
-
-                        <button
-                            className={styles.pageBtn}
-                            onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                        </button>
-                    </div>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
-            )}
-            {/* Single Delete Confirmation */}
-            <ConfirmDialog
-                isOpen={deleteDialogOpen}
-                onClose={closeDeleteDialog}
-                onConfirm={confirmDelete}
-                title="Delete Salary Slip"
-                message={<>Are you sure you want to delete the salary slip for <strong>{slipToDelete?.employeeName}</strong>? This action cannot be undone.</>}
-                confirmText="Delete"
-                confirmColor="#dc2626"
-            />
 
-            {/* Bulk Delete Confirmation */}
-            <ConfirmDialog
-                isOpen={bulkDeleteConfirmOpen}
-                onClose={() => setBulkDeleteConfirmOpen(false)}
-                onConfirm={handleBulkDelete}
-                title="Delete Multiple Records"
-                message={`Are you sure you want to delete ${selectedSlips.length} selected salary slips? This action cannot be undone.`}
-                confirmText="Delete All"
-                confirmColor="#dc2626"
-            />
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className={styles.pagination}>
+                        <div className={styles.paginationInfo}>
+                            Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} entries
+                        </div>
+                        <div className={styles.paginationControls}>
+                            <button
+                                className={styles.pageBtn}
+                                onClick={() => handlePageChange(currentPage - 1)}
+                                disabled={currentPage === 1}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
 
-            {/* Bulk Generate Confirmation */}
-            <ConfirmDialog
-                isOpen={generateConfirmOpen}
-                onClose={() => setGenerateConfirmOpen(false)}
-                onConfirm={confirmGenerateBulk}
-                title="Generate Salary Slips"
-                message={`Generate or update salary slips for ${selectedMonth} ${selectedYear}? Missing eligible employees will be added; existing slips for this month will be updated.`}
-                confirmText={salarySlips.length > 0 ? "Regenerate Now" : "Generate Now"}
-                confirmColor="#16a34a"
-                icon="success"
-            />
+                            {getPageNumbers().map((page, index) => (
+                                page === '...' ? (
+                                    <span key={`ellipsis-${index}`} className={styles.pageEllipsis}>...</span>
+                                ) : (
+                                    <button
+                                        key={page}
+                                        className={`${styles.pageBtn} ${currentPage === page ? styles.pageBtnActive : ''}`}
+                                        onClick={() => handlePageChange(page)}
+                                    >
+                                        {page}
+                                    </button>
+                                )
+                            ))}
 
-            <SalarySlipBulkImportModal
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-                onSuccess={fetchData}
-                month={selectedMonth === 'All' ? new Date().toLocaleString('default', { month: 'long' }) : selectedMonth}
-                year={selectedYear === 'All' ? new Date().getFullYear().toString() : selectedYear}
-            />
+                            <button
+                                className={styles.pageBtn}
+                                onClick={() => handlePageChange(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {/* Single Delete Confirmation */}
+                <ConfirmDialog
+                    isOpen={deleteDialogOpen}
+                    onClose={closeDeleteDialog}
+                    onConfirm={confirmDelete}
+                    title="Delete Salary Slip"
+                    message={<>Are you sure you want to delete the salary slip for <strong>{slipToDelete?.employeeName}</strong>? This action cannot be undone.</>}
+                    confirmText="Delete"
+                    confirmColor="#dc2626"
+                />
 
-            <SalarySlipManualAddModal
-                isOpen={isManualAddModalOpen}
-                onClose={() => setIsManualAddModalOpen(false)}
-                onSuccess={fetchData}
-                month={selectedMonth === 'All' ? new Date().toLocaleString('default', { month: 'long' }) : selectedMonth}
-                year={selectedYear === 'All' ? new Date().getFullYear().toString() : selectedYear}
-                existingSlips={salarySlips}
-            />
+                {/* Bulk Delete Confirmation */}
+                <ConfirmDialog
+                    isOpen={bulkDeleteConfirmOpen}
+                    onClose={() => setBulkDeleteConfirmOpen(false)}
+                    onConfirm={handleBulkDelete}
+                    title="Delete Multiple Records"
+                    message={`Are you sure you want to delete ${selectedSlips.length} selected salary slips? This action cannot be undone.`}
+                    confirmText="Delete All"
+                    confirmColor="#dc2626"
+                />
 
-            <SalarySlipEditModal
-                isOpen={isEditModalOpen}
-                onClose={() => {
-                    setIsEditModalOpen(false);
-                    setSlipToEdit(null);
-                }}
-                onSuccess={fetchData}
-                salarySlip={slipToEdit}
-            />
+                {/* Bulk Generate Confirmation */}
+                <ConfirmDialog
+                    isOpen={generateConfirmOpen}
+                    onClose={() => setGenerateConfirmOpen(false)}
+                    onConfirm={confirmGenerateBulk}
+                    title="Generate Salary Slips"
+                    message={`Generate or update salary slips for ${selectedMonth} ${selectedYear}? Missing eligible employees will be added; existing slips for this month will be updated.`}
+                    confirmText={salarySlips.length > 0 ? "Regenerate Now" : "Generate Now"}
+                    confirmColor="#16a34a"
+                    icon="success"
+                />
 
-            
-            <SalaryReportSifImportModal
-                isOpen={isSalaryReportSifImportOpen}
-                onClose={() => setIsSalaryReportSifImportOpen(false)}
-                onSuccess={fetchData}
-                defaultMonth={selectedMonth === 'All' ? new Date().getMonth() + 1 : MONTH_NAMES.indexOf(selectedMonth) + 1}
-                defaultYear={selectedYear === 'All' ? new Date().getFullYear() : Number(selectedYear)}
-                canManage={canManageSlips}
-                showToast={showToast}
-            />
-            <SalaryAdvanceModal
-                isOpen={isAdvanceModalOpen}
-                onClose={() => setIsAdvanceModalOpen(false)}
-                onSuccess={fetchData}
-            />
+                <SalarySlipBulkImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onSuccess={fetchData}
+                    month={selectedMonth === 'All' ? new Date().toLocaleString('default', { month: 'long' }) : selectedMonth}
+                    year={selectedYear === 'All' ? new Date().getFullYear().toString() : selectedYear}
+                />
 
-            {/* Create Expense Modal for Employees */}
-            {!isAdmin && (
-                <CreateExpenseModal
-                    isOpen={isExpenseModalOpen}
-                    onClose={() => setIsExpenseModalOpen(false)}
+                <SalarySlipManualAddModal
+                    isOpen={isManualAddModalOpen}
+                    onClose={() => setIsManualAddModalOpen(false)}
+                    onSuccess={fetchData}
+                    month={selectedMonth === 'All' ? new Date().toLocaleString('default', { month: 'long' }) : selectedMonth}
+                    year={selectedYear === 'All' ? new Date().getFullYear().toString() : selectedYear}
+                    existingSlips={salarySlips}
+                />
+
+                <SalarySlipEditModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => {
+                        setIsEditModalOpen(false);
+                        setSlipToEdit(null);
+                    }}
+                    onSuccess={fetchData}
+                    salarySlip={slipToEdit}
+                />
+
+
+                <SalaryReportSifImportModal
+                    isOpen={isSalaryReportSifImportOpen}
+                    onClose={() => setIsSalaryReportSifImportOpen(false)}
+                    onSuccess={fetchData}
+                    defaultMonth={selectedMonth === 'All' ? new Date().getMonth() + 1 : MONTH_NAMES.indexOf(selectedMonth) + 1}
+                    defaultYear={selectedYear === 'All' ? new Date().getFullYear() : Number(selectedYear)}
+                    canManage={canManageSlips}
                     showToast={showToast}
                 />
-            )}
-        </div>
-    );
+                <SalaryAdvanceModal
+                    isOpen={isAdvanceModalOpen}
+                    onClose={() => setIsAdvanceModalOpen(false)}
+                    onSuccess={fetchData}
+                />
+
+                {/* Create Expense Modal for Employees */}
+                {!isAdmin && (
+                    <CreateExpenseModal
+                        isOpen={isExpenseModalOpen}
+                        onClose={() => setIsExpenseModalOpen(false)}
+                        showToast={showToast}
+                    />
+                )}
+            </div>
+            );
 }
 
-export default SalarySlipTable;
+            export default SalarySlipTable;

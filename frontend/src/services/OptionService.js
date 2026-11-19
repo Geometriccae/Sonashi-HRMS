@@ -50,6 +50,18 @@ const addOption = async (type, label) => {
   return response.data;
 };
 
+const updateOption = async (type, id, label) => {
+  const token = localStorage.getItem('token');
+  const response = await axios.put(
+    `${API_URL}/${type}/${id}`,
+    { label },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  delete _cache[`opts:${type}`];
+  delete _cache[`excluded:${type}`];
+  return response.data;
+};
+
 const deleteOption = async (type, id) => {
   const token = localStorage.getItem('token');
   const response = await axios.delete(
@@ -133,6 +145,7 @@ const mergeWithDynamicOptions = (defaultOptions, dbOptions, excludedDefaults = [
 const OptionService = {
   getOptions,
   addOption,
+  updateOption,
   deleteOption,
   getExcludedDefaults,
   excludeDefaultOption,

@@ -281,6 +281,73 @@
   margin-right: 0.5rem;
 }
 
+.clickableItem {
+  cursor: pointer;
+}
+
+.clickableItem:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.itemTitleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.itemActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.markReadBtn {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.markReadBtn:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.readLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.unreadDot {
+  margin-left: 6px;
+  width: 7px;
+  height: 7px;
+  background: #3b82f6;
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.viewLinkText {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0284c7;
+}
+
 .itemTime {
   font-size: clamp(0.6rem, 0.6875vw, 0.6875rem);
   color: #9ca3af;
