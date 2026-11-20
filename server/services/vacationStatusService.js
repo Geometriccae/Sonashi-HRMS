@@ -60,6 +60,10 @@ async function autoUpdateVacationStatuses(referenceDate = new Date(), io = null)
           vacationStatusUpdatedAt: new Date(),
         };
 
+        if (targetStatus === 'Vacation Pending') {
+          updateFields.lastWorkingDay = null;
+        }
+
         // Align attendance with vacation status
         if (targetStatus === 'On Vacation') {
           updateFields.attendance = 'Leave';

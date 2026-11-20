@@ -36,5 +36,10 @@ export const fmtDate = (d) => {
  * @param {{ lastWorkingDay?: string|Date|null }} item
  * @returns {string}
  */
-export const displayLastWorkingDay = (item) => fmtDate(item?.lastWorkingDay);
+export const displayLastWorkingDay = (item) => {
+  if (item?.vacationStatus === "Vacation Pending" || item?.vacationStatus === "Yet to Go") {
+    return "—";
+  }
+  return fmtDate(item?.lastWorkingDay);
+};
 

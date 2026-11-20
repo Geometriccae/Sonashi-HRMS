@@ -267,17 +267,21 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         }
     };
 
-    const fetchReportingManagerOptions = async (empList = employees) => {
+    const fetchReportingManagerOptions = async () => {
         try {
-            const baseDefaults = empList
-                .map((e) => (e.employeeName || e.name || "").trim())
-                .filter(Boolean);
             const [dbOptions, excluded] = await Promise.all([
                 OptionService.getOptions('reportingManager'),
                 OptionService.getExcludedDefaults('reportingManager'),
             ]);
-            const merged = OptionService.mergeWithDynamicOptions(baseDefaults, dbOptions, excluded);
-            setDynamicReportingManagerOptions(merged);
+            const excludedSet = new Set((excluded || []).map(x => String(x).toLowerCase().trim()));
+            const list = Array.isArray(dbOptions) ? dbOptions : [];
+            const filtered = list.filter(o => !excludedSet.has(String(o.label || o.value).toLowerCase().trim()));
+            const mapped = filtered.map((opt) => ({
+                value: opt.value || opt.label,
+                label: opt.label || opt.value,
+                _id: opt._id,
+            }));
+            setDynamicReportingManagerOptions(mapped);
         } catch (error) {
             console.error("Error fetching reporting manager options:", error);
         }
@@ -287,6 +291,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         try {
             await OptionService.addOption('reportingManager', label);
             await fetchReportingManagerOptions();
+            handleInputChange("reportingManager", label);
             showToast(`Reporting Manager "${label}" added`, "success");
         } catch (err) {
             console.error("Error adding reporting manager:", err);
@@ -296,12 +301,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const handleEditReportingManager = async (option, newLabel) => {
         try {
-            const dbOptions = await OptionService.getOptions('reportingManager');
-            const match = dbOptions.find((o) => o.label === option.label || o.value === option.value);
-            if (match?._id) {
-                await OptionService.updateOption('reportingManager', match._id, newLabel);
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('reportingManager');
+                const match = (dbOptions || []).find((o) => o.label === (option.label || option.value) || o.value === (option.value || option.label));
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.updateOption('reportingManager', optionId, newLabel);
             } else {
-                await OptionService.excludeDefaultOption('reportingManager', option.label || option.value);
                 await OptionService.addOption('reportingManager', newLabel);
             }
             if (formData.reportingManager === (option.value || option.label)) {
@@ -316,37 +324,46 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     };
 
     const handleDeleteReportingManager = async (option) => {
-        if (!option?.label || option.label === "-Select-") return;
+        const optLabel = option?.label || option?.value;
+        if (!optLabel || optLabel === "-Select-") return;
         try {
-            const dbOptions = await OptionService.getOptions('reportingManager');
-            const toDelete = dbOptions.find((o) => o.label === option.label || o.value === option.value);
-            if (toDelete?._id) {
-                await OptionService.deleteOption('reportingManager', toDelete._id);
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('reportingManager');
+                const match = (dbOptions || []).find((o) => o.label === optLabel || o.value === optLabel);
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.deleteOption('reportingManager', optionId);
             } else {
-                await OptionService.excludeDefaultOption('reportingManager', option.label || option.value);
+                await OptionService.excludeDefaultOption('reportingManager', optLabel);
             }
             if (formData.reportingManager === (option.value || option.label)) {
                 handleInputChange("reportingManager", "");
             }
             await fetchReportingManagerOptions();
-            showToast(`Reporting Manager "${option.label}" deleted`, "success");
+            showToast(`Reporting Manager "${optLabel}" deleted`, "success");
         } catch (err) {
             console.error("Error deleting reporting manager:", err);
             showToast("Failed to delete reporting manager", "error");
         }
     };
 
-    const fetchApprovalManagerOptions = async (empList = employees) => {
+    const fetchApprovalManagerOptions = async () => {
         try {
-            const baseDefaults = empList
-                .map((e) => (e.employeeName || e.name || "").trim())
-                .filter(Boolean);
             const [dbOptions, excluded] = await Promise.all([
                 OptionService.getOptions('approvalManager'),
                 OptionService.getExcludedDefaults('approvalManager'),
             ]);
-            const merged = OptionService.mergeWithDynamicOptions(baseDefaults, dbOptions, excluded);
-            setDynamicApprovalManagerOptions(merged);
+            const excludedSet = new Set((excluded || []).map(x => String(x).toLowerCase().trim()));
+            const list = Array.isArray(dbOptions) ? dbOptions : [];
+            const filtered = list.filter(o => !excludedSet.has(String(o.label || o.value).toLowerCase().trim()));
+            const mapped = filtered.map((opt) => ({
+                value: opt.value || opt.label,
+                label: opt.label || opt.value,
+                _id: opt._id,
+            }));
+            setDynamicApprovalManagerOptions(mapped);
         } catch (error) {
             console.error("Error fetching approval manager options:", error);
         }
@@ -365,13 +382,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const handleEditApprovalManager = async (option, newLabel) => {
         try {
-            const dbOptions = await OptionService.getOptions('approvalManager');
-            const match = dbOptions.find((o) => o.label === (option.label || option.value || option) || o.value === (option.value || option.label || option));
-            if (match?._id) {
-                await OptionService.updateOption('approvalManager', match._id, newLabel);
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('approvalManager');
+                const match = (dbOptions || []).find((o) => o.label === (option.label || option.value || option) || o.value === (option.value || option.label || option));
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.updateOption('approvalManager', optionId, newLabel);
             } else {
-                const oldVal = typeof option === "string" ? option : (option.label || option.value);
-                await OptionService.excludeDefaultOption('approvalManager', oldVal);
                 await OptionService.addOption('approvalManager', newLabel);
             }
             await fetchApprovalManagerOptions();
@@ -386,10 +405,14 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const optLabel = typeof option === "string" ? option : (option?.label || option?.value);
         if (!optLabel || optLabel === "-Select-") return;
         try {
-            const dbOptions = await OptionService.getOptions('approvalManager');
-            const toDelete = dbOptions.find((o) => o.label === optLabel || o.value === optLabel);
-            if (toDelete?._id) {
-                await OptionService.deleteOption('approvalManager', toDelete._id);
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('approvalManager');
+                const match = (dbOptions || []).find((o) => o.label === optLabel || o.value === optLabel);
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.deleteOption('approvalManager', optionId);
             } else {
                 await OptionService.excludeDefaultOption('approvalManager', optLabel);
             }
@@ -448,8 +471,6 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             const data = await EmployeeService.getEmployeesList();
             const empList = Array.isArray(data) ? data : (data?.employees || []);
             setEmployees(empList);
-            fetchReportingManagerOptions(empList);
-            fetchApprovalManagerOptions(empList);
         } catch (error) {
             console.error("Error fetching employees:", error);
         }
@@ -570,21 +591,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const employeeOptions = employeesForNativeSelect(employees, formData.employeeId).map((emp) => toSearchableEmployeeOption(emp));
 
-    const reportingManagerOptions = employees.map(emp => ({
-        value: emp.employeeName || emp.name || "Unknown",
-        label: emp.employeeName || emp.name || "Unknown",
-        employeeId: emp.employeeId || "",
-        name: emp.employeeName || emp.name || "",
-        hideUnlessSearch: isNonWorkingEmployeeStatus(emp.employeeStatus),
-    }));
+    const reportingManagerOptions = [...dynamicReportingManagerOptions];
+    const currentManager = (formData.reportingManager || "").trim();
+    if (currentManager && !reportingManagerOptions.find(o => o.value === currentManager)) {
+        reportingManagerOptions.unshift({ value: currentManager, label: currentManager });
+    }
 
     const departmentOptions = [...baseDepartmentOptions];
     if (formData.department && !departmentOptions.find(o => o.value === formData.department)) {
         departmentOptions.push({ value: formData.department, label: formData.department });
-    }
-
-    if (formData.reportingManager && !reportingManagerOptions.find(o => o.value === formData.reportingManager)) {
-        reportingManagerOptions.push({ value: formData.reportingManager, label: formData.reportingManager });
     }
 
     // Resolve Employee master (doj / visa live on Employee, not User on leaveRequest.employee)
@@ -756,30 +771,30 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                             />
 
                             <Dropdown
-                                label="Department *"
+                                label="Department"
                                 placeholder="Select department"
                                 options={departmentOptions}
                                 value={formData.department}
                                 onChange={(e) => handleInputChange("department", e.target.value)}
-                                onAdd={isManager ? handleAddDepartment : null}
-                                onDelete={isManager ? handleDeleteDepartment : null}
+                                onAdd={handleAddDepartment}
+                                onDelete={handleDeleteDepartment}
                                 disabled={!isEditable}
                             />
 
                             <Dropdown
-                                label="Reporting Manager *"
+                                label="Reporting Manager"
                                 placeholder="Select reporting manager"
-                                options={dynamicReportingManagerOptions.length > 0 ? dynamicReportingManagerOptions : reportingManagerOptions}
+                                options={reportingManagerOptions}
                                 value={formData.reportingManager}
                                 onChange={(e) => handleInputChange("reportingManager", e.target.value)}
-                                onAdd={isManager ? handleAddReportingManager : null}
-                                onEdit={isManager ? handleEditReportingManager : null}
-                                onDelete={isManager ? handleDeleteReportingManager : null}
+                                onAdd={handleAddReportingManager}
+                                onEdit={handleEditReportingManager}
+                                onDelete={handleDeleteReportingManager}
                                 disabled={!isEditable}
                             />
 
                             <Dropdown
-                                label="Leave Type *"
+                                label="Leave Type"
                                 placeholder="Select leave type"
                                 options={leaveTypeOptions}
                                 value={formData.leaveType}
@@ -923,11 +938,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 <ApprovalManagerSelect
                                     value={formData.approvalManagers}
                                     onChange={(val) => handleInputChange("approvalManagers", val)}
-                                    options={dynamicApprovalManagerOptions.length > 0 ? dynamicApprovalManagerOptions : reportingManagerOptions}
-                                    onAdd={isManager ? handleAddApprovalManager : null}
-                                    onEdit={isManager ? handleEditApprovalManager : null}
-                                    onDelete={isManager ? handleDeleteApprovalManager : null}
-                                    isManager={isManager}
+                                    options={dynamicApprovalManagerOptions}
+                                    onAdd={handleAddApprovalManager}
+                                    onEdit={handleEditApprovalManager}
+                                    onDelete={handleDeleteApprovalManager}
+                                    isManager={true}
                                     disabled={!isEditable}
                                     required={false}
                                 />

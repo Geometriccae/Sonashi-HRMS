@@ -340,7 +340,12 @@ async function syncEmployeeVacationStatus(leaveRequest) {
         if (controllingLeave) {
             patch.travellingDate = controllingLeave.travellingDate || controllingLeave.startDate;
             patch.leaveEndDate = controllingLeave.endDate;
-            if (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') {
+            if (vacationStatus === 'Vacation Pending') {
+                // Future approved leave (Yet To Go): Last Working Day must remain blank
+                patch.lastWorkingDay = null;
+                patch.returnDate = null;
+                patch.firstWorkingDay = null;
+            } else if (vacationStatus === 'On Vacation') {
                 patch.returnDate = null;
                 patch.firstWorkingDay = null;
             }

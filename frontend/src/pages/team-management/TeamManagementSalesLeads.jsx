@@ -1246,12 +1246,14 @@ function TeamManagementSalesLeads() {
                           </div>
                           {(employee.lastWorkingDay || employee.travellingDate || employee.leaveEndDate || employee.endDate) && (
                             <>
-                              <div className={styles.column4}>
-                                <span className={styles.text9}>Last Working Day</span>
-                                <span className={styles.text10}>
-                                  {employee.lastWorkingDay ? new Date(employee.lastWorkingDay).toLocaleDateString('en-GB') : "Not provided"}
-                                </span>
-                              </div>
+                              {employee.vacationStatus !== "Vacation Pending" && (
+                                <div className={styles.column4}>
+                                  <span className={styles.text9}>Last Working Day</span>
+                                  <span className={styles.text10}>
+                                    {employee.lastWorkingDay ? new Date(employee.lastWorkingDay).toLocaleDateString('en-GB') : "Not provided"}
+                                  </span>
+                                </div>
+                              )}
                               <div className={styles.column4}>
                                 <span className={styles.text9}>Travelling Date</span>
                                 <span className={styles.text10}>

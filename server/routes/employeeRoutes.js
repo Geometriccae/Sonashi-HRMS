@@ -478,7 +478,7 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
     const upcomingLeave = employeeLeaves.find(
       (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'Vacation Pending'
     );
-    if (upcomingLeave) return { ...employee, vacationStatus: 'Vacation Pending' };
+    if (upcomingLeave) return { ...employee, vacationStatus: 'Vacation Pending', lastWorkingDay: null };
 
     const completedLeave = [...employeeLeaves].reverse().find(
       (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'Vacation Approved'
@@ -1068,6 +1068,9 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
       hasReturnDate: patch.returnDate !== undefined,
       returnDate: patch.returnDate,
     }));
+    if (vacationStatus === 'Vacation Pending') {
+      patch.lastWorkingDay = null;
+    }
     if (vacationStatus === 'Vacation Approved' || vacationStatus === 'Onsite') patch.attendance = 'Onsite';
 
     Object.assign(employee, patch);
