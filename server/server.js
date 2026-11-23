@@ -349,6 +349,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/options', optionRoutes);
 app.use('/api/sif', sifRoutes);
 app.use('/api/salary-advances', salaryAdvanceRoutes);
+app.use('/api/salary-advance', salaryAdvanceRoutes);
 
 
 // ====== DATABASE CONNECTION ======
