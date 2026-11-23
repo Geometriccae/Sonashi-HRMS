@@ -10,12 +10,28 @@ const digitsOnly = (value) => String(value ?? "").replace(/\D/g, "");
 
 const normalizeEmiratesId = (value) => digitsOnly(value);
 
+/**
+ * Retrieve the UAE WPS Person ID / Person Code for an employee.
+ * Strictly stored in workPermitNo (or personCode / personId).
+ * Per client instructions, DO NOT use Emirates ID or passport number as fallback.
+ */
+const getPersonId = (emp) => {
+  if (!emp) return "";
+  const raw =
+    emp.workPermitNo ||
+    emp.personCode ||
+    emp.personId ||
+    emp.labourCardNumber ||
+    "";
+  return digitsOnly(raw);
+};
+
 const normalizeEmpId = (value) => {
   const d = digitsOnly(value);
   if (!d) return "";
-  if (d.length >= 14 && d.length <= 15) return d;
+  if (d.length === 14) return d;
   if (d.length >= 6 && d.length < 14) return d.padStart(14, "0");
-  return d;
+  return d; // Do not truncate > 14 so validation can report it
 };
 
 const getBankAccount = (emp) => {
@@ -70,10 +86,17 @@ const validateEmployerId = (employerId) => {
   return null;
 };
 
-const validateEmpId = (empid) => {
+const validateEmpId = (empid, empName, staffId) => {
   const d = digitsOnly(empid);
-  if (d.length < 14 || d.length > 15) {
-    return "EMPID (Labour Card / Person Code) must be 14–15 digits";
+  const identifier = empName ? `${empName}${staffId ? ` (${staffId})` : ""}` : staffId || "Employee";
+  if (!d) {
+    return `Person ID is missing for ${identifier}. Person ID (14 digits) is required for SIF generation.`;
+  }
+  if (d.length > 14) {
+    return `Person ID cannot be more than 14 characters for ${identifier} (got ${d.length} digits: ${d}).`;
+  }
+  if (d.length < 6) {
+    return `Person ID is invalid for ${identifier} (got ${d.length} digits: ${d}). Must be between 6 and 14 digits.`;
   }
   return null;
 };
@@ -126,12 +149,7 @@ const buildEdrPayload = (employees, year, month) => {
   let totalSalary = 0;
 
   employees.forEach((emp) => {
-    const empidRaw =
-      normalizeEmiratesId(emp.emiratesId) ||
-      digitsOnly(emp.workPermitNo) ||
-      digitsOnly(emp.labourCardNumber) ||
-      digitsOnly(emp.unifiedId) ||
-      digitsOnly(emp.personCode);
+    const empidRaw = getPersonId(emp);
     const empid = normalizeEmpId(empidRaw);
     const agent = getAgentCode(emp);
     const bank = getBankAccount(emp) || "";
@@ -143,7 +161,7 @@ const buildEdrPayload = (employees, year, month) => {
       emp.customVariableAmount != null ? Number(emp.customVariableAmount) : 0;
 
     const reasons = [];
-    const empErr = validateEmpId(empid);
+    const empErr = validateEmpId(empid, emp.employeeName, emp.employeeId);
     const agentErr = validateAgentCode(agent);
     const bankErr = validateBankAccount(bank);
     if (empErr) reasons.push(empErr);
@@ -200,12 +218,13 @@ const buildScrLine = ({
   fileRef,
 }) => {
   const mmYYYY = `${pad(month, 2)}${year}`;
+  const cleanTime = String(fileTime || "").replace(/[^0-9]/g, "").slice(0, 4);
   return [
     "SCR",
     digitsOnly(employerId),
     cleanAgentCode(agentRouting),
     fileDate,
-    fileTime,
+    cleanTime,
     mmYYYY,
     String(edrCount),
     formatMoney(totalSalary),
@@ -216,13 +235,13 @@ const buildScrLine = ({
 
 const buildFileReference = (employerId, now = new Date()) => {
   const emp = digitsOnly(employerId);
-  const dd = pad(now.getDate(), 2);
-  const mm = pad(now.getMonth() + 1, 2);
   const yy = String(now.getFullYear()).slice(-2);
+  const mm = pad(now.getMonth() + 1, 2);
+  const dd = pad(now.getDate(), 2);
   const hh = pad(now.getHours(), 2);
   const mi = pad(now.getMinutes(), 2);
-  const seq = "00";
-  return `${emp}${dd}${mm}${yy}${hh}${mi}${seq}`;
+  const ss = pad(now.getSeconds(), 2);
+  return `${emp}${yy}${mm}${dd}${hh}${mi}${ss}`;
 };
 
 const generateSifContent = ({
@@ -297,7 +316,7 @@ const generateSifContent = ({
     fileRef,
   });
 
-  const content = [...edrLines, scr].join("\n") + "\n";
+  const content = [...edrLines, scr].join("\r\n") + "\r\n";
   const fileName = `${fileRef}.SIF`;
 
   return {
@@ -393,12 +412,7 @@ const RED_HEADERS = new Set([
 const employeeToExcelRow = (emp) => {
   const sal = emp.salaryDetails || {};
   const rowEmployerId = digitsOnly(emp.sifEmployerId || emp.companyCode);
-  const empidRaw =
-    normalizeEmiratesId(emp.emiratesId) ||
-    digitsOnly(emp.workPermitNo) ||
-    digitsOnly(emp.labourCardNumber) ||
-    digitsOnly(emp.unifiedId) ||
-    digitsOnly(emp.personCode);
+  const empidRaw = getPersonId(emp);
   return {
     StaffID: emp.employeeId || "",
     EMPID: normalizeEmpId(empidRaw),
@@ -447,6 +461,7 @@ module.exports = {
   pad,
   digitsOnly,
   normalizeEmiratesId,
+  getPersonId,
   normalizeEmpId,
   getBankAccount,
   getFixedIncome,

@@ -14,6 +14,7 @@ test('Off-Cycle SIF & Payroll Reconciliation Test Suite', async (t) => {
     _id: 'emp_001',
     employeeId: 'IDMD-001',
     employeeName: 'Ahmad Khan',
+    workPermitNo: '10074007721871',
     emiratesId: '784199012345671',
     companyCode: employerA,
     sifEmployerId: employerA,
@@ -32,6 +33,7 @@ test('Off-Cycle SIF & Payroll Reconciliation Test Suite', async (t) => {
     _id: 'emp_002',
     employeeId: 'IDMD-002',
     employeeName: 'Bilal Saeed',
+    workPermitNo: '10074007721872',
     emiratesId: '784199012345672',
     companyCode: employerA,
     sifEmployerId: employerA,
@@ -50,6 +52,7 @@ test('Off-Cycle SIF & Payroll Reconciliation Test Suite', async (t) => {
     _id: 'emp_003',
     employeeId: 'IDMD-003',
     employeeName: 'Carlos Gomez',
+    workPermitNo: '10074007721873',
     emiratesId: '784199012345673',
     companyCode: employerB,
     sifEmployerId: employerB,
@@ -85,9 +88,9 @@ test('Off-Cycle SIF & Payroll Reconciliation Test Suite', async (t) => {
 
     const { edrs, scr } = parseSifContent(sifResult.content);
     assert.equal(edrs.length, 2);
-    assert.equal(edrs[0].empId, '784199012345671');
+    assert.equal(edrs[0].empId, '10074007721871');
     assert.equal(edrs[0].fixedIncome, 1500, 'Emp A EDR transfer amount must be AED 1,500');
-    assert.equal(edrs[1].empId, '784199012345672');
+    assert.equal(edrs[1].empId, '10074007721872');
     assert.equal(edrs[1].fixedIncome, 800, 'Emp B EDR transfer amount must be AED 800');
 
     assert.equal(scr.employerId, employerA);
@@ -116,7 +119,7 @@ test('Off-Cycle SIF & Payroll Reconciliation Test Suite', async (t) => {
 
     const { edrs, scr } = parseSifContent(sifResult.content);
     assert.equal(edrs.length, 1);
-    assert.equal(edrs[0].empId, '784199012345672');
+    assert.equal(edrs[0].empId, '10074007721872');
     assert.equal(edrs[0].fixedIncome, 2500, 'Commission EDR transfer amount must match AED 2,500');
     assert.equal(scr.totalSalary, 2500);
   });
@@ -240,10 +243,10 @@ test('Off-Cycle SIF & Payroll Reconciliation Test Suite', async (t) => {
     const parsedB = parseSifContent(sifB.content);
 
     assert.equal(parsedA.scr.employerId, employerA);
-    assert.equal(parsedA.edrs[0].empId, '784199012345671');
+    assert.equal(parsedA.edrs[0].empId, '10074007721871');
 
     assert.equal(parsedB.scr.employerId, employerB);
-    assert.equal(parsedB.edrs[0].empId, '784199012345673');
+    assert.equal(parsedB.edrs[0].empId, '10074007721873');
   });
 
   await t.test('11. Missing bank account / IBAN validation stops invalid SIF creation', () => {

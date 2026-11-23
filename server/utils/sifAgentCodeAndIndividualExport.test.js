@@ -26,7 +26,7 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
     _id: "emp-a",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "600310101",
@@ -40,7 +40,7 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
     _id: "emp-b",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -54,7 +54,7 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
     _id: "emp-c",
     employeeId: "EMP-003",
     employeeName: "Charlie Brown",
-    emiratesId: "784199012345673",
+    workPermitNo: "10074007721873",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "",
@@ -86,12 +86,12 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
   assert.equal(edrs.length, 2);
 
   // Emp A must have Agent Code 600310101
-  assert.equal(edrs[0].empId, "784199012345671");
+  assert.equal(edrs[0].empId, "10074007721871");
   assert.equal(edrs[0].agentCode, "600310101");
   assert.equal(edrs[0].fixedIncome, 5000);
 
   // Emp B must have Agent Code 740810000 (different from Emp A)
-  assert.equal(edrs[1].empId, "784199012345672");
+  assert.equal(edrs[1].empId, "10074007721872");
   assert.equal(edrs[1].agentCode, "740810000");
   assert.equal(edrs[1].fixedIncome, 8000);
 
@@ -114,7 +114,7 @@ test("Individual SIF export for Emp A uses Emp A's own Agent Code in both EDR an
     _id: "emp-a",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "600310101",
@@ -152,7 +152,7 @@ test("Individual SIF export for Emp B uses Emp B's own Agent Code in both EDR an
     _id: "emp-b",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -187,7 +187,7 @@ test("Individual SIF export validates missing Agent Code and does not substitute
     _id: "emp-c",
     employeeId: "EMP-003",
     employeeName: "Charlie Brown",
-    emiratesId: "784199012345673",
+    workPermitNo: "10074007721873",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "",
@@ -218,7 +218,7 @@ test("Agent Code is not fetched or assigned from Company Code or Employer ID", (
   const emp = {
     employeeId: "EMP-010",
     employeeName: "Diana Prince",
-    emiratesId: "784199012345675",
+    workPermitNo: "10074007721875",
     companyCode: companyEmployerId,
     salaryDetails: {
       bankName: "First Abu Dhabi Bank",
@@ -274,7 +274,7 @@ test("Individual employee export contains only the selected employee and exclude
     _id: "emp-a",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "600310101",
@@ -288,7 +288,7 @@ test("Individual employee export contains only the selected employee and exclude
     _id: "emp-b",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -312,7 +312,7 @@ test("Individual employee export contains only the selected employee and exclude
   assert.equal(sifResultA.totalSalary, 5000);
   const { edrs: edrsA, scr: scrA } = parseSifContent(sifResultA.content);
   assert.equal(edrsA.length, 1);
-  assert.equal(edrsA[0].empId, "784199012345671");
+  assert.equal(edrsA[0].empId, "10074007721871");
   assert.equal(edrsA[0].agentCode, "600310101");
   assert.equal(scrA.edrCount, 1);
   assert.equal(scrA.totalSalary, 5000);
@@ -332,7 +332,7 @@ test("Individual employee export contains only the selected employee and exclude
   assert.equal(sifResultB.totalSalary, 8000);
   const { edrs: edrsB, scr: scrB } = parseSifContent(sifResultB.content);
   assert.equal(edrsB.length, 1);
-  assert.equal(edrsB[0].empId, "784199012345672");
+  assert.equal(edrsB[0].empId, "10074007721872");
   assert.equal(edrsB[0].agentCode, "740810000");
   assert.equal(scrB.edrCount, 1);
   assert.equal(scrB.totalSalary, 8000);
@@ -348,7 +348,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
     _id: "emp-1",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     sifEmployerId: company1,
     salaryDetails: {
       agentCode: "600310101",
@@ -361,7 +361,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
     _id: "emp-2",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     sifEmployerId: company1,
     salaryDetails: {
       agentCode: "740810000",
@@ -374,7 +374,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
     _id: "emp-3",
     employeeId: "EMP-003",
     employeeName: "Charlie Other",
-    emiratesId: "784199012345673",
+    workPermitNo: "10074007721873",
     sifEmployerId: company2,
     salaryDetails: {
       agentCode: "123456789",
@@ -401,7 +401,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
   assert.equal(sifResult.totalSalary, 13000);
   const { edrs, scr } = parseSifContent(sifResult.content);
   assert.equal(edrs.length, 2);
-  assert.equal(edrs.some(e => e.empId === "784199012345673"), false, "Employee from Company 2 must not be included");
+  assert.equal(edrs.some(e => e.empId === "10074007721873"), false, "Employee from Company 2 must not be included");
   assert.equal(scr.employerId, company1);
   assert.equal(scr.agentRouting, defaultRouting);
 });
@@ -412,7 +412,7 @@ test("Agent Code with leading zeros retains zeros in SIF export, preview, and Ex
     _id: "emp-zeros",
     employeeId: "EMP-Z01",
     employeeName: "Zero Leader",
-    emiratesId: "784199012345681",
+    workPermitNo: "10074007721881",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "009710001",
@@ -449,7 +449,7 @@ test("Agent Code with alphanumeric value retains the original value in SIF expor
     _id: "emp-alpha",
     employeeId: "EMP-A01",
     employeeName: "Alpha User",
-    emiratesId: "784199012345682",
+    workPermitNo: "10074007721882",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "CBUE00001",
@@ -486,7 +486,7 @@ test("Two employees with the same legitimate Agent Code export without being tre
     _id: "emp-s1",
     employeeId: "EMP-S01",
     employeeName: "Shared Code One",
-    emiratesId: "784199012345683",
+    workPermitNo: "10074007721883",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -498,7 +498,7 @@ test("Two employees with the same legitimate Agent Code export without being tre
     _id: "emp-s2",
     employeeId: "EMP-S02",
     employeeName: "Shared Code Two",
-    emiratesId: "784199012345684",
+    workPermitNo: "10074007721884",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -521,8 +521,8 @@ test("Two employees with the same legitimate Agent Code export without being tre
   const { edrs } = parseSifContent(sifResult.content);
   assert.equal(edrs[0].agentCode, "740810000");
   assert.equal(edrs[1].agentCode, "740810000");
-  assert.equal(edrs[0].empId, "784199012345683");
-  assert.equal(edrs[1].empId, "784199012345684");
+  assert.equal(edrs[0].empId, "10074007721883");
+  assert.equal(edrs[1].empId, "10074007721884");
 });
 
 test("Authoritative fallback to bankSortCode or root agentCode when salaryDetails.agentCode is empty", () => {

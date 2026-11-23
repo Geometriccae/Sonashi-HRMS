@@ -492,11 +492,10 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
     const selectedEmployeeId = String(req.query.employeeId || "").trim();
-    const isExplicitIndividual =
-      req.query.mode === "individual" ||
-      req.query.isIndividual === "true" ||
-      req.query.employeeId !== undefined;
-    const isIndividual = isExplicitIndividual || Boolean(selectedEmployeeId);
+    const isIndividual =
+      Boolean(selectedEmployeeId) &&
+      selectedEmployeeId.toLowerCase() !== "all" &&
+      (req.query.mode === "individual" || req.query.isIndividual === "true" || !req.query.mode || req.query.mode === "single");
 
     let matched = [];
     let excluded = [];
@@ -613,11 +612,10 @@ router.get("/export/pdf", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
     const selectedEmployeeId = String(req.query.employeeId || "").trim();
-    const isExplicitIndividual =
-      req.query.mode === "individual" ||
-      req.query.isIndividual === "true" ||
-      req.query.employeeId !== undefined;
-    const isIndividual = isExplicitIndividual || Boolean(selectedEmployeeId);
+    const isIndividual =
+      Boolean(selectedEmployeeId) &&
+      selectedEmployeeId.toLowerCase() !== "all" &&
+      (req.query.mode === "individual" || req.query.isIndividual === "true" || !req.query.mode || req.query.mode === "single");
 
     let matched = [];
     let excluded = [];
@@ -742,11 +740,10 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
 
     const settings = await getOrCreateSettings();
     const selectedEmployeeId = String(req.query.employeeId || "").trim();
-    const isExplicitIndividual =
-      req.query.mode === "individual" ||
-      req.query.isIndividual === "true" ||
-      req.query.employeeId !== undefined;
-    const isIndividual = isExplicitIndividual || Boolean(selectedEmployeeId);
+    const isIndividual =
+      Boolean(selectedEmployeeId) &&
+      selectedEmployeeId.toLowerCase() !== "all" &&
+      (req.query.mode === "individual" || req.query.isIndividual === "true" || !req.query.mode || req.query.mode === "single");
 
     let matched = [];
     let excluded = [];
@@ -1499,7 +1496,7 @@ router.get("/import-batch/:batchId/export-pdf", authMiddleware, async (req, res)
       skipped: (batch.records || []).filter((r) => r.validationStatus === "Invalid").map((r) => ({
         staffId: r.employeeId,
         empName: r.empName,
-        empId: r.emiratesId || r.workPermitNo,
+        empId: r.workPermitNo || r.personCode || r.personId || "",
         reason: (r.issues || []).join("; ") || "Invalid data",
       })),
       fileRef: `BATCH-${batch.batchId}`,
