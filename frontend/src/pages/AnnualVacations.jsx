@@ -57,6 +57,13 @@ const loadJsPdf = async () => {
 const TAB_STORAGE_KEY = "hrms:listPage:annual-vacations-tab";
 const VALID_TABS = new Set(["onVacation", "yetToGo", "returned"]);
 
+const getTabDefaultSort = (tabKey) => {
+  if (tabKey === "yetToGo") return { field: "travellingDate", order: "asc" };
+  if (tabKey === "onVacation") return { field: "lastWorkingDay", order: "asc" };
+  if (tabKey === "returned") return { field: "firstWorkingDay", order: "asc" };
+  return { field: "travellingDate", order: "asc" };
+};
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 const fmt = (d) => {
   if (!d) return "—";
@@ -249,6 +256,25 @@ function AnnualVacations() {
   const [page, setPage]                 = useState(1);
   const [searchQuery, setSearchQuery]   = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [sortConfig, setSortConfig]     = useState(() => getTabDefaultSort(activeTab));
+
+  useEffect(() => {
+    setSortConfig(getTabDefaultSort(activeTab));
+  }, [activeTab]);
+
+  const handleSort = (field) => {
+    setSortConfig((prev) => {
+      if (prev?.field === field) {
+        return { field, order: prev.order === "asc" ? "desc" : "asc" };
+      }
+      return { field, order: "asc" };
+    });
+  };
+
+  const renderSortIndicator = (field) => {
+    if (sortConfig?.field !== field) return null;
+    return <span style={{ marginLeft: 4, fontSize: 10, display: "inline-block" }}>{sortConfig.order === "asc" ? "▲" : "▼"}</span>;
+  };
 
   // Filters — sent to vacation-tab API
   const [filters, setFilters]           = useState(DEFAULT_FILTERS);
@@ -334,6 +360,8 @@ function AnnualVacations() {
         limit: PAGE_SIZE,
         search: debouncedSearch,
         filters,
+        sortField: sortConfig?.field,
+        sortOrder: sortConfig?.order,
       });
       setTabList(Array.isArray(result?.employees) ? result.employees : []);
       setTabTotal(Number(result?.total) || 0);
@@ -345,7 +373,7 @@ function AnnualVacations() {
     } finally {
       setTableLoading(false);
     }
-  }, [activeTab, page, debouncedSearch, filters]);
+  }, [activeTab, page, debouncedSearch, filters, sortConfig]);
 
   // ─── Fetch Data ──────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -389,10 +417,10 @@ function AnnualVacations() {
     fetchTabPage();
   }, [fetchTabPage]);
 
-  // Reset to page 1 when tab, search, or filters change
+  // Reset to page 1 when tab, search, filters, or sort change
   useEffect(() => {
     setPage(1);
-  }, [activeTab, debouncedSearch, filters]);
+  }, [activeTab, debouncedSearch, filters, sortConfig]);
 
   // Server already filtered — display as-is
   const filteredList = tabList;
@@ -443,6 +471,8 @@ function AnnualVacations() {
         search: debouncedSearch,
         filters,
         all: true,
+        sortField: sortConfig?.field,
+        sortOrder: sortConfig?.order,
       });
       const exportList = Array.isArray(result?.employees) ? result.employees : [];
       if (exportList.length === 0) {
@@ -479,6 +509,8 @@ function AnnualVacations() {
         search: debouncedSearch,
         filters,
         all: true,
+        sortField: sortConfig?.field,
+        sortOrder: sortConfig?.order,
       });
       const exportList = Array.isArray(result?.employees) ? result.employees : [];
       if (exportList.length === 0) {
@@ -897,17 +929,39 @@ function AnnualVacations() {
                           <thead>
                             <tr>
                               <th>#</th>
-                              <th>Employee</th>
-                              <th>ID</th>
-                              <th>Department</th>
-                              <th>Role</th>
-                              <th>Office</th>
-                              <th>Country</th>
-                              <th>DOJ</th>
+                              <th onClick={() => handleSort("employeeName")} style={{ cursor: "pointer", userSelect: "none" }}>Employee {renderSortIndicator("employeeName")}</th>
+                              <th onClick={() => handleSort("employeeId")} style={{ cursor: "pointer", userSelect: "none" }}>ID {renderSortIndicator("employeeId")}</th>
+                              <th onClick={() => handleSort("department")} style={{ cursor: "pointer", userSelect: "none" }}>Department {renderSortIndicator("department")}</th>
+                              <th onClick={() => handleSort("role")} style={{ cursor: "pointer", userSelect: "none" }}>Role {renderSortIndicator("role")}</th>
+                              <th onClick={() => handleSort("office")} style={{ cursor: "pointer", userSelect: "none" }}>Office {renderSortIndicator("office")}</th>
+                              <th onClick={() => handleSort("nationality")} style={{ cursor: "pointer", userSelect: "none" }}>Country {renderSortIndicator("nationality")}</th>
+                              <th onClick={() => handleSort("doj")} style={{ cursor: "pointer", userSelect: "none" }}>DOJ {renderSortIndicator("doj")}</th>
                               <th>Experience</th>
-                              {activeTab === "onVacation" && <><th>Leave End Date</th><th>Travelling Date</th><th>Last Working Day</th><th>Days of Vacation</th><th>Remaining Days</th></>}
-                              {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th><th>Days of Vacation</th></>}
-                              {activeTab === "returned"  && <><th>Return Date</th><th>First Working Day</th><th>Last Working Day</th><th>Total Days</th></>}
+                              {activeTab === "onVacation" && (
+                                <>
+                                  <th onClick={() => handleSort("leaveEndDate")} style={{ cursor: "pointer", userSelect: "none" }}>Leave End Date {renderSortIndicator("leaveEndDate")}</th>
+                                  <th onClick={() => handleSort("travellingDate")} style={{ cursor: "pointer", userSelect: "none" }}>Travelling Date {renderSortIndicator("travellingDate")}</th>
+                                  <th onClick={() => handleSort("lastWorkingDay")} style={{ cursor: "pointer", userSelect: "none", color: sortConfig?.field === "lastWorkingDay" ? "#1d4ed8" : "inherit" }}>Last Working Day {renderSortIndicator("lastWorkingDay")}</th>
+                                  <th>Days of Vacation</th>
+                                  <th>Remaining Days</th>
+                                </>
+                              )}
+                              {activeTab === "yetToGo" && (
+                                <>
+                                  <th onClick={() => handleSort("lastWorkingDay")} style={{ cursor: "pointer", userSelect: "none" }}>Last Working Day {renderSortIndicator("lastWorkingDay")}</th>
+                                  <th onClick={() => handleSort("travellingDate")} style={{ cursor: "pointer", userSelect: "none", color: sortConfig?.field === "travellingDate" ? "#6d28d9" : "inherit" }}>Travelling Date {renderSortIndicator("travellingDate")}</th>
+                                  <th onClick={() => handleSort("leaveEndDate")} style={{ cursor: "pointer", userSelect: "none" }}>Leave End Date {renderSortIndicator("leaveEndDate")}</th>
+                                  <th>Days of Vacation</th>
+                                </>
+                              )}
+                              {activeTab === "returned" && (
+                                <>
+                                  <th onClick={() => handleSort("returnDate")} style={{ cursor: "pointer", userSelect: "none" }}>Return Date {renderSortIndicator("returnDate")}</th>
+                                  <th onClick={() => handleSort("firstWorkingDay")} style={{ cursor: "pointer", userSelect: "none", color: sortConfig?.field === "firstWorkingDay" ? "#047857" : "inherit" }}>First Working Day {renderSortIndicator("firstWorkingDay")}</th>
+                                  <th onClick={() => handleSort("lastWorkingDay")} style={{ cursor: "pointer", userSelect: "none" }}>Last Working Day {renderSortIndicator("lastWorkingDay")}</th>
+                                  <th>Total Days</th>
+                                </>
+                              )}
                               <th>Status</th>
                               {canReturn && <th>Actions</th>}
                             </tr>

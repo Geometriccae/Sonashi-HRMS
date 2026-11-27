@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Select from "react-select";
+import CreatableSelect from "react-select/creatable";
 
 export default function ApprovalManagerSelect({
   value = [],
@@ -32,6 +32,17 @@ export default function ApprovalManagerSelect({
   const handleSelectChange = (selected) => {
     const newVals = selected ? selected.map((s) => s.value) : [];
     onChange(newVals);
+  };
+
+  const handleCreate = async (inputValue) => {
+    const clean = (inputValue || "").trim();
+    if (!clean) return;
+    if (onAdd) {
+      await onAdd(clean);
+      if (!selectedValues.includes(clean)) {
+        onChange([...selectedValues, clean]);
+      }
+    }
   };
 
   const handleQuickAdd = async (e) => {
@@ -134,12 +145,14 @@ export default function ApprovalManagerSelect({
       </div>
 
       {/* React-Select Multi-Select */}
-      <Select
+      <CreatableSelect
         isMulti
         isDisabled={disabled}
         options={selectOptions}
         value={currentSelection}
         onChange={handleSelectChange}
+        onCreateOption={handleCreate}
+        formatCreateLabel={(input) => `+ Add "${input}" as Approval Manager`}
         placeholder="Select one or more Approval Managers..."
         styles={{
           control: (base, state) => ({

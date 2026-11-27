@@ -23,6 +23,7 @@ import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOpti
 import OptionService from "../../services/OptionService";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus, employeesForNativeSelect } from "../../utils/employeeStatusDisplay";
 import ApprovalManagerSelect from "./ApprovalManagerSelect";
+import ReportingManagerSelect from "./ReportingManagerSelect";
 import "./LeaveForm.css";
 
 function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null, onEditLeave }) {
@@ -693,15 +694,16 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                         onDelete={handleDeleteDepartment}
                                         required
                                     />
-                                    <Dropdown
+                                    <ReportingManagerSelect
                                         label="Reporting Manager"
                                         placeholder="Select reporting manager"
                                         options={reportingManagerOptions}
                                         value={formData.reportingManager}
-                                        onChange={(e) => handleInputChange("reportingManager", e.target.value)}
+                                        onChange={(val) => handleInputChange("reportingManager", val)}
                                         onAdd={handleAddReportingManager}
                                         onEdit={handleEditReportingManager}
                                         onDelete={handleDeleteReportingManager}
+                                        isManager={true}
                                         required
                                     />
                                 </div>

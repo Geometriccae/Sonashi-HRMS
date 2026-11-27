@@ -125,52 +125,38 @@ export async function renderCompanyHeader(doc, margin, maxHeightMm = 22) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const contentWidth = pageWidth - margin * 2;
   // Keep header near the top of the page
-  let y = Math.min(margin, 4);
-  // Inner padding so logo/text are not flush against the header border
-  const pad = 4;
+  let y = Math.min(margin, 5);
 
   const headerImg = await getHeaderImage();
   if (headerImg) {
     try {
       const src = imageSource(headerImg);
       const props = imageSize(doc, src || headerImg);
-      let drawW = contentWidth - pad * 2;
+      let drawW = contentWidth;
       let drawH = (props.height * drawW) / props.width;
       if (drawH > maxHeightMm) {
         drawH = maxHeightMm;
         drawW = (props.width * drawH) / props.height;
       }
 
-      const boxH = drawH + pad * 2;
-      doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(...COLORS.black);
-      doc.setLineWidth(0.35);
-      doc.rect(margin, y, contentWidth, boxH, "FD");
-
       const imgX = margin + (contentWidth - drawW) / 2;
-      const imgY = y + pad;
+      const imgY = y;
       doc.addImage(src || headerImg, "PNG", imgX, imgY, drawW, drawH, undefined, "MEDIUM");
-      y += boxH + 3;
+      y += drawH + 3.5;
     } catch {
-      y = drawTextCompanyHeader(doc, margin, y + pad) + pad;
+      y = drawTextCompanyHeader(doc, margin, y) + 2;
     }
   } else {
-    const boxH = 22 + pad * 2;
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(...COLORS.black);
-    doc.setLineWidth(0.35);
-    doc.rect(margin, y, contentWidth, boxH, "FD");
-    drawTextCompanyHeader(doc, margin, y + pad + 2);
-    y += boxH + 3;
+    y = drawTextCompanyHeader(doc, margin, y) + 2;
   }
 
-  // Single divider under the header block
+  // Clean horizontal divider line under the company header
   doc.setDrawColor(...COLORS.black);
   doc.setLineWidth(0.45);
   doc.line(margin, y, pageWidth - margin, y);
 
   // Clear gap under the line before the report title (~0.35 inch)
-  return y + 10;
+  return y + 6;
 }
 
 export function drawReportTitle(doc, margin, startY, title, metaLines = []) {

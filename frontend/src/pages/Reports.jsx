@@ -94,10 +94,10 @@ const getEmployeePersonCode = (emp) => {
   if (!emp) return "";
   return String(
     emp.workPermitNo ||
-      emp.personCode ||
-      emp.personId ||
-      emp.labourCardNumber ||
-      ""
+    emp.personCode ||
+    emp.personId ||
+    emp.labourCardNumber ||
+    ""
   ).replace(/\D/g, "");
 };
 
@@ -412,7 +412,7 @@ function Reports() {
           : data.employees || data.data || [];
 
         const depts = ["All", ...[...new Set(empList.map(e => e.department).filter(Boolean))].sort()];
-        const roles  = ["All", ...[...new Set(empList.flatMap(e => [e.role, e.designation]).filter(Boolean))].sort()];
+        const roles = ["All", ...[...new Set(empList.flatMap(e => [e.role, e.designation]).filter(Boolean))].sort()];
         const offices = ["All", ...[...new Set(empList.map(e => e.office).filter(Boolean))].sort()];
         const countries = ["All", ...[...new Set(empList.map(e => e.nationality).filter(Boolean))].sort()];
 
@@ -486,21 +486,44 @@ function Reports() {
   const resolveEmployerIdForEmployee = useCallback(
     (emp) => {
       if (!emp) return "";
+      const directSif = String(emp.sifEmployerId || "").replace(/\D/g, "");
+      if (directSif.length === 13) return directSif;
+
+      const empOffice = String(emp.office || "").trim().toLowerCase().replace(/\s+/g, " ");
+      const empCompanyCode = String(emp.companyCode || "").trim().toUpperCase();
       const companyCodeDigits = String(emp.companyCode || "").replace(/\D/g, "");
+
+      // 1. Match by Office / Company Name against configured SIF employers
+      if (empOffice) {
+        const matchByName = sifEmployerOptions.find((entry) => {
+          const entryCompanyName = String(entry.companyName || "").trim().toLowerCase().replace(/\s+/g, " ");
+          return (
+            entryCompanyName &&
+            (entryCompanyName === empOffice ||
+              empOffice.includes(entryCompanyName) ||
+              entryCompanyName.includes(empOffice))
+          );
+        });
+        if (matchByName?.employerId) return matchByName.employerId;
+      }
+
+      // 2. Match by Company Code against configured SIF employers
+      if (empCompanyCode) {
+        const matchByCode = sifEmployerOptions.find((entry) => {
+          const entryCompanyCode = String(entry.companyCode || "").trim().toUpperCase();
+          const entryEmployerId = String(entry.employerId || "").replace(/\D/g, "");
+          return (
+            (entryCompanyCode && entryCompanyCode === empCompanyCode) ||
+            (entryEmployerId && entryEmployerId === empCompanyCode.replace(/\D/g, ""))
+          );
+        });
+        if (matchByCode?.employerId) return matchByCode.employerId;
+      }
+
+      // 3. Stored companyCode itself is a 13-digit Employer ID
       if (companyCodeDigits.length === 13) return companyCodeDigits;
 
-      const empCompanyCode = String(emp.companyCode || "").trim().toUpperCase();
-      const empOffice = String(emp.office || "").trim().toLowerCase();
-      const matched = sifEmployerOptions.find((entry) => {
-        const entryEmployerId = String(entry.employerId || "");
-        const entryCompanyCode = String(entry.companyCode || "").trim().toUpperCase();
-        const entryCompanyName = String(entry.companyName || "").trim().toLowerCase();
-        if (empCompanyCode && entryEmployerId === empCompanyCode.replace(/\D/g, "")) return true;
-        if (empCompanyCode && entryCompanyCode && entryCompanyCode === empCompanyCode) return true;
-        if (empOffice && entryCompanyName && entryCompanyName === empOffice) return true;
-        return false;
-      });
-      return matched?.employerId || "";
+      return "";
     },
     [sifEmployerOptions]
   );
@@ -696,15 +719,15 @@ function Reports() {
   const employeeStatusOptions =
     reportType === "Employees Master Data"
       ? [
-          { value: "Active", label: "Active" },
-          { value: "InActive", label: "Ex-Employee / Inactive" },
-          { value: "All", label: "All" },
-        ]
+        { value: "Active", label: "Active" },
+        { value: "InActive", label: "Ex-Employee / Inactive" },
+        { value: "All", label: "All" },
+      ]
       : [
-          { value: "All", label: "All" },
-          { value: "Active", label: "Active" },
-          { value: "InActive", label: "InActive" },
-        ];
+        { value: "All", label: "All" },
+        { value: "Active", label: "Active" },
+        { value: "InActive", label: "InActive" },
+      ];
   const minExperienceOptions = ["All", ...Array.from({ length: 21 }, (_, i) => String(i))];
   const minExpMonthsOptions = ["All", ...Array.from({ length: 12 }, (_, i) => String(i))];
 
@@ -1029,6 +1052,13 @@ function Reports() {
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
       empList = filterByExperience(empList);
 
+      if (sifEmployerId && String(sifEmployerId).toUpperCase() !== "ALL") {
+        const targetEmployerId = digitsOnly(sifEmployerId);
+        if (targetEmployerId) {
+          empList = empList.filter(e => resolveEmployerIdForEmployee(e) === targetEmployerId);
+        }
+      }
+
       const rows = empList.map(e => {
         const sal = e.salaryDetails || {};
         return {
@@ -1288,7 +1318,7 @@ function Reports() {
 
   const generateSalaryReport = async (reportFormat) => {
     const activeFormat = reportFormat || format;
-    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const now = new Date();
     const m = filterMonth !== "All"
       ? monthNames.indexOf(filterMonth) + 1
@@ -1375,7 +1405,7 @@ function Reports() {
     }
 
     // Excel: Staff Salary report layout (department sections + /30*days + SUM + yearly increments)
-    if (format === "Excel") {
+    if (activeFormat === "Excel") {
       const statusForApi = employeeStatus === "InActive" ? "InActive" : "Active";
       let empList = await fetchFullEmployees(statusForApi);
       if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
@@ -1389,6 +1419,13 @@ function Reports() {
       if (filterOffice !== "All") empList = empList.filter(e => e.office === filterOffice);
       if (filterCountry !== "All") empList = empList.filter(e => e.nationality === filterCountry);
       empList = filterByExperience(empList);
+
+      if (sifEmployerId && String(sifEmployerId).toUpperCase() !== "ALL") {
+        const targetEmployerId = digitsOnly(sifEmployerId);
+        if (targetEmployerId) {
+          empList = empList.filter(e => resolveEmployerIdForEmployee(e) === targetEmployerId);
+        }
+      }
 
       if (!empList.length) {
         alert("No data found for the selected filters.");
@@ -1404,13 +1441,23 @@ function Reports() {
     const exportData = await fetchReportData("Salary report");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (activeFormat === "PDF") {
+      const selectedEmployer = sifEmployerOptions.find(o => digitsOnly(o.employerId) === digitsOnly(sifEmployerId));
+      const companyScope = selectedEmployer
+        ? (selectedEmployer.companyName ? `${selectedEmployer.companyName} (${selectedEmployer.employerId})` : `Employer ID: ${selectedEmployer.employerId}`)
+        : (isAllEmployersSelected ? "All Companies" : "");
+
       await exportToPDF(exportData, "Salary_Report", {
         title: "SALARY REPORT",
         period: [filterMonth !== "All" ? filterMonth : null, filterYear !== "All" ? filterYear : null]
           .filter(Boolean)
           .join(" ") || "All periods",
         employeeScope:
-          filterEmployee && filterEmployee !== "All" ? filterEmployee : "All Employees",
+          filterEmployee && filterEmployee !== "All"
+            ? filterEmployee
+            : (companyScope ? companyScope : "All Employees"),
+        extraMeta: selectedEmployer
+          ? `Employer: ${selectedEmployer.companyName ? `${selectedEmployer.companyName}  |  ` : ""}Employer ID: ${selectedEmployer.employerId}`
+          : null,
       });
     }
   };
@@ -1562,7 +1609,7 @@ function Reports() {
           if (/^\d{13}$/.test(String(current || ""))) return current;
           return employerId || "ALL";
         });
-      } catch {}
+      } catch { }
 
       if (reportType === "Salary report") {
         await handlePreview();
@@ -1683,434 +1730,380 @@ function Reports() {
 
         <PageBody as="section" className={styles["main-content"]}>
           <div className={styles.reportCard}>
-          <div className={styles["report-container"]}>
-            <div className={styles["report-header"]}>
-              <div className={styles.reportHeaderText}>
-                <div className={styles["report-title"]}>Generate Reports</div>
-                <p className={styles.reportSubtitle}>
-                  Configure filters below, then preview or download your report.
-                </p>
-              </div>
-              <div className={styles["report-actions"]}>
-                <button type="button" className={styles["cancel-button"]} onClick={handleCancel}>Cancel</button>
-                {reportType === "Salary report" && (
-                  <button
-                    type="button"
-                    className={styles["import-sif-button"]}
-                    onClick={() => {
-                      setError("");
-                      setSalaryReportSifModalOpen(true);
-                    }}
-                    disabled={loading}
-                  >
-                    Import Salary Report / SIF
+            <div className={styles["report-container"]}>
+              <div className={styles["report-header"]}>
+                <div className={styles.reportHeaderText}>
+                  <div className={styles["report-title"]}>Generate Reports</div>
+                  <p className={styles.reportSubtitle}>
+                    Configure filters below, then preview or download your report.
+                  </p>
+                </div>
+                <div className={styles["report-actions"]}>
+                  <button type="button" className={styles["cancel-button"]} onClick={handleCancel}>Cancel</button>
+                  {reportType === "Salary report" && (
+                    <button
+                      type="button"
+                      className={styles["import-sif-button"]}
+                      onClick={() => {
+                        setError("");
+                        setSalaryReportSifModalOpen(true);
+                      }}
+                      disabled={loading}
+                    >
+                      Import Salary Report / SIF
+                    </button>
+                  )}
+                  <input
+                    ref={sifInputRef}
+                    type="file"
+                    accept=".sif,.SIF,.txt,.csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    hidden
+                    onChange={handleImportSif}
+                  />
+                  <button type="button" className={styles["preview-button"]} onClick={handlePreview} disabled={loading}>
+                    {loading ? "Loading..." : "Preview"}
                   </button>
-                )}
-                <input
-                  ref={sifInputRef}
-                  type="file"
-                  accept=".sif,.SIF,.txt,.csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                  hidden
-                  onChange={handleImportSif}
-                />
-                <button type="button" className={styles["preview-button"]} onClick={handlePreview} disabled={loading}>
-                  {loading ? "Loading..." : "Preview"}
-                </button>
-                <button type="button" className={styles["generate-button"]} onClick={handleGenerateReport} disabled={loading}>
-                  {loading ? "Generating..." : "Generate"}
-                </button>
+                  <button type="button" className={styles["generate-button"]} onClick={handleGenerateReport} disabled={loading}>
+                    {loading ? "Generating..." : "Generate"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className={styles["report-form"]}>
-            <div className={styles["form-section"]}>
+            <div className={styles["report-form"]}>
+              <div className={styles["form-section"]}>
 
-              {/* Report Type */}
-              <div className={styles["form-row"]}>
-                <div className={styles["form-label"]}>Select Type of Report</div>
-                <div className={styles["form-field"]}>
-                  <select
-                    className={styles["select-field"]}
-                    value={reportType}
-                    onChange={e => {
-                      const nextType = e.target.value;
-                      setReportType(nextType);
-                      setFormat("");
-                      setLeadType("All");
-                      setFollowupStatus("All");
-                      // Employees Master Data defaults to Active employees only
-                      setEmployeeStatus(nextType === "Employees Master Data" ? "Active" : "All");
-                      setFilterDepartment("All");
-                      setFilterRole("All");
-                      setFilterOffice("All");
-                      setFilterCountry("All");
-                      setMinExperience("All");
-                      setMinExpMonths("All");
-                      setExperienceMode("minimum");
-                      setFilterEmployee("All");
-                      setFilterMonth("All");
-                      setShowPreview(false);
-                      setPreviewData([]);
-                      setPreviewHeaders([]);
-                      // Leave: default Year = current (existing Year filter)
-                      if (nextType === "Leave Report") {
-                        setFilterYear(String(new Date().getFullYear()));
-                      } else {
-                        setFilterYear("All");
-                      }
-                    }}
-                  >
-                    <option value="">Select type</option>
-                    {reportTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-
-
-
-              {/* Individual Employee Filter */}
-              {reportType && (
-                <div className={`${styles["form-row"]} ${styles.employeeSelectRow}`}>
-                  <div className={styles["form-label"]}>Individual Employee</div>
-                  <div
-                    ref={employeeSelectWrapRef}
-                    className={`${styles["form-field"]} ${styles.employeeSelectWrap}`}
-                  >
-                    <Select
-                      inputId="report-employee-filter"
-                      options={employeeOptions}
-                      value={employeeSelectValue}
-                      onChange={(opt) => setFilterEmployee(opt?.value || "All")}
-                      placeholder={
-                        showEmployeeSearchPlaceholder
-                          ? "Search all employees"
-                          : "All Employees"
-                      }
-                      isSearchable
-                      openMenuOnFocus
-                      blurInputOnSelect={false}
-                      noOptionsMessage={() => "No employees found"}
-                      styles={employeeSelectStyles}
-                      classNamePrefix="report-employee-select"
-                      menuPortalTarget={document.body}
-                      menuPlacement="auto"
-                      menuShouldScrollIntoView
-                      maxMenuHeight={EMPLOYEE_MENU_MAX_HEIGHT}
-                      formatOptionLabel={formatEmployeeOption}
-                      onMenuOpen={handleEmployeeMenuOpen}
-                      onMenuClose={handleEmployeeMenuClose}
-                      filterOption={(option, inputValue) => {
-                        if (option.value === "All") {
-                          if (!inputValue) return true;
-                          return String(option.label || "").toLowerCase().includes(inputValue.trim().toLowerCase());
+                {/* Report Type */}
+                <div className={styles["form-row"]}>
+                  <div className={styles["form-label"]}>Select Type of Report</div>
+                  <div className={styles["form-field"]}>
+                    <select
+                      className={styles["select-field"]}
+                      value={reportType}
+                      onChange={e => {
+                        const nextType = e.target.value;
+                        setReportType(nextType);
+                        setFormat("");
+                        setLeadType("All");
+                        setFollowupStatus("All");
+                        // Employees Master Data defaults to Active employees only
+                        setEmployeeStatus(nextType === "Employees Master Data" ? "Active" : "All");
+                        setFilterDepartment("All");
+                        setFilterRole("All");
+                        setFilterOffice("All");
+                        setFilterCountry("All");
+                        setMinExperience("All");
+                        setMinExpMonths("All");
+                        setExperienceMode("minimum");
+                        setFilterEmployee("All");
+                        setFilterMonth("All");
+                        setShowPreview(false);
+                        setPreviewData([]);
+                        setPreviewHeaders([]);
+                        // Leave: default Year = current (existing Year filter)
+                        if (nextType === "Leave Report") {
+                          setFilterYear(String(new Date().getFullYear()));
+                        } else {
+                          setFilterYear("All");
                         }
-                        return filterReactSelectEmployeeOption(option, inputValue);
                       }}
-                    />
+                    >
+                      <option value="">Select type</option>
+                      {reportTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                   </div>
                 </div>
-              )}
 
-              {/* Employee & Leave Report Filters */}
-              {(reportType === "Document expiry" ||
-                reportType === "Salary report" ||
-                reportType === "Employee Experience" ||
-                reportType === "Leave Report" ||
-                reportType === "Employees Master Data") && (
-                <div className={styles.filtersPanel}>
-                  {/* Status — same as other employee reports (filters Active / InActive) */}
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Status</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={employeeStatus} onChange={e => setEmployeeStatus(e.target.value)}>
-                        {employeeStatusOptions.map(o => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+
+
+                {/* Individual Employee Filter */}
+                {reportType && (
+                  <div className={`${styles["form-row"]} ${styles.employeeSelectRow}`}>
+                    <div className={styles["form-label"]}>Individual Employee</div>
+                    <div
+                      ref={employeeSelectWrapRef}
+                      className={`${styles["form-field"]} ${styles.employeeSelectWrap}`}
+                    >
+                      <Select
+                        inputId="report-employee-filter"
+                        options={employeeOptions}
+                        value={employeeSelectValue}
+                        onChange={(opt) => setFilterEmployee(opt?.value || "All")}
+                        placeholder={
+                          showEmployeeSearchPlaceholder
+                            ? "Search all employees"
+                            : "All Employees"
+                        }
+                        isSearchable
+                        openMenuOnFocus
+                        blurInputOnSelect={false}
+                        noOptionsMessage={() => "No employees found"}
+                        styles={employeeSelectStyles}
+                        classNamePrefix="report-employee-select"
+                        menuPortalTarget={document.body}
+                        menuPlacement="auto"
+                        menuShouldScrollIntoView
+                        maxMenuHeight={EMPLOYEE_MENU_MAX_HEIGHT}
+                        formatOptionLabel={formatEmployeeOption}
+                        onMenuOpen={handleEmployeeMenuOpen}
+                        onMenuClose={handleEmployeeMenuClose}
+                        filterOption={(option, inputValue) => {
+                          if (option.value === "All") {
+                            if (!inputValue) return true;
+                            return String(option.label || "").toLowerCase().includes(inputValue.trim().toLowerCase());
+                          }
+                          return filterReactSelectEmployeeOption(option, inputValue);
+                        }}
+                      />
                     </div>
                   </div>
+                )}
 
-                  {/* Department Filter (Show for all of them) */}
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Department</div>
-                    <div className={styles["form-field"]}>
-                      <select className={styles["select-field"]} value={filterDepartment} onChange={e => setFilterDepartment(e.target.value)}>
-                        {uniqueDepartments.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  </div>
-    
-
-                  {/* Role/Office/Country/Experience filters (Show only for non-leave reports) */}
-                  {(reportType !== "Leave Report") && (
-                    <>
+                {/* Employee & Leave Report Filters */}
+                {(reportType === "Document expiry" ||
+                  reportType === "Salary report" ||
+                  reportType === "Employee Experience" ||
+                  reportType === "Leave Report" ||
+                  reportType === "Employees Master Data") && (
+                    <div className={styles.filtersPanel}>
+                      {/* Status — same as other employee reports (filters Active / InActive) */}
                       <div className={styles["form-row"]}>
-                        <div className={styles["form-label"]}>
-                          {reportType === "Employees Master Data" ? "Role / Designation" : "Role"}
-                        </div>
+                        <div className={styles["form-label"]}>Status</div>
                         <div className={styles["form-field"]}>
-                          <select className={styles["select-field"]} value={filterRole} onChange={e => setFilterRole(e.target.value)}>
-                            {uniqueRoles.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
-                        </div>
-                      </div>
-        
-
-                      <div className={styles["form-row"]}>
-                        <div className={styles["form-label"]}>
-                          {reportType === "Employees Master Data" ? "Company / Office Location" : "Office Location"}
-                        </div>
-                        <div className={styles["form-field"]}>
-                          <select className={styles["select-field"]} value={filterOffice} onChange={e => setFilterOffice(e.target.value)}>
-                            {uniqueOffices.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
-                        </div>
-                      </div>
-        
-
-                      <div className={styles["form-row"]}>
-                        <div className={styles["form-label"]}>Country (Nationality)</div>
-                        <div className={styles["form-field"]}>
-                          <select className={styles["select-field"]} value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
-                            {uniqueCountries.map(o => <option key={o} value={o}>{o}</option>)}
+                          <select className={styles["select-field"]} value={employeeStatus} onChange={e => setEmployeeStatus(e.target.value)}>
+                            {employeeStatusOptions.map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
 
-                      {reportType !== "Document expiry" && reportType !== "Employees Master Data" && (
+                      {/* Department Filter (Show for all of them) */}
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Department</div>
+                        <div className={styles["form-field"]}>
+                          <select className={styles["select-field"]} value={filterDepartment} onChange={e => setFilterDepartment(e.target.value)}>
+                            {uniqueDepartments.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+
+                      {/* Role/Office/Country/Experience filters (Show only for non-leave reports) */}
+                      {(reportType !== "Leave Report") && (
                         <>
-                          <div className={`${styles["form-row"]} ${styles.experienceModeRow}`}>
-                            <div className={styles["form-label"]}>Experience Filter</div>
-                            <div className={`${styles["form-field"]} ${styles.experienceModeToggle}`}>
-                              <button
-                                type="button"
-                                className={`${styles.experienceModeBtn} ${experienceMode === "minimum" ? styles.experienceModeBtnActive : ""}`}
-                                onClick={() => setExperienceMode("minimum")}
-                              >
-                                Minimum
-                              </button>
-                              <button
-                                type="button"
-                                className={`${styles.experienceModeBtn} ${experienceMode === "exact" ? styles.experienceModeBtnActive : ""}`}
-                                onClick={() => setExperienceMode("exact")}
-                              >
-                                Exact
-                              </button>
-                            </div>
-                            <p className={styles.experienceModeHint}>
-                              {experienceMode === "minimum"
-                                ? "Shows employees with this experience or more."
-                                : "Shows only employees matching this experience."}
-                            </p>
-                          </div>
                           <div className={styles["form-row"]}>
                             <div className={styles["form-label"]}>
-                              {experienceMode === "minimum" ? "Min Years of Experience" : "Years of Experience"}
+                              {reportType === "Employees Master Data" ? "Role / Designation" : "Role"}
                             </div>
                             <div className={styles["form-field"]}>
-                              <select
-                                className={styles["select-field"]}
-                                value={minExperience}
-                                onChange={e => setMinExperience(e.target.value)}
-                              >
-                                {minExperienceOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} year${o !== "1" ? "s" : ""}`}</option>)}
+                              <select className={styles["select-field"]} value={filterRole} onChange={e => setFilterRole(e.target.value)}>
+                                {uniqueRoles.map(o => <option key={o} value={o}>{o}</option>)}
                               </select>
                             </div>
                           </div>
+
+
                           <div className={styles["form-row"]}>
                             <div className={styles["form-label"]}>
-                              {experienceMode === "minimum" ? "Min Months of Experience" : "Months of Experience"}
+                              {reportType === "Employees Master Data" ? "Company / Office Location" : "Office Location"}
                             </div>
                             <div className={styles["form-field"]}>
-                              <select
-                                className={styles["select-field"]}
-                                value={minExpMonths}
-                                onChange={e => setMinExpMonths(e.target.value)}
-                              >
-                                {minExpMonthsOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} month${o !== "1" ? "s" : ""}`}</option>)}
+                              <select className={styles["select-field"]} value={filterOffice} onChange={e => setFilterOffice(e.target.value)}>
+                                {uniqueOffices.map(o => <option key={o} value={o}>{o}</option>)}
                               </select>
                             </div>
                           </div>
+
+
+                          <div className={styles["form-row"]}>
+                            <div className={styles["form-label"]}>Country (Nationality)</div>
+                            <div className={styles["form-field"]}>
+                              <select className={styles["select-field"]} value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
+                                {uniqueCountries.map(o => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            </div>
+                          </div>
+
+                          {reportType !== "Document expiry" && reportType !== "Employees Master Data" && (
+                            <>
+                              <div className={`${styles["form-row"]} ${styles.experienceModeRow}`}>
+                                <div className={styles["form-label"]}>Experience Filter</div>
+                                <div className={`${styles["form-field"]} ${styles.experienceModeToggle}`}>
+                                  <button
+                                    type="button"
+                                    className={`${styles.experienceModeBtn} ${experienceMode === "minimum" ? styles.experienceModeBtnActive : ""}`}
+                                    onClick={() => setExperienceMode("minimum")}
+                                  >
+                                    Minimum
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`${styles.experienceModeBtn} ${experienceMode === "exact" ? styles.experienceModeBtnActive : ""}`}
+                                    onClick={() => setExperienceMode("exact")}
+                                  >
+                                    Exact
+                                  </button>
+                                </div>
+                                <p className={styles.experienceModeHint}>
+                                  {experienceMode === "minimum"
+                                    ? "Shows employees with this experience or more."
+                                    : "Shows only employees matching this experience."}
+                                </p>
+                              </div>
+                              <div className={styles["form-row"]}>
+                                <div className={styles["form-label"]}>
+                                  {experienceMode === "minimum" ? "Min Years of Experience" : "Years of Experience"}
+                                </div>
+                                <div className={styles["form-field"]}>
+                                  <select
+                                    className={styles["select-field"]}
+                                    value={minExperience}
+                                    onChange={e => setMinExperience(e.target.value)}
+                                  >
+                                    {minExperienceOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} year${o !== "1" ? "s" : ""}`}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <div className={styles["form-row"]}>
+                                <div className={styles["form-label"]}>
+                                  {experienceMode === "minimum" ? "Min Months of Experience" : "Months of Experience"}
+                                </div>
+                                <div className={styles["form-field"]}>
+                                  <select
+                                    className={styles["select-field"]}
+                                    value={minExpMonths}
+                                    onChange={e => setMinExpMonths(e.target.value)}
+                                  >
+                                    {minExpMonthsOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} month${o !== "1" ? "s" : ""}`}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                            </>
+                          )}
+
                         </>
                       )}
-        
-                    </>
+                    </div>
                   )}
-                </div>
-              )}
 
-              {reportType === "Document expiry" && (
-                <>
-                  <div className={`${styles["form-row"]} ${styles.experienceModeRow}`}>
-                    <div className={styles["form-label"]}>Experience Filter</div>
-                    <div className={`${styles["form-field"]} ${styles.experienceModeToggle}`}>
-                      <button
-                        type="button"
-                        className={`${styles.experienceModeBtn} ${experienceMode === "minimum" ? styles.experienceModeBtnActive : ""}`}
-                        onClick={() => setExperienceMode("minimum")}
-                      >
-                        Minimum
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.experienceModeBtn} ${experienceMode === "exact" ? styles.experienceModeBtnActive : ""}`}
-                        onClick={() => setExperienceMode("exact")}
-                      >
-                        Exact
-                      </button>
-                    </div>
-                    <p className={styles.experienceModeHint}>
-                      {experienceMode === "minimum"
-                        ? "Shows employees with this experience or more."
-                        : "Shows only employees matching this experience."}
-                    </p>
-                  </div>
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>
-                      {experienceMode === "minimum" ? "Min Years of Experience" : "Years of Experience"}
-                    </div>
-                    <div className={styles["form-field"]}>
-                      <select
-                        className={styles["select-field"]}
-                        value={minExperience}
-                        onChange={e => setMinExperience(e.target.value)}
-                      >
-                        {minExperienceOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} year${o !== "1" ? "s" : ""}`}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>
-                      {experienceMode === "minimum" ? "Min Months of Experience" : "Months of Experience"}
-                    </div>
-                    <div className={styles["form-field"]}>
-                      <select
-                        className={styles["select-field"]}
-                        value={minExpMonths}
-                        onChange={e => setMinExpMonths(e.target.value)}
-                      >
-                        {minExpMonthsOptions.map(o => <option key={o} value={o}>{o === "All" ? "All" : `${o} month${o !== "1" ? "s" : ""}`}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {reportType !== "Employees Master Data" && (
-              <div className={styles.datePeriodPanel}>
-              {/* Date Range */}
-              <div className={`${styles["form-row"]} ${styles.dateRangeRow}`}>
-                <div className={styles["form-label"]}>Choose a date range</div>
-                <div className={`${styles["form-field"]} ${styles.dateRangeGroup}`}>
-                  <DateInput className={styles["date-field"]} value={startDate} onChange={e => setStartDate(e.target.value)} />
-                  <span className={styles.dateRangeSep}>to</span>
-                  <DateInput className={styles["date-field"]} value={endDate} onChange={e => setEndDate(e.target.value)} />
-                </div>
-              </div>
-
-              <div className={styles.periodGroup}>
-              {/* Month */}
-              <div className={styles["form-row"]}>
-                <div className={styles["form-label"]}>Month</div>
-                <div className={styles["form-field"]}>
-                  <select className={styles["select-field"]} value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
-                    {monthsList.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Year */}
-              <div className={styles["form-row"]}>
-                <div className={styles["form-label"]}>Year</div>
-                <div className={styles["form-field"]}>
-                  <select className={styles["select-field"]} value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-                    {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-              </div>
-              </div>
-              </div>
-              )}
-
-
-
-              {reportType === "Salary report" && (
-                <div className={styles.sifSettingsPanel}>
-                  <div className={styles["form-row"]}>
-                    <div className={styles["form-label"]}>Employer ID</div>
-                    <div className={`${styles["form-field"]} ${styles.sifEmployerField}`}>
-                      <select
-                        className={styles["select-field"]}
-                        value={sifEmployerId}
-                        onChange={(e) => setSifEmployerId(e.target.value)}
-                        disabled={sifSettingsLoading}
-                      >
-                        <option value="">{sifSettingsLoading ? "Loading Employer IDs..." : "Select Employer ID"}</option>
-                        {showAllEmployersOption && (
-                          <option value="ALL">
-                            {`All companies — ${sifAllEligibleCount} eligible employee(s)`}
-                          </option>
-                        )}
-                        {sifEmployerOptions.map((emp) => (
-                          <option key={emp.employerId} value={emp.employerId}>
-                            {`${emp.companyName ? `${emp.companyName} — ` : ""}${emp.employerId} — ${emp.employeeCount} eligible employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
-                          </option>
-                        ))}
-                      </select>
-                      {sifSettingsError && <div className={styles.sifSettingsError}>{sifSettingsError}</div>}
-                      
-                      <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          className={styles["generate-button"]}
-                          style={{ background: "#0284c7", padding: "6px 12px", fontSize: "13px" }}
-                          onClick={() => {
-                            setFormat("SIF");
-                            handleGenerateReport("SIF");
-                          }}
-                          disabled={loading}
-                        >
-                          Download SIF
-                        </button>
-                        <button
-                          type="button"
-                          className={styles["generate-button"]}
-                          style={{ background: "#4f46e5", padding: "6px 12px", fontSize: "13px" }}
-                          onClick={async () => {
-                            const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-                            const now = new Date();
-                            const m = filterMonth !== "All" ? monthNames.indexOf(filterMonth) + 1 : now.getMonth() + 1;
-                            const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
-                            if (isAllEmployersSelected) {
-                              try {
-                                const result = await sifService.downloadSifPdf(m, y, { employerId: "ALL" });
-                                alert(
-                                  `All-companies SIF PDF exported (${result.edrCount} paid employee(s), total AED ${Number(result.totalSalary || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}${result.companyCount ? ` across ${result.companyCount} companies` : ""}).`
-                                );
-                              } catch (err) {
-                                alert(err.message || "Failed to export all-company PDF.");
-                              }
-                              return;
-                            }
-                            const employerId = digitsOnly(sifEmployerId);
-                            if (!employerId || employerId.length !== 13) {
-                              alert("Please select a valid 13-digit Employer ID or All companies.");
-                              return;
-                            }
-                            const built = buildSalarySifExportOptions(employerId);
-                            if (built.error) {
-                              setError(built.error);
-                              alert(built.error);
-                              return;
-                            }
-                            await sifService.downloadSifPdf(m, y, built.exportOptions);
-                          }}
-                          disabled={loading}
-                        >
-                          Download Employee Details & SIF Summary PDF
-                        </button>
+                {reportType !== "Employees Master Data" && (
+                  <div className={styles.datePeriodPanel}>
+                    {/* Date Range */}
+                    <div className={`${styles["form-row"]} ${styles.dateRangeRow}`}>
+                      <div className={styles["form-label"]}>Choose a date range</div>
+                      <div className={`${styles["form-field"]} ${styles.dateRangeGroup}`}>
+                        <DateInput className={styles["date-field"]} value={startDate} onChange={e => setStartDate(e.target.value)} />
+                        <span className={styles.dateRangeSep}>to</span>
+                        <DateInput className={styles["date-field"]} value={endDate} onChange={e => setEndDate(e.target.value)} />
                       </div>
+                    </div>
+
+                    <div className={styles.periodGroup}>
+                      {/* Month */}
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Month</div>
+                        <div className={styles["form-field"]}>
+                          <select className={styles["select-field"]} value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+                            {monthsList.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Year */}
+                      <div className={styles["form-row"]}>
+                        <div className={styles["form-label"]}>Year</div>
+                        <div className={styles["form-field"]}>
+                          <select className={styles["select-field"]} value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+                            {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {reportType === "Salary report" && (
+                  <div className={styles.sifSettingsPanel}>
+                    <div className={styles["form-row"]}>
+                      <div className={styles["form-label"]}>Employer ID</div>
+                      <div className={`${styles["form-field"]} ${styles.sifEmployerField}`}>
+                        <select
+                          className={styles["select-field"]}
+                          value={sifEmployerId}
+                          onChange={(e) => {
+                            setSifEmployerId(e.target.value);
+                            setShowPreview(false);
+                            setPreviewData([]);
+                            setPreviewHeaders([]);
+                          }}
+                          disabled={sifSettingsLoading}
+                        >
+                          <option value="">{sifSettingsLoading ? "Loading Employer IDs..." : "Select Employer ID"}</option>
+                          {showAllEmployersOption && (
+                            <option value="ALL">
+                              {`All companies — ${sifAllEligibleCount} eligible employee(s)`}
+                            </option>
+                          )}
+                          {sifEmployerOptions.map((emp) => (
+                            <option key={emp.employerId} value={emp.employerId}>
+                              {`${emp.companyName ? `${emp.companyName} — ` : ""}${emp.employerId} — ${emp.employeeCount} eligible employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
+                            </option>
+                          ))}
+                        </select>
+                        {sifSettingsError && <div className={styles.sifSettingsError}>{sifSettingsError}</div>}
+
+                        <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className={styles["generate-button"]}
+                            style={{ background: "#0284c7", padding: "6px 12px", fontSize: "13px" }}
+                            onClick={() => {
+                              setFormat("SIF");
+                              handleGenerateReport("SIF");
+                            }}
+                            disabled={loading}
+                          >
+                            Download SIF
+                          </button>
+                          <button
+                            type="button"
+                            className={styles["generate-button"]}
+                            style={{ background: "#4f46e5", padding: "6px 12px", fontSize: "13px" }}
+                            onClick={async () => {
+                              const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                              const now = new Date();
+                              const m = filterMonth !== "All" ? monthNames.indexOf(filterMonth) + 1 : now.getMonth() + 1;
+                              const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
+                              if (isAllEmployersSelected) {
+                                try {
+                                  const result = await sifService.downloadSifPdf(m, y, { employerId: "ALL" });
+                                  alert(
+                                    `All-companies SIF PDF exported (${result.edrCount} paid employee(s), total AED ${Number(result.totalSalary || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}${result.companyCount ? ` across ${result.companyCount} companies` : ""}).`
+                                  );
+                                } catch (err) {
+                                  alert(err.message || "Failed to export all-company PDF.");
+                                }
+                                return;
+                              }
+                              const employerId = digitsOnly(sifEmployerId);
+                              if (!employerId || employerId.length !== 13) {
+                                alert("Please select a valid 13-digit Employer ID or All companies.");
+                                return;
+                              }
+                              const built = buildSalarySifExportOptions(employerId);
+                              if (built.error) {
+                                setError(built.error);
+                                alert(built.error);
+                                return;
+                              }
+                              await sifService.downloadSifPdf(m, y, built.exportOptions);
+                            }}
+                            disabled={loading}
+                          >
+                            Download Employee Details & SIF Summary PDF
+                          </button>
+                        </div>
                       <div className={styles.sifEmployerHint}>
                         {filterEmployee && filterEmployee !== "All"
                           ? "Employer ID is auto-filled from the selected employee’s company assignment. You can still change it if needed."
@@ -2173,41 +2166,11 @@ function Reports() {
           </div>
 
         </PageBody>
-      </main>
+            </main>
 
-      {sifImportOpen && (
-        <div
-          className={styles.sifImportOverlay}
-          onClick={() => {
-            if (!sifImporting) {
-              setSifImportOpen(false);
-              setSifDragOver(false);
-              setSifPreviewRows([]);
-              setSifPreviewFile(null);
-            }
-          }}
-        >
-          <div
-            className={`${styles.sifImportModal} ${sifPreviewRows.length > 0 ? styles.sifImportModalWide : ""}`}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sif-import-title"
-          >
-            <div className={styles.sifImportHeader}>
-              <div>
-                <h3 id="sif-import-title" className={styles.sifImportTitle}>
-                  Import SIF / Excel
-                </h3>
-                <p className={styles.sifImportSubtitle}>
-                  {sifPreviewRows.length > 0
-                    ? `Preview — ${sifPreviewRows.length} record(s) found in ${sifPreviewFile?.name || "file"}`
-                    : "Drag and drop your salary file, or browse to upload."}
-                </p>
-              </div>
-              <button
-                type="button"
-                className={styles.sifImportClose}
+            {sifImportOpen && (
+              <div
+                className={styles.sifImportOverlay}
                 onClick={() => {
                   if (!sifImporting) {
                     setSifImportOpen(false);
@@ -2216,115 +2179,145 @@ function Reports() {
                     setSifPreviewFile(null);
                   }
                 }}
-                disabled={sifImporting}
-                aria-label="Close"
               >
-                ×
-              </button>
-            </div>
-
-            {sifPreviewRows.length === 0 ? (
-              <div
-                className={`${styles.sifDropZone} ${sifDragOver ? styles.sifDropZoneActive : ""} ${sifImporting ? styles.sifDropZoneDisabled : ""}`}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!sifImporting) setSifDragOver(true);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!sifImporting) setSifDragOver(true);
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setSifDragOver(false);
-                }}
-                onDrop={handleSifDrop}
-                onClick={() => {
-                  if (!sifImporting) sifInputRef.current?.click();
-                }}
-              >
-                <div className={styles.sifDropIcon} aria-hidden="true">
-                  ⬆
-                </div>
-                <p className={styles.sifDropTitle}>
-                  {sifDragOver
-                    ? "Drop file to import"
-                    : "Drag & drop file here"}
-                </p>
-                <p className={styles.sifDropHint}>
-                  Supports .SIF, .xlsx, .xls, .csv, .txt
-                </p>
-                <button
-                  type="button"
-                  className={styles.sifBrowseButton}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    sifInputRef.current?.click();
-                  }}
+                <div
+                  className={`${styles.sifImportModal} ${sifPreviewRows.length > 0 ? styles.sifImportModalWide : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="sif-import-title"
                 >
-                  Browse files
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className={styles.sifPreviewTableWrap}>
-                  <table className={styles.sifPreviewTable}>
-                    <thead>
-                      <tr>
-                        {SIF_HEADERS.filter((h) => sifPreviewRows.some((r) => r[h] !== undefined && r[h] !== "")).map((h) => (
-                          <th key={h} className={SIF_RED_HEADERS.has(h) ? styles.sifRedHeader : undefined}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sifPreviewRows.slice(0, 200).map((row, idx) => (
-                        <tr key={idx}>
-                          {SIF_HEADERS.filter((h) => sifPreviewRows.some((r) => r[h] !== undefined && r[h] !== "")).map((h) => (
-                            <td key={h}>{row[h] !== undefined && row[h] !== null ? String(row[h]) : ""}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {sifPreviewRows.length > 200 && (
-                    <p className={styles.sifPreviewTruncated}>
-                      Showing first 200 of {sifPreviewRows.length} rows
-                    </p>
-                  )}
-                </div>
-                <div className={styles.sifPreviewActions}>
-                  <button
-                    type="button"
-                    className={styles["cancel-button"]}
-                    onClick={() => {
-                      setSifPreviewRows([]);
-                      setSifPreviewFile(null);
-                    }}
-                    disabled={sifImporting}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    className={styles["generate-button"]}
-                    onClick={confirmSifImport}
-                    disabled={sifImporting}
-                  >
-                    {sifImporting ? "Importing..." : `Confirm Import (${sifPreviewRows.length} rows)`}
-                  </button>
-                </div>
-              </>
-            )}
+                  <div className={styles.sifImportHeader}>
+                    <div>
+                      <h3 id="sif-import-title" className={styles.sifImportTitle}>
+                        Import SIF / Excel
+                      </h3>
+                      <p className={styles.sifImportSubtitle}>
+                        {sifPreviewRows.length > 0
+                          ? `Preview — ${sifPreviewRows.length} record(s) found in ${sifPreviewFile?.name || "file"}`
+                          : "Drag and drop your salary file, or browse to upload."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.sifImportClose}
+                      onClick={() => {
+                        if (!sifImporting) {
+                          setSifImportOpen(false);
+                          setSifDragOver(false);
+                          setSifPreviewRows([]);
+                          setSifPreviewFile(null);
+                        }
+                      }}
+                      disabled={sifImporting}
+                      aria-label="Close"
+                    >
+                      ×
+                    </button>
+                  </div>
 
-            {error && <div className={styles.sifImportError}>{error}</div>}
+                  {sifPreviewRows.length === 0 ? (
+                    <div
+                      className={`${styles.sifDropZone} ${sifDragOver ? styles.sifDropZoneActive : ""} ${sifImporting ? styles.sifDropZoneDisabled : ""}`}
+                      onDragEnter={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!sifImporting) setSifDragOver(true);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!sifImporting) setSifDragOver(true);
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSifDragOver(false);
+                      }}
+                      onDrop={handleSifDrop}
+                      onClick={() => {
+                        if (!sifImporting) sifInputRef.current?.click();
+                      }}
+                    >
+                      <div className={styles.sifDropIcon} aria-hidden="true">
+                        ⬆
+                      </div>
+                      <p className={styles.sifDropTitle}>
+                        {sifDragOver
+                          ? "Drop file to import"
+                          : "Drag & drop file here"}
+                      </p>
+                      <p className={styles.sifDropHint}>
+                        Supports .SIF, .xlsx, .xls, .csv, .txt
+                      </p>
+                      <button
+                        type="button"
+                        className={styles.sifBrowseButton}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sifInputRef.current?.click();
+                        }}
+                      >
+                        Browse files
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className={styles.sifPreviewTableWrap}>
+                        <table className={styles.sifPreviewTable}>
+                          <thead>
+                            <tr>
+                              {SIF_HEADERS.filter((h) => sifPreviewRows.some((r) => r[h] !== undefined && r[h] !== "")).map((h) => (
+                                <th key={h} className={SIF_RED_HEADERS.has(h) ? styles.sifRedHeader : undefined}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sifPreviewRows.slice(0, 200).map((row, idx) => (
+                              <tr key={idx}>
+                                {SIF_HEADERS.filter((h) => sifPreviewRows.some((r) => r[h] !== undefined && r[h] !== "")).map((h) => (
+                                  <td key={h}>{row[h] !== undefined && row[h] !== null ? String(row[h]) : ""}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {sifPreviewRows.length > 200 && (
+                          <p className={styles.sifPreviewTruncated}>
+                            Showing first 200 of {sifPreviewRows.length} rows
+                          </p>
+                        )}
+                      </div>
+                      <div className={styles.sifPreviewActions}>
+                        <button
+                          type="button"
+                          className={styles["cancel-button"]}
+                          onClick={() => {
+                            setSifPreviewRows([]);
+                            setSifPreviewFile(null);
+                          }}
+                          disabled={sifImporting}
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          className={styles["generate-button"]}
+                          onClick={confirmSifImport}
+                          disabled={sifImporting}
+                        >
+                          {sifImporting ? "Importing..." : `Confirm Import (${sifPreviewRows.length} rows)`}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {error && <div className={styles.sifImportError}>{error}</div>}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
-    </div>
-  );
+          );
 }
 
-export default Reports;
+          export default Reports;
