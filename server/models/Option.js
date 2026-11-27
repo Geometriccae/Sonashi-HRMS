@@ -4,7 +4,8 @@ const optionSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['role', 'department']
+    // Leave request dropdowns persist reporting/approval manager names here too.
+    enum: ['role', 'department', 'reportingManager', 'approvalManager']
   },
   label: {
     type: String,

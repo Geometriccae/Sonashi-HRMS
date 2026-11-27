@@ -3,6 +3,8 @@
  * No React or router imports — safe to use in tests and utility modules.
  */
 
+import { calculateLeaveDays, excelDateDiffDays } from "./leaveCalculator";
+
 /**
  * Formats a date value to DD/MM/YYYY for display in tables and exports.
  * Returns "—" when the value is absent, empty, or invalid.
@@ -41,5 +43,67 @@ export const displayLastWorkingDay = (item) => {
     return "—";
   }
   return fmtDate(item?.lastWorkingDay);
+};
+
+/**
+ * Formats a day count for vacation tables/exports (e.g. "63 Days").
+ * Returns "—" when missing or invalid. Never shows negative values.
+ *
+ * @param {number|string|null|undefined} n
+ * @returns {string}
+ */
+export const formatDaysCount = (n) => {
+  if (n == null || n === "") return "—";
+  const v = Number(n);
+  if (!Number.isFinite(v) || v < 0) return "—";
+  const days = Math.floor(v);
+  return `${days} ${days === 1 ? "Day" : "Days"}`;
+};
+
+/**
+ * Days of Vacation for Yet To Go / On Vacation rows.
+ * Uses API daysOfVacation when present; otherwise derives from leaveDays or
+ * the same Travelling Date → Leave End Date already shown on the row.
+ *
+ * @param {object} item
+ * @returns {string}
+ */
+export const displayDaysOfVacation = (item) => {
+  if (item?.daysOfVacation != null && item.daysOfVacation !== "") {
+    return formatDaysCount(item.daysOfVacation);
+  }
+  if (item?.leaveDays != null && item.leaveDays !== "") {
+    return formatDaysCount(item.leaveDays);
+  }
+  const start = item?.travellingDate || item?.startDate || null;
+  const end = item?.leaveEndDate || item?.endDate || null;
+  return formatDaysCount(calculateLeaveDays(start, end));
+};
+
+/**
+ * Remaining days until expected return — recomputed from today so the value
+ * stays correct without editing the leave record (Leave Management END−START).
+ *
+ * @param {{ leaveEndDate?: string|Date|null, endDate?: string|Date|null, remainingDays?: number|null }} item
+ * @returns {string}
+ */
+export const displayRemainingDays = (item) => {
+  const end = item?.leaveEndDate || item?.endDate;
+  if (end) {
+    return formatDaysCount(excelDateDiffDays(end, new Date()));
+  }
+  return formatDaysCount(item?.remainingDays);
+};
+
+/**
+ * Returned Back Total Days: Last Working Day → First Working Day.
+ *
+ * @param {object} item
+ * @returns {string}
+ */
+export const displayTotalDays = (item) => {
+  const fromDates = calculateLeaveDays(item?.lastWorkingDay, item?.firstWorkingDay);
+  if (fromDates != null) return formatDaysCount(fromDates);
+  return formatDaysCount(item?.totalDays);
 };
 

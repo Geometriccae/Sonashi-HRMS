@@ -32,7 +32,13 @@ import {
   buildVacationDatePrompt,
   toDateInputValue,
 } from "../utils/vacationStatusUpdate";
-import { fmtDate, displayLastWorkingDay } from "../utils/vacationDisplayHelpers";
+import {
+  fmtDate,
+  displayLastWorkingDay,
+  displayDaysOfVacation,
+  displayRemainingDays,
+  displayTotalDays,
+} from "../utils/vacationDisplayHelpers";
 
 const PAGE_SIZE = 20;
 
@@ -152,6 +158,8 @@ const buildVacationExportRows = (list, tabKey) =>
         "Leave End Date": fmt(item.leaveEndDate || item.endDate),
         "Travelling Date": fmt(item.travellingDate),
         "Last Working Day": fmt(item.lastWorkingDay),
+        "Days of Vacation": displayDaysOfVacation(item),
+        "Remaining Days": displayRemainingDays(item),
       };
     }
     if (tabKey === "yetToGo") {
@@ -160,12 +168,15 @@ const buildVacationExportRows = (list, tabKey) =>
         "Last Working Day": displayLastWorkingDay(item),
         "Travelling Date": fmt(item.travellingDate),
         "Leave End Date": fmt(item.leaveEndDate || item.endDate),
+        "Days of Vacation": displayDaysOfVacation(item),
       };
     }
     return {
       ...base,
       "Return Date": fmt(item.returnDate),
       "First Working Day": fmt(item.firstWorkingDay),
+      "Last Working Day": displayLastWorkingDay(item),
+      "Total Days": displayTotalDays(item),
     };
   });
 
@@ -894,9 +905,9 @@ function AnnualVacations() {
                               <th>Country</th>
                               <th>DOJ</th>
                               <th>Experience</th>
-                              {activeTab === "onVacation" && <><th>Leave End Date</th><th>Travelling Date</th><th>Last Working Day</th></>}
-                              {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th></>}
-                              {activeTab === "returned"  && <><th>Return Date</th><th>First Working Day</th></>}
+                              {activeTab === "onVacation" && <><th>Leave End Date</th><th>Travelling Date</th><th>Last Working Day</th><th>Days of Vacation</th><th>Remaining Days</th></>}
+                              {activeTab === "yetToGo"   && <><th>Last Working Day</th><th>Travelling Date</th><th>Leave End Date</th><th>Days of Vacation</th></>}
+                              {activeTab === "returned"  && <><th>Return Date</th><th>First Working Day</th><th>Last Working Day</th><th>Total Days</th></>}
                               <th>Status</th>
                               {canReturn && <th>Actions</th>}
                             </tr>
@@ -933,9 +944,9 @@ function AnnualVacations() {
                                       : "—"}
                                   </td>
 
-                                  {activeTab === "onVacation" && <><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.lastWorkingDay)}</td></>}
-                                  {activeTab === "yetToGo"   && <><td className={styles.tdDate}>{displayLastWorkingDay(item)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td></>}
-                                  {activeTab === "returned"  && <><td className={styles.tdDate}>{fmt(item.returnDate)}</td><td className={styles.tdDate}>{fmt(item.firstWorkingDay)}</td></>}
+                                  {activeTab === "onVacation" && <><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.lastWorkingDay)}</td><td className={styles.tdCenter}>{displayDaysOfVacation(item)}</td><td className={styles.tdCenter}>{displayRemainingDays(item)}</td></>}
+                                  {activeTab === "yetToGo"   && <><td className={styles.tdDate}>{displayLastWorkingDay(item)}</td><td className={styles.tdDate}>{fmt(item.travellingDate)}</td><td className={styles.tdDate}>{fmt(item.leaveEndDate || item.endDate)}</td><td className={styles.tdCenter}>{displayDaysOfVacation(item)}</td></>}
+                                  {activeTab === "returned"  && <><td className={styles.tdDate}>{fmt(item.returnDate)}</td><td className={styles.tdDate}>{fmt(item.firstWorkingDay)}</td><td className={styles.tdDate}>{displayLastWorkingDay(item)}</td><td className={styles.tdCenter}>{displayTotalDays(item)}</td></>}
 
                                   <td onClick={e => e.stopPropagation()}>
                                     {canReturn && item._source === "employee" ? (

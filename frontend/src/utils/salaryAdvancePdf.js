@@ -1,19 +1,70 @@
 /**
  * Salary Advance & Off-Cycle Payment PDF Generator
- * Complies with UAE client requirements:
- * - High-definition company letterhead (/letterhead.png / /letterhead_header.png)
- * - Professional black-and-white theme
- * - Supports both Individual Advance Voucher and Bulk Batch Statement
- * - Accurate Person ID (workPermitNo), Employee ID, Department, Amounts, and Status
+ *
+ * Layout-only module: professional A4 corporate black-and-white reports.
+ * Business logic, amounts, statuses and selection remain caller-owned.
  */
 
+const COMPANY = {
+  name: "JOINT VEN TRADING CO. LLC.",
+  address: "P.O. Box: 15683, Dubai, UAE.",
+  contact: "Tel-Off: +971 4 221 1461 | Tel-Main: +971 4 226 4228 | Fax: +971 4 229 6950",
+  emailWeb: "Email: accounts@sonashi.ae | Web: www.sonashiuae.com",
+};
+
+const COLORS = {
+  black: [0, 0, 0],
+  text: [33, 33, 33],
+  muted: [90, 90, 90],
+  headerBg: [235, 235, 235],
+  line: [160, 160, 160],
+  softLine: [200, 200, 200],
+};
+
+const HEADER_CANDIDATES = [
+  "/payslip_company_header.png",
+  "/letterhead_header.png",
+  "/letterhead.png",
+  "/sonashi_logo_updated.png",
+  "/sonashi_logo.png",
+];
+
+let cachedHeaderImage = null;
+
 const loadJsPdf = async () => {
-  const [{ default: jsPDF }] = await Promise.all([
+  const [jspdfMod, autoTableMod] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
   ]);
-  return { jsPDF };
+  const jsPDF =
+    jspdfMod.jsPDF ||
+    jspdfMod.default?.jsPDF ||
+    jspdfMod.default;
+  const autoTable = autoTableMod.default || autoTableMod;
+  if (typeof jsPDF !== "function") {
+    throw new Error("jsPDF failed to load");
+  }
+  return { jsPDF, autoTable };
 };
+
+/** Prefer natural image aspect; fall back to element width/height. */
+function imageSize(doc, img) {
+  try {
+    return doc.getImageProperties(img);
+  } catch {
+    return {
+      width: Number(img?.width) || 1000,
+      height: Number(img?.height) || 200,
+    };
+  }
+}
+
+function imageSource(img) {
+  if (!img) return null;
+  if (typeof img === "string") return img;
+  if (img._dataUrl) return img._dataUrl;
+  return img;
+}
 
 const loadImage = (src) =>
   new Promise((resolve, reject) => {
@@ -23,6 +74,19 @@ const loadImage = (src) =>
     img.onerror = () => reject(new Error(`Failed to load ${src}`));
     img.src = src;
   });
+
+const getHeaderImage = async () => {
+  if (cachedHeaderImage) return cachedHeaderImage;
+  for (const src of HEADER_CANDIDATES) {
+    try {
+      cachedHeaderImage = await loadImage(src);
+      return cachedHeaderImage;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+};
 
 const formatAed = (val) => {
   const n = Number(val || 0);
@@ -35,297 +99,471 @@ const formatAed = (val) => {
 const formatDate = (dateVal) => {
   if (!dateVal) return "—";
   const d = new Date(dateVal);
-  if (isNaN(d.getTime())) return String(dateVal);
+  if (Number.isNaN(d.getTime())) return String(dateVal);
   const day = String(d.getDate()).padStart(2, "0");
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const year = d.getFullYear();
   return `${day}/${month}/${year}`;
 };
 
+const formatDateTime = (dateVal = new Date()) => {
+  const d = new Date(dateVal);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const displayStatus = (status) =>
+  String(status || "active")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/\bSif\b/g, "SIF");
+
+const isPaidStatus = (status) => {
+  const s = String(status || "").toLowerCase();
+  return ["sif_generated", "processed", "fully_recovered"].includes(s);
+};
+
+const isApprovedStatus = (status) => {
+  const s = String(status || "").toLowerCase();
+  return s !== "cancelled";
+};
+
+const recordAmount = (item) =>
+  Number(item?.originalAmount != null ? item.originalAmount : item?.amount || 0);
+
 /**
- * Render standard HD company letterhead banner on the document.
+ * Draw company header with HD letterhead (aspect-preserved, not stretched).
+ * Returns Y position below the header.
  */
-async function renderHeader(doc, margin = 14) {
+async function renderCompanyHeader(doc, margin, maxHeightMm = 28) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  const headerWidth = pageWidth - margin * 2;
-  let headerBottom = 12;
+  const contentWidth = pageWidth - margin * 2;
+  let y = margin;
 
-  try {
-    let headerImg = null;
+  const headerImg = await getHeaderImage();
+  if (headerImg) {
     try {
-      headerImg = await loadImage("/letterhead.png");
-    } catch {
-      headerImg = await loadImage("/letterhead_header.png");
+      const src = imageSource(headerImg);
+      const props = imageSize(doc, src || headerImg);
+      let drawW = contentWidth;
+      let drawH = (props.height * drawW) / props.width;
+      if (drawH > maxHeightMm) {
+        drawH = maxHeightMm;
+        drawW = (props.width * drawH) / props.height;
+      }
+      const x = margin + (contentWidth - drawW) / 2;
+      // MEDIUM keeps letterhead sharp without the heavy pixelation of FAST
+      doc.addImage(src || headerImg, "PNG", x, y, drawW, drawH, undefined, "MEDIUM");
+      y += drawH + 3;
+    } catch (err) {
+      console.warn("Letterhead render failed, using text header:", err);
+      y = drawTextCompanyHeader(doc, margin, y);
     }
-
-    if (headerImg) {
-      const imgProps = doc.getImageProperties(headerImg);
-      const imgHeight = (imgProps.height * headerWidth) / imgProps.width;
-      doc.addImage(headerImg, "PNG", margin, 10, headerWidth, imgHeight, undefined, "FAST");
-      headerBottom = 10 + imgHeight;
-    }
-  } catch (err) {
-    console.warn("Letterhead image failed to load, falling back to text banner:", err);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(0, 0, 0);
-    doc.text("SONASHI GENERAL TRADING LLC", pageWidth / 2, 18, { align: "center" });
-    headerBottom = 22;
+  } else {
+    y = drawTextCompanyHeader(doc, margin, y);
   }
 
-  // Black divider line under letterhead
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.4);
-  doc.line(margin, headerBottom + 3, pageWidth - margin, headerBottom + 3);
+  doc.setDrawColor(...COLORS.black);
+  doc.setLineWidth(0.45);
+  doc.line(margin, y, pageWidth - margin, y);
+  doc.setDrawColor(...COLORS.softLine);
+  doc.setLineWidth(0.2);
+  doc.line(margin, y + 1.2, pageWidth - margin, y + 1.2);
 
-  return headerBottom + 7;
+  return y + 5;
+}
+
+function drawTextCompanyHeader(doc, margin, startY) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const cx = pageWidth / 2;
+  let y = startY;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...COLORS.black);
+  doc.text(COMPANY.name, cx, y + 4, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...COLORS.muted);
+  doc.text(COMPANY.address, cx, y + 9, { align: "center" });
+  doc.text(COMPANY.contact, cx, y + 13.5, { align: "center" });
+  doc.text(COMPANY.emailWeb, cx, y + 18, { align: "center" });
+
+  return y + 22;
+}
+
+function drawReportTitle(doc, margin, startY, title, metaLines = []) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = startY;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...COLORS.black);
+  doc.text(title, pageWidth / 2, y, { align: "center" });
+  y += 5;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...COLORS.muted);
+  metaLines.filter(Boolean).forEach((line) => {
+    doc.text(line, pageWidth / 2, y, { align: "center" });
+    y += 4.2;
+  });
+
+  return y + 2;
+}
+
+function drawSectionHeading(doc, margin, y, label) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...COLORS.black);
+  doc.text(label, margin, y);
+  doc.setDrawColor(...COLORS.line);
+  doc.setLineWidth(0.25);
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.line(margin, y + 1.5, pageWidth - margin, y + 1.5);
+  return y + 5;
+}
+
+function drawKeyValueGrid(doc, autoTable, margin, startY, pairs) {
+  const rows = [];
+  for (let i = 0; i < pairs.length; i += 2) {
+    rows.push([pairs[i], pairs[i + 1] || null]);
+  }
+
+  const body = rows.map(([left, right]) => {
+    const cells = [
+      {
+        content: left?.label || "",
+        styles: { fontStyle: "bold", fillColor: COLORS.headerBg, textColor: COLORS.black },
+      },
+      {
+        content: String(left?.value ?? "—"),
+        styles: { textColor: COLORS.text },
+      },
+    ];
+    if (right) {
+      cells.push({
+        content: right.label || "",
+        styles: { fontStyle: "bold", fillColor: COLORS.headerBg, textColor: COLORS.black },
+      });
+      cells.push({
+        content: String(right.value ?? "—"),
+        styles: { textColor: COLORS.text },
+      });
+    } else {
+      cells.push({ content: "", styles: { fillColor: COLORS.headerBg } });
+      cells.push({ content: "" });
+    }
+    return cells;
+  });
+
+  autoTable(doc, {
+    startY,
+    margin: { left: margin, right: margin },
+    body,
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 8.5,
+      cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 },
+      lineColor: COLORS.line,
+      lineWidth: 0.2,
+      valign: "middle",
+      overflow: "linebreak",
+      minCellHeight: 7.5,
+    },
+    columnStyles: {
+      0: { cellWidth: "18%" },
+      1: { cellWidth: "32%" },
+      2: { cellWidth: "18%" },
+      3: { cellWidth: "32%" },
+    },
+  });
+
+  return doc.lastAutoTable.finalY + 6;
+}
+
+function drawSummaryBox(doc, autoTable, margin, startY, summaryItems) {
+  autoTable(doc, {
+    startY,
+    margin: { left: margin, right: margin },
+    head: [summaryItems.map((item) => item.label)],
+    body: [summaryItems.map((item) => item.value)],
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 8.5,
+      textColor: COLORS.text,
+      cellPadding: { top: 3.2, right: 3, bottom: 3.2, left: 3 },
+      lineColor: COLORS.line,
+      lineWidth: 0.25,
+      halign: "center",
+      valign: "middle",
+      minCellHeight: 8,
+    },
+    headStyles: {
+      fillColor: COLORS.headerBg,
+      textColor: COLORS.black,
+      fontStyle: "bold",
+      fontSize: 8,
+    },
+    bodyStyles: {
+      fontStyle: "bold",
+      textColor: COLORS.black,
+    },
+  });
+
+  return doc.lastAutoTable.finalY + 4;
+}
+
+function applyFooters(doc, margin, generatedAt) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageCount = doc.internal.getNumberOfPages();
+
+  for (let i = 1; i <= pageCount; i += 1) {
+    doc.setPage(i);
+    const footerY = pageHeight - 8;
+
+    doc.setDrawColor(...COLORS.softLine);
+    doc.setLineWidth(0.2);
+    doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLORS.muted);
+    doc.text(COMPANY.name, margin, footerY);
+    doc.text(`Generated: ${generatedAt}`, pageWidth / 2, footerY, { align: "center" });
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+  }
+}
+
+function resolveEmployeeFields(record, employeeDetails = null) {
+  return {
+    empName: record.employeeName || employeeDetails?.employeeName || "—",
+    empStaffId: record.employeeId || employeeDetails?.employeeId || "—",
+    personCode:
+      employeeDetails?.workPermitNo ||
+      employeeDetails?.personCode ||
+      record.workPermitNo ||
+      record.personCode ||
+      "—",
+    department: record.department || employeeDetails?.department || "—",
+    designation:
+      record.designation ||
+      employeeDetails?.designation ||
+      employeeDetails?.role ||
+      "—",
+    company: record.company || employeeDetails?.company || employeeDetails?.office || "—",
+  };
+}
+
+function buildAdvanceTableRows(items) {
+  return (items || []).map((item, idx) => {
+    const amount = recordAmount(item);
+    return [
+      String(idx + 1),
+      item.employeeName || "—",
+      item.employeeId || "—",
+      formatDate(item.advanceDate || item.createdAt),
+      formatAed(amount),
+      displayStatus(item.status),
+    ];
+  });
+}
+
+function summarizeItems(items) {
+  const list = Array.isArray(items) ? items : [];
+  const totalEmployees = new Set(
+    list.map((i) => String(i.employeeId || i.employee || i._id || i.employeeName || "")).filter(Boolean)
+  ).size;
+  let approved = 0;
+  let paid = 0;
+  let totalAmount = 0;
+  list.forEach((item) => {
+    totalAmount += recordAmount(item);
+    if (isApprovedStatus(item.status)) approved += 1;
+    if (isPaidStatus(item.status)) paid += 1;
+  });
+  return {
+    totalEmployees: totalEmployees || list.length,
+    totalApproved: approved,
+    totalPaid: paid,
+    totalAmount,
+  };
 }
 
 /**
- * 1. Download Individual Salary Advance / Commission Voucher PDF
+ * 1. Individual Salary Advance / Commission PDF (A4 portrait)
  */
-export async function downloadIndividualAdvancePdf(record, employeeDetails = null) {
-  const { jsPDF } = await loadJsPdf();
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+export async function buildIndividualAdvancePdf(record, employeeDetails = null) {
+  const { jsPDF, autoTable } = await loadJsPdf();
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
-
-  const startY = await renderHeader(doc, margin);
+  const generatedAt = formatDateTime(new Date());
 
   const isAdv = (record.type || "advance") === "advance";
-  const voucherTitle = isAdv ? "SALARY ADVANCE VOUCHER" : "COMMISSION PAYOUT VOUCHER";
-
-  // Document Title
-  let currentY = startY + 4;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(0, 0, 0);
-  doc.text(voucherTitle, pageWidth / 2, currentY, { align: "center" });
-
-  currentY += 6;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(60, 60, 60);
-  const voucherNo = record.batchId || record._id || "ADV-VOUCHER";
-  const advanceDateStr = formatDate(record.advanceDate || record.createdAt || new Date());
-  doc.text(`Voucher Ref: ${voucherNo}   |   Date: ${advanceDateStr}`, pageWidth / 2, currentY, {
-    align: "center",
-  });
-
-  currentY += 8;
-
-  // Employee Information Block
-  const empName = record.employeeName || employeeDetails?.employeeName || "—";
-  const empStaffId = record.employeeId || employeeDetails?.employeeId || "—";
-  const personCode =
-    employeeDetails?.workPermitNo ||
-    employeeDetails?.personCode ||
-    record.workPermitNo ||
-    record.personCode ||
-    "—";
-  const department = record.department || employeeDetails?.department || "—";
-  const designation = record.designation || employeeDetails?.designation || "—";
-  const bankAcc =
-    employeeDetails?.salaryDetails?.ibanNumber ||
-    employeeDetails?.salaryDetails?.accountNumber ||
-    employeeDetails?.bankAccount ||
-    record.bankAccount ||
-    "—";
-
-  const originalAmt = Number(record.originalAmount != null ? record.originalAmount : (record.amount || 0));
+  const reportTitle = isAdv ? "SALARY ADVANCE REPORT" : "COMMISSION PAYOUT REPORT";
+  const fields = resolveEmployeeFields(record, employeeDetails);
+  const originalAmt = recordAmount(record);
   const recoveredAmt = Number(record.recoveredAmount || 0);
-  const balanceAmt = Number(record.outstandingBalance != null ? record.outstandingBalance : originalAmt);
-  const statusStr = String(record.status || "Approved").replace(/_/g, " ").toUpperCase();
+  const balanceAmt = Number(
+    record.outstandingBalance != null ? record.outstandingBalance : originalAmt
+  );
+  const statusStr = displayStatus(record.status || "active");
+  const advanceDateStr = formatDate(record.advanceDate || record.createdAt || new Date());
+  const period = record.period || advanceDateStr;
   const remarksStr = record.remarks || record.paymentReference || "—";
 
-  const infoRows = [
+  let y = await renderCompanyHeader(doc, margin, 26);
+  y = drawReportTitle(doc, margin, y, reportTitle, [
+    `Generated: ${generatedAt}`,
+    `Payment Period: ${period}   |   Employee: ${fields.empName} (${fields.empStaffId})`,
+    record.batchId ? `Batch / Ref: ${record.batchId}` : null,
+  ]);
+
+  y = drawSectionHeading(doc, margin, y + 1, "Employee Details");
+  y = drawKeyValueGrid(doc, autoTable, margin, y, [
+    { label: "Employee Name", value: fields.empName },
+    { label: "Employee ID", value: fields.empStaffId },
+    { label: "Person Code", value: fields.personCode },
+    { label: "Department", value: fields.department },
+    { label: "Designation", value: fields.designation },
+    { label: "Company / Office", value: fields.company },
+  ]);
+
+  y = drawSectionHeading(doc, margin, y, "Advance Details");
+
+  const detailHead = [["S.No", "Employee Name", "Employee ID", "Advance Date", "Advance Amount", "Status"]];
+  const detailBody = [
     [
-      { content: "Employee Name", styles: { fontStyle: "bold", fillColor: [245, 245, 245] } },
-      { content: empName },
-      { content: "Staff ID", styles: { fontStyle: "bold", fillColor: [245, 245, 245] } },
-      { content: empStaffId },
-    ],
-    [
-      { content: "Person ID / Code", styles: { fontStyle: "bold", fillColor: [245, 245, 245] } },
-      { content: personCode },
-      { content: "Department", styles: { fontStyle: "bold", fillColor: [245, 245, 245] } },
-      { content: department },
-    ],
-    [
-      { content: "Designation", styles: { fontStyle: "bold", fillColor: [245, 245, 245] } },
-      { content: designation },
-      { content: "Bank / IBAN", styles: { fontStyle: "bold", fillColor: [245, 245, 245] } },
-      { content: bankAcc },
+      "1",
+      fields.empName,
+      fields.empStaffId,
+      advanceDateStr,
+      formatAed(originalAmt),
+      statusStr,
     ],
   ];
 
-  doc.autoTable({
-    startY: currentY,
-    margin: { left: margin, right: margin },
-    body: infoRows,
-    theme: "plain",
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin, bottom: 18 },
+    head: detailHead,
+    body: detailBody,
+    theme: "grid",
     styles: {
-      fontSize: 9,
-      textColor: [0, 0, 0],
-      cellPadding: 3.5,
-      lineColor: [0, 0, 0],
+      font: "helvetica",
+      fontSize: 8.5,
+      textColor: COLORS.text,
+      cellPadding: { top: 3, right: 2.5, bottom: 3, left: 2.5 },
+      lineColor: COLORS.line,
       lineWidth: 0.2,
+      valign: "middle",
+      overflow: "linebreak",
+      minCellHeight: 8,
+    },
+    headStyles: {
+      fillColor: COLORS.headerBg,
+      textColor: COLORS.black,
+      fontStyle: "bold",
+      fontSize: 8.5,
+      halign: "center",
     },
     columnStyles: {
-      0: { cellWidth: 35 },
-      1: { cellWidth: 55 },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 57 },
+      0: { cellWidth: "6%", halign: "center" },
+      1: { cellWidth: "28%" },
+      2: { cellWidth: "15%", halign: "center" },
+      3: { cellWidth: "15%", halign: "center" },
+      4: { cellWidth: "20%", halign: "right" },
+      5: { cellWidth: "16%", halign: "center" },
     },
   });
 
-  currentY = doc.lastAutoTable.finalY + 8;
-
-  // Financial Summary Table
-  const finHeaders = [["Item Description", "Details / Reference", "Amount (AED)"]];
-  const finBody = [
-    [
-      isAdv ? "Approved Salary Advance Amount" : "Commission Payout Amount",
-      `Disbursement Date: ${advanceDateStr}`,
-      formatAed(originalAmt),
-    ],
-  ];
+  y = doc.lastAutoTable.finalY + 6;
 
   if (isAdv) {
-    finBody.push([
-      "Recovered Amount to Date",
-      "Deducted via monthly payroll",
-      formatAed(recoveredAmt),
-    ]);
-    finBody.push([
-      { content: "Outstanding Balance", styles: { fontStyle: "bold" } },
-      { content: `Payment Status: ${statusStr}`, styles: { fontStyle: "bold" } },
-      { content: formatAed(balanceAmt), styles: { fontStyle: "bold" } },
+    y = drawSectionHeading(doc, margin, y, "Recovery Summary");
+    y = drawKeyValueGrid(doc, autoTable, margin, y, [
+      { label: "Advance Amount", value: formatAed(originalAmt) },
+      { label: "Status", value: statusStr },
+      { label: "Recovered", value: formatAed(recoveredAmt) },
+      { label: "Outstanding", value: formatAed(balanceAmt) },
     ]);
   } else {
-    finBody.push([
-      { content: "Net Commission Payable", styles: { fontStyle: "bold" } },
-      { content: `Payment Status: ${statusStr}`, styles: { fontStyle: "bold" } },
-      { content: formatAed(originalAmt), styles: { fontStyle: "bold" } },
+    y = drawSectionHeading(doc, margin, y, "Payment Summary");
+    y = drawKeyValueGrid(doc, autoTable, margin, y, [
+      { label: "Payable Amount", value: formatAed(originalAmt) },
+      { label: "Status", value: statusStr },
     ]);
   }
 
-  doc.autoTable({
-    startY: currentY,
-    margin: { left: margin, right: margin },
-    head: finHeaders,
-    body: finBody,
-    theme: "plain",
-    styles: {
-      fontSize: 9.5,
-      textColor: [0, 0, 0],
-      cellPadding: 4,
-      lineColor: [0, 0, 0],
-      lineWidth: 0.25,
-    },
-    headStyles: {
-      fillColor: [240, 240, 240],
-      fontStyle: "bold",
-      textColor: [0, 0, 0],
-      lineWidth: 0.35,
-    },
-    columnStyles: {
-      0: { cellWidth: 80 },
-      1: { cellWidth: 62 },
-      2: { cellWidth: 40, halign: "right" },
-    },
-  });
-
-  currentY = doc.lastAutoTable.finalY + 8;
-
-  // Remarks section
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(0, 0, 0);
-  doc.text("Remarks / Notes:", margin, currentY);
-  currentY += 4.5;
-  doc.setFont("helvetica", "normal");
-  doc.text(remarksStr, margin, currentY, { maxWidth: pageWidth - margin * 2 });
-
-  // Signatures at bottom
-  const sigY = pageHeight - 45;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.3);
-
-  const sigColWidth = 50;
-  // Prepared by
-  doc.line(margin, sigY, margin + sigColWidth, sigY);
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.text("Prepared By", margin + 12, sigY + 5);
+  doc.setTextColor(...COLORS.black);
+  doc.text("Remarks / Notes", margin, y);
+  y += 4;
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...COLORS.text);
+  const remarkLines = doc.splitTextToSize(String(remarksStr), pageWidth - margin * 2);
+  doc.text(remarkLines, margin, y);
+  y += remarkLines.length * 4 + 10;
 
-  // Approved by
-  const centerSigX = pageWidth / 2 - sigColWidth / 2;
-  doc.line(centerSigX, sigY, centerSigX + sigColWidth, sigY);
-  doc.text("Approved By", centerSigX + 13, sigY + 5);
-
-  // Employee Signature
-  const rightSigX = pageWidth - margin - sigColWidth;
-  doc.line(rightSigX, sigY, rightSigX + sigColWidth, sigY);
-  doc.text("Employee Signature", rightSigX + 8, sigY + 5);
-
-  // Footer
+  const sigY = Math.max(y + 8, pageHeight - 42);
+  const sigW = 48;
+  doc.setDrawColor(...COLORS.black);
+  doc.setLineWidth(0.3);
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(120, 120, 120);
-  const timeStamp = new Date().toLocaleString("en-GB");
-  doc.text(`Generated on ${timeStamp} — Sonashi HRMS`, margin, pageHeight - 12);
-  doc.text("Page 1 of 1", pageWidth - margin, pageHeight - 12, { align: "right" });
+  doc.setTextColor(...COLORS.muted);
 
-  const fileName = `${empStaffId}_${isAdv ? "Advance" : "Commission"}_${advanceDateStr.replace(/\//g, "-")}.pdf`;
+  doc.line(margin, sigY, margin + sigW, sigY);
+  doc.text("Prepared By", margin + 10, sigY + 5);
+
+  const midX = pageWidth / 2 - sigW / 2;
+  doc.line(midX, sigY, midX + sigW, sigY);
+  doc.text("Approved By", midX + 11, sigY + 5);
+
+  const rightX = pageWidth - margin - sigW;
+  doc.line(rightX, sigY, rightX + sigW, sigY);
+  doc.text("Employee Signature", rightX + 6, sigY + 5);
+
+  applyFooters(doc, margin, generatedAt);
+
+  const fileName = `${fields.empStaffId}_${isAdv ? "Advance" : "Commission"}_${advanceDateStr.replace(/\//g, "-")}.pdf`;
+  return { doc, fileName };
+}
+
+export async function downloadIndividualAdvancePdf(record, employeeDetails = null) {
+  const { doc, fileName } = await buildIndividualAdvancePdf(record, employeeDetails);
   doc.save(fileName);
   return { ok: true, fileName };
 }
 
 /**
- * 2. Download Bulk Batch Salary Advance / Commission Statement PDF
+ * 2. Bulk Batch Salary Advance / Commission Statement PDF (A4 landscape)
  */
-export async function downloadBatchAdvancePdf(batch, employeeList = []) {
-  const { jsPDF } = await loadJsPdf();
+export async function buildBatchAdvancePdf(batch, employeeList = []) {
+  const { jsPDF, autoTable } = await loadJsPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 12;
-
-  const startY = await renderHeader(doc, margin);
+  const generatedAt = formatDateTime(new Date());
 
   const isAdv = (batch.type || "advance") === "advance";
-  const title = isAdv
-    ? "SALARY ADVANCE BATCH STATEMENT"
-    : "COMMISSION PAYOUT BATCH STATEMENT";
+  const reportTitle = isAdv ? "SALARY ADVANCE REPORT" : "COMMISSION PAYOUT REPORT";
 
-  // Document Title
-  let currentY = startY + 4;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(0, 0, 0);
-  doc.text(title, pageWidth / 2, currentY, { align: "center" });
-
-  currentY += 6;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
-  doc.setTextColor(50, 50, 50);
-
-  const paymentDateStr = formatDate(batch.paymentDate || batch.advanceDate || batch.createdAt);
   const items = Array.isArray(batch.items) ? batch.items : [];
-  const empCount = items.length || batch.employeeCount || 0;
-  const totalAmt = Number(batch.totalAmount || 0);
-
-  doc.text(
-    `Batch ID: ${batch.batchId}   |   Disbursement Date: ${paymentDateStr}   |   Employees: ${empCount}   |   Total: ${formatAed(totalAmt)}`,
-    pageWidth / 2,
-    currentY,
-    { align: "center" }
-  );
-
-  currentY += 7;
-
-  // Build Map of employees for Person ID / Department lookup
   const empMap = new Map();
   if (Array.isArray(employeeList)) {
     employeeList.forEach((e) => {
@@ -334,133 +572,124 @@ export async function downloadBatchAdvancePdf(batch, employeeList = []) {
     });
   }
 
-  // Table Columns & Rows
-  const headers = [
-    [
-      "S.No",
-      "Employee Name",
-      "Emp ID",
-      "Person ID",
-      "Department",
-      "Amount (AED)",
-      ...(isAdv ? ["Recovered", "Balance"] : []),
-      "Status",
-      "Remarks",
-    ],
-  ];
-
-  let sumRecovered = 0;
-  let sumBalance = 0;
-
-  const body = items.map((item, idx) => {
+  const enrichedItems = items.map((item) => {
     const empIdKey = item.employeeId || item.employee?._id || item.employee;
     const empDoc =
       empMap.get(String(empIdKey)) ||
       (item.employeeId ? empMap.get(String(item.employeeId).trim().toLowerCase()) : null) ||
       (typeof item.employee === "object" ? item.employee : {}) ||
       {};
-
-    const name = item.employeeName || empDoc.employeeName || "—";
-    const staffId = item.employeeId || empDoc.employeeId || "—";
-    const personId =
-      empDoc.workPermitNo ||
-      empDoc.personCode ||
-      item.workPermitNo ||
-      item.personCode ||
-      "—";
-    const dept = item.department || empDoc.department || "—";
-    const originalAmt = Number(item.originalAmount != null ? item.originalAmount : (item.amount || 0));
-    const recAmt = Number(item.recoveredAmount || 0);
-    const balAmt = Number(item.outstandingBalance != null ? item.outstandingBalance : originalAmt);
-    const status = String(item.status || "active").replace(/_/g, " ");
-    const remarks = item.remarks || "—";
-
-    sumRecovered += recAmt;
-    sumBalance += balAmt;
-
-    const row = [
-      idx + 1,
-      name,
-      staffId,
-      personId,
-      dept,
-      Number(originalAmt).toFixed(2),
-    ];
-    if (isAdv) {
-      row.push(Number(recAmt).toFixed(2));
-      row.push(Number(balAmt).toFixed(2));
-    }
-    row.push(status);
-    row.push(remarks);
-    return row;
+    return {
+      ...item,
+      employeeName: item.employeeName || empDoc.employeeName || "—",
+      employeeId: item.employeeId || empDoc.employeeId || "—",
+      department: item.department || empDoc.department || "—",
+      designation: item.designation || empDoc.designation || empDoc.role || "—",
+      advanceDate: item.advanceDate || batch.paymentDate || batch.advanceDate || batch.createdAt,
+      status: item.status || batch.status || "active",
+    };
   });
 
-  // Footer summary row
-  const summaryRow = [
-    { content: "Total", colSpan: 5, styles: { fontStyle: "bold", halign: "right" } },
-    { content: totalAmt.toFixed(2), styles: { fontStyle: "bold", halign: "right" } },
-  ];
-  if (isAdv) {
-    summaryRow.push({ content: sumRecovered.toFixed(2), styles: { fontStyle: "bold", halign: "right" } });
-    summaryRow.push({ content: sumBalance.toFixed(2), styles: { fontStyle: "bold", halign: "right" } });
-  }
-  summaryRow.push({ content: "", colSpan: 2 });
-  body.push(summaryRow);
+  const paymentDateStr = formatDate(batch.paymentDate || batch.advanceDate || batch.createdAt);
+  const period = batch.period || paymentDateStr;
+  const totals = summarizeItems(enrichedItems);
+  const totalAmt =
+    Number(batch.totalAmount) > 0 ? Number(batch.totalAmount) : totals.totalAmount;
 
-  doc.autoTable({
-    startY: currentY,
-    margin: { left: margin, right: margin, bottom: 15 },
+  let y = await renderCompanyHeader(doc, margin, 22);
+  y = drawReportTitle(doc, margin, y, reportTitle, [
+    `Generated: ${generatedAt}`,
+    `Payment Period: ${period}   |   Employees: All Selected (${enrichedItems.length})`,
+    `Batch ID: ${batch.batchId || "—"}   |   Disbursement Date: ${paymentDateStr}`,
+  ]);
+
+  y = drawSectionHeading(doc, margin, y + 1, "Salary Advance Details");
+
+  const headers = [["S.No", "Employee Name", "Employee ID", "Advance Date", "Advance Amount", "Status"]];
+  const body = buildAdvanceTableRows(enrichedItems);
+
+  // Content width ~273mm on landscape A4 with 12mm margins
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin, top: 18, bottom: 16 },
     head: headers,
-    body: body,
-    theme: "plain",
+    body,
+    theme: "grid",
     styles: {
+      font: "helvetica",
       fontSize: 8.5,
-      textColor: [0, 0, 0],
-      cellPadding: 2.5,
-      lineColor: [0, 0, 0],
+      textColor: COLORS.text,
+      cellPadding: { top: 2.8, right: 2.5, bottom: 2.8, left: 2.5 },
+      lineColor: COLORS.line,
       lineWidth: 0.2,
+      valign: "middle",
+      overflow: "linebreak",
+      minCellHeight: 7.5,
     },
     headStyles: {
-      fillColor: [240, 240, 240],
+      fillColor: COLORS.headerBg,
+      textColor: COLORS.black,
       fontStyle: "bold",
-      textColor: [0, 0, 0],
-      lineWidth: 0.3,
+      fontSize: 8.5,
+      halign: "center",
+      valign: "middle",
+    },
+    alternateRowStyles: {
+      fillColor: [250, 250, 250],
     },
     columnStyles: {
-      0: { cellWidth: 12, halign: "center" },
-      1: { cellWidth: 48 },
-      2: { cellWidth: 22 },
-      3: { cellWidth: 32 },
-      4: { cellWidth: 35 },
-      5: { cellWidth: 26, halign: "right" },
-      ...(isAdv
-        ? {
-            6: { cellWidth: 24, halign: "right" },
-            7: { cellWidth: 24, halign: "right" },
-            8: { cellWidth: 24 },
-            9: { cellWidth: "auto" },
-          }
-        : {
-            6: { cellWidth: 26 },
-            7: { cellWidth: "auto" },
-          }),
+      0: { cellWidth: "5%", halign: "center" },
+      1: { cellWidth: "32%" },
+      2: { cellWidth: "14%", halign: "center" },
+      3: { cellWidth: "14%", halign: "center" },
+      4: { cellWidth: "18%", halign: "right" },
+      5: { cellWidth: "17%", halign: "center" },
     },
+    showHead: "everyPage",
+    rowPageBreak: "avoid",
     didDrawPage: (data) => {
-      const pageCount = doc.internal.getNumberOfPages();
-      doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
-      const timeStamp = new Date().toLocaleString("en-GB");
-      doc.text(`Generated on ${timeStamp} — Sonashi HRMS`, margin, pageHeight - 8);
-      doc.text(
-        `Page ${data.pageNumber} of ${pageCount}`,
-        pageWidth - margin,
-        pageHeight - 8,
-        { align: "right" }
-      );
+      // Compact continuation header on pages after the first
+      if (data.pageNumber > 1) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(...COLORS.black);
+        doc.text(`${reportTitle} (continued)`, pageWidth / 2, 10, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(...COLORS.muted);
+        doc.text(`Batch: ${batch.batchId || "—"}`, pageWidth / 2, 14, { align: "center" });
+      }
     },
   });
 
-  const fileName = `${batch.batchId}_Statement.pdf`;
+  let summaryY = doc.lastAutoTable.finalY + 6;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  if (summaryY > pageHeight - 36) {
+    doc.addPage();
+    summaryY = 18;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.black);
+    doc.text(`${reportTitle} — Summary`, pageWidth / 2, 12, { align: "center" });
+  }
+
+  drawSectionHeading(doc, margin, summaryY, "Report Summary");
+  summaryY += 5;
+  drawSummaryBox(doc, autoTable, margin, summaryY, [
+    { label: "Total Employees", value: String(totals.totalEmployees) },
+    { label: "Total Approved Advances", value: String(totals.totalApproved) },
+    { label: "Total Paid Advances", value: String(totals.totalPaid) },
+    { label: "Total Advance Amount", value: formatAed(totalAmt) },
+  ]);
+
+  applyFooters(doc, margin, generatedAt);
+
+  const fileName = `${batch.batchId || "SalaryAdvance"}_Statement.pdf`;
+  return { doc, fileName };
+}
+
+export async function downloadBatchAdvancePdf(batch, employeeList = []) {
+  const { doc, fileName } = await buildBatchAdvancePdf(batch, employeeList);
   doc.save(fileName);
   return { ok: true, fileName };
 }

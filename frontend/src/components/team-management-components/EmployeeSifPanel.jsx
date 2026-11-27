@@ -140,25 +140,19 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
       const s = await sifService.getSettings();
       const loadedEmployers = Array.isArray(s.employers) ? s.employers : [];
       const selectedEmployer = resolveEmployerForEmployee(employee, loadedEmployers, s.employerId);
-      const companyRouting = loadedEmployers.find(
-        (entry) => entry.employerId === selectedEmployer
-      )?.agentRoutingCode || (selectedEmployer === s.employerId ? s.defaultAgentRoutingCode : "");
-
-      const empAgent = String(
-        employee?.salaryDetails?.agentCode ||
-        employee?.salaryDetails?.bankSortCode ||
-        employee?.agentCode ||
-        employee?.bankSortCode ||
-        employee?.salaryDetails?.cif ||
-        employee?.salaryDetails?.cifNumber ||
-        employee?.cif ||
-        employee?.cifNumber ||
-        ""
-      ).trim().replace(/[^A-Za-z0-9]/g, "");
-
-      // For an employee in Team Management, fetch Agent Code from the employee's details in basic info.
-      // If the employee does not have an Agent Code saved, fall back to company routing.
-      const routingToUse = empAgent || companyRouting || "";
+      // SCR Column C = company employer bank routing only (never employee AGENTCODE)
+      const COMPANY_EMPLOYER_BANK_ROUTING = "600310101";
+      const rawCompanyRouting =
+        loadedEmployers.find((entry) => entry.employerId === selectedEmployer)?.agentRoutingCode ||
+        s.defaultAgentRoutingCode ||
+        "";
+      const cleanedCompanyRouting = String(rawCompanyRouting || "")
+        .trim()
+        .replace(/[^A-Za-z0-9]/g, "");
+      const routingToUse =
+        cleanedCompanyRouting.length === 9 && cleanedCompanyRouting !== "740810000"
+          ? cleanedCompanyRouting
+          : COMPANY_EMPLOYER_BANK_ROUTING;
       setEmployerId(selectedEmployer);
       setAgentRouting(routingToUse);
       setEmployers(loadedEmployers);
@@ -381,59 +375,6 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
     }
   };
 
-  const handleExportCompanyPdf = async () => {
-    const settingsMsg = validateSettingsLocal();
-    if (settingsMsg) {
-      setSettingsError(settingsMsg);
-      toast(settingsMsg, "error");
-      return;
-    }
-    setBusy("companyPdf");
-    try {
-      const result = await sifService.downloadSifPdf(month, year, {
-        employerId: employerDigits,
-      });
-      toast(`Company SIF Summary PDF downloaded (${result.fileName}).`, "success");
-    } catch (err) {
-      toast(err.message || "Company SIF PDF export failed", "error");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleExportCompanySif = async () => {
-    const settingsMsg = validateSettingsLocal();
-    if (settingsMsg) {
-      setSettingsError(settingsMsg);
-      toast(settingsMsg, "error");
-      return;
-    }
-    setBusy("companySif");
-    setImportResult(null);
-    try {
-      const result = await sifService.exportSif(month, year, { employerId: employerDigits });
-      const skipped = result.skippedCount || 0;
-      setPreview({
-        edrCount: result.edrCount,
-        skipped: result.skipped || [],
-        skippedCount: skipped,
-        fileName: result.fileName,
-        totalSalary: result.totalSalary,
-        error: null,
-      });
-      toast(
-        skipped > 0
-          ? `Company SIF downloaded (${result.edrCount} valid). ${skipped} incomplete employee(s) excluded — review the list below.`
-          : `Company SIF downloaded (${result.edrCount} records): ${result.fileName}`,
-        "success"
-      );
-    } catch (err) {
-      toast(err.message || "SIF export failed", "error");
-    } finally {
-      setBusy("");
-    }
-  };
-
   const handleExportExcel = async () => {
     setBusy("excel");
     setImportResult(null);
@@ -513,8 +454,12 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
                 <span className={styles.value}>{employeePreview.employerId}</span>
               </div>
               <div>
-                <span className={styles.label}>AGENTCODE</span>
+                <span className={styles.label}>AGENTCODE (EDR)</span>
                 <span className={styles.value}>{employeePreview.agentCode}</span>
+              </div>
+              <div>
+                <span className={styles.label}>EMPLOYER BANK (SCR)</span>
+                <span className={styles.value}>{agentDigits || "600310101"}</span>
               </div>
               <div>
                 <span className={styles.label}>BANKACCOUNT / IBAN</span>
@@ -526,8 +471,9 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
               </div>
             </div>
             <p className={styles.hint}>
-              Edit AGENTCODE / BANKACCOUNT on Salary Details (Bank SORT Code / IBAN); labour card
-              is the employee&apos;s Person Code and EMPLOYERID is the Company Code.
+              AGENTCODE (EDR) is the employee bank routing from Salary Details. EMPLOYER BANK (SCR)
+              is the company routing ({agentDigits || "600310101"}) used only in the SCR line.
+              Edit AGENTCODE / BANKACCOUNT on Salary Details; labour card is the Person Code.
               {!employeePreview.ready && (
                 <span className={styles.warn}>
                   {" "}
@@ -556,8 +502,13 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
                 setSettingsError("");
                 const nextEmployer = digitsOnly(e.target.value).slice(0, 13);
                 setEmployerId(nextEmployer);
-                setAgentRouting(
+                const nextRouting = String(
                   employers.find((entry) => entry.employerId === nextEmployer)?.agentRoutingCode || ""
+                ).replace(/[^A-Za-z0-9]/g, "");
+                setAgentRouting(
+                  nextRouting.length === 9 && nextRouting !== "740810000"
+                    ? nextRouting
+                    : "600310101"
                 );
               }}
               disabled={!canManage || saving}
@@ -684,24 +635,6 @@ function EmployeeSifPanel({ employee, canManage = false, showToast }) {
             title="Download Employee Details and SIF Summary PDF for this individual employee"
           >
             {busy === "individualPdf" ? "Exporting…" : "Download Employee SIF PDF"}
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            onClick={handleExportCompanySif}
-            disabled={Boolean(busy)}
-            title="Export company-wide SIF for all employees matching this Employer ID"
-          >
-            {busy === "companySif" ? "Exporting…" : "Export Company .SIF"}
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            onClick={handleExportCompanyPdf}
-            disabled={Boolean(busy)}
-            title="Download Company-wide Employee Details and SIF Summary PDF"
-          >
-            {busy === "companyPdf" ? "Exporting…" : "Download Company SIF PDF"}
           </button>
           <button
             type="button"

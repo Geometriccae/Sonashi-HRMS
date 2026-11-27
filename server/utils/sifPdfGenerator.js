@@ -3,11 +3,12 @@ const autoTableMod = require("jspdf-autotable");
 const autoTable = autoTableMod.default || autoTableMod;
 
 const {
-  formatMoney,
   getAgentCode,
   getBankAccount,
-  getFixedIncome,
-  digitsOnly,
+  getPersonId,
+  getPayableAmount,
+  buildEdrPayload,
+  resolveEmployerBankRoutingCode,
 } = require("./sifUtils");
 
 const MONTH_NAMES = [
@@ -18,6 +19,91 @@ const MONTH_NAMES = [
 function formatCurrency(amount) {
   const num = Number(amount) || 0;
   return `AED ${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function presentationAmounts(emp) {
+  const breakdown = emp.payrollBreakdown;
+  if (breakdown) {
+    return {
+      basic: Number(breakdown.basic) || 0,
+      hra: Number(breakdown.hra) || 0,
+      allowances: Number(breakdown.allowances) || 0,
+      deduction: Number(breakdown.deduction) || 0,
+      net: getPayableAmount(emp),
+    };
+  }
+  const sal = emp.salaryDetails || {};
+  const travel = Number(sal.travelExp) || 0;
+  const other = Number(sal.other) || 0;
+  return {
+    basic: Number(sal.basicSalary) || 0,
+    hra: Number(sal.houseRent) || 0,
+    allowances: Number(sal.totalAllowance) || travel + other,
+    deduction: Number(sal.deduction) || 0,
+    net: getPayableAmount(emp),
+  };
+}
+
+function dedupeExcluded(lists) {
+  const seen = new Set();
+  const rows = [];
+  lists.flat().forEach((row) => {
+    if (!row) return;
+    const key = `${row.staffId || ""}|${row.empId || ""}|${row.reason || ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  });
+  return rows;
+}
+
+/**
+ * The supporting PDF is built from the same EDR payload as the SIF file.
+ * Employees who fail person-code, agent-code or bank checks are excluded here
+ * and listed with the caller-supplied company mismatches.
+ */
+function buildSifPdfDataset({
+  employees = [],
+  year,
+  month,
+  skipped = [],
+  excludedByCompany = 0,
+}) {
+  const payload = buildEdrPayload(employees, year, month);
+  const excludedRows = dedupeExcluded([payload.skipped, skipped]);
+  const companyListed = excludedRows.filter((row) =>
+    /does not match selected Employer ID|Missing company assignment|company mismatch/i.test(
+      String(row.reason || "")
+    )
+  ).length;
+  const totalExcludedCount =
+    excludedRows.length + Math.max(0, (Number(excludedByCompany) || 0) - companyListed);
+
+  let totalBasic = 0;
+  let totalHra = 0;
+  let totalAllowances = 0;
+  let totalDeductions = 0;
+  const rows = payload.includedEmployees.map((emp) => {
+    const money = presentationAmounts(emp);
+    totalBasic += money.basic;
+    totalHra += money.hra;
+    totalAllowances += money.allowances;
+    totalDeductions += money.deduction;
+    return { emp, money };
+  });
+
+  return {
+    rows,
+    totalBasic,
+    totalHra,
+    totalAllowances,
+    totalDeductions,
+    totalNetSalary: payload.totalSalary,
+    includedCount: payload.includedEmployees.length,
+    excludedRows,
+    totalExcludedCount,
+    edrCount: payload.edrLines.length,
+  };
 }
 
 /**
@@ -34,6 +120,7 @@ function generateSifPdf({
   month = new Date().getMonth() + 1,
   generatedDate = new Date(),
   isIndividual = false,
+  isAllCompanies = false,
   skipped = [],
   excludedByCompany = 0,
   fileRef = "",
@@ -49,50 +136,34 @@ function generateSifPdf({
     ? generatedDate.toLocaleString("en-GB", { timeZone: "Asia/Dubai" })
     : String(generatedDate);
 
-  // Compute totals across included employees
-  let totalBasic = 0;
-  let totalHra = 0;
-  let totalAllowances = 0;
-  let totalDeductions = 0;
-  let totalNetSalary = 0;
+  const dataset = buildSifPdfDataset({ employees, year, month, skipped, excludedByCompany });
+  const { totalBasic, totalHra, totalAllowances, totalDeductions, totalNetSalary, excludedRows, totalExcludedCount } = dataset;
 
-  const employeeRows = employees.map((emp, idx) => {
-    const sal = emp.salaryDetails || {};
-    const basic = Number(sal.basicSalary) || 0;
-    const hra = Number(sal.houseRent) || 0;
-    const travel = Number(sal.travelExp) || 0;
-    const other = Number(sal.other) || 0;
-    const totalAllow = Number(sal.totalAllowance) || (travel + other);
-    const deduction = Number(sal.deduction) || 0;
-    const net = getFixedIncome(emp);
-
-    totalBasic += basic;
-    totalHra += hra;
-    totalAllowances += totalAllow;
-    totalDeductions += deduction;
-    totalNetSalary += net;
-
+  const employeeRows = dataset.rows.map(({ emp, money }, idx) => {
     const agent = getAgentCode(emp);
     const bank = getBankAccount(emp);
-    const personCode = String(emp.workPermitNo || "").trim() || String(emp.labourCardNumber || "").trim();
+    const personCode = getPersonId(emp);
+    const employerLabel = String(emp.sifEmployerId || emp.companyCode || "")
+      .replace(/[\s-]+/g, "");
+    const nameCell = isAllCompanies && employerLabel
+      ? `${emp.employeeName || "—"}\n${employerLabel}`
+      : (emp.employeeName || "—");
 
     return [
       idx + 1,
       emp.employeeId || "—",
-      emp.employeeName || "—",
+      nameCell,
       `${emp.department || "—"}\n${emp.designation || ""}`.trim(),
       personCode || "—",
       agent || "—",
       bank || "—",
-      basic.toFixed(2),
-      hra.toFixed(2),
-      totalAllow.toFixed(2),
-      deduction.toFixed(2),
-      net.toFixed(2),
+      money.basic.toFixed(2),
+      money.hra.toFixed(2),
+      money.allowances.toFixed(2),
+      money.deduction.toFixed(2),
+      money.net.toFixed(2),
     ];
   });
-
-  const totalExcludedCount = (skipped?.length || 0) + (Number(excludedByCompany) || 0);
 
   // ── Header Banner ────────────────────────────────────────────────────────
   doc.setFillColor(15, 23, 42); // slate-900
@@ -107,7 +178,13 @@ function generateSifPdf({
   doc.setFontSize(9);
   doc.setTextColor(203, 213, 225); // slate-300
   doc.text(
-    `Wages Protection System (WPS) Supporting Document | Scope: ${isIndividual ? "Individual Employee Export" : "Company-Wide Export"}`,
+    `Wages Protection System (WPS) Supporting Document | Scope: ${
+      isIndividual
+        ? "Individual Employee Export"
+        : isAllCompanies
+          ? "All Companies Combined Export"
+          : "Company-Wide Export"
+    }`,
     14,
     18
   );
@@ -140,7 +217,13 @@ function generateSifPdf({
   doc.setTextColor(15, 23, 42);
   doc.text(`Company Name: ${companyName || "Sonashi General Trading LLC"}`, 18, currentY + 12);
   doc.text(`Company Code: ${companyCode || "—"}`, 18, currentY + 17);
-  doc.text(`Employer ID (MOL 13-digit): ${employerId || "—"}`, 18, currentY + 22);
+  doc.text(
+    isAllCompanies
+      ? `Employer ID: ALL (combined grand total)`
+      : `Employer ID (MOL 13-digit): ${employerId || "—"}`,
+    18,
+    currentY + 22
+  );
 
   // Card 2: Period & Routing Info
   const card2X = 14 + cardWidth + 4;
@@ -156,9 +239,10 @@ function generateSifPdf({
   doc.setTextColor(15, 23, 42);
   doc.text(`Payroll Period: ${periodText}`, card2X + 4, currentY + 12);
   doc.text(`Generated On: ${genDateStr}`, card2X + 4, currentY + 17);
-  const routingDisplay = isIndividual && employees[0]
-    ? getAgentCode(employees[0]) || defaultAgentRoutingCode || "—"
-    : defaultAgentRoutingCode || "—";
+  // SCR Column C = company employer bank routing only (never employee AGENTCODE)
+  const routingDisplay = isAllCompanies
+    ? "Per company SCR"
+    : (resolveEmployerBankRoutingCode(defaultAgentRoutingCode) || "—");
   doc.text(`Agent Routing Code (SCR): ${routingDisplay}`, card2X + 4, currentY + 22);
 
   // Card 3: Financial Totals & Validation
@@ -175,7 +259,7 @@ function generateSifPdf({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
-  doc.text(`Total Employees Included: ${employees.length}`, card3X + 4, currentY + 12);
+  doc.text(`Total Employees Included: ${dataset.includedCount}`, card3X + 4, currentY + 12);
   doc.text(`Total Deductions: ${formatCurrency(totalDeductions)}`, card3X + 4, currentY + 17);
   doc.setFont("helvetica", "bold");
   doc.text(`Final Net SIF Payable: ${formatCurrency(totalNetSalary)}`, card3X + 4, currentY + 22);
@@ -188,14 +272,14 @@ function generateSifPdf({
   if (totalExcludedCount > 0) {
     doc.setTextColor(194, 65, 12); // amber
     doc.text(
-      `* Validation Note: ${employees.length} record(s) valid and included in SIF. ${totalExcludedCount} record(s) excluded/skipped due to missing data or company mismatch.`,
+      `* Validation Note: ${dataset.includedCount} record(s) valid and included in SIF. ${totalExcludedCount} record(s) excluded/skipped due to missing data or company mismatch.`,
       14,
       currentY
     );
   } else {
     doc.setTextColor(22, 101, 52); // green
     doc.text(
-      `* Validation Status: All ${employees.length} record(s) verified against authoritative database records and eligible for SIF export.`,
+      `* Validation Status: All ${dataset.includedCount} record(s) verified against authoritative database records and eligible for SIF export.`,
       14,
       currentY
     );
@@ -231,7 +315,7 @@ function generateSifPdf({
     [
       "",
       "Total",
-      `${employees.length} Employee(s)`,
+      `${dataset.includedCount} Employee(s)`,
       "",
       "",
       "",
@@ -308,7 +392,7 @@ function generateSifPdf({
   });
 
   // If there are skipped records, add a small excluded records table on a new page or below
-  if (skipped && skipped.length > 0) {
+  if (excludedRows.length > 0) {
     const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : currentY;
     if (finalY + 40 > pageHeight) {
       doc.addPage();
@@ -323,7 +407,7 @@ function generateSifPdf({
     doc.text("EXCLUDED / SKIPPED RECORDS SUMMARY", 14, currentY);
 
     const skippedHeaders = [["#", "Staff ID", "Employee Name", "EMPID / Work Permit", "Reason for Exclusion"]];
-    const skippedBody = skipped.map((s, idx) => [
+    const skippedBody = excludedRows.map((s, idx) => [
       idx + 1,
       s.staffId || "—",
       s.empName || "—",
@@ -363,5 +447,6 @@ function generateSifPdf({
 
 module.exports = {
   generateSifPdf,
+  buildSifPdfDataset,
   formatCurrency,
 };

@@ -1,8 +1,13 @@
 /**
  * UAE WPS SIF helpers — matches sample format:
  * EDR,<EMPID>,<AGENTCODE>,<BANKACCOUNT>,<start>,<end>,<days>,<fixed>,<variable>,<leaveDays>
- * SCR,<EMPLOYERID>,<agent>,<fileDate>,<fileTime>,<MMYYYY>,<count>,<total>,AED,<fileRef>
+ * SCR,<EMPLOYERID>,<employerBankRouting>,<fileDate>,<fileTime>,<MMYYYY>,<count>,<total>,AED,<fileRef>
+ *
+ * SCR Column C is the company employer bank routing code (never an employee agent code).
  */
+
+/** Sonashi company employer bank routing code (SCR Column C) — 9 digits */
+const EMPLOYER_BANK_ROUTING_CODE = "600310101";
 
 const pad = (value, len) => String(value ?? "").padStart(len, "0");
 
@@ -64,6 +69,50 @@ const getFixedIncome = (emp) => {
   const allowance = Number(sal.totalAllowance) || house + travel + other;
   const deduction = Number(sal.deduction) || 0;
   return Math.max(0, basic + allowance - deduction);
+};
+
+const roundAed = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+/**
+ * Payment amount written to an EDR and to the supporting PDF.
+ * A finalized salary slip for the month (including a zero net) wins.
+ * Otherwise the existing Employee Master total is used, unchanged.
+ */
+const getPayableAmount = (emp) => {
+  if (emp?.customTransferAmount != null && emp.customTransferAmount !== "") {
+    const net = Number(emp.customTransferAmount);
+    if (Number.isFinite(net) && net >= 0) return roundAed(net);
+  }
+  return roundAed(getFixedIncome(emp));
+};
+
+/**
+ * Attach one month's salary slip onto an employee without changing the slip.
+ * Net pay is the slip net. The displayed deduction is gross minus that net,
+ * so leave, standing deductions and salary-advance recovery are shown once.
+ */
+const employeeWithSlipPayable = (emp, slip) => {
+  if (!slip || slip.netSalary == null) return emp;
+  const net = Number(slip.netSalary);
+  if (!Number.isFinite(net) || net < 0) return emp;
+  const basic = Number(slip.basicPay) || 0;
+  const hra = Number(slip.hra) || 0;
+  const allowances =
+    (Number(slip.conveyanceAllowance) || 0) + (Number(slip.otherAllowance) || 0);
+  const gross = Number(slip.grossSalary);
+  const deduction = Number.isFinite(gross)
+    ? Math.max(0, roundAed(gross - net))
+    : roundAed((Number(slip.totalDeduction) || 0) + (Number(slip.salaryAdvanceDeduction) || 0));
+  return {
+    ...emp,
+    customTransferAmount: roundAed(net),
+    payrollBreakdown: {
+      basic: roundAed(basic),
+      hra: roundAed(hra),
+      allowances: roundAed(allowances),
+      deduction,
+    },
+  };
 };
 
 const formatMoney = (n) => Number(n || 0).toFixed(2);
@@ -145,6 +194,7 @@ const buildEdrPayload = (employees, year, month) => {
   const daysField = pad(days, 4);
   const edrLines = [];
   const edrRecords = [];
+  const includedEmployees = [];
   const skipped = [];
   let totalSalary = 0;
 
@@ -153,10 +203,7 @@ const buildEdrPayload = (employees, year, month) => {
     const empid = normalizeEmpId(empidRaw);
     const agent = getAgentCode(emp);
     const bank = getBankAccount(emp) || "";
-    const fixed =
-      emp.customTransferAmount != null
-        ? Number(emp.customTransferAmount)
-        : getFixedIncome(emp);
+    const fixed = getPayableAmount(emp);
     const variable =
       emp.customVariableAmount != null ? Number(emp.customVariableAmount) : 0;
 
@@ -200,10 +247,11 @@ const buildEdrPayload = (employees, year, month) => {
       bankAccount: bank,
       fixedIncome: fixed,
     });
-    totalSalary += fixed;
+    includedEmployees.push(emp);
+    totalSalary = roundAed(totalSalary + fixed);
   });
 
-  return { edrLines, edrRecords, skipped, totalSalary, start, end, days };
+  return { edrLines, edrRecords, includedEmployees, skipped, totalSalary, start, end, days };
 };
 
 const buildScrLine = ({
@@ -244,6 +292,23 @@ const buildFileReference = (employerId, now = new Date()) => {
   return `${emp}${yy}${mm}${dd}${hh}${mi}${ss}`;
 };
 
+/**
+ * Resolve the employer bank routing code used in SCR Column C.
+ * Never falls back to an employee agent / bank routing code.
+ * Rejects the legacy incorrect company default (740810000).
+ */
+const resolveEmployerBankRoutingCode = (defaultAgentRoutingCode) => {
+  const fromSettings = cleanAgentCode(defaultAgentRoutingCode);
+  if (
+    fromSettings.length === 9 &&
+    /^[A-Za-z0-9]{9}$/.test(fromSettings) &&
+    fromSettings !== "740810000"
+  ) {
+    return fromSettings;
+  }
+  return EMPLOYER_BANK_ROUTING_CODE;
+};
+
 const generateSifContent = ({
   employees,
   employerId,
@@ -255,10 +320,9 @@ const generateSifContent = ({
 }) => {
   const safeEmployerId = digitsOnly(employerId);
   const employerErr = validateEmployerId(safeEmployerId);
-  const routingCodeToValidate = isIndividual && employees && employees[0]
-    ? (cleanAgentCode(defaultAgentRoutingCode) || getAgentCode(employees[0]))
-    : cleanAgentCode(defaultAgentRoutingCode);
-  const routingErr = validateAgentCode(routingCodeToValidate);
+  // SCR Column C = employer bank routing code (company-level), for all SIF scenarios
+  const scrRoutingCode = resolveEmployerBankRoutingCode(defaultAgentRoutingCode);
+  const routingErr = validateAgentCode(scrRoutingCode);
   if (employerErr || routingErr) {
     return {
       error: [employerErr, routingErr].filter(Boolean).join("; "),
@@ -266,7 +330,7 @@ const generateSifContent = ({
     };
   }
 
-  const { edrLines, edrRecords, skipped, totalSalary } = buildEdrPayload(
+  const { edrLines, edrRecords, includedEmployees, skipped, totalSalary } = buildEdrPayload(
     employees,
     year,
     month
@@ -278,6 +342,7 @@ const generateSifContent = ({
         ? (skipped[0]?.reason || "Employee is not eligible for SIF export.")
         : "No employees found for SIF export.",
       skipped,
+      includedEmployees: [],
     };
   }
 
@@ -289,24 +354,9 @@ const generateSifContent = ({
   const fileTime = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}`;
   const fileRef = buildFileReference(safeEmployerId, now);
 
-  let scrAgent = "";
-  if (isIndividual) {
-    // For individual employee SIF export: use the selected employee's own Agent Code
-    const empAgent = edrRecords[0]?.agentCode || getAgentCode(employees[0]);
-    scrAgent = empAgent;
-  } else {
-    // For company-wide SIF export: use company's defaultAgentRoutingCode
-    // Do NOT substitute another employee's value
-    scrAgent = cleanAgentCode(defaultAgentRoutingCode);
-  }
-
-  if (scrAgent.length !== 9) {
-    scrAgent = pad(scrAgent || "0", 9).slice(-9);
-  }
-
   const scr = buildScrLine({
     employerId: safeEmployerId,
-    agentRouting: scrAgent,
+    agentRouting: scrRoutingCode,
     fileDate,
     fileTime,
     year,
@@ -327,6 +377,7 @@ const generateSifContent = ({
     totalSalary,
     skipped,
     edrRecords,
+    includedEmployees,
   };
 };
 
@@ -458,6 +509,7 @@ const HEADER_ALIASES = {
 };
 
 module.exports = {
+  EMPLOYER_BANK_ROUTING_CODE,
   pad,
   digitsOnly,
   normalizeEmiratesId,
@@ -465,6 +517,9 @@ module.exports = {
   normalizeEmpId,
   getBankAccount,
   getFixedIncome,
+  getPayableAmount,
+  employeeWithSlipPayable,
+  roundAed,
   formatMoney,
   daysInMonth,
   periodDates,
@@ -477,6 +532,7 @@ module.exports = {
   buildEdrPayload,
   buildScrLine,
   buildFileReference,
+  resolveEmployerBankRoutingCode,
   generateSifContent,
   parseSifContent,
   excelHeaders,

@@ -301,7 +301,8 @@ const EMPLOYEE_LIST_FIELDS = [
   'noticePeriod', 'provisionPeriod', 'noticePeriodStartDate', 'noticePeriodEndDate',
   'provisionPeriodStartDate', 'provisionPeriodEndDate',
   'reportingManager', 'assignedProjects',
-  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt',
+  // workPermitNo = WPS Person Code / Person ID for SIF EDR (never use emiratesId as fallback)
+  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'workPermitNo', 'labourCardNumber', 'airFare', 'createdAt',
 ].join(' ');
 
 const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];

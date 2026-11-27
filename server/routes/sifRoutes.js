@@ -26,11 +26,14 @@ const {
   validateAgentCode,
   getBankAccount,
   getFixedIncome,
+  getPersonId,
+  employeeWithSlipPayable,
   excelHeaders,
   RED_HEADERS,
   employeeToExcelRow,
   normalizeExcelHeader,
   HEADER_ALIASES,
+  EMPLOYER_BANK_ROUTING_CODE,
 } = require("../utils/sifUtils");
 const {
   loadCompanyEmployerMap,
@@ -38,6 +41,7 @@ const {
   normalizeEmployerId,
   isEmployerId,
 } = require("../utils/sifCompanyMapping");
+const { matchSlipsToEmployees } = require("../utils/sifSalaryReportRows");
 
 const router = express.Router();
 const upload = multer({
@@ -54,7 +58,34 @@ const requireAdminOrHod = (req, res, next) => {
 async function getOrCreateSettings() {
   let doc = await CompanySifSettings.findOne({ key: "default" });
   if (!doc) {
-    doc = await CompanySifSettings.create({ key: "default" });
+    doc = await CompanySifSettings.create({
+      key: "default",
+      defaultAgentRoutingCode: EMPLOYER_BANK_ROUTING_CODE,
+    });
+    return doc;
+  }
+
+  // Ensure SCR employer bank routing is present and not the legacy incorrect value
+  let dirty = false;
+  const currentRouting = digitsOnly(doc.defaultAgentRoutingCode);
+  if (!currentRouting || currentRouting.length !== 9 || currentRouting === "740810000") {
+    doc.defaultAgentRoutingCode = EMPLOYER_BANK_ROUTING_CODE;
+    dirty = true;
+  }
+  const nextRoutes = Array.from(doc.employerRoutingCodes || []).map((entry) => {
+    const code = digitsOnly(entry?.agentRoutingCode);
+    if (!code || code.length !== 9 || code === "740810000") {
+      dirty = true;
+      return {
+        employerId: digitsOnly(entry?.employerId) || entry?.employerId,
+        agentRoutingCode: EMPLOYER_BANK_ROUTING_CODE,
+      };
+    }
+    return entry;
+  });
+  if (dirty) {
+    doc.employerRoutingCodes = nextRoutes;
+    await doc.save();
   }
   return doc;
 }
@@ -69,6 +100,116 @@ function parseMonthYear(req) {
     return { error: "Valid year is required" };
   }
   return { month, year };
+}
+
+function isAllEmployersSelection(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  return raw === "ALL" || raw === "*";
+}
+
+/**
+ * One combined payroll dataset across every employer: same payslip matching
+ * and EDR rules as a single-company export, with grand totals for viewing.
+ */
+async function buildAllCompaniesExport(settings, month, year) {
+  const employees = await loadEmployeesWithSifMappings();
+  const byEmployer = new Map();
+  const unassigned = [];
+
+  employees.forEach((employee) => {
+    const employerId = normalizeEmployerId(employee.sifEmployerId);
+    if (!isEmployerId(employerId)) {
+      unassigned.push({
+        staffId: employee.employeeId || "",
+        empName: employee.employeeName || "",
+        empId: getPersonId(employee),
+        companyCode: employee.companyCode || "",
+        employerId: employerId || "",
+        reason: (employee.sifCompanyMapping?.issues || ["Missing company assignment"]).join("; "),
+      });
+      return;
+    }
+    if (!byEmployer.has(employerId)) byEmployer.set(employerId, []);
+    byEmployer.get(employerId).push(employee);
+  });
+
+  const companyBlocks = [];
+  const includedEmployees = [];
+  const skipped = [];
+  const contentParts = [];
+  let totalSalary = 0;
+  let edrCount = 0;
+
+  const employerIds = Array.from(byEmployer.keys()).sort();
+  for (const employerId of employerIds) {
+    let matched = byEmployer.get(employerId) || [];
+    matched = await attachPayslipNetSalaries(matched, month, year);
+    const routing = resolveExportAgentRouting(settings, employerId);
+    const result = generateSifContent({
+      employees: matched,
+      employerId,
+      defaultAgentRoutingCode: routing,
+      year,
+      month,
+      isIndividual: false,
+    });
+
+    if (result.error) {
+      skipped.push(...(result.skipped || []).map((row) => ({
+        ...row,
+        reason: `${row.reason || "Not eligible"} (Employer ID ${employerId})`,
+      })));
+      continue;
+    }
+
+    (result.includedEmployees || []).forEach((emp) => {
+      includedEmployees.push({
+        ...emp,
+        sifEmployerId: employerId,
+      });
+    });
+    skipped.push(...(result.skipped || []).map((row) => ({
+      ...row,
+      reason: `${row.reason || "Not eligible"} (Employer ID ${employerId})`,
+    })));
+    contentParts.push(String(result.content || "").replace(/\s+$/g, ""));
+    edrCount += result.edrCount || 0;
+    totalSalary = Math.round((totalSalary + (Number(result.totalSalary) || 0)) * 100) / 100;
+    companyBlocks.push({
+      employerId,
+      edrCount: result.edrCount || 0,
+      totalSalary: result.totalSalary || 0,
+      routing: resolveExportAgentRouting(settings, employerId),
+      fileRef: result.fileRef,
+    });
+  }
+
+  if (!edrCount) {
+    return {
+      error: "No employees found for All-companies SIF export.",
+      skipped: [...skipped, ...unassigned],
+      includedEmployees: [],
+      companyBlocks: [],
+      content: "",
+      edrCount: 0,
+      totalSalary: 0,
+    };
+  }
+
+  const mm = String(month).padStart(2, "0");
+  return {
+    error: null,
+    content: `${contentParts.join("\r\n")}\r\n`,
+    fileName: `SIF_All_Companies_${year}_${mm}.SIF`,
+    fileRef: `ALL-${year}${mm}`,
+    edrCount,
+    totalSalary,
+    skipped: [...skipped, ...unassigned],
+    includedEmployees,
+    companyBlocks,
+    companyCount: companyBlocks.length,
+    eligibleCount: employees.length,
+  };
 }
 
 async function loadActiveEmployees() {
@@ -108,6 +249,7 @@ async function loadEmployeesForEmployerExport(employerId) {
     excluded.push({
       staffId: employee.employeeId || "",
       empName: employee.employeeName || "",
+      empId: getPersonId(employee),
       companyCode: employee.companyCode || "",
       employerId: mappedEmployerId,
       reason: !mappedEmployerId
@@ -125,29 +267,22 @@ async function attachPayslipNetSalaries(employees, monthNum, yearNum) {
   const monthName = monthNames[Number(monthNum) - 1];
   if (!monthName || !employees || !employees.length) return employees;
 
-  const emails = employees
-    .map((e) => String(e.emailId || "").trim().toLowerCase())
-    .filter(Boolean);
-  if (!emails.length) return employees;
-
   const slips = await SalarySlip.find({
-    emailId: { $in: emails },
     month: { $regex: new RegExp(`^${monthName}`, "i") },
     year: { $in: [String(yearNum), Number(yearNum)] },
   }).lean();
-
   if (!slips.length) return employees;
 
-  const slipMap = new Map();
-  slips.forEach((s) => slipMap.set(String(s.emailId || "").toLowerCase(), s));
+  // Match across every employee so a placeholder payslip address
+  // (noemail+staffcode@...) cannot attach to the wrong person.
+  const allEmployees = await Employee.find({})
+    .select("_id employeeId employeeName emailId")
+    .lean();
+  const slipByEmployee = matchSlipsToEmployees(slips, allEmployees);
 
-  return employees.map((emp) => {
-    const slip = slipMap.get(String(emp.emailId || "").toLowerCase());
-    if (slip && slip.netSalary != null && Number(slip.netSalary) >= 0) {
-      return { ...emp, customTransferAmount: Number(slip.netSalary) };
-    }
-    return emp;
-  });
+  return employees.map((emp) =>
+    employeeWithSlipPayable(emp, slipByEmployee.get(String(emp._id)))
+  );
 }
 
 async function loadSingleEmployeeForExport(employeeId, requestedEmployerId) {
@@ -209,12 +344,13 @@ function getEmployerRoutingCodes(settings) {
 
 function resolveExportAgentRouting(settings, employerId) {
   const companyRouting = getEmployerRoutingCodes(settings).get(digitsOnly(employerId));
-  if (companyRouting) return companyRouting;
-  if (digitsOnly(settings?.employerId) === digitsOnly(employerId)) {
-    const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
-    return defaultRouting.length === 9 ? defaultRouting : "";
+  if (companyRouting && companyRouting !== "740810000") return companyRouting;
+  const defaultRouting = digitsOnly(settings?.defaultAgentRoutingCode);
+  if (defaultRouting.length === 9 && defaultRouting !== "740810000") {
+    return defaultRouting;
   }
-  return "";
+  // Company employer bank routing for SCR Column C (never employee agent codes)
+  return EMPLOYER_BANK_ROUTING_CODE;
 }
 
 /** Employer picker data must use the exact same active population and company mapping as export. */
@@ -391,7 +527,11 @@ router.get("/settings", authMiddleware, async (req, res) => {
 router.put("/settings", authMiddleware, blockViewerWrites, requireAdminOrHod, async (req, res) => {
   try {
     const employerId = digitsOnly(req.body.employerId);
-    const defaultAgentRoutingCode = digitsOnly(req.body.defaultAgentRoutingCode);
+    // Reject legacy incorrect company SCR routing; keep employer bank code 600310101
+    let defaultAgentRoutingCode = digitsOnly(req.body.defaultAgentRoutingCode);
+    if (defaultAgentRoutingCode === "740810000") {
+      defaultAgentRoutingCode = EMPLOYER_BANK_ROUTING_CODE;
+    }
     const companyCode = normalizeEmployerId(req.body.companyCode);
 
     if (employerId && employerId.length !== 13) {
@@ -500,6 +640,38 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     let matched = [];
     let excluded = [];
     let employerId = "";
+    const wantsAllEmployers = !isIndividual && isAllEmployersSelection(req.query.employerId);
+
+    if (wantsAllEmployers) {
+      const result = await buildAllCompaniesExport(settings, parsed.month, parsed.year);
+      if (result.error) {
+        return res.status(400).json({
+          message: result.error,
+          skipped: (result.skipped || []).slice(0, 100),
+        });
+      }
+      const allSkipped = result.skipped || [];
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+      res.setHeader("X-SIF-Edr-Count", String(result.edrCount));
+      res.setHeader("X-SIF-Skipped", String(allSkipped.length));
+      res.setHeader("X-SIF-Excluded-Company", "0");
+      res.setHeader("X-SIF-Total", String(result.totalSalary));
+      res.setHeader("X-SIF-Is-Individual", "false");
+      res.setHeader("X-SIF-Is-All-Companies", "true");
+      res.setHeader("X-SIF-Company-Count", String(result.companyCount || 0));
+      if (allSkipped.length) {
+        const compactSummary = allSkipped.slice(0, 10).map((s) => ({
+          staffId: s.staffId || "",
+          reason: s.reason || "",
+        }));
+        res.setHeader(
+          "X-SIF-Skip-Summary",
+          Buffer.from(JSON.stringify(compactSummary)).toString("base64")
+        );
+      }
+      return res.send(result.content);
+    }
 
     if (isIndividual) {
       if (!selectedEmployeeId) {
@@ -544,8 +716,8 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
       return res.status(400).json({ message: employerErr });
     }
 
-    const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
-    const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
+    // SCR Column C must use employer bank routing — never substitute employee agent codes
+    const effectiveRoutingCode = resolveExportAgentRouting(settings, employerId);
 
     matched = await attachPayslipNetSalaries(matched, parsed.month, parsed.year);
 
@@ -580,8 +752,8 @@ router.get("/export/sif", authMiddleware, async (req, res) => {
     res.setHeader("X-SIF-Is-Individual", isIndividual ? "true" : "false");
     if (isIndividual && matched[0]) {
       res.setHeader("X-SIF-Employee-Id", String(matched[0].employeeId || ""));
-      const empAgent = getAgentCode(matched[0]);
-      if (empAgent) res.setHeader("X-SIF-Agent-Code", empAgent);
+      const empAgentHeader = getAgentCode(matched[0]);
+      if (empAgentHeader) res.setHeader("X-SIF-Agent-Code", empAgentHeader);
     }
     // Expose skip summary via custom header (JSON) for UI — keep compact to prevent proxy buffer overflow
     if (allSkipped.length) {
@@ -620,6 +792,43 @@ router.get("/export/pdf", authMiddleware, async (req, res) => {
     let matched = [];
     let excluded = [];
     let employerId = "";
+    const wantsAllEmployers = !isIndividual && isAllEmployersSelection(req.query.employerId);
+
+    if (wantsAllEmployers) {
+      const result = await buildAllCompaniesExport(settings, parsed.month, parsed.year);
+      if (result.error) {
+        return res.status(400).json({
+          message: result.error,
+          skipped: (result.skipped || []).slice(0, 100),
+        });
+      }
+
+      const pdfBuffer = generateSifPdf({
+        employees: result.includedEmployees,
+        employerId: "ALL",
+        companyCode: "ALL",
+        companyName: `All companies (${result.companyCount})`,
+        defaultAgentRoutingCode: EMPLOYER_BANK_ROUTING_CODE,
+        year: parsed.year,
+        month: parsed.month,
+        isIndividual: false,
+        isAllCompanies: true,
+        skipped: result.skipped || [],
+        excludedByCompany: 0,
+        fileRef: result.fileRef,
+        fileName: result.fileName,
+      });
+
+      const pdfFileName = `SIF_Summary_All_Companies_${parsed.year}_${parsed.month}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${pdfFileName}"`);
+      res.setHeader("X-SIF-Edr-Count", String(result.edrCount));
+      res.setHeader("X-SIF-Total", String(result.totalSalary));
+      res.setHeader("X-SIF-Is-Individual", "false");
+      res.setHeader("X-SIF-Is-All-Companies", "true");
+      res.setHeader("X-SIF-Company-Count", String(result.companyCount || 0));
+      return res.send(pdfBuffer);
+    }
 
     if (isIndividual) {
       if (!selectedEmployeeId) {
@@ -667,8 +876,8 @@ router.get("/export/pdf", authMiddleware, async (req, res) => {
       return res.status(400).json({ message: employerErr });
     }
 
-    const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
-    const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
+    // SCR Column C must use employer bank routing — never substitute employee agent codes
+    const effectiveRoutingCode = resolveExportAgentRouting(settings, employerId);
 
     matched = await attachPayslipNetSalaries(matched, parsed.month, parsed.year);
 
@@ -711,8 +920,16 @@ router.get("/export/pdf", authMiddleware, async (req, res) => {
       year: parsed.year,
       month: parsed.month,
       isIndividual,
-      skipped: sifResult.skipped || [],
-      excludedByCompany: excluded.length,
+      skipped: [
+        ...(sifResult.skipped || []),
+        ...excluded.map((row) => ({
+          staffId: row.staffId,
+          empName: row.empName,
+          empId: row.empId || "",
+          reason: row.reason,
+        })),
+      ],
+      excludedByCompany: 0,
       fileRef: sifResult.fileRef,
       fileName: sifResult.fileName,
     });
@@ -778,8 +995,8 @@ router.get("/export/sif/preview", authMiddleware, async (req, res) => {
       matched = loadRes.matched;
       excluded = loadRes.excluded;
     }
-    const empAgent = isIndividual && matched[0] ? getAgentCode(matched[0]) : "";
-    const effectiveRoutingCode = empAgent || resolveExportAgentRouting(settings, employerId);
+    // SCR Column C must use employer bank routing — never substitute employee agent codes
+    const effectiveRoutingCode = resolveExportAgentRouting(settings, employerId);
 
     matched = await attachPayslipNetSalaries(matched, parsed.month, parsed.year);
 
@@ -1389,7 +1606,8 @@ router.get("/import-batch/:batchId/export-sif", authMiddleware, async (req, res)
 
     const settings = await getOrCreateSettings();
     const employerId = digitsOnly(batch.employerId || settings.employerId || "0000000172509");
-    const routing = resolveExportAgentRouting(settings, employerId) || eligibleRecords[0]?.uploaded?.agentCode || "740810000";
+    // SCR Column C = employer bank routing; never fall back to an uploaded employee agent code
+    const routing = resolveExportAgentRouting(settings, employerId);
 
     const syntheticEmployees = eligibleRecords.map((r) => ({
       employeeId: r.employeeId,
@@ -1459,7 +1677,8 @@ router.get("/import-batch/:batchId/export-pdf", authMiddleware, async (req, res)
 
     const settings = await getOrCreateSettings();
     const employerId = digitsOnly(batch.employerId || settings.employerId || "0000000172509");
-    const routing = resolveExportAgentRouting(settings, employerId) || eligibleRecords[0]?.uploaded?.agentCode || "740810000";
+    // SCR Column C = employer bank routing; never fall back to an uploaded employee agent code
+    const routing = resolveExportAgentRouting(settings, employerId);
 
     const syntheticEmployees = eligibleRecords.map((r) => ({
       employeeId: r.employeeId,

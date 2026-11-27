@@ -211,7 +211,8 @@ class SalaryAdvanceService {
     }
 
     const defaultEmployerId = '0000000172509';
-    const defaultAgentRoutingCode = '740810000';
+    // Company employer bank routing for SCR Column C (not employee agent codes)
+    const defaultAgentRoutingCode = '600310101';
     const now = new Date();
     const pad = (n, w = 2) => String(n).padStart(w, '0');
     const digitsOnly = (v) => String(v || '').replace(/\D/g, '');

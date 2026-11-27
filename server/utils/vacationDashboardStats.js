@@ -28,7 +28,82 @@ const {
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const APPROVED_LEAVE_SELECT =
-  'employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department adminApprovedAt hodApprovedAt createdAt updatedAt';
+  'employee employeeRecordId employeeId employeeName leaveType startDate endDate leaveDays status travellingDate lastWorkingDay returnDate firstWorkingDay department adminApprovedAt hodApprovedAt createdAt updatedAt';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Same inclusive calendar convention as Leave Management / leaveCalculator:
+ * END − START; same calendar day counts as 1.
+ */
+function calculateLeaveDays(startDate, endDate, leaveDaysOverride = null) {
+  if (leaveDaysOverride != null && leaveDaysOverride !== '') {
+    const stored = Number(leaveDaysOverride);
+    if (Number.isFinite(stored) && stored >= 0) return stored;
+  }
+  const s = toDayStart(startDate);
+  const e = toDayStart(endDate);
+  if (!s || !e) return null;
+  const days = Math.round((e.getTime() - s.getTime()) / MS_PER_DAY);
+  if (days < 0) return null;
+  return days === 0 ? 1 : days;
+}
+
+/** Countdown to expected return: END − START from today, never negative. */
+function remainingVacationDays(expectedReturn, now = new Date()) {
+  const s = toDayStart(now);
+  const e = toDayStart(expectedReturn);
+  if (!s || !e) return null;
+  return Math.max(0, Math.round((e.getTime() - s.getTime()) / MS_PER_DAY));
+}
+
+function approvedVacationDays(leave, dates) {
+  // Prefer stored approved leaveDays; otherwise use the same trip dates shown in the table.
+  if (leave?.leaveDays != null && leave.leaveDays !== '') {
+    const stored = Number(leave.leaveDays);
+    if (Number.isFinite(stored) && stored >= 0) return stored;
+  }
+  const start =
+    dates?.travellingDate ||
+    dates?.startDate ||
+    leave?.travellingDate ||
+    leave?.startDate ||
+    null;
+  const end =
+    dates?.leaveEndDate || dates?.endDate || leave?.endDate || null;
+  return calculateLeaveDays(start, end, null);
+}
+
+/** Returned Back Total Days: Last Working Day → First Working Day (END − START). */
+function actualVacationDaysTaken(leave, emp) {
+  const start = emp?.lastWorkingDay || leave?.lastWorkingDay || null;
+  const end = emp?.firstWorkingDay || leave?.firstWorkingDay || null;
+  return calculateLeaveDays(start, end, null);
+}
+
+function vacationDayColumns(leave, emp, dates, tabKey, now = new Date()) {
+  const daysOfVacation = approvedVacationDays(leave, dates);
+  if (tabKey === 'onVacation') {
+    const expectedReturn = dates?.leaveEndDate || dates?.endDate || leave?.endDate || null;
+    return {
+      daysOfVacation,
+      remainingDays: remainingVacationDays(expectedReturn, now),
+      totalDays: null,
+    };
+  }
+  if (tabKey === 'returned') {
+    return {
+      daysOfVacation: null,
+      remainingDays: null,
+      totalDays: actualVacationDaysTaken(leave, emp),
+    };
+  }
+  // yetToGo
+  return {
+    daysOfVacation,
+    remainingDays: null,
+    totalDays: null,
+  };
+}
 
 const EMP_LEAN_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId',
@@ -393,8 +468,10 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         leaveStatus: req.status,
         experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: 'Vacation Pending',
+        ...vacationDayColumns(req, linked, dates, 'yetToGo'),
       });
     } else {
+      const dates = tripDisplayDates(null, req);
       rows.push({
         ...req,
         employeeName: req.employeeName || req.employee?.username || 'Unknown',
@@ -403,8 +480,13 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         vacationStatus: 'Vacation Pending',
         linkedEmployeeId: null,
         linkedLeaveId: req._id,
+        travellingDate: dates.travellingDate,
+        leaveEndDate: dates.leaveEndDate,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
         _source: 'leave',
         experienceYears: null,
+        ...vacationDayColumns(req, null, dates, 'yetToGo'),
       });
     }
   });
@@ -429,6 +511,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         leaveStatus: leave?.status || null,
         experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: 'Vacation Pending',
+        ...vacationDayColumns(leave, e, dates, 'yetToGo'),
       });
     });
 
@@ -453,6 +536,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
       leaveStatus: leave?.status || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
       vacationStatus: 'Vacation Pending',
+      ...vacationDayColumns(leave, e, dates, 'yetToGo'),
     });
   });
 
@@ -505,6 +589,7 @@ function enrichEmployeeRows(empList, leaveList, tabKey) {
       // For Returned Back list: show leave end when returnDate was cleared after mark-onsite
       returnDate: e.returnDate || (tabKey === 'returned' ? dates.endDate : e.returnDate) || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
+      ...vacationDayColumns(leave, e, dates, tabKey),
     };
   });
 }

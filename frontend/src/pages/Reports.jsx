@@ -4,8 +4,13 @@ import styles from "./Reports.module.css";
 import Side from "./sidebar/Sidebar";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import {
+  buildCorporateTablePdf,
+  buildSalaryReportPdfRows,
+  buildEmployeeMasterPdfRows,
+  buildDocumentExpiryPdfRows,
+  buildGenericReportPdfRows,
+} from "../utils/corporateReportPdf";
 
 import TopNavbar, { PageBody, pageLayoutStyles } from "../components/TopNavbar";
 import DateInput from "../components/DateInput";
@@ -59,10 +64,54 @@ const formatReportDate = (value) => {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB");
 };
 
+/** Prefer filled string from common employee document field aliases. */
+const firstFilled = (...values) => {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
+};
+
+const pickPassportNo = (e) =>
+  firstFilled(e?.passportNo, e?.passportNumber, e?.passport);
+
+const pickLabourCardNumber = (e) =>
+  firstFilled(e?.labourCardNumber, e?.laborCardNumber, e?.labourCardNo, e?.laborCardNo);
+
+const pickLabourCardExpiry = (e) =>
+  e?.labourCardExpiryDate || e?.laborCardExpiryDate || e?.labourCardExpiry || e?.laborCardExpiry || null;
+
 const formatYesNo = (value) => {
   if (value === true || value === "true" || value === "Yes") return "Yes";
   if (value === false || value === "false" || value === "No") return "No";
   return "";
+};
+
+/** WPS Person Code from employee DB fields only — never Emirates ID / passport / name. */
+const getEmployeePersonCode = (emp) => {
+  if (!emp) return "";
+  return String(
+    emp.workPermitNo ||
+      emp.personCode ||
+      emp.personId ||
+      emp.labourCardNumber ||
+      ""
+  ).replace(/\D/g, "");
+};
+
+const validateEmployeePersonCode = (personCode, empName = "selected employee") => {
+  if (!personCode) {
+    return `Person Code is missing for ${empName}. Update Work Permit / Person Code in Team Management before generating SIF.`;
+  }
+  if (personCode.length > 14) {
+    return `Person Code cannot be more than 14 digits for ${empName} (got ${personCode.length}).`;
+  }
+  if (personCode.length < 6) {
+    return `Person Code is invalid for ${empName} (got ${personCode.length} digits). Must be between 6 and 14 digits.`;
+  }
+  return null;
 };
 
 /** Map one Employee Master record to report columns (existing schema fields only). */
@@ -99,10 +148,10 @@ const mapEmployeeMasterRow = (e) => {
     Attendance: e.attendance || "",
     "Emirates ID": e.emiratesId || "",
     "Emirates ID Expiry": formatReportDate(e.emiratesIdExpiryDate),
-    "Passport No": e.passportNo || "",
+    "Passport No": pickPassportNo(e),
     "Passport Expiry": formatReportDate(e.passportExpiryDate),
-    "Labour Card Number": e.labourCardNumber || "",
-    "Labour Card Expiry": formatReportDate(e.labourCardExpiryDate),
+    "Labour Card Number": pickLabourCardNumber(e),
+    "Labour Card Expiry": formatReportDate(pickLabourCardExpiry(e)),
     "Visa Expiry": formatReportDate(e.visaExpiryDate),
     "Work Permit No": e.workPermitNo || "",
     "Contract Renewal Date": formatReportDate(e.contractRenewalDate),
@@ -278,6 +327,14 @@ function Reports() {
     ];
   }, [employeeList]);
 
+  const selectedSalaryEmployee = useMemo(() => {
+    if (!filterEmployee || filterEmployee === "All") return null;
+    return (
+      employeeList.find((e) => (e.employeeId || e._id) === filterEmployee) ||
+      null
+    );
+  }, [filterEmployee, employeeList]);
+
   const selectedEmployeeOption =
     employeeOptions.find((opt) => opt.value === filterEmployee) || employeeOptions[0];
 
@@ -327,7 +384,7 @@ function Reports() {
   const [error, setError] = useState("");
 
   // SIF Employer ID (Salary report) — options from existing company-code config
-  const [sifEmployerId, setSifEmployerId] = useState("");
+  const [sifEmployerId, setSifEmployerId] = useState("ALL");
   const [sifSettingsEmployerId, setSifSettingsEmployerId] = useState("");
   const [sifEmployers, setSifEmployers] = useState([]);
   const [sifSettingsLoading, setSifSettingsLoading] = useState(true);
@@ -348,7 +405,8 @@ function Reports() {
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        const data = await employeeService.getEmployeesList();
+        // force:true so Person Code (workPermitNo) is present after list-field updates
+        const data = await employeeService.getEmployeesList({ force: true });
         const empList = Array.isArray(data)
           ? data
           : data.employees || data.data || [];
@@ -376,9 +434,14 @@ function Reports() {
     sifService.getSettings()
       .then((s) => {
         const employerId = String(s.employerId || "").replace(/\D/g, "").slice(0, 13);
-        setSifEmployerId(employerId);
         setSifSettingsEmployerId(employerId);
         setSifEmployers(Array.isArray(s.employers) ? s.employers : []);
+        // Keep All companies / a concrete selection; only seed when empty
+        setSifEmployerId((current) => {
+          if (String(current || "").toUpperCase() === "ALL") return "ALL";
+          if (/^\d{13}$/.test(String(current || ""))) return current;
+          return "ALL";
+        });
       })
       .catch((err) => {
         console.error("Failed to load SIF employer assignments:", err);
@@ -410,6 +473,61 @@ function Reports() {
     });
     return [...byEmployer.values()];
   }, [sifEmployers, sifSettingsEmployerId]);
+
+  const sifAllEligibleCount = useMemo(
+    () => sifEmployerOptions.reduce((sum, row) => sum + (Number(row.employeeCount) || 0), 0),
+    [sifEmployerOptions]
+  );
+
+  const isAllEmployersSelected = String(sifEmployerId || "").toUpperCase() === "ALL";
+  const showAllEmployersOption = !filterEmployee || filterEmployee === "All";
+
+  /** Resolve 13-digit Employer ID for a selected employee (company code / SIF employer map). */
+  const resolveEmployerIdForEmployee = useCallback(
+    (emp) => {
+      if (!emp) return "";
+      const companyCodeDigits = String(emp.companyCode || "").replace(/\D/g, "");
+      if (companyCodeDigits.length === 13) return companyCodeDigits;
+
+      const empCompanyCode = String(emp.companyCode || "").trim().toUpperCase();
+      const empOffice = String(emp.office || "").trim().toLowerCase();
+      const matched = sifEmployerOptions.find((entry) => {
+        const entryEmployerId = String(entry.employerId || "");
+        const entryCompanyCode = String(entry.companyCode || "").trim().toUpperCase();
+        const entryCompanyName = String(entry.companyName || "").trim().toLowerCase();
+        if (empCompanyCode && entryEmployerId === empCompanyCode.replace(/\D/g, "")) return true;
+        if (empCompanyCode && entryCompanyCode && entryCompanyCode === empCompanyCode) return true;
+        if (empOffice && entryCompanyName && entryCompanyName === empOffice) return true;
+        return false;
+      });
+      return matched?.employerId || "";
+    },
+    [sifEmployerOptions]
+  );
+
+  // Auto-fill Employer ID when an individual employee is selected in Salary Reports
+  useEffect(() => {
+    if (reportType !== "Salary report") return;
+
+    if (!filterEmployee || filterEmployee === "All") {
+      // All employees → offer All companies (combined eligible headcount) by default
+      setSifEmployerId("ALL");
+      return;
+    }
+
+    const emp =
+      employeeList.find((e) => (e.employeeId || e._id) === filterEmployee) || null;
+    const resolved = resolveEmployerIdForEmployee(emp);
+    if (resolved && /^\d{13}$/.test(resolved)) {
+      setSifEmployerId(resolved);
+    }
+  }, [
+    reportType,
+    filterEmployee,
+    employeeList,
+    sifSettingsEmployerId,
+    resolveEmployerIdForEmployee,
+  ]);
 
   // Employees Master Data: default Status=Active, then auto-load / refresh preview
   const masterDataReadyRef = useRef(false);
@@ -835,8 +953,9 @@ function Reports() {
     }
 
     if (type === "Document expiry") {
-      let data = await employeeService.getEmployeesList({ force: true });
-      let empList = Array.isArray(data) ? data : (data.employees || data.data || []);
+      // Full employee records so passport / labour-card fields are present
+      let empList = await fetchFullEmployees("Active");
+      if (!Array.isArray(empList)) empList = [];
 
       if (filterEmployee !== "All") empList = empList.filter(e => (e.employeeId || e._id) === filterEmployee);
       // Document Expiry: Active (Working) employees only — exclude InActive/Non-Working
@@ -849,7 +968,9 @@ function Reports() {
 
       if (hasDateFilter) {
         empList = empList.filter(e => {
-          return isDateMatch(e.passportExpiryDate) || isDateMatch(e.visaExpiryDate) || isDateMatch(e.labourCardExpiryDate);
+          return isDateMatch(e.passportExpiryDate)
+            || isDateMatch(e.visaExpiryDate)
+            || isDateMatch(pickLabourCardExpiry(e));
         });
       }
 
@@ -857,6 +978,7 @@ function Reports() {
       const getStatus = (expiryDate) => {
         if (!expiryDate) return "N/A";
         const exp = new Date(expiryDate);
+        if (Number.isNaN(exp.getTime())) return "N/A";
         const diffTime = exp - today;
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         if (diffDays < 0) return "EXPIRED";
@@ -866,9 +988,10 @@ function Reports() {
       };
 
       return empList.map(e => {
+        const labourExpiry = pickLabourCardExpiry(e);
         const passportStatus = getStatus(e.passportExpiryDate);
         const visaStatus = getStatus(e.visaExpiryDate);
-        const laborStatus = getStatus(e.labourCardExpiryDate);
+        const laborStatus = getStatus(labourExpiry);
 
         return {
           "Employee ID": e.employeeId || "",
@@ -877,12 +1000,13 @@ function Reports() {
           "Role": e.role || "",
           "Company": e.office || "",
           "Company Code": e.companyCode || "",
-          "Passport No": e.passportNo || "",
+          "Passport No": pickPassportNo(e),
           "Passport Expiry": e.passportExpiryDate ? new Date(e.passportExpiryDate).toLocaleDateString('en-GB') : "Not set",
           "Passport Status": passportStatus,
           "Visa Expiry": e.visaExpiryDate ? new Date(e.visaExpiryDate).toLocaleDateString('en-GB') : "Not set",
           "Visa Status": visaStatus,
-          "Labour Card Expiry": e.labourCardExpiryDate ? new Date(e.labourCardExpiryDate).toLocaleDateString('en-GB') : "Not set",
+          "Labour Card Number": pickLabourCardNumber(e),
+          "Labour Card Expiry": labourExpiry ? new Date(labourExpiry).toLocaleDateString('en-GB') : "Not set",
           "Labour Card Status": laborStatus
         };
       });
@@ -1103,7 +1227,7 @@ function Reports() {
       return;
     }
     if (activeFormat === "PDF") {
-      exportToPDF(exportData, "Leave_Report");
+      await exportToPDF(exportData, "Leave_Report");
     }
   };
 
@@ -1114,8 +1238,52 @@ function Reports() {
     if (activeFormat === "Excel") {
       exportToExcel(exportData, "Document_Expiry_Report");
     } else if (activeFormat === "PDF") {
-      exportToPDF(exportData, "Document_Expiry_Report");
+      await exportToPDF(exportData, "Document_Expiry_Report");
     }
+  };
+
+  /**
+   * Resolve individual Salary SIF export options from the selected employee name.
+   * Person Code is fetched from the employee DB record — never Emirates ID.
+   */
+  const buildSalarySifExportOptions = (employerId) => {
+    const isIndividual = Boolean(filterEmployee && filterEmployee !== "All");
+    const exportOptions = { employerId };
+    if (!isIndividual) {
+      return { isIndividual: false, exportOptions, empLabel: "", personCode: "" };
+    }
+
+    const selectedEmp =
+      selectedSalaryEmployee ||
+      employeeList.find((e) => (e.employeeId || e._id) === filterEmployee) ||
+      null;
+
+    if (!selectedEmp) {
+      return {
+        isIndividual: true,
+        error: "Selected employee was not found. Please select an employee by name again.",
+      };
+    }
+
+    const personCode = getEmployeePersonCode(selectedEmp);
+    const empLabel =
+      selectedEmp.employeeName ||
+      employeeOptions.find((o) => o.value === filterEmployee)?.label ||
+      filterEmployee;
+    const personErr = validateEmployeePersonCode(personCode, empLabel);
+    if (personErr) {
+      return { isIndividual: true, error: personErr, empLabel, personCode };
+    }
+
+    // Prefer auto-resolved employer from the selected employee when available
+    const resolvedEmployer = resolveEmployerIdForEmployee(selectedEmp);
+    if (resolvedEmployer && /^\d{13}$/.test(resolvedEmployer)) {
+      exportOptions.employerId = resolvedEmployer;
+    }
+
+    exportOptions.employeeId = selectedEmp.employeeId || selectedEmp._id || filterEmployee;
+    exportOptions.mode = "individual";
+    return { isIndividual: true, exportOptions, empLabel, personCode };
   };
 
   const generateSalaryReport = async (reportFormat) => {
@@ -1128,6 +1296,7 @@ function Reports() {
     const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
 
     const isIndividual = filterEmployee && filterEmployee !== "All";
+    const wantsAllEmployers = !isIndividual && String(sifEmployerId || "").toUpperCase() === "ALL";
     let employerId = digitsOnly(sifEmployerId);
     if (isIndividual && (!employerId || employerId.length !== 13)) {
       const selectedEmp = employeeList.find(e => (e.employeeId || e._id) === filterEmployee);
@@ -1138,21 +1307,27 @@ function Reports() {
     }
 
     if (activeFormat === "SIF Summary PDF") {
-      if (!employerId || employerId.length !== 13) {
-        setError("Please select a valid 13-digit Employer ID.");
-        alert("Please select a valid 13-digit Employer ID.");
+      if (wantsAllEmployers) {
+        const result = await sifService.downloadSifPdf(m, y, { employerId: "ALL" });
+        alert(
+          `All-companies SIF PDF exported (${result.edrCount} paid employee(s), total AED ${Number(result.totalSalary || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}${result.companyCount ? ` across ${result.companyCount} companies` : ""}).`
+        );
         return;
       }
-      const isIndividual = filterEmployee && filterEmployee !== "All";
-      const exportOptions = { employerId };
-      if (isIndividual) {
-        exportOptions.employeeId = filterEmployee;
-        exportOptions.mode = "individual";
+      if (!employerId || employerId.length !== 13) {
+        setError("Please select a valid 13-digit Employer ID or All companies.");
+        alert("Please select a valid 13-digit Employer ID or All companies.");
+        return;
       }
-      await sifService.downloadSifPdf(m, y, exportOptions);
-      if (isIndividual) {
-        const empLabel = employeeOptions.find(o => o.value === filterEmployee)?.label || filterEmployee;
-        alert(`Individual SIF Summary PDF exported for ${empLabel} (Employer ID ${employerId}).`);
+      const built = buildSalarySifExportOptions(employerId);
+      if (built.error) {
+        setError(built.error);
+        alert(built.error);
+        return;
+      }
+      await sifService.downloadSifPdf(m, y, built.exportOptions);
+      if (built.isIndividual) {
+        alert(`Individual SIF Summary PDF exported for ${built.empLabel} (Person Code ${built.personCode}, Employer ID ${employerId}).`);
       } else {
         alert(`Company SIF Summary PDF exported for Employer ID ${employerId}.`);
       }
@@ -1160,24 +1335,33 @@ function Reports() {
     }
 
     if (activeFormat === "SIF") {
+      if (wantsAllEmployers) {
+        const result = await sifService.exportSif(m, y, { employerId: "ALL" });
+        const skipNote = result.skippedCount
+          ? ` ${result.skippedCount} employee(s) skipped due to missing data.`
+          : "";
+        alert(
+          `All-companies SIF exported (${result.edrCount} EDR records, total AED ${Number(result.totalSalary || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}${result.companyCount ? ` across ${result.companyCount} companies` : ""}).${skipNote}`
+        );
+        return;
+      }
       if (!employerId || employerId.length !== 13) {
-        setError("Please select a valid 13-digit Employer ID.");
-        alert("Please select a valid 13-digit Employer ID.");
+        setError("Please select a valid 13-digit Employer ID or All companies.");
+        alert("Please select a valid 13-digit Employer ID or All companies.");
         return;
       }
       // Pass selected Employer ID for this export only.
-      // Agent Code is employee-specific.
-      const isIndividual = filterEmployee && filterEmployee !== "All";
-      const exportOptions = { employerId };
-      if (isIndividual) {
-        exportOptions.employeeId = filterEmployee;
-        exportOptions.mode = "individual";
+      // EDR Person Code comes from the selected employee's DB record.
+      const built = buildSalarySifExportOptions(employerId);
+      if (built.error) {
+        setError(built.error);
+        alert(built.error);
+        return;
       }
 
-      const result = await sifService.exportSif(m, y, exportOptions);
-      if (isIndividual) {
-        const empLabel = employeeOptions.find(o => o.value === filterEmployee)?.label || filterEmployee;
-        alert(`Individual SIF exported for ${empLabel} (Employer ID ${employerId}) using their own Agent Code.`);
+      const result = await sifService.exportSif(m, y, built.exportOptions);
+      if (built.isIndividual) {
+        alert(`Individual SIF exported for ${built.empLabel} (Person Code ${built.personCode}, Employer ID ${employerId}).`);
       } else {
         const companyNote = result.excludedByCompany > 0
           ? ` ${result.excludedByCompany} employee(s) excluded (different company code).`
@@ -1220,7 +1404,14 @@ function Reports() {
     const exportData = await fetchReportData("Salary report");
     if (exportData.length === 0) { alert("No data found for the selected filters."); return; }
     if (activeFormat === "PDF") {
-      exportToPDF(exportData, "Salary_Report");
+      await exportToPDF(exportData, "Salary_Report", {
+        title: "SALARY REPORT",
+        period: [filterMonth !== "All" ? filterMonth : null, filterYear !== "All" ? filterYear : null]
+          .filter(Boolean)
+          .join(" ") || "All periods",
+        employeeScope:
+          filterEmployee && filterEmployee !== "All" ? filterEmployee : "All Employees",
+      });
     }
   };
 
@@ -1231,7 +1422,7 @@ function Reports() {
     if (activeFormat === "Excel") {
       exportToExcel(exportData, "Employee_Experience_Report");
     } else if (activeFormat === "PDF") {
-      exportToPDF(exportData, "Employee_Experience_Report");
+      await exportToPDF(exportData, "Employee_Experience_Report");
     }
   };
 
@@ -1245,7 +1436,7 @@ function Reports() {
     if (activeFormat === "Excel") {
       exportToExcel(exportData, "Employees_Master_Data_Report");
     } else if (activeFormat === "PDF") {
-      exportToPDF(exportData, "Employees_Master_Data_Report");
+      await exportToPDF(exportData, "Employees_Master_Data_Report");
     }
   };
 
@@ -1364,9 +1555,13 @@ function Reports() {
       try {
         const s = await sifService.getSettings();
         const employerId = String(s.employerId || "").replace(/\D/g, "").slice(0, 13);
-        setSifEmployerId(employerId);
         setSifSettingsEmployerId(employerId);
         setSifEmployers(Array.isArray(s.employers) ? s.employers : []);
+        setSifEmployerId((current) => {
+          if (String(current || "").toUpperCase() === "ALL") return "ALL";
+          if (/^\d{13}$/.test(String(current || ""))) return current;
+          return employerId || "ALL";
+        });
       } catch {}
 
       if (reportType === "Salary report") {
@@ -1421,55 +1616,63 @@ function Reports() {
     saveAs(dataBlob, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const exportToPDF = (data, fileName) => {
-    const doc = new jsPDF({ orientation: "landscape" });
-    
-    // Add title
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(15, 23, 42);
-    doc.text(fileName.replace("_", " ").toUpperCase(), 14, 15);
-    
-    // Add subtitle / date
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')} | Total Records: ${data.length}`, 14, 21);
+  const exportToPDF = async (data, fileName, options = {}) => {
+    if (!Array.isArray(data) || data.length === 0) {
+      alert("No data found for the selected filters.");
+      return;
+    }
 
-    let filteredData = data;
+    const title =
+      options.title ||
+      String(fileName || "Report")
+        .replace(/_/g, " ")
+        .toUpperCase();
 
-    const headers = Object.keys(filteredData[0]);
-    const rows = filteredData.map(item => 
-      headers.map(header => 
-        item[header] !== null && item[header] !== undefined ? String(item[header]) : ""
-      )
-    );
+    const periodLabel =
+      options.period ||
+      [filterMonth !== "All" ? filterMonth : null, filterYear !== "All" ? filterYear : null]
+        .filter(Boolean)
+        .join(" ") ||
+      "All periods";
 
-    autoTable(doc, {
-      startY: 26,
-      head: [headers],
-      body: rows,
-      theme: 'grid',
-      styles: {
-        fontSize: 8,
-        cellPadding: 3,
-        overflow: 'linebreak',
-        halign: 'left',
-        valign: 'middle'
-      },
-      headStyles: {
-        fillColor: [22, 163, 74], // green color matching the UI #16a34a
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        fontSize: 8.5
-      },
-      alternateRowStyles: {
-        fillColor: [248, 250, 252] // light grey for alternate rows
-      },
-      margin: { top: 25, bottom: 15, left: 14, right: 14 }
+    const employeeScope =
+      options.employeeScope ||
+      (filterEmployee && filterEmployee !== "All" ? filterEmployee : "All Employees");
+
+    const layout = options.layout
+      || (fileName === "Salary_Report" ? "salary"
+        : fileName === "Employees_Master_Data_Report" ? "master"
+          : fileName === "Document_Expiry_Report" ? "documentExpiry"
+            : "generic");
+
+    const built =
+      layout === "salary"
+        ? buildSalaryReportPdfRows(data)
+        : layout === "master"
+          ? buildEmployeeMasterPdfRows(data)
+          : layout === "documentExpiry"
+            ? buildDocumentExpiryPdfRows(data)
+            : buildGenericReportPdfRows(data);
+
+    const metaLines = [
+      `Generated on: ${new Date().toLocaleDateString("en-GB")}  |  Total Records: ${data.length}`,
+      `Period: ${periodLabel}  |  Employees: ${employeeScope}`,
+      options.extraMeta || null,
+    ];
+
+    const { doc } = await buildCorporateTablePdf({
+      title,
+      fileName: `${fileName}_${new Date().toISOString().split("T")[0]}.pdf`,
+      metaLines,
+      headers: built.headers,
+      rows: built.rows,
+      columnStyles: built.columnStyles,
+      moneyColIndexes: built.moneyColIndexes,
+      orientation: "landscape",
+      summaryItems: built.summaryItems || null,
     });
 
-    doc.save(`${fileName}_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`${fileName}_${new Date().toISOString().split("T")[0]}.pdf`);
   };
 
   return (
@@ -1844,6 +2047,11 @@ function Reports() {
                         disabled={sifSettingsLoading}
                       >
                         <option value="">{sifSettingsLoading ? "Loading Employer IDs..." : "Select Employer ID"}</option>
+                        {showAllEmployersOption && (
+                          <option value="ALL">
+                            {`All companies — ${sifAllEligibleCount} eligible employee(s)`}
+                          </option>
+                        )}
                         {sifEmployerOptions.map((emp) => (
                           <option key={emp.employerId} value={emp.employerId}>
                             {`${emp.companyName ? `${emp.companyName} — ` : ""}${emp.employerId} — ${emp.employeeCount} eligible employee(s)${emp.isSettingsDefault ? " (SIF Settings)" : ""}${emp.agentRoutingCode ? "" : " — SCR routing required"}`}
@@ -1874,18 +2082,29 @@ function Reports() {
                             const now = new Date();
                             const m = filterMonth !== "All" ? monthNames.indexOf(filterMonth) + 1 : now.getMonth() + 1;
                             const y = filterYear !== "All" ? Number(filterYear) : now.getFullYear();
-                            const employerId = digitsOnly(sifEmployerId);
-                            if (!employerId || employerId.length !== 13) {
-                              alert("Please select a valid 13-digit Employer ID.");
+                            if (isAllEmployersSelected) {
+                              try {
+                                const result = await sifService.downloadSifPdf(m, y, { employerId: "ALL" });
+                                alert(
+                                  `All-companies SIF PDF exported (${result.edrCount} paid employee(s), total AED ${Number(result.totalSalary || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}${result.companyCount ? ` across ${result.companyCount} companies` : ""}).`
+                                );
+                              } catch (err) {
+                                alert(err.message || "Failed to export all-company PDF.");
+                              }
                               return;
                             }
-                            const isIndividual = filterEmployee && filterEmployee !== "All";
-                            const exportOptions = { employerId };
-                            if (isIndividual) {
-                              exportOptions.employeeId = filterEmployee;
-                              exportOptions.mode = "individual";
+                            const employerId = digitsOnly(sifEmployerId);
+                            if (!employerId || employerId.length !== 13) {
+                              alert("Please select a valid 13-digit Employer ID or All companies.");
+                              return;
                             }
-                            await sifService.downloadSifPdf(m, y, exportOptions);
+                            const built = buildSalarySifExportOptions(employerId);
+                            if (built.error) {
+                              setError(built.error);
+                              alert(built.error);
+                              return;
+                            }
+                            await sifService.downloadSifPdf(m, y, built.exportOptions);
                           }}
                           disabled={loading}
                         >
@@ -1893,7 +2112,11 @@ function Reports() {
                         </button>
                       </div>
                       <div className={styles.sifEmployerHint}>
-                        The SIF file includes only employees whose Company Code matches this Employer ID. Generate a separate file for each company.
+                        {filterEmployee && filterEmployee !== "All"
+                          ? "Employer ID is auto-filled from the selected employee’s company assignment. You can still change it if needed."
+                          : isAllEmployersSelected
+                            ? `All companies combines every employer (${sifAllEligibleCount} eligible) into one file so you can view the grand total easily.`
+                            : "Pick one Employer ID, or All companies for every eligible employee across all companies in one download."}
                       </div>
                     </div>
                   </div>

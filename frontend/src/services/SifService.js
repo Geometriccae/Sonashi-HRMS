@@ -2,6 +2,31 @@ import config, { getApiBaseUrl } from "../config/config";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
+const ALL_EMPLOYERS = "ALL";
+
+const buildExportParams = (month, year, options = {}) => {
+  const employerId = typeof options === "object" ? options.employerId : options;
+  const isExplicitIndividual =
+    typeof options === "object" &&
+    (options.mode === "individual" || options.isIndividual || "employeeId" in options);
+  const employeeId = typeof options === "object" ? options.employeeId : null;
+  const params = new URLSearchParams({ month: String(month), year: String(year) });
+  const employerRaw = String(employerId || "").trim();
+  if (employerRaw.toUpperCase() === ALL_EMPLOYERS) {
+    params.set("employerId", ALL_EMPLOYERS);
+  } else {
+    const employerDigits = employerRaw.replace(/\D/g, "");
+    if (employerDigits) params.set("employerId", employerDigits);
+  }
+  if (isExplicitIndividual) {
+    params.set("mode", "individual");
+    if (employeeId != null) params.set("employeeId", String(employeeId).trim());
+  } else if (employeeId) {
+    params.set("employeeId", String(employeeId).trim());
+  }
+  return params;
+};
+
 class SifService {
   constructor() {
     const raw = (config.API_BASE_URL || "").trim();
@@ -99,20 +124,8 @@ class SifService {
     return res.json();
   }
 
-  async exportSif(month, year, options = {}) {
-    const employerId = typeof options === "object" ? options.employerId : options;
-    const isExplicitIndividual =
-      typeof options === "object" &&
-      (options.mode === "individual" || options.isIndividual || "employeeId" in options);
-    const employeeId = typeof options === "object" ? options.employeeId : null;
-    const params = new URLSearchParams({ month: String(month), year: String(year) });
-    if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
-    if (isExplicitIndividual) {
-      params.set("mode", "individual");
-      if (employeeId != null) params.set("employeeId", String(employeeId).trim());
-    } else if (employeeId) {
-      params.set("employeeId", String(employeeId).trim());
-    }
+  async fetchSifBlob(month, year, options = {}) {
+    const params = buildExportParams(month, year, options);
     const res = await fetch(`${this.baseURL}/export/sif?${params}`, {
       headers: this.getAuthHeaders(false),
     });
@@ -122,13 +135,13 @@ class SifService {
     }
     const blob = await res.blob();
     const sifText = await blob.text();
+    const downloadBlob = new Blob([sifText], { type: "text/plain;charset=utf-8" });
     const fileEdrCount = sifText
       .split(/\r?\n/)
       .filter((line) => line.trim().startsWith("EDR,")).length;
     const disposition = res.headers.get("Content-Disposition") || "";
     const match = disposition.match(/filename="?([^"]+)"?/i);
     const fileName = match?.[1] || `export_${year}_${month}.SIF`;
-    saveAs(blob, fileName);
 
     let skipped = [];
     const skipHeader = res.headers.get("X-SIF-Skip-Summary");
@@ -139,17 +152,27 @@ class SifService {
         skipped = [];
       }
     }
+
     return {
+      blob: downloadBlob,
       fileName,
       edrCount: Number(res.headers.get("X-SIF-Edr-Count") || fileEdrCount),
       skippedCount: Number(res.headers.get("X-SIF-Skipped") || 0),
       excludedByCompany: Number(res.headers.get("X-SIF-Excluded-Company") || 0),
       totalSalary: Number(res.headers.get("X-SIF-Total") || 0),
       isIndividual: res.headers.get("X-SIF-Is-Individual") === "true",
+      isAllCompanies: res.headers.get("X-SIF-Is-All-Companies") === "true",
+      companyCount: Number(res.headers.get("X-SIF-Company-Count") || 0),
       employeeId: res.headers.get("X-SIF-Employee-Id") || null,
       agentCode: res.headers.get("X-SIF-Agent-Code") || null,
       skipped,
     };
+  }
+
+  async exportSif(month, year, options = {}) {
+    const result = await this.fetchSifBlob(month, year, options);
+    saveAs(result.blob, result.fileName);
+    return result;
   }
 
   async auditMappings() {
@@ -238,20 +261,8 @@ class SifService {
     return data;
   }
 
-  async downloadSifPdf(month, year, options = {}) {
-    const employerId = typeof options === "object" ? options.employerId : options;
-    const isExplicitIndividual =
-      typeof options === "object" &&
-      (options.mode === "individual" || options.isIndividual || "employeeId" in options);
-    const employeeId = typeof options === "object" ? options.employeeId : null;
-    const params = new URLSearchParams({ month: String(month), year: String(year) });
-    if (employerId) params.set("employerId", String(employerId).replace(/\D/g, ""));
-    if (isExplicitIndividual) {
-      params.set("mode", "individual");
-      if (employeeId != null) params.set("employeeId", String(employeeId).trim());
-    } else if (employeeId) {
-      params.set("employeeId", String(employeeId).trim());
-    }
+  async fetchSifPdfBlob(month, year, options = {}) {
+    const params = buildExportParams(month, year, options);
     const res = await fetch(`${this.baseURL}/export/pdf?${params}`, {
       headers: this.getAuthHeaders(false),
     });
@@ -263,12 +274,20 @@ class SifService {
     const disposition = res.headers.get("Content-Disposition") || "";
     const match = disposition.match(/filename="?([^"]+)"?/i);
     const fileName = match?.[1] || `SIF_Summary_${year}_${month}.pdf`;
-    saveAs(blob, fileName);
     return {
+      blob,
       fileName,
       edrCount: Number(res.headers.get("X-SIF-Edr-Count") || 0),
       totalSalary: Number(res.headers.get("X-SIF-Total") || 0),
+      isAllCompanies: res.headers.get("X-SIF-Is-All-Companies") === "true",
+      companyCount: Number(res.headers.get("X-SIF-Company-Count") || 0),
     };
+  }
+
+  async downloadSifPdf(month, year, options = {}) {
+    const result = await this.fetchSifPdfBlob(month, year, options);
+    saveAs(result.blob, result.fileName);
+    return result;
   }
 
   async uploadImportBatch(file, options = {}) {

@@ -17,6 +17,8 @@ const {
   cleanAgentCode,
   normalizeEmpId,
   normalizeEmiratesId,
+  EMPLOYER_BANK_ROUTING_CODE,
+  resolveEmployerBankRoutingCode,
 } = require('../utils/sifUtils');
 const {
   loadCompanyEmployerMap,
@@ -47,7 +49,7 @@ const generateBatchId = (type = 'advance') => {
   return `${prefix}-${dateStr}-${rand}`;
 };
 
-async function resolveRoutingCodeForEmployer(employerId, fallbackEmployee) {
+async function resolveRoutingCodeForEmployer(employerId) {
   try {
     const settings = await CompanySifSettings.findOne().lean();
     const cleanEmpId = digitsOnly(employerId);
@@ -55,21 +57,20 @@ async function resolveRoutingCodeForEmployer(employerId, fallbackEmployee) {
       const match = (settings.employerRoutingCodes || []).find(
         (entry) => digitsOnly(entry?.employerId) === cleanEmpId
       );
-      if (match && match.agentRoutingCode && cleanAgentCode(match.agentRoutingCode).length === 9) {
-        return cleanAgentCode(match.agentRoutingCode);
+      const matchedCode = cleanAgentCode(match?.agentRoutingCode);
+      // Prefer configured employer routing when valid and not the legacy incorrect value
+      if (matchedCode.length === 9 && matchedCode !== '740810000') {
+        return matchedCode;
       }
-      if (settings.defaultAgentRoutingCode && cleanAgentCode(settings.defaultAgentRoutingCode).length === 9) {
-        return cleanAgentCode(settings.defaultAgentRoutingCode);
+      const defaultCode = cleanAgentCode(settings.defaultAgentRoutingCode);
+      if (defaultCode.length === 9 && defaultCode !== '740810000') {
+        return defaultCode;
       }
     }
-    if (fallbackEmployee) {
-      const empCode = cleanAgentCode(getAgentCode(fallbackEmployee));
-      if (empCode && empCode.length === 9) return empCode;
-    }
-    // Sonashi default agent routing code (from sifRoutes.js)
-    return '740810000';
+    // Company employer bank routing for SCR Column C (never employee agent codes)
+    return EMPLOYER_BANK_ROUTING_CODE;
   } catch {
-    return '740810000';
+    return EMPLOYER_BANK_ROUTING_CODE;
   }
 }
 
@@ -403,9 +404,9 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
       ? digitsOnly(requestedEmployerId)
       : availableEmployers[0] || defaultEmployerId;
 
-    const defaultAgentRoutingCode = await resolveRoutingCodeForEmployer(
-      targetEmployerId,
-      records[0] ? empById.get(String(records[0].employee)) : null
+    // SCR Column C = employer bank routing; never substitute employee agent codes
+    const defaultAgentRoutingCode = resolveEmployerBankRoutingCode(
+      await resolveRoutingCodeForEmployer(targetEmployerId)
     );
 
     // Prepare ALL employees in this batch for one single combined SIF file
@@ -427,10 +428,9 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
         };
       }
 
-      const empAgent = cleanAgentCode(getAgentCode(emp));
+      // Preserve the employee's own EDR agent code; do not replace with employer bank routing
       return {
         ...emp,
-        agentCode: empAgent && empAgent.length === 9 ? empAgent : defaultAgentRoutingCode,
         customTransferAmount: rec.originalAmount,
       };
     });
