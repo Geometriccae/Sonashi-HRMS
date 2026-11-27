@@ -2,13 +2,20 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const XLSX = require("xlsx");
 
-const { generateSifPdf } = require("./sifPdfGenerator");
+const { generateSifPdf, buildSifPdfDataset } = require("./sifPdfGenerator");
 const {
   parseImportFile,
   buildImportRecords,
   applyBatchToEmployees,
 } = require("./sifImportBatchUtils");
-const { generateSifContent, parseSifContent } = require("./sifUtils");
+const {
+  generateSifContent,
+  parseSifContent,
+  getPayableAmount,
+  employeeWithSlipPayable,
+  EMPLOYER_BANK_ROUTING_CODE,
+} = require("./sifUtils");
+const { matchSlipsToEmployees } = require("./sifSalaryReportRows");
 
 test("PDF Generation - Individual Employee PDF matches SIF dataset exactly", () => {
   const emp = {
@@ -87,7 +94,7 @@ test("PDF Generation - Company-wide PDF with skipped/excluded records includes s
     employerId: "0000000172509",
     companyName: "Sonashi Head Office",
     companyCode: "0000000172509",
-    defaultAgentRoutingCode: "740810000",
+    defaultAgentRoutingCode: "600310101",
     year: 2026,
     month: 10,
     isIndividual: false,
@@ -311,5 +318,168 @@ test("Import Staging & Rejection - Rejected batch leaves DB records completely u
 
   // DB record was NOT modified
   assert.equal(dbEmp.salaryDetails.totalSalary, 9000);
+});
+
+test("Payable amount uses the month slip once, including a zero net, and does not deduct a standing deduction twice", () => {
+  const withSlip = employeeWithSlipPayable(
+    {
+      employeeId: "IDMO-215",
+      salaryDetails: { totalSalary: 5700, deduction: 300, basicSalary: 1000 },
+    },
+    { basicPay: 1000, hra: 2000, conveyanceAllowance: 1000, otherAllowance: 2000, grossSalary: 6000, totalDeduction: 300, netSalary: 5700 }
+  );
+  assert.equal(getPayableAmount(withSlip), 5700);
+  assert.equal(withSlip.payrollBreakdown.deduction, 300);
+
+  const zeroNet = employeeWithSlipPayable(
+    { employeeId: "IDMM-074", salaryDetails: { totalSalary: 2400 } },
+    { basicPay: 400, hra: 800, conveyanceAllowance: 500, otherAllowance: 500, grossSalary: 2200, totalDeduction: 2200, netSalary: 0 }
+  );
+  assert.equal(getPayableAmount(zeroNet), 0);
+
+  const masterOnly = {
+    employeeId: "IDMO-223",
+    salaryDetails: {
+      basicSalary: 1000,
+      houseRent: 2000,
+      travelExp: 2000,
+      other: 1000,
+      deduction: 300,
+      totalSalary: 5700,
+    },
+  };
+  assert.equal(getPayableAmount(masterOnly), 5700);
+});
+
+test("Placeholder payslip addresses match the employee code for every month", () => {
+  const noEmail = { _id: "1", employeeId: "IDMM-053", employeeName: "Thirupathi Jainapurapu", emailId: "" };
+  const renamedPlaceholder = {
+    _id: "2",
+    employeeId: "IDMM-137",
+    employeeName: "Sachin Kanoujiya",
+    emailId: "noemail+idmm-137+e89f831ceb27@import.hrms.placeholder",
+  };
+  const slips = [
+    { emailId: "noemail+idmm-053@import.hrms.placeholder", employeeName: "THIRUPATHI JAINAPURAPU", netSalary: 766.67, updatedAt: "2026-11-01" },
+    { emailId: "noemail+idmm-137@import.hrms.placeholder", employeeName: "SACHIN KANOUJIYA", netSalary: 1800, updatedAt: "2026-11-01" },
+  ];
+  const matched = matchSlipsToEmployees(slips, [noEmail, renamedPlaceholder]);
+  assert.equal(matched.get("1").netSalary, 766.67);
+  assert.equal(matched.get("2").netSalary, 1800);
+});
+
+test("PDF and SIF share one dataset for any month: count, net, person code, exclusions, and employer routing", () => {
+  const paid = employeeWithSlipPayable(
+    {
+      employeeId: "IDMM-010",
+      employeeName: "Sai Kumar",
+      workPermitNo: "10001059622333",
+      emiratesId: "784199900000001",
+      department: "Operations",
+      designation: "Staff",
+      salaryDetails: {
+        basicSalary: 500,
+        houseRent: 800,
+        totalAllowance: 1800,
+        totalSalary: 2700,
+        deduction: 0,
+        agentCode: "302620122",
+        ibanNumber: "AE111111111111111111111",
+      },
+    },
+    {
+      basicPay: 500,
+      hra: 800,
+      conveyanceAllowance: 700,
+      otherAllowance: 300,
+      grossSalary: 2300,
+      totalDeduction: 0,
+      netSalary: 2300,
+    }
+  );
+  const zero = employeeWithSlipPayable(
+    {
+      employeeId: "IDMM-074",
+      employeeName: "Zero Net",
+      workPermitNo: "10000000000074",
+      salaryDetails: {
+        totalSalary: 2400,
+        agentCode: "600310101",
+        ibanNumber: "AE222222222222222222222",
+      },
+    },
+    { basicPay: 400, hra: 800, conveyanceAllowance: 500, otherAllowance: 500, grossSalary: 2200, totalDeduction: 2200, netSalary: 0 }
+  );
+  const missingBank = {
+    employeeId: "IDMC-247",
+    employeeName: "Missing Bank",
+    workPermitNo: "10016049367660",
+    salaryDetails: { totalSalary: 2600, agentCode: "", basicSalary: 2600 },
+  };
+  const employees = [paid, zero, missingBank];
+  const companyExcluded = [{
+    staffId: "IDBL-009",
+    empName: "Other Company",
+    empId: "20001038179816",
+    reason: "Assigned Employer ID 0000000246878 does not match selected Employer ID 0000000172509",
+  }];
+
+  [3, 11].forEach((month) => {
+    const sif = generateSifContent({
+      employees,
+      employerId: "0000000172509",
+      defaultAgentRoutingCode: "740810000",
+      year: 2026,
+      month,
+      now: new Date("2026-11-25T08:00:00.000Z"),
+    });
+    const parsed = parseSifContent(sif.content);
+    const pdf = buildSifPdfDataset({
+      employees,
+      year: 2026,
+      month,
+      skipped: [...sif.skipped, ...companyExcluded],
+      excludedByCompany: 0,
+    });
+
+    assert.equal(parsed.scr.agentRouting, EMPLOYER_BANK_ROUTING_CODE);
+    assert.equal(parsed.scr.edrCount, parsed.edrs.length);
+    assert.equal(parsed.scr.totalSalary, parsed.edrs.reduce((sum, row) => sum + row.fixedIncome, 0));
+    assert.equal(pdf.includedCount, parsed.scr.edrCount);
+    assert.equal(pdf.edrCount, parsed.scr.edrCount);
+    assert.equal(pdf.totalNetSalary, parsed.scr.totalSalary);
+    assert.equal(pdf.includedCount, 2);
+    assert.equal(pdf.totalNetSalary, 2300);
+    assert.equal(parsed.edrs[0].empId, "10001059622333");
+    assert.notEqual(parsed.edrs[0].empId, "784199900000001");
+    assert.equal(parsed.edrs[0].agentCode, "302620122");
+    assert.equal(parsed.edrs[1].fixedIncome, 0);
+    assert.equal(pdf.rows[0].money.net, 2300);
+    assert.equal(pdf.rows[0].money.deduction, 0);
+    assert.equal(pdf.rows[1].money.net, 0);
+    assert.equal(pdf.rows[1].money.deduction, 2200);
+    assert.equal(sif.skipped.length, 1);
+    assert.match(sif.skipped[0].reason, /BANKACCOUNT/);
+    assert.equal(pdf.totalExcludedCount, 2);
+    assert.equal(pdf.excludedRows.some((row) => row.staffId === "IDMC-247"), true);
+    assert.equal(pdf.excludedRows.some((row) => row.staffId === "IDBL-009"), true);
+  });
+
+  const generated = generateSifContent({
+    employees,
+    employerId: "0000000172509",
+    defaultAgentRoutingCode: EMPLOYER_BANK_ROUTING_CODE,
+    year: 2026,
+    month: 11,
+  });
+  const pdfBuffer = generateSifPdf({
+    employees,
+    employerId: "0000000172509",
+    defaultAgentRoutingCode: EMPLOYER_BANK_ROUTING_CODE,
+    year: 2026,
+    month: 11,
+    skipped: [...generated.skipped, ...companyExcluded],
+  });
+  assert.equal(pdfBuffer.slice(0, 5).toString("utf8"), "%PDF-");
 });
 

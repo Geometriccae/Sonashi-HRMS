@@ -6,6 +6,7 @@ const CompanyDocument = require('../models/CompanyDocument');
 const Notification = require('../models/Notification');
 const { runDailyHrAlerts } = require('./hrNotificationService');
 const { workingStatusFilter } = require('../utils/employeeStatus');
+const { checkAndSendPendingLeaveReminders } = require('./adminLeaveEmailService');
 
 const ALERT_DAYS = [30, 25, 20, 15, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0];
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -202,7 +203,10 @@ function initExpiryCron(io) {
         checkExpiries();
         checkCompanyDocumentExpiries(io);
         runDailyHrAlerts(io);
+        checkAndSendPendingLeaveReminders()
+            .then(res => console.log(`[Expiry] Leave reminders checked: ${res?.length || 0} processed`))
+            .catch(err => console.error('[Expiry] Error checking pending leave reminders:', err?.message || err));
     });
 }
 
-module.exports = { initExpiryCron, checkExpiries, checkCompanyDocumentExpiries };
+module.exports = { initExpiryCron, checkExpiries, checkCompanyDocumentExpiries, checkAndSendPendingLeaveReminders };

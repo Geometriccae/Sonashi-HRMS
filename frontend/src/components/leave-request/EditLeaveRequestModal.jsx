@@ -22,6 +22,7 @@ import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorki
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import calendarIcon from "../../assets/dashboard/calendar.svg";
+import ApprovalManagerSelect from "./ApprovalManagerSelect";
 import "./LeaveForm.css"; // Using new clean grid styles
 
 function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLeaveRequests }) {
@@ -37,6 +38,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         company: "Sonashi",
         department: "",
         reportingManager: "",
+        approvalManagers: [],
+        approvalManager: "",
         leaveType: "Personal Leave",
         startDate: "",
         endDate: "",
@@ -48,6 +51,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
     const { setBaselines, getResetValue } = useDateBaselines({ start: "", end: "" });
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
+    const [dynamicReportingManagerOptions, setDynamicReportingManagerOptions] = useState([]);
+    const [dynamicApprovalManagerOptions, setDynamicApprovalManagerOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
     // Which leave record the form is editing (click a date in history to switch)
     const [activeLeave, setActiveLeave] = useState(leaveRequest || null);
@@ -94,12 +99,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const empName = req.employeeName || req.employee?.employeeName || req.employee?.username || req.employee?.name || "";
         const matchedEmp = resolveEmployeeRecord(empId, empName, req.employee);
         const visaSrc = req.employee?.visaExpiryDate || matchedEmp?.visaExpiryDate;
+        const initialApprovalMgrs = Array.isArray(req.approvalManagers) && req.approvalManagers.length > 0
+            ? req.approvalManagers
+            : (req.approvalManager ? [req.approvalManager] : []);
         setFormData({
             employeeId: matchedEmp?._id || empId,
             employeeName: empName,
             company: req.company || "Sonashi",
             department: req.department || "",
             reportingManager: req.reportingManager || "",
+            approvalManagers: initialApprovalMgrs,
+            approvalManager: initialApprovalMgrs[0] || "",
             leaveType: req.leaveType || "Personal Leave",
             startDate: req.startDate ? new Date(req.startDate).toISOString().split('T')[0] : "",
             endDate: req.endDate ? new Date(req.endDate).toISOString().split('T')[0] : "",
@@ -140,13 +150,13 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const selected = new Date(date);
         selected.setHours(0, 0, 0, 0);
 
-        const currentSelectedEmp = employees.find(e => e._id === formData.employeeId) || 
-                                   (formData.employeeName && employees.find(e => {
-                                       const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
-                                       const fName = String(formData.employeeName || "").toLowerCase().trim();
-                                       return eName === fName && fName !== "";
-                                   })) || 
-                                   targetLeave?.employee;
+        const currentSelectedEmp = employees.find(e => e._id === formData.employeeId) ||
+            (formData.employeeName && employees.find(e => {
+                const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+                const fName = String(formData.employeeName || "").toLowerCase().trim();
+                return eName === fName && fName !== "";
+            })) ||
+            targetLeave?.employee;
 
         if (currentSelectedEmp && currentSelectedEmp.doj) {
             const joiningDate = new Date(currentSelectedEmp.doj);
@@ -173,6 +183,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             // so DOJ, experience, and leave balance resolve consistently when reviewing.
             fetchEmployees();
             fetchDepartmentOptions();
+            fetchReportingManagerOptions();
+            fetchApprovalManagerOptions();
         } else {
             setEmployeeLeaveHistory([]);
         }
@@ -255,6 +267,163 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         }
     };
 
+    const fetchReportingManagerOptions = async () => {
+        try {
+            const [dbOptions, excluded] = await Promise.all([
+                OptionService.getOptions('reportingManager'),
+                OptionService.getExcludedDefaults('reportingManager'),
+            ]);
+            const excludedSet = new Set((excluded || []).map(x => String(x).toLowerCase().trim()));
+            const list = Array.isArray(dbOptions) ? dbOptions : [];
+            const filtered = list.filter(o => !excludedSet.has(String(o.label || o.value).toLowerCase().trim()));
+            const mapped = filtered.map((opt) => ({
+                value: opt.value || opt.label,
+                label: opt.label || opt.value,
+                _id: opt._id,
+            }));
+            setDynamicReportingManagerOptions(mapped);
+        } catch (error) {
+            console.error("Error fetching reporting manager options:", error);
+        }
+    };
+
+    const handleAddReportingManager = async (label) => {
+        try {
+            await OptionService.addOption('reportingManager', label);
+            await fetchReportingManagerOptions();
+            handleInputChange("reportingManager", label);
+            showToast(`Reporting Manager "${label}" added`, "success");
+        } catch (err) {
+            console.error("Error adding reporting manager:", err);
+            showToast(err.response?.data?.message || "Failed to add reporting manager", "error");
+        }
+    };
+
+    const handleEditReportingManager = async (option, newLabel) => {
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('reportingManager');
+                const match = (dbOptions || []).find((o) => o.label === (option.label || option.value) || o.value === (option.value || option.label));
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.updateOption('reportingManager', optionId, newLabel);
+            } else {
+                await OptionService.addOption('reportingManager', newLabel);
+            }
+            if (formData.reportingManager === (option.value || option.label)) {
+                handleInputChange("reportingManager", newLabel);
+            }
+            await fetchReportingManagerOptions();
+            showToast(`Reporting Manager updated to "${newLabel}"`, "success");
+        } catch (err) {
+            console.error("Error updating reporting manager:", err);
+            showToast(err.response?.data?.message || "Failed to update reporting manager", "error");
+        }
+    };
+
+    const handleDeleteReportingManager = async (option) => {
+        const optLabel = option?.label || option?.value;
+        if (!optLabel || optLabel === "-Select-") return;
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('reportingManager');
+                const match = (dbOptions || []).find((o) => o.label === optLabel || o.value === optLabel);
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.deleteOption('reportingManager', optionId);
+            } else {
+                await OptionService.excludeDefaultOption('reportingManager', optLabel);
+            }
+            if (formData.reportingManager === (option.value || option.label)) {
+                handleInputChange("reportingManager", "");
+            }
+            await fetchReportingManagerOptions();
+            showToast(`Reporting Manager "${optLabel}" deleted`, "success");
+        } catch (err) {
+            console.error("Error deleting reporting manager:", err);
+            showToast("Failed to delete reporting manager", "error");
+        }
+    };
+
+    const fetchApprovalManagerOptions = async () => {
+        try {
+            const [dbOptions, excluded] = await Promise.all([
+                OptionService.getOptions('approvalManager'),
+                OptionService.getExcludedDefaults('approvalManager'),
+            ]);
+            const excludedSet = new Set((excluded || []).map(x => String(x).toLowerCase().trim()));
+            const list = Array.isArray(dbOptions) ? dbOptions : [];
+            const filtered = list.filter(o => !excludedSet.has(String(o.label || o.value).toLowerCase().trim()));
+            const mapped = filtered.map((opt) => ({
+                value: opt.value || opt.label,
+                label: opt.label || opt.value,
+                _id: opt._id,
+            }));
+            setDynamicApprovalManagerOptions(mapped);
+        } catch (error) {
+            console.error("Error fetching approval manager options:", error);
+        }
+    };
+
+    const handleAddApprovalManager = async (label) => {
+        try {
+            await OptionService.addOption('approvalManager', label);
+            await fetchApprovalManagerOptions();
+            showToast(`Approval Manager "${label}" added`, "success");
+        } catch (err) {
+            console.error("Error adding approval manager:", err);
+            showToast(err.response?.data?.message || "Failed to add approval manager", "error");
+        }
+    };
+
+    const handleEditApprovalManager = async (option, newLabel) => {
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('approvalManager');
+                const match = (dbOptions || []).find((o) => o.label === (option.label || option.value || option) || o.value === (option.value || option.label || option));
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.updateOption('approvalManager', optionId, newLabel);
+            } else {
+                await OptionService.addOption('approvalManager', newLabel);
+            }
+            await fetchApprovalManagerOptions();
+            showToast(`Approval Manager updated to "${newLabel}"`, "success");
+        } catch (err) {
+            console.error("Error updating approval manager:", err);
+            showToast(err.response?.data?.message || "Failed to update approval manager", "error");
+        }
+    };
+
+    const handleDeleteApprovalManager = async (option) => {
+        const optLabel = typeof option === "string" ? option : (option?.label || option?.value);
+        if (!optLabel || optLabel === "-Select-") return;
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('approvalManager');
+                const match = (dbOptions || []).find((o) => o.label === optLabel || o.value === optLabel);
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.deleteOption('approvalManager', optionId);
+            } else {
+                await OptionService.excludeDefaultOption('approvalManager', optLabel);
+            }
+            await fetchApprovalManagerOptions();
+            showToast(`Approval Manager "${optLabel}" deleted`, "success");
+        } catch (err) {
+            console.error("Error deleting approval manager:", err);
+            showToast("Failed to delete approval manager", "error");
+        }
+    };
+
     useEffect(() => {
         if (leaveRequest) {
             setActiveLeave(leaveRequest);
@@ -268,6 +437,9 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             const empName = leaveRequest.employeeName || leaveRequest.employee?.employeeName || leaveRequest.employee?.username || leaveRequest.employee?.name || "";
             const matchedEmp = resolveEmployeeRecord(empId, empName, leaveRequest.employee);
             const visaSrc = leaveRequest.employee?.visaExpiryDate || matchedEmp?.visaExpiryDate;
+            const initialApprovalMgrs = Array.isArray(leaveRequest.approvalManagers) && leaveRequest.approvalManagers.length > 0
+                ? leaveRequest.approvalManagers
+                : (leaveRequest.approvalManager ? [leaveRequest.approvalManager] : []);
 
             setFormData({
                 employeeId: matchedEmp?._id || empId,
@@ -275,6 +447,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                 company: leaveRequest.company || "Sonashi",
                 department: leaveRequest.department || "",
                 reportingManager: leaveRequest.reportingManager || "",
+                approvalManagers: initialApprovalMgrs,
+                approvalManager: initialApprovalMgrs[0] || "",
                 leaveType: leaveRequest.leaveType || "Personal Leave",
                 startDate: leaveRequest.startDate ? new Date(leaveRequest.startDate).toISOString().split('T')[0] : "",
                 endDate: leaveRequest.endDate ? new Date(leaveRequest.endDate).toISOString().split('T')[0] : "",
@@ -295,7 +469,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
     const fetchEmployees = async () => {
         try {
             const data = await EmployeeService.getEmployeesList();
-            setEmployees(Array.isArray(data) ? data : (data?.employees || []));
+            const empList = Array.isArray(data) ? data : (data?.employees || []);
+            setEmployees(empList);
         } catch (error) {
             console.error("Error fetching employees:", error);
         }
@@ -338,7 +513,11 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             return;
         }
 
-        const payload = { ...formData };
+        const payload = {
+            ...formData,
+            approvalManagers: formData.approvalManagers,
+            approvalManager: formData.approvalManagers?.[0] || formData.approvalManager || "",
+        };
         // Only send real Mongo ObjectIds (24-char names like "MAHESH CHAINANI RAMCHAND" must not be sent)
         if (
             !payload.employeeId ||
@@ -358,13 +537,13 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         start.setHours(0, 0, 0, 0);
         end.setHours(0, 0, 0, 0);
 
-        const currentSelectedEmp = employees.find(e => e._id === formData.employeeId) || 
-                                   (formData.employeeName && employees.find(e => {
-                                       const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
-                                       const fName = String(formData.employeeName || "").toLowerCase().trim();
-                                       return eName === fName && fName !== "";
-                                   })) || 
-                                   targetLeave?.employee;
+        const currentSelectedEmp = employees.find(e => e._id === formData.employeeId) ||
+            (formData.employeeName && employees.find(e => {
+                const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+                const fName = String(formData.employeeName || "").toLowerCase().trim();
+                return eName === fName && fName !== "";
+            })) ||
+            targetLeave?.employee;
 
         if (currentSelectedEmp && currentSelectedEmp.doj) {
             const joiningDate = new Date(currentSelectedEmp.doj);
@@ -412,21 +591,15 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
 
     const employeeOptions = employeesForNativeSelect(employees, formData.employeeId).map((emp) => toSearchableEmployeeOption(emp));
 
-    const reportingManagerOptions = employees.map(emp => ({
-        value: emp.employeeName || emp.name || "Unknown",
-        label: emp.employeeName || emp.name || "Unknown",
-        employeeId: emp.employeeId || "",
-        name: emp.employeeName || emp.name || "",
-        hideUnlessSearch: isNonWorkingEmployeeStatus(emp.employeeStatus),
-    }));
+    const reportingManagerOptions = [...dynamicReportingManagerOptions];
+    const currentManager = (formData.reportingManager || "").trim();
+    if (currentManager && !reportingManagerOptions.find(o => o.value === currentManager)) {
+        reportingManagerOptions.unshift({ value: currentManager, label: currentManager });
+    }
 
     const departmentOptions = [...baseDepartmentOptions];
     if (formData.department && !departmentOptions.find(o => o.value === formData.department)) {
         departmentOptions.push({ value: formData.department, label: formData.department });
-    }
-
-    if (formData.reportingManager && !reportingManagerOptions.find(o => o.value === formData.reportingManager)) {
-        reportingManagerOptions.push({ value: formData.reportingManager, label: formData.reportingManager });
     }
 
     // Resolve Employee master (doj / visa live on Employee, not User on leaveRequest.employee)
@@ -441,17 +614,17 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         leaveRequest?.employee?.employeeId ||
         "";
     const selectedEmp = employees.find(e => e._id === formData.employeeId) ||
-                        (linkedEmployeeId && employees.find(e => String(e._id) === String(linkedEmployeeId))) ||
-                        (formData.employeeName && employees.find(e => {
-                            const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
-                            const fName = String(formData.employeeName || "").toLowerCase().trim();
-                            return eName === fName && fName !== "";
-                        })) ||
-                        leaveRequest?.employeeMaster ||
-                        targetLeave?.employeeMaster ||
-                        (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
-                            ? targetLeave.employee
-                            : null);
+        (linkedEmployeeId && employees.find(e => String(e._id) === String(linkedEmployeeId))) ||
+        (formData.employeeName && employees.find(e => {
+            const eName = String(e.employeeName || e.name || "").toLowerCase().trim();
+            const fName = String(formData.employeeName || "").toLowerCase().trim();
+            return eName === fName && fName !== "";
+        })) ||
+        leaveRequest?.employeeMaster ||
+        targetLeave?.employeeMaster ||
+        (typeof targetLeave?.employee === "object" && targetLeave.employee?.doj
+            ? targetLeave.employee
+            : null);
 
     const experienceLabel = selectedEmp
         ? (formatExperienceLabel(
@@ -481,8 +654,8 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const takenStart = leaveStats.takenRangeStart
             ? new Date(leaveStats.takenRangeStart)
             : leaveStats.calculationStartDate
-              ? new Date(leaveStats.calculationStartDate)
-              : null;
+                ? new Date(leaveStats.calculationStartDate)
+                : null;
         if (takenStart && yearEnd < takenStart) {
             return leaveStats.historicalYearTotals?.[year] ?? 0;
         }
@@ -505,20 +678,20 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
         const s = new Date(formData.startDate);
         const e = new Date(formData.endDate);
         if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
-        
+
         s.setHours(0, 0, 0, 0);
         e.setHours(0, 0, 0, 0);
-        
+
         if (s > e) {
             return { error: "Start date must be before or equal to End date" };
         }
-        
+
         const calendarDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
-        
+
         let workingDays = 0;
         const tempDate = new Date(s);
         const holidaysSet = new Set(OFFICIAL_HOLIDAYS_2026 || []);
-        
+
         while (tempDate <= e) {
             const day = tempDate.getDay();
             const y = tempDate.getFullYear();
@@ -530,7 +703,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
             }
             tempDate.setDate(tempDate.getDate() + 1);
         }
-        
+
         return { calendarDays, workingDays };
     };
 
@@ -556,7 +729,7 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                         <Select
                                             options={employeeOptions}
                                             value={
-                                                employeeOptions.find(opt => opt.value === formData.employeeId) || 
+                                                employeeOptions.find(opt => opt.value === formData.employeeId) ||
                                                 (formData.employeeName && employeeOptions.find(opt => opt.label.toLowerCase().includes(formData.employeeName.toLowerCase()))) ||
                                                 (formData.employeeName ? { value: formData.employeeId || "unknown", label: formData.employeeName } : null)
                                             }
@@ -594,31 +767,34 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 label="Company *"
                                 value="Sonashi"
                                 disabled={true}
-                                onChange={() => {}}
+                                onChange={() => { }}
                             />
 
                             <Dropdown
-                                label="Department *"
+                                label="Department"
                                 placeholder="Select department"
                                 options={departmentOptions}
                                 value={formData.department}
                                 onChange={(e) => handleInputChange("department", e.target.value)}
-                                onAdd={isManager ? handleAddDepartment : null}
-                                onDelete={isManager ? handleDeleteDepartment : null}
+                                onAdd={handleAddDepartment}
+                                onDelete={handleDeleteDepartment}
                                 disabled={!isEditable}
                             />
 
                             <Dropdown
-                                label="Reporting Manager *"
+                                label="Reporting Manager"
                                 placeholder="Select reporting manager"
                                 options={reportingManagerOptions}
                                 value={formData.reportingManager}
                                 onChange={(e) => handleInputChange("reportingManager", e.target.value)}
+                                onAdd={handleAddReportingManager}
+                                onEdit={handleEditReportingManager}
+                                onDelete={handleDeleteReportingManager}
                                 disabled={!isEditable}
                             />
 
                             <Dropdown
-                                label="Leave Type *"
+                                label="Leave Type"
                                 placeholder="Select leave type"
                                 options={leaveTypeOptions}
                                 value={formData.leaveType}
@@ -715,22 +891,22 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
                                     <div className="input-field">
                                         <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Joining Date</label>
-                                        <input 
-                                            type="text" 
-                                            className="input-field-input" 
-                                            disabled 
-                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString('en-GB') : 'N/A'} 
-                                            style={{ background: "#f8fafc" }} 
+                                        <input
+                                            type="text"
+                                            className="input-field-input"
+                                            disabled
+                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString('en-GB') : 'N/A'}
+                                            style={{ background: "#f8fafc" }}
                                         />
                                     </div>
                                     <div className="input-field">
                                         <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Total Experience</label>
-                                        <input 
-                                            type="text" 
-                                            className="input-field-input" 
-                                            disabled 
-                                            value={experienceLabel} 
-                                            style={{ background: "#f8fafc" }} 
+                                        <input
+                                            type="text"
+                                            className="input-field-input"
+                                            disabled
+                                            value={experienceLabel}
+                                            style={{ background: "#f8fafc" }}
                                         />
                                     </div>
                                     <div className="input-field">
@@ -742,23 +918,37 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                                 onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)}
                                             />
                                         ) : (
-                                            <input 
-                                                type="text" 
-                                                className="input-field-input" 
-                                                disabled 
+                                            <input
+                                                type="text"
+                                                className="input-field-input"
+                                                disabled
                                                 value={
                                                     (formData.visaExpiryDate || selectedEmp?.visaExpiryDate)
                                                         ? new Date(formData.visaExpiryDate || selectedEmp.visaExpiryDate).toLocaleDateString('en-GB')
                                                         : 'Not Set'
-                                                } 
-                                                style={{ background: "#f8fafc" }} 
+                                                }
+                                                style={{ background: "#f8fafc" }}
                                             />
                                         )}
                                     </div>
                                 </div>
                             </div>
 
-                             <div className="full-width">
+                            <div className="full-width">
+                                <ApprovalManagerSelect
+                                    value={formData.approvalManagers}
+                                    onChange={(val) => handleInputChange("approvalManagers", val)}
+                                    options={dynamicApprovalManagerOptions}
+                                    onAdd={handleAddApprovalManager}
+                                    onEdit={handleEditApprovalManager}
+                                    onDelete={handleDeleteApprovalManager}
+                                    isManager={true}
+                                    disabled={!isEditable}
+                                    required={false}
+                                />
+                            </div>
+
+                            <div className="full-width">
                                 <InputField
                                     label="Reason *"
                                     placeholder="Enter reason for leave"
@@ -768,59 +958,59 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                                 />
                             </div>
 
-                             {(() => {
-                                 return (
-                                     <div className="full-width animated-ticket-container" style={{ marginTop: "12px" }}>
-                                         <label className="ticket-label-title">
-                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                 <path d="M22 2L2 22" /><path d="M17 2l5 5" /><path d="M2 12l5 5" /><path d="M7 17l-5 5" /><path d="M12 12l5-5" /><path d="M17 7l5 5v5" /><path d="M2 12l10-10" />
-                                             </svg>
-                                             Ticket Type
-                                         </label>
-                                         <div className="ticket-cards-wrapper">
-                                             {/* Company Ticket Card */}
-                                             <div 
-                                                 className={`ticket-card company-ticket ${formData.requestAirfare ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
-                                                 onClick={() => isAdmin && handleInputChange("requestAirfare", true)}
-                                             >
-                                                 <div className="ticket-card-icon">
-                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                         <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4.5 19.5 3c-1.5-1.5-3-1.5-4.5.5L11.5 7 3.3 5.2c-.9-.2-1.7.4-1.5 1.3l1.4 4.7 5.7 2.9-2.9 5.7-4.7-1.4c-.9-.2-1.5.6-1.3 1.5L2 22l8.2-1.8 5.7 2.9 2.9-5.7-1-.2z" />
-                                                     </svg>
-                                                 </div>
-                                                 <div className="ticket-card-title">Company Ticket</div>
-                                                 <div className="ticket-card-desc">Travel expenses fully sponsored and arranged by the company.</div>
-                                             </div>
+                            {(() => {
+                                return (
+                                    <div className="full-width animated-ticket-container" style={{ marginTop: "12px" }}>
+                                        <label className="ticket-label-title">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M22 2L2 22" /><path d="M17 2l5 5" /><path d="M2 12l5 5" /><path d="M7 17l-5 5" /><path d="M12 12l5-5" /><path d="M17 7l5 5v5" /><path d="M2 12l10-10" />
+                                            </svg>
+                                            Ticket Type
+                                        </label>
+                                        <div className="ticket-cards-wrapper">
+                                            {/* Company Ticket Card */}
+                                            <div
+                                                className={`ticket-card company-ticket ${formData.requestAirfare ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
+                                                onClick={() => isAdmin && handleInputChange("requestAirfare", true)}
+                                            >
+                                                <div className="ticket-card-icon">
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4.5 19.5 3c-1.5-1.5-3-1.5-4.5.5L11.5 7 3.3 5.2c-.9-.2-1.7.4-1.5 1.3l1.4 4.7 5.7 2.9-2.9 5.7-4.7-1.4c-.9-.2-1.5.6-1.3 1.5L2 22l8.2-1.8 5.7 2.9 2.9-5.7-1-.2z" />
+                                                    </svg>
+                                                </div>
+                                                <div className="ticket-card-title">Company Ticket</div>
+                                                <div className="ticket-card-desc">Travel expenses fully sponsored and arranged by the company.</div>
+                                            </div>
 
-                                             {/* Personal Ticket Card */}
-                                             <div 
-                                                 className={`ticket-card personal-ticket ${!formData.requestAirfare ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
-                                                 onClick={() => isAdmin && handleInputChange("requestAirfare", false)}
-                                             >
-                                                 <div className="ticket-card-icon">
-                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                         <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
-                                                         <line x1="12" y1="4" x2="12" y2="20" />
-                                                         <line x1="2" y1="12" x2="22" y2="12" />
-                                                     </svg>
-                                                 </div>
-                                                 <div className="ticket-card-title">Personal Ticket</div>
-                                                 <div className="ticket-card-desc">Travel expenses paid by the employee (self-expense / own ticket).</div>
-                                             </div>
-                                         </div>
-                                     </div>
-                                 );
-                             })()}
+                                            {/* Personal Ticket Card */}
+                                            <div
+                                                className={`ticket-card personal-ticket ${!formData.requestAirfare ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
+                                                onClick={() => isAdmin && handleInputChange("requestAirfare", false)}
+                                            >
+                                                <div className="ticket-card-icon">
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                                                        <line x1="12" y1="4" x2="12" y2="20" />
+                                                        <line x1="2" y1="12" x2="22" y2="12" />
+                                                    </svg>
+                                                </div>
+                                                <div className="ticket-card-title">Personal Ticket</div>
+                                                <div className="ticket-card-desc">Travel expenses paid by the employee (self-expense / own ticket).</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {error && (
-                            <div style={{ 
-                                margin: "16px 0", 
-                                padding: "12px 16px", 
-                                background: "#fef2f2", 
-                                border: "1px solid #fecaca", 
-                                borderRadius: "8px", 
-                                color: "#991b1b", 
+                            <div style={{
+                                margin: "16px 0",
+                                padding: "12px 16px",
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
+                                borderRadius: "8px",
+                                color: "#991b1b",
                                 fontSize: "13px",
                                 fontWeight: "600",
                                 display: "flex",
@@ -840,166 +1030,166 @@ function EditLeaveRequestModal({ isOpen, onClose, onSubmit, leaveRequest, allLea
                         </div>
                     </form>
 
-                {/* Employee Leave Overview Section - Side Panel */}
-                {selectedEmp || formData.employeeName ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                        <div style={{ background: "#fff", padding: "24px", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
-                            <h3 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "20px", color: "#0f172a" }}>Employee Leave Summary</h3>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
-                                <div style={{ padding: "12px", background: "#f0fdf4", borderRadius: "12px", border: "1px solid #bbf7d0", textAlign: "center" }}>
-                                    <div style={{ fontSize: "10px", color: "#166534", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Entitlement</div>
-                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#14532d" }}>{leaveStats.entitlement} Days</div>
-                                </div>
-                                <div style={{ padding: "12px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecaca", textAlign: "center" }}>
-                                    <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Leave Taken</div>
-                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
-                                    <div style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>
-                                        {leaveStats.rollingFiveYear
-                                            ? `${new Date(leaveStats.rollingWindowStart).toLocaleDateString("en-GB")} → ${new Date(leaveStats.rollingWindowEnd).toLocaleDateString("en-GB")}`
-                                            : selectedEmp?.doj
-                                            ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
-                                            : "From DOJ to today"}
+                    {/* Employee Leave Overview Section - Side Panel */}
+                    {selectedEmp || formData.employeeName ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                            <div style={{ background: "#fff", padding: "24px", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+                                <h3 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "20px", color: "#0f172a" }}>Employee Leave Summary</h3>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
+                                    <div style={{ padding: "12px", background: "#f0fdf4", borderRadius: "12px", border: "1px solid #bbf7d0", textAlign: "center" }}>
+                                        <div style={{ fontSize: "10px", color: "#166534", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Entitlement</div>
+                                        <div style={{ fontSize: "16px", fontWeight: "800", color: "#14532d" }}>{leaveStats.entitlement} Days</div>
                                     </div>
-                                </div>
-                                <div style={{ padding: "12px", background: "#fff7ed", borderRadius: "12px", border: "1px solid #fed7aa", textAlign: "center" }}>
-                                    <div style={{ fontSize: "10px", color: "#9a3412", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Expired</div>
-                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#7c2d12" }}>{leaveStats.expiredDays} Days</div>
-                                </div>
-                                <div style={{ padding: "12px", background: "#eff6ff", borderRadius: "12px", border: "1px solid #bfdbfe", textAlign: "center" }}>
-                                    <div style={{ fontSize: "10px", color: "#1e40af", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Available</div>
-                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#1e3a8a" }}>{leaveStats.balance} Days</div>
-                                </div>
-                                <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
-                                    <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
-                                    <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
-                                        {experienceLabel}
+                                    <div style={{ padding: "12px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecaca", textAlign: "center" }}>
+                                        <div style={{ fontSize: "10px", color: "#991b1b", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Total Leave Taken</div>
+                                        <div style={{ fontSize: "16px", fontWeight: "800", color: "#7f1d1d" }}>{leaveStats.totalTaken} Days</div>
+                                        <div style={{ fontSize: "9px", color: "#9ca3af", marginTop: "4px" }}>
+                                            {leaveStats.rollingFiveYear
+                                                ? `${new Date(leaveStats.rollingWindowStart).toLocaleDateString("en-GB")} → ${new Date(leaveStats.rollingWindowEnd).toLocaleDateString("en-GB")}`
+                                                : selectedEmp?.doj
+                                                    ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
+                                                    : "From DOJ to today"}
+                                        </div>
+                                    </div>
+                                    <div style={{ padding: "12px", background: "#fff7ed", borderRadius: "12px", border: "1px solid #fed7aa", textAlign: "center" }}>
+                                        <div style={{ fontSize: "10px", color: "#9a3412", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Expired</div>
+                                        <div style={{ fontSize: "16px", fontWeight: "800", color: "#7c2d12" }}>{leaveStats.expiredDays} Days</div>
+                                    </div>
+                                    <div style={{ padding: "12px", background: "#eff6ff", borderRadius: "12px", border: "1px solid #bfdbfe", textAlign: "center" }}>
+                                        <div style={{ fontSize: "10px", color: "#1e40af", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Available</div>
+                                        <div style={{ fontSize: "16px", fontWeight: "800", color: "#1e3a8a" }}>{leaveStats.balance} Days</div>
+                                    </div>
+                                    <div style={{ padding: "12px", background: "#f3e8ff", borderRadius: "12px", border: "1px solid #d8b4fe", textAlign: "center" }}>
+                                        <div style={{ fontSize: "10px", color: "#6b21a8", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px" }}>Experience</div>
+                                        <div style={{ fontSize: "16px", fontWeight: "800", color: "#581c87" }}>
+                                            {experienceLabel}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                            <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
-                                <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History</h3>
-                            </div>
-                            <div style={{ overflowX: "auto" }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "400px" }}>
-                                    <thead>
-                                        <tr style={{ background: "#f8fafc" }}>
-                                            <th style={{ textAlign: "left", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>YEAR</th>
-                                            <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>TAKEN</th>
-                                            <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>STATUS</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {years.map(year => {
-                                            const total = getYearlyTotal(year);
-                                            const isSelected = selectedYearDetails?.year === year;
-                                            return (
-                                                <React.Fragment key={year}>
-                                                    <tr 
-                                                        style={{ 
-                                                            borderBottom: "1px solid #f1f5f9", 
-                                                            cursor: "pointer",
-                                                            background: isSelected ? "#f8fafc" : "transparent"
-                                                        }}
-                                                        onClick={() => handleYearClick(year)}
-                                                    >
-                                                        <td style={{ padding: "14px 24px", fontSize: "14px", fontWeight: "600", color: "#334155" }}>{year}</td>
-                                                        <td style={{ padding: "14px 24px", fontSize: "14px", textAlign: "right", color: "#2563eb", fontWeight: "700", textDecoration: "underline" }}>
-                                                            {total} Days
-                                                        </td>
-                                                        <td style={{ padding: "14px 24px", textAlign: "right" }}>
-                                                            <span style={{
-                                                                padding: "4px 10px",
-                                                                borderRadius: "6px",
-                                                                fontSize: "11px",
-                                                                fontWeight: "700",
-                                                                background: total > 30 ? "#fef2f2" : "#f0fdf4",
-                                                                color: total > 30 ? "#ef4444" : "#16a34a"
-                                                            }}>
-                                                                {total > 30 ? "EXCEEDED" : "WITHIN LIMIT"}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                    {isSelected && (
-                                                        <tr>
-                                                            <td colSpan="3" style={{ padding: "0" }}>
-                                                                <div style={{ background: "#f8fafc", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
-                                                                    <div style={{ fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "12px", textTransform: "uppercase" }}>
-                                                                        Leave Details for {year}
-                                                                    </div>
-                                                                    {selectedYearDetails.leaves.length > 0 ? (
-                                                                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                                                            {selectedYearDetails.leaves.map((req, idx) => {
-                                                                                const isActiveRow = targetLeave?._id && req._id && String(targetLeave._id) === String(req._id);
-                                                                                return (
-                                                                                <div key={req._id || idx} style={{ 
-                                                                                    background: isActiveRow ? "#eff6ff" : "#fff", 
-                                                                                    padding: "12px", 
-                                                                                    borderRadius: "8px", 
-                                                                                    border: isActiveRow ? "1px solid #93c5fd" : "1px solid #e2e8f0",
-                                                                                    display: "flex",
-                                                                                    justifyContent: "space-between",
-                                                                                    alignItems: "center"
-                                                                                }}>
-                                                                                    <div>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => handleSelectLeaveFromHistory(req)}
-                                                                                            title="Click to edit this leave"
-                                                                                            style={{
-                                                                                                fontSize: "13px",
-                                                                                                fontWeight: "600",
-                                                                                                color: "#2563eb",
-                                                                                                background: "none",
-                                                                                                border: "none",
-                                                                                                padding: 0,
-                                                                                                cursor: "pointer",
-                                                                                                textDecoration: "underline",
-                                                                                                textAlign: "left",
-                                                                                            }}
-                                                                                        >
-                                                                                            {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
-                                                                                        </button>
-                                                                                        <div style={{ fontSize: "11px", color: "#64748b" }}>
-                                                                                            {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate, req.leaveDays) || 0} Days
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div style={{ textAlign: "right" }}>
-                                                                                        <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b" }}>TICKET</div>
-                                                                                        <div style={{ 
-                                                                                            fontSize: "11px", 
-                                                                                            fontWeight: "700", 
-                                                                                            color: req.requestAirfare ? "#15803d" : "#9a3412" 
-                                                                                        }}>
-                                                                                            {req.requestAirfare ? "COMPANY" : "PERSONAL"}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                                );
-                                                                            })}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div style={{ fontSize: "13px", color: "#94a3b8", fontStyle: "italic" }}>No approved leaves found for this year.</div>
-                                                                    )}
-                                                                </div>
+                            <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                                <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                                    <h3 style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>Leave History</h3>
+                                </div>
+                                <div style={{ overflowX: "auto" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "400px" }}>
+                                        <thead>
+                                            <tr style={{ background: "#f8fafc" }}>
+                                                <th style={{ textAlign: "left", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>YEAR</th>
+                                                <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>TAKEN</th>
+                                                <th style={{ textAlign: "right", padding: "12px 24px", fontSize: "12px", color: "#64748b" }}>STATUS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {years.map(year => {
+                                                const total = getYearlyTotal(year);
+                                                const isSelected = selectedYearDetails?.year === year;
+                                                return (
+                                                    <React.Fragment key={year}>
+                                                        <tr
+                                                            style={{
+                                                                borderBottom: "1px solid #f1f5f9",
+                                                                cursor: "pointer",
+                                                                background: isSelected ? "#f8fafc" : "transparent"
+                                                            }}
+                                                            onClick={() => handleYearClick(year)}
+                                                        >
+                                                            <td style={{ padding: "14px 24px", fontSize: "14px", fontWeight: "600", color: "#334155" }}>{year}</td>
+                                                            <td style={{ padding: "14px 24px", fontSize: "14px", textAlign: "right", color: "#2563eb", fontWeight: "700", textDecoration: "underline" }}>
+                                                                {total} Days
+                                                            </td>
+                                                            <td style={{ padding: "14px 24px", textAlign: "right" }}>
+                                                                <span style={{
+                                                                    padding: "4px 10px",
+                                                                    borderRadius: "6px",
+                                                                    fontSize: "11px",
+                                                                    fontWeight: "700",
+                                                                    background: total > 30 ? "#fef2f2" : "#f0fdf4",
+                                                                    color: total > 30 ? "#ef4444" : "#16a34a"
+                                                                }}>
+                                                                    {total > 30 ? "EXCEEDED" : "WITHIN LIMIT"}
+                                                                </span>
                                                             </td>
                                                         </tr>
-                                                    )}
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                                        {isSelected && (
+                                                            <tr>
+                                                                <td colSpan="3" style={{ padding: "0" }}>
+                                                                    <div style={{ background: "#f8fafc", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
+                                                                        <div style={{ fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "12px", textTransform: "uppercase" }}>
+                                                                            Leave Details for {year}
+                                                                        </div>
+                                                                        {selectedYearDetails.leaves.length > 0 ? (
+                                                                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                                                                {selectedYearDetails.leaves.map((req, idx) => {
+                                                                                    const isActiveRow = targetLeave?._id && req._id && String(targetLeave._id) === String(req._id);
+                                                                                    return (
+                                                                                        <div key={req._id || idx} style={{
+                                                                                            background: isActiveRow ? "#eff6ff" : "#fff",
+                                                                                            padding: "12px",
+                                                                                            borderRadius: "8px",
+                                                                                            border: isActiveRow ? "1px solid #93c5fd" : "1px solid #e2e8f0",
+                                                                                            display: "flex",
+                                                                                            justifyContent: "space-between",
+                                                                                            alignItems: "center"
+                                                                                        }}>
+                                                                                            <div>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => handleSelectLeaveFromHistory(req)}
+                                                                                                    title="Click to edit this leave"
+                                                                                                    style={{
+                                                                                                        fontSize: "13px",
+                                                                                                        fontWeight: "600",
+                                                                                                        color: "#2563eb",
+                                                                                                        background: "none",
+                                                                                                        border: "none",
+                                                                                                        padding: 0,
+                                                                                                        cursor: "pointer",
+                                                                                                        textDecoration: "underline",
+                                                                                                        textAlign: "left",
+                                                                                                    }}
+                                                                                                >
+                                                                                                    {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
+                                                                                                </button>
+                                                                                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                                                                                    {req.leaveType} • {calculateLeaveDays(req.startDate, req.endDate, req.leaveDays) || 0} Days
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div style={{ textAlign: "right" }}>
+                                                                                                <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b" }}>TICKET</div>
+                                                                                                <div style={{
+                                                                                                    fontSize: "11px",
+                                                                                                    fontWeight: "700",
+                                                                                                    color: req.requestAirfare ? "#15803d" : "#9a3412"
+                                                                                                }}>
+                                                                                                    {req.requestAirfare ? "COMPANY" : "PERSONAL"}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div style={{ fontSize: "13px", color: "#94a3b8", fontStyle: "italic" }}>No approved leaves found for this year.</div>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ) : (
-                    <div style={{ padding: "40px", background: "#fff", borderRadius: "16px", border: "1px dashed #cbd5e1", textAlign: "center", color: "#94a3b8" }}>
-                        Select an employee to view their leave history and balance summary.
-                    </div>
-                )}
+                    ) : (
+                        <div style={{ padding: "40px", background: "#fff", borderRadius: "16px", border: "1px dashed #cbd5e1", textAlign: "center", color: "#94a3b8" }}>
+                            Select an employee to view their leave history and balance summary.
+                        </div>
+                    )}
                 </div>
             </div>
             {isEditable && (

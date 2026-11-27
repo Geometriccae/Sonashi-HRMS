@@ -240,6 +240,8 @@ class EmployeeService {
     search = '',
     filters = {},
     all = false,
+    sortField,
+    sortOrder,
   } = {}) {
     try {
       const params = new URLSearchParams({
@@ -249,6 +251,8 @@ class EmployeeService {
       });
       if (all) params.set('all', '1');
       if (search) params.set('search', search);
+      if (sortField) params.set('sortField', String(sortField));
+      if (sortOrder) params.set('sortOrder', String(sortOrder));
       const f = filters || {};
       ['department', 'role', 'office', 'country', 'dojFrom', 'dojTo', 'expMin', 'expMax', 'vacationMonth', 'vacationYear']
         .forEach((key) => {

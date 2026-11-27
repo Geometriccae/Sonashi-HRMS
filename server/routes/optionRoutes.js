@@ -96,12 +96,56 @@ router.post('/:type', authMiddleware, async (req, res) => {
   }
 });
 
+// Update an option
+router.put('/:type/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id, type } = req.params;
+    const { label } = req.body;
+    if (!label || !label.trim()) {
+      return res.status(400).json({ message: 'Label is required' });
+    }
+    const value = label.trim();
+    console.log(`[API] Updating option - ID: ${id}, Type: ${type}, New Label: ${value}`);
+    const mongoose = require('mongoose');
+    let updated = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      updated = await Option.findOneAndUpdate(
+        { _id: id, type },
+        { label: value, value },
+        { new: true }
+      );
+    }
+    if (!updated) {
+      updated = await Option.findOneAndUpdate(
+        { type, $or: [{ value: id }, { label: id }] },
+        { label: value, value },
+        { new: true }
+      );
+    }
+    if (!updated) {
+      return res.status(404).json({ message: 'Option not found' });
+    }
+    res.json(updated);
+  } catch (error) {
+    console.error(`[API] Error updating option:`, error);
+    res.status(500).json({ message: 'Error updating option', error: error.message });
+  }
+});
+
 // Delete an option
 router.delete('/:type/:id', authMiddleware, async (req, res) => {
   try {
     const { id, type } = req.params;
     console.log(`[API] Deleting option - ID: ${id}, Type: ${type}`);
-    await Option.findByIdAndDelete(id);
+    const mongoose = require('mongoose');
+    let deleted = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      deleted = await Option.findByIdAndDelete(id);
+    }
+    if (!deleted) {
+      deleted = await Option.findOneAndDelete({ type, $or: [{ value: id }, { label: id }] });
+    }
+    await Option.deleteMany({ type, value: id, isExcludedDefault: true });
     res.json({ message: 'Option deleted successfully' });
   } catch (error) {
     console.error(`[API] Error deleting option:`, error);

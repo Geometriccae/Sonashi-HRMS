@@ -9,6 +9,24 @@ const loadXlsx = async () => {
   return XLSX;
 };
 
+export const getDaysInMonth = (month, year) => {
+  if (!month || !year) return 30;
+  const monthNames = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
+  ];
+  let mIndex = monthNames.indexOf(String(month).trim().toLowerCase());
+  if (mIndex === -1) {
+    const num = parseInt(month, 10);
+    if (!isNaN(num) && num >= 1 && num <= 12) mIndex = num - 1;
+  }
+  const yNum = parseInt(year, 10) || new Date().getFullYear();
+  if (mIndex !== -1) {
+    return new Date(yNum, mIndex + 1, 0).getDate();
+  }
+  return 30;
+};
+
 const num = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -46,6 +64,7 @@ export const salarySlipToExcelRow = (slip) => {
     Designation: slip.designation || "",
     Month: slip.month || "",
     Year: String(slip.year || ""),
+    "Total Working Days": slip.totalWorkingDays || getDaysInMonth(slip.month, slip.year),
     "Payable Days": slip.payableDays ?? "",
     "Present Days": slip.presentDays ?? "",
     "Basic Pay (AED)": basicPay,

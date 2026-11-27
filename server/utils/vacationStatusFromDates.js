@@ -471,6 +471,9 @@ function applyEffectiveVacationStatuses(employees, leaveRequests, todayValue) {
   const today = toCalendarDate(todayValue || new Date());
   return list.map((employee) => {
     const next = resolveEmployeeVacationStatus(employee, leaves, today);
+    if (next === 'Vacation Pending') {
+      return { ...employee, vacationStatus: next, lastWorkingDay: null };
+    }
     if (next === employee.vacationStatus) return employee;
     return { ...employee, vacationStatus: next };
   });

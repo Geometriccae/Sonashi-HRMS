@@ -96,12 +96,20 @@ const vacationLabel = formatVacationStatus;
 
 const formatVacationDates = (record, vs) => {
   const fmt = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : null);
-  if (vs === "On Vacation" || vs === "Vacation Pending") {
+  if (vs === "On Vacation") {
     const lines = [];
     const lwd = fmt(record.lastWorkingDay);
     const travel = fmt(record.travellingDate);
     const leaveEnd = fmt(record.leaveEndDate || record.endDate);
     if (lwd) lines.push(`LWD: ${lwd}`);
+    if (travel) lines.push(`Travel: ${travel}`);
+    if (leaveEnd) lines.push(`Leave End: ${leaveEnd}`);
+    return lines;
+  }
+  if (vs === "Vacation Pending") {
+    const lines = [];
+    const travel = fmt(record.travellingDate);
+    const leaveEnd = fmt(record.leaveEndDate || record.endDate);
     if (travel) lines.push(`Travel: ${travel}`);
     if (leaveEnd) lines.push(`Leave End: ${leaveEnd}`);
     return lines;

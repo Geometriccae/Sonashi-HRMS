@@ -301,7 +301,8 @@ const EMPLOYEE_LIST_FIELDS = [
   'noticePeriod', 'provisionPeriod', 'noticePeriodStartDate', 'noticePeriodEndDate',
   'provisionPeriodStartDate', 'provisionPeriodEndDate',
   'reportingManager', 'assignedProjects',
-  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'airFare', 'createdAt',
+  // workPermitNo = WPS Person Code / Person ID for SIF EDR (never use emiratesId as fallback)
+  'nationality', 'office', 'companyCode', 'passportNo', 'emiratesId', 'workPermitNo', 'labourCardNumber', 'airFare', 'createdAt',
 ].join(' ');
 
 const APPROVED_VACATION_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
@@ -478,7 +479,7 @@ function applyEffectiveVacationStatuses(employees, leaveRequests) {
     const upcomingLeave = employeeLeaves.find(
       (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'Vacation Pending'
     );
-    if (upcomingLeave) return { ...employee, vacationStatus: 'Vacation Pending' };
+    if (upcomingLeave) return { ...employee, vacationStatus: 'Vacation Pending', lastWorkingDay: null };
 
     const completedLeave = [...employeeLeaves].reverse().find(
       (leave) => getEffectiveVacationStatusFromLeave(leave, employee) === 'Vacation Approved'
@@ -1068,6 +1069,9 @@ router.post('/:id/vacation-status', authMiddleware, async (req, res) => {
       hasReturnDate: patch.returnDate !== undefined,
       returnDate: patch.returnDate,
     }));
+    if (vacationStatus === 'Vacation Pending') {
+      patch.lastWorkingDay = null;
+    }
     if (vacationStatus === 'Vacation Approved' || vacationStatus === 'Onsite') patch.attendance = 'Onsite';
 
     Object.assign(employee, patch);

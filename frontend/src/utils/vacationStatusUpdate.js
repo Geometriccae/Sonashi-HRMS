@@ -18,12 +18,10 @@ const DATE_CONFIGS = {
     tertiaryFieldKey: "leaveEndDate",
   },
   [VACATION_STATUS.YET_TO_GO]: {
-    label: "Last Working Day",
-    fieldKey: "lastWorkingDay",
-    secondaryLabel: "Travelling Date",
-    secondaryFieldKey: "travellingDate",
-    tertiaryLabel: "Leave End Date",
-    tertiaryFieldKey: "leaveEndDate",
+    label: "Travelling Date",
+    fieldKey: "travellingDate",
+    secondaryLabel: "Leave End Date",
+    secondaryFieldKey: "leaveEndDate",
   },
   [VACATION_STATUS.RETURNED_BACK]: {
     label: "Return / Entry Date",
@@ -132,6 +130,9 @@ export const datesFromPrompt = (prompt) => {
   }
   if (tertiaryFieldKey && tertiaryDateValue) {
     dates[tertiaryFieldKey] = iso(tertiaryDateValue);
+  }
+  if (normalizeVacationStatus(newStatus) === VACATION_STATUS.YET_TO_GO) {
+    dates.lastWorkingDay = null;
   }
   return { dates };
 };

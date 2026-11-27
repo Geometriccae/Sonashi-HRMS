@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const SalaryAdvance = require('../models/SalaryAdvance');
 const Employee = require('../models/Employee');
-const SifSetting = require('../models/SifSetting');
+const CompanySifSettings = require('../models/CompanySifSettings');
 const authMiddleware = require('../middleware/authMiddleware');
 const {
   generateSifContent,
@@ -17,6 +17,8 @@ const {
   cleanAgentCode,
   normalizeEmpId,
   normalizeEmiratesId,
+  EMPLOYER_BANK_ROUTING_CODE,
+  resolveEmployerBankRoutingCode,
 } = require('../utils/sifUtils');
 const {
   loadCompanyEmployerMap,
@@ -47,29 +49,28 @@ const generateBatchId = (type = 'advance') => {
   return `${prefix}-${dateStr}-${rand}`;
 };
 
-async function resolveRoutingCodeForEmployer(employerId, fallbackEmployee) {
+async function resolveRoutingCodeForEmployer(employerId) {
   try {
-    const settings = await SifSetting.findOne().lean();
+    const settings = await CompanySifSettings.findOne().lean();
     const cleanEmpId = digitsOnly(employerId);
     if (settings) {
       const match = (settings.employerRoutingCodes || []).find(
         (entry) => digitsOnly(entry?.employerId) === cleanEmpId
       );
-      if (match && match.agentRoutingCode && cleanAgentCode(match.agentRoutingCode).length === 9) {
-        return cleanAgentCode(match.agentRoutingCode);
+      const matchedCode = cleanAgentCode(match?.agentRoutingCode);
+      // Prefer configured employer routing when valid and not the legacy incorrect value
+      if (matchedCode.length === 9 && matchedCode !== '740810000') {
+        return matchedCode;
       }
-      if (settings.defaultAgentRoutingCode && cleanAgentCode(settings.defaultAgentRoutingCode).length === 9) {
-        return cleanAgentCode(settings.defaultAgentRoutingCode);
+      const defaultCode = cleanAgentCode(settings.defaultAgentRoutingCode);
+      if (defaultCode.length === 9 && defaultCode !== '740810000') {
+        return defaultCode;
       }
     }
-    if (fallbackEmployee) {
-      const empCode = cleanAgentCode(getAgentCode(fallbackEmployee));
-      if (empCode && empCode.length === 9) return empCode;
-    }
-    // Sonashi default agent routing code (from sifRoutes.js)
-    return '740810000';
+    // Company employer bank routing for SCR Column C (never employee agent codes)
+    return EMPLOYER_BANK_ROUTING_CODE;
   } catch {
-    return '740810000';
+    return EMPLOYER_BANK_ROUTING_CODE;
   }
 }
 
@@ -383,13 +384,33 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
     });
 
     // Default employer fallback from SIF settings
-    const defaultSettings = await SifSetting.findOne().lean();
+    const defaultSettings = await CompanySifSettings.findOne().lean();
     const defaultEmployerId = digitsOnly(defaultSettings?.employerId) || '0000000172509';
 
-    // Group items by resolved 13-digit Employer ID
-    const groupedByEmployer = new Map();
-
+    // Collect available employer IDs from matched employees
+    const availableEmployers = [];
     records.forEach((rec) => {
+      const emp =
+        empById.get(String(rec.employee)) ||
+        (rec.employeeId ? empByCode.get(String(rec.employeeId).trim().toLowerCase()) : null);
+      const mappedId = digitsOnly(emp?.sifEmployerId || emp?.companyCode || '');
+      if (mappedId.length === 13 && !availableEmployers.includes(mappedId)) {
+        availableEmployers.push(mappedId);
+      }
+    });
+
+    // Single unified Employer ID for this batch: use requested, primary matched, or default
+    const targetEmployerId = requestedEmployerId
+      ? digitsOnly(requestedEmployerId)
+      : availableEmployers[0] || defaultEmployerId;
+
+    // SCR Column C = employer bank routing; never substitute employee agent codes
+    const defaultAgentRoutingCode = resolveEmployerBankRoutingCode(
+      await resolveRoutingCodeForEmployer(targetEmployerId)
+    );
+
+    // Prepare ALL employees in this batch for one single combined SIF file
+    const employerEmployees = records.map((rec) => {
       let emp =
         empById.get(String(rec.employee)) ||
         (rec.employeeId ? empByCode.get(String(rec.employeeId).trim().toLowerCase()) : null);
@@ -399,80 +420,23 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
           _id: rec.employee || rec._id,
           employeeId: rec.employeeId || 'EMP',
           employeeName: rec.employeeName || 'Employee',
-          sifEmployerId: defaultEmployerId,
-          companyCode: defaultEmployerId,
+          sifEmployerId: targetEmployerId,
+          companyCode: targetEmployerId,
           salaryDetails: {
             basicSalary: rec.originalAmount,
           },
         };
       }
 
-      let mappedEmployerId = digitsOnly(emp.sifEmployerId || emp.companyCode || '');
-      if (mappedEmployerId.length !== 13) {
-        mappedEmployerId = defaultEmployerId;
-      }
-
-      if (!groupedByEmployer.has(mappedEmployerId)) {
-        groupedByEmployer.set(mappedEmployerId, []);
-      }
-      groupedByEmployer.get(mappedEmployerId).push({ record: rec, employee: emp });
-    });
-
-    const availableEmployers = Array.from(groupedByEmployer.keys()).filter((id) => id && id.length === 13);
-    if (!availableEmployers.length) {
-      return res.status(400).json({
-        message: 'No valid 13-digit Employer IDs mapped for the employees in this batch.',
-      });
-    }
-
-    let targetEmployerId = requestedEmployerId ? digitsOnly(requestedEmployerId) : '';
-    if (!targetEmployerId || !groupedByEmployer.has(targetEmployerId)) {
-      if (availableEmployers.length === 1) {
-        targetEmployerId = availableEmployers[0];
-      } else {
-        const employerSummaries = availableEmployers.map((empId) => {
-          const list = groupedByEmployer.get(empId) || [];
-          const total = list.reduce((sum, item) => sum + (item.record.originalAmount || 0), 0);
-          return {
-            employerId: empId,
-            count: list.length,
-            totalAmount: roundAed(total),
-          };
-        });
-        return res.status(200).json({
-          multipleEmployers: true,
-          batchId: batchId || '',
-          type: targetType,
-          employers: employerSummaries,
-          message: 'This batch spans multiple companies. Please choose an Employer ID to export.',
-        });
-      }
-    }
-
-    const itemsForEmployer = groupedByEmployer.get(targetEmployerId);
-    if (!itemsForEmployer || !itemsForEmployer.length) {
-      return res.status(400).json({
-        message: `No transactions found for Employer ID ${targetEmployerId} in this batch.`,
-      });
-    }
-
-    const defaultAgentRoutingCode = await resolveRoutingCodeForEmployer(
-      targetEmployerId,
-      itemsForEmployer[0]?.employee
-    );
-
-    // Prepare employees with their exact off-cycle payment amount and guaranteed routing code
-    const employerEmployees = itemsForEmployer.map(({ record, employee }) => {
-      const empAgent = cleanAgentCode(getAgentCode(employee));
+      // Preserve the employee's own EDR agent code; do not replace with employer bank routing
       return {
-        ...employee,
-        agentCode: empAgent && empAgent.length === 9 ? empAgent : defaultAgentRoutingCode,
-        customTransferAmount: record.originalAmount,
+        ...emp,
+        customTransferAmount: rec.originalAmount,
       };
     });
 
-    const sampleDate = itemsForEmployer[0].record.advanceDate
-      ? new Date(itemsForEmployer[0].record.advanceDate)
+    const sampleDate = records[0]?.advanceDate
+      ? new Date(records[0].advanceDate)
       : new Date();
     const year = sampleDate.getFullYear();
     const month = sampleDate.getMonth() + 1;
@@ -498,7 +462,7 @@ router.post('/export-sif', authMiddleware, requireAdmin, async (req, res) => {
     }
 
     // Mark transactions as sifExported = true, sifFileName, and status = 'sif_generated'
-    const processedIds = itemsForEmployer.map((item) => item.record._id);
+    const processedIds = records.map((item) => item._id);
     await SalaryAdvance.updateMany(
       { _id: { $in: processedIds } },
       {

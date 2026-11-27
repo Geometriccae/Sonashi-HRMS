@@ -22,6 +22,8 @@ import { buildLeaveHistoryYears, leaveBelongsToHistoryYear } from "../../utils/y
 import { DEPARTMENT_OPTIONS_DEFAULT } from "../../constants/employeeDropdownOptions";
 import OptionService from "../../services/OptionService";
 import { toSearchableEmployeeOption, filterReactSelectEmployeeOption, isNonWorkingEmployeeStatus, employeesForNativeSelect } from "../../utils/employeeStatusDisplay";
+import ApprovalManagerSelect from "./ApprovalManagerSelect";
+import ReportingManagerSelect from "./ReportingManagerSelect";
 import "./LeaveForm.css";
 
 function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, initialEmployeeId = null, onEditLeave }) {
@@ -38,6 +40,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         company: "Sonashi",
         department: "",
         reportingManager: "",
+        approvalManagers: [],
+        approvalManager: "",
         leaveType: "Personal Leave",
         startDate: "",
         endDate: "",
@@ -48,6 +52,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     const [datePickerField, setDatePickerField] = useState(null); // 'start' | 'end'
     const { setBaselines, getResetValue } = useDateBaselines({ start: "", end: "" });
     const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState([]);
+    const [dynamicReportingManagerOptions, setDynamicReportingManagerOptions] = useState([]);
+    const [dynamicApprovalManagerOptions, setDynamicApprovalManagerOptions] = useState([]);
     const [selectedYearDetails, setSelectedYearDetails] = useState(null); // { year, leaves }
     const [leaveEntitlementType, setLeaveEntitlementType] = useState('New Leave'); // 'New Leave' | 'Past Leave'
 
@@ -69,10 +75,12 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         if (isOpen) {
             fetchEmployees();
             fetchDepartmentOptions();
-            
+            fetchReportingManagerOptions();
+            fetchApprovalManagerOptions();
+
             const r = String(localStorage.getItem("role") || "").toLowerCase();
             const isM = r === "admin" || r === "hr";
-            
+
             const targetEmpId = initialEmployeeId || (isM ? "" : (localStorage.getItem("userId") || ""));
             const targetEmp = targetEmpId ? employees.find(e => String(e._id) === String(targetEmpId)) : null;
 
@@ -160,16 +168,173 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         }
     };
 
+    const fetchReportingManagerOptions = async () => {
+        try {
+            const [dbOptions, excluded] = await Promise.all([
+                OptionService.getOptions('reportingManager'),
+                OptionService.getExcludedDefaults('reportingManager'),
+            ]);
+            const excludedSet = new Set((excluded || []).map(x => String(x).toLowerCase().trim()));
+            const list = Array.isArray(dbOptions) ? dbOptions : [];
+            const filtered = list.filter(o => !excludedSet.has(String(o.label || o.value).toLowerCase().trim()));
+            const mapped = filtered.map((opt) => ({
+                value: opt.value || opt.label,
+                label: opt.label || opt.value,
+                _id: opt._id,
+            }));
+            setDynamicReportingManagerOptions(mapped);
+        } catch (error) {
+            console.error("Error fetching reporting manager options:", error);
+        }
+    };
+
+    const handleAddReportingManager = async (label) => {
+        try {
+            await OptionService.addOption('reportingManager', label);
+            await fetchReportingManagerOptions();
+            handleInputChange("reportingManager", label);
+            showToast(`Reporting Manager "${label}" added`, "success");
+        } catch (err) {
+            console.error("Error adding reporting manager:", err);
+            showToast(err.response?.data?.message || "Failed to add reporting manager", "error");
+        }
+    };
+
+    const handleEditReportingManager = async (option, newLabel) => {
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('reportingManager');
+                const match = (dbOptions || []).find((o) => o.label === (option.label || option.value) || o.value === (option.value || option.label));
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.updateOption('reportingManager', optionId, newLabel);
+            } else {
+                await OptionService.addOption('reportingManager', newLabel);
+            }
+            if (formData.reportingManager === (option.value || option.label)) {
+                handleInputChange("reportingManager", newLabel);
+            }
+            await fetchReportingManagerOptions();
+            showToast(`Reporting Manager updated to "${newLabel}"`, "success");
+        } catch (err) {
+            console.error("Error updating reporting manager:", err);
+            showToast(err.response?.data?.message || "Failed to update reporting manager", "error");
+        }
+    };
+
+    const handleDeleteReportingManager = async (option) => {
+        const optLabel = option?.label || option?.value;
+        if (!optLabel || optLabel === "-Select-") return;
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('reportingManager');
+                const match = (dbOptions || []).find((o) => o.label === optLabel || o.value === optLabel);
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.deleteOption('reportingManager', optionId);
+            } else {
+                await OptionService.excludeDefaultOption('reportingManager', optLabel);
+            }
+            if (formData.reportingManager === (option.value || option.label)) {
+                handleInputChange("reportingManager", "");
+            }
+            await fetchReportingManagerOptions();
+            showToast(`Reporting Manager "${optLabel}" deleted`, "success");
+        } catch (err) {
+            console.error("Error deleting reporting manager:", err);
+            showToast("Failed to delete reporting manager", "error");
+        }
+    };
+
+    const fetchApprovalManagerOptions = async () => {
+        try {
+            const [dbOptions, excluded] = await Promise.all([
+                OptionService.getOptions('approvalManager'),
+                OptionService.getExcludedDefaults('approvalManager'),
+            ]);
+            const excludedSet = new Set((excluded || []).map(x => String(x).toLowerCase().trim()));
+            const list = Array.isArray(dbOptions) ? dbOptions : [];
+            const filtered = list.filter(o => !excludedSet.has(String(o.label || o.value).toLowerCase().trim()));
+            const mapped = filtered.map((opt) => ({
+                value: opt.value || opt.label,
+                label: opt.label || opt.value,
+                _id: opt._id,
+            }));
+            setDynamicApprovalManagerOptions(mapped);
+        } catch (error) {
+            console.error("Error fetching approval manager options:", error);
+        }
+    };
+
+    const handleAddApprovalManager = async (label) => {
+        try {
+            await OptionService.addOption('approvalManager', label);
+            await fetchApprovalManagerOptions();
+            showToast(`Approval Manager "${label}" added`, "success");
+        } catch (err) {
+            console.error("Error adding approval manager:", err);
+            showToast(err.response?.data?.message || "Failed to add approval manager", "error");
+        }
+    };
+
+    const handleEditApprovalManager = async (option, newLabel) => {
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('approvalManager');
+                const match = (dbOptions || []).find((o) => o.label === (option.label || option.value || option) || o.value === (option.value || option.label || option));
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.updateOption('approvalManager', optionId, newLabel);
+            } else {
+                await OptionService.addOption('approvalManager', newLabel);
+            }
+            await fetchApprovalManagerOptions();
+            showToast(`Approval Manager updated to "${newLabel}"`, "success");
+        } catch (err) {
+            console.error("Error updating approval manager:", err);
+            showToast(err.response?.data?.message || "Failed to update approval manager", "error");
+        }
+    };
+
+    const handleDeleteApprovalManager = async (option) => {
+        const optLabel = typeof option === "string" ? option : (option?.label || option?.value);
+        if (!optLabel || optLabel === "-Select-") return;
+        try {
+            let optionId = option?._id;
+            if (!optionId) {
+                const dbOptions = await OptionService.getOptions('approvalManager');
+                const match = (dbOptions || []).find((o) => o.label === optLabel || o.value === optLabel);
+                optionId = match?._id;
+            }
+            if (optionId) {
+                await OptionService.deleteOption('approvalManager', optionId);
+            } else {
+                await OptionService.excludeDefaultOption('approvalManager', optLabel);
+            }
+            await fetchApprovalManagerOptions();
+            showToast(`Approval Manager "${optLabel}" deleted`, "success");
+        } catch (err) {
+            console.error("Error deleting approval manager:", err);
+            showToast("Failed to delete approval manager", "error");
+        }
+    };
+
     // Update form data for regular users once employees are loaded
     useEffect(() => {
         if (isOpen && employees.length > 0) {
             const r = String(userRole || "").toLowerCase();
             const isM = r === "admin" || r === "hr";
-            
+
             if (initialEmployeeId || !isM) {
                 const targetId = initialEmployeeId || localStorage.getItem("userId") || "";
                 const me = employees.find(e => String(e._id) === String(targetId) || String(e.employeeId) === String(targetId));
-                
+
                 if (me) {
                     setFormData(prev => ({
                         ...prev,
@@ -206,7 +371,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
     };
 
     const handleEmployeeChange = (selectedOption) => {
-        if (error) setError(""); 
+        if (error) setError("");
         if (!selectedOption) {
             setFormData(prev => ({
                 ...prev,
@@ -287,6 +452,11 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             return;
         }
 
+        if (!formData.approvalManagers || formData.approvalManagers.length === 0) {
+            setError("Please select at least one Approval Manager");
+            return;
+        }
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const start = new Date(formData.startDate);
@@ -315,6 +485,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         try {
             const submissionData = {
                 ...formData,
+                approvalManagers: formData.approvalManagers,
+                approvalManager: formData.approvalManagers[0] || "",
                 requestAirfare: !!formData.requestAirfare, // From checkbox
                 isPastLeave: leaveEntitlementType === 'Past Leave'
             };
@@ -322,7 +494,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             showToast("Leave request submitted successfully.", "success");
             onSubmit(result);
             onClose();
-            
+
             const me = employees.find(e => String(e._id) === String(formData.employeeId) || String(e.employeeId) === String(formData.employeeId));
             setFormData({
                 employeeId: isAdmin || isHR ? "" : (me ? me._id : loggedInUser.id),
@@ -330,6 +502,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                 company: "Sonashi",
                 department: isAdmin || isHR ? "" : (me ? me.department : ""),
                 reportingManager: isAdmin || isHR ? "" : (me ? me.reportingManager : ""),
+                approvalManagers: [],
+                approvalManager: "",
                 leaveType: "Personal Leave",
                 startDate: "",
                 endDate: "",
@@ -371,8 +545,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         const takenStart = leaveStats.takenRangeStart
             ? new Date(leaveStats.takenRangeStart)
             : leaveStats.calculationStartDate
-              ? new Date(leaveStats.calculationStartDate)
-              : null;
+                ? new Date(leaveStats.calculationStartDate)
+                : null;
         if (takenStart && yearEnd < takenStart) {
             return leaveStats.historicalYearTotals?.[year] ?? 0;
         }
@@ -395,20 +569,20 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
         const s = new Date(formData.startDate);
         const e = new Date(formData.endDate);
         if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
-        
+
         s.setHours(0, 0, 0, 0);
         e.setHours(0, 0, 0, 0);
-        
+
         if (s > e) {
             return { error: "Start date must be before or equal to End date" };
         }
-        
+
         const calendarDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
-        
+
         let workingDays = 0;
         const tempDate = new Date(s);
         const holidaysSet = new Set(OFFICIAL_HOLIDAYS_2026 || []);
-        
+
         while (tempDate <= e) {
             const day = tempDate.getDay();
             const y = tempDate.getFullYear();
@@ -420,7 +594,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
             }
             tempDate.setDate(tempDate.getDate() + 1);
         }
-        
+
         return { calendarDays, workingDays };
     };
 
@@ -437,17 +611,10 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
     const employeeOptions = employeesForNativeSelect(employees, formData.employeeId).map((emp) => toSearchableEmployeeOption(emp));
 
-    const reportingManagerOptions = employees.map(emp => ({
-        value: (emp.employeeName || emp.name || "").trim(),
-        label: (emp.employeeName || emp.name || "Unknown").trim(),
-        employeeId: emp.employeeId || "",
-        name: emp.employeeName || emp.name || "",
-        hideUnlessSearch: isNonWorkingEmployeeStatus(emp.employeeStatus),
-    })).filter(opt => opt.value !== "");
-
+    const reportingManagerOptions = [...dynamicReportingManagerOptions];
     const currentManager = (formData.reportingManager || "").trim();
     if (currentManager && !reportingManagerOptions.find(o => o.value === currentManager)) {
-        reportingManagerOptions.push({ value: currentManager, label: currentManager });
+        reportingManagerOptions.unshift({ value: currentManager, label: currentManager });
     }
 
     const daysCount = getSelectedDaysCount();
@@ -519,19 +686,24 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                             <div className="full-width">
                                 <div className="form-row">
                                     <Dropdown
-                                        label="Department *"
+                                        label="Department"
                                         options={departmentOptions}
                                         value={formData.department}
                                         onChange={(e) => handleInputChange("department", e.target.value)}
-                                        onAdd={isManager ? handleAddDepartment : null}
-                                        onDelete={isManager ? handleDeleteDepartment : null}
+                                        onAdd={handleAddDepartment}
+                                        onDelete={handleDeleteDepartment}
                                         required
                                     />
-                                    <Dropdown
-                                        label="Reporting Manager *"
+                                    <ReportingManagerSelect
+                                        label="Reporting Manager"
+                                        placeholder="Select reporting manager"
                                         options={reportingManagerOptions}
                                         value={formData.reportingManager}
-                                        onChange={(e) => handleInputChange("reportingManager", e.target.value)}
+                                        onChange={(val) => handleInputChange("reportingManager", val)}
+                                        onAdd={handleAddReportingManager}
+                                        onEdit={handleEditReportingManager}
+                                        onDelete={handleDeleteReportingManager}
+                                        isManager={true}
                                         required
                                     />
                                 </div>
@@ -542,22 +714,22 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                 <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
                                     <div className="input-field">
                                         <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Joining Date</label>
-                                        <input 
-                                            type="text" 
-                                            className="input-field-input" 
-                                            disabled 
-                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString('en-GB') : 'N/A'} 
-                                            style={{ background: "#f8fafc" }} 
+                                        <input
+                                            type="text"
+                                            className="input-field-input"
+                                            disabled
+                                            value={selectedEmp?.doj ? new Date(selectedEmp.doj).toLocaleDateString('en-GB') : 'N/A'}
+                                            style={{ background: "#f8fafc" }}
                                         />
                                     </div>
                                     <div className="input-field">
                                         <label className="input-label" style={{ display: "block", marginBottom: "8px" }}>Total Experience</label>
-                                        <input 
-                                            type="text" 
-                                            className="input-field-input" 
-                                            disabled 
-                                            value={experienceLabel} 
-                                            style={{ background: "#f8fafc" }} 
+                                        <input
+                                            type="text"
+                                            className="input-field-input"
+                                            disabled
+                                            value={experienceLabel}
+                                            style={{ background: "#f8fafc" }}
                                         />
                                     </div>
                                     <div className="input-field">
@@ -569,12 +741,12 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                 onChange={(e) => handleInputChange("visaExpiryDate", e.target.value)}
                                             />
                                         ) : (
-                                            <input 
-                                                type="text" 
-                                                className="input-field-input" 
-                                                disabled 
-                                                value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'} 
-                                                style={{ background: "#f8fafc" }} 
+                                            <input
+                                                type="text"
+                                                className="input-field-input"
+                                                disabled
+                                                value={formData.visaExpiryDate ? new Date(formData.visaExpiryDate).toLocaleDateString('en-GB') : 'Not Set'}
+                                                style={{ background: "#f8fafc" }}
                                             />
                                         )}
                                     </div>
@@ -583,7 +755,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
 
                             <div className="full-width">
                                 <Dropdown
-                                    label="Leave Type *"
+                                    label="Leave Type"
                                     options={leaveTypeOptions}
                                     value={formData.leaveType}
                                     onChange={(e) => handleInputChange("leaveType", e.target.value)}
@@ -659,6 +831,20 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                             )}
 
                             <div className="full-width">
+                                <ApprovalManagerSelect
+                                    value={formData.approvalManagers}
+                                    onChange={(val) => handleInputChange("approvalManagers", val)}
+                                    options={dynamicApprovalManagerOptions}
+                                    onAdd={handleAddApprovalManager}
+                                    onEdit={handleEditApprovalManager}
+                                    onDelete={handleDeleteApprovalManager}
+                                    isManager={true}
+                                    disabled={false}
+                                    required
+                                />
+                            </div>
+
+                            <div className="full-width">
                                 <InputField label="Reason *" placeholder="Reason for leave" value={formData.reason} onChange={(e) => handleInputChange("reason", e.target.value)} />
                             </div>
 
@@ -671,7 +857,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                 </label>
                                 <div className="ticket-cards-wrapper">
                                     {/* Company Ticket Card */}
-                                    <div 
+                                    <div
                                         className={`ticket-card company-ticket ${formData.requestAirfare || (!isAdmin && leaveStats.airfareAvailable) ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
                                         onClick={() => isAdmin && handleInputChange("requestAirfare", true)}
                                     >
@@ -685,7 +871,7 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                     </div>
 
                                     {/* Personal Ticket Card */}
-                                    <div 
+                                    <div
                                         className={`ticket-card personal-ticket ${(!formData.requestAirfare && isAdmin) || (!isAdmin && !leaveStats.airfareAvailable) ? 'selected' : ''} ${!isAdmin ? 'readonly' : ''}`}
                                         onClick={() => isAdmin && handleInputChange("requestAirfare", false)}
                                     >
@@ -704,13 +890,13 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                         </div>
 
                         {error && (
-                            <div style={{ 
-                                margin: "16px 0", 
-                                padding: "12px 16px", 
-                                background: "#fef2f2", 
-                                border: "1px solid #fecaca", 
-                                borderRadius: "8px", 
-                                color: "#991b1b", 
+                            <div style={{
+                                margin: "16px 0",
+                                padding: "12px 16px",
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
+                                borderRadius: "8px",
+                                color: "#991b1b",
                                 fontSize: "13px",
                                 fontWeight: "600",
                                 display: "flex",
@@ -748,8 +934,8 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                 {leaveStats.rollingFiveYear
                                                     ? `${new Date(leaveStats.rollingWindowStart).toLocaleDateString("en-GB")} → ${new Date(leaveStats.rollingWindowEnd).toLocaleDateString("en-GB")}`
                                                     : selectedEmp?.doj
-                                                    ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
-                                                    : "From DOJ to today"}
+                                                        ? `${new Date(selectedEmp.doj).toLocaleDateString("en-GB")} → today`
+                                                        : "From DOJ to today"}
                                             </div>
                                         </div>
                                         <div style={{ padding: "12px", background: "#fff7ed", borderRadius: "12px", border: "1px solid #fed7aa", textAlign: "center" }}>
@@ -790,9 +976,9 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                     const isSelected = selectedYearDetails?.year === year;
                                                     return (
                                                         <React.Fragment key={year}>
-                                                            <tr 
-                                                                style={{ 
-                                                                    borderBottom: "1px solid #f1f5f9", 
+                                                            <tr
+                                                                style={{
+                                                                    borderBottom: "1px solid #f1f5f9",
                                                                     cursor: "pointer",
                                                                     background: isSelected ? "#f8fafc" : "transparent"
                                                                 }}
@@ -825,10 +1011,10 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                             {selectedYearDetails.leaves.length > 0 ? (
                                                                                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                                                                     {selectedYearDetails.leaves.map((req, idx) => (
-                                                                                        <div key={req._id || idx} style={{ 
-                                                                                            background: "#fff", 
-                                                                                            padding: "12px", 
-                                                                                            borderRadius: "8px", 
+                                                                                        <div key={req._id || idx} style={{
+                                                                                            background: "#fff",
+                                                                                            padding: "12px",
+                                                                                            borderRadius: "8px",
                                                                                             border: "1px solid #e2e8f0",
                                                                                             display: "flex",
                                                                                             justifyContent: "space-between",
@@ -865,10 +1051,10 @@ function AddLeaveRequestModal({ isOpen, onClose, onSubmit, allLeaveRequests, ini
                                                                                             </div>
                                                                                             <div style={{ textAlign: "right" }}>
                                                                                                 <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b" }}>TICKET</div>
-                                                                                                <div style={{ 
-                                                                                                    fontSize: "11px", 
-                                                                                                    fontWeight: "700", 
-                                                                                                    color: req.requestAirfare ? "#15803d" : "#9a3412" 
+                                                                                                <div style={{
+                                                                                                    fontSize: "11px",
+                                                                                                    fontWeight: "700",
+                                                                                                    color: req.requestAirfare ? "#15803d" : "#9a3412"
                                                                                                 }}>
                                                                                                     {req.requestAirfare ? "COMPANY TICKET" : "PERSONAL TICKET"}
                                                                                                 </div>

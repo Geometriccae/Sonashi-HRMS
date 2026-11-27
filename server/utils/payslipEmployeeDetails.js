@@ -21,6 +21,8 @@ const PAYSLIP_EMPLOYEE_FIELDS = [
   "emiratesId",
   "doj",
   "salaryDetails",
+  "companyCode",
+  "office",
 ].join(" ");
 
 const text = (value) => {
@@ -60,6 +62,24 @@ const dayCount = (value) => {
   return String(Math.round(n * 100) / 100);
 };
 
+const getDaysInMonth = (month, year) => {
+  if (!month || !year) return 30;
+  const monthNames = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
+  ];
+  let mIndex = monthNames.indexOf(String(month).trim().toLowerCase());
+  if (mIndex === -1) {
+    const num = parseInt(month, 10);
+    if (!isNaN(num) && num >= 1 && num <= 12) mIndex = num - 1;
+  }
+  const yNum = parseInt(year, 10) || new Date().getFullYear();
+  if (mIndex !== -1) {
+    return new Date(yNum, mIndex + 1, 0).getDate();
+  }
+  return 30;
+};
+
 /**
  * @param {object|null} employee Employee record matched to the slip, if found.
  * @param {object|null} slip Stored salary slip.
@@ -70,9 +90,15 @@ const buildPayslipEmployeeDetails = (employee, slip) => {
   const row = slip || {};
   const salary = emp.salaryDetails || {};
 
+  const workingDays =
+    row.totalWorkingDays && Number(row.totalWorkingDays) > 0
+      ? row.totalWorkingDays
+      : getDaysInMonth(row.month, row.year);
+
   return {
     empId: text(emp.employeeId),
     employeeName: text(emp.employeeName) || text(row.employeeName),
+    totalWorkingDays: dayCount(workingDays),
     payableDays: dayCount(row.payableDays),
     presentDays: dayCount(row.presentDays),
     department: text(emp.department) || text(row.department),
@@ -87,6 +113,8 @@ const buildPayslipEmployeeDetails = (employee, slip) => {
     emailId: emailForPayslip(emp.emailId, row.emailId),
     emiratesId: text(emp.emiratesId),
     unifiedId: text(emp.unifiedId),
+    companyCode: text(emp.companyCode),
+    companyName: text(emp.office),
   };
 };
 

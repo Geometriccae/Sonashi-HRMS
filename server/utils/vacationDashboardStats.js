@@ -28,7 +28,82 @@ const {
 
 const APPROVED_LEAVE_STATUSES = ['Approved', 'HOD Approved'];
 const APPROVED_LEAVE_SELECT =
-  'employee employeeRecordId employeeId employeeName leaveType startDate endDate status travellingDate lastWorkingDay returnDate firstWorkingDay department adminApprovedAt hodApprovedAt createdAt updatedAt';
+  'employee employeeRecordId employeeId employeeName leaveType startDate endDate leaveDays status travellingDate lastWorkingDay returnDate firstWorkingDay department adminApprovedAt hodApprovedAt createdAt updatedAt';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Same inclusive calendar convention as Leave Management / leaveCalculator:
+ * END − START; same calendar day counts as 1.
+ */
+function calculateLeaveDays(startDate, endDate, leaveDaysOverride = null) {
+  if (leaveDaysOverride != null && leaveDaysOverride !== '') {
+    const stored = Number(leaveDaysOverride);
+    if (Number.isFinite(stored) && stored >= 0) return stored;
+  }
+  const s = toDayStart(startDate);
+  const e = toDayStart(endDate);
+  if (!s || !e) return null;
+  const days = Math.round((e.getTime() - s.getTime()) / MS_PER_DAY);
+  if (days < 0) return null;
+  return days === 0 ? 1 : days;
+}
+
+/** Countdown to expected return: END − START from today, never negative. */
+function remainingVacationDays(expectedReturn, now = new Date()) {
+  const s = toDayStart(now);
+  const e = toDayStart(expectedReturn);
+  if (!s || !e) return null;
+  return Math.max(0, Math.round((e.getTime() - s.getTime()) / MS_PER_DAY));
+}
+
+function approvedVacationDays(leave, dates) {
+  // Prefer stored approved leaveDays; otherwise use the same trip dates shown in the table.
+  if (leave?.leaveDays != null && leave.leaveDays !== '') {
+    const stored = Number(leave.leaveDays);
+    if (Number.isFinite(stored) && stored >= 0) return stored;
+  }
+  const start =
+    dates?.travellingDate ||
+    dates?.startDate ||
+    leave?.travellingDate ||
+    leave?.startDate ||
+    null;
+  const end =
+    dates?.leaveEndDate || dates?.endDate || leave?.endDate || null;
+  return calculateLeaveDays(start, end, null);
+}
+
+/** Returned Back Total Days: Last Working Day → First Working Day (END − START). */
+function actualVacationDaysTaken(leave, emp) {
+  const start = emp?.lastWorkingDay || leave?.lastWorkingDay || null;
+  const end = emp?.firstWorkingDay || leave?.firstWorkingDay || null;
+  return calculateLeaveDays(start, end, null);
+}
+
+function vacationDayColumns(leave, emp, dates, tabKey, now = new Date()) {
+  const daysOfVacation = approvedVacationDays(leave, dates);
+  if (tabKey === 'onVacation') {
+    const expectedReturn = dates?.leaveEndDate || dates?.endDate || leave?.endDate || null;
+    return {
+      daysOfVacation,
+      remainingDays: remainingVacationDays(expectedReturn, now),
+      totalDays: null,
+    };
+  }
+  if (tabKey === 'returned') {
+    return {
+      daysOfVacation: null,
+      remainingDays: null,
+      totalDays: actualVacationDaysTaken(leave, emp),
+    };
+  }
+  // yetToGo
+  return {
+    daysOfVacation,
+    remainingDays: null,
+    totalDays: null,
+  };
+}
 
 const EMP_LEAN_FIELDS = [
   'employeeId', 'employeeName', 'employeeStatus', 'vacationStatus', 'emailId',
@@ -48,16 +123,98 @@ function invalidateVacationDashboardStats() {
 
 function toDayStart(value) {
   if (!value) return null;
-  if (typeof value === 'string') {
-    const match = String(value).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-    if (match) {
-      const [, year, month, day] = match;
-      return new Date(Number(year), Number(month) - 1, Number(day));
-    }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value.getFullYear(), value.getMonth(), value.getDate());
   }
-  const dt = new Date(value);
+  const str = String(value).trim();
+  const ymd = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymd) {
+    return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  }
+  const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmy) {
+    return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+  }
+  const dt = new Date(str);
   if (Number.isNaN(dt.getTime())) return null;
   return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+
+function getTabDefaultSortField(tab) {
+  if (tab === 'yetToGo') return 'travellingDate';
+  if (tab === 'onVacation') return 'lastWorkingDay';
+  if (tab === 'returned') return 'firstWorkingDay';
+  return 'travellingDate';
+}
+
+function getItemSortDate(item, field, tab) {
+  if (!item) return null;
+  if (field === 'travellingDate') return item.travellingDate || item.startDate || null;
+  if (field === 'lastWorkingDay') return item.lastWorkingDay || null;
+  if (field === 'firstWorkingDay') return item.firstWorkingDay || item.returnDate || null;
+  if (tab === 'yetToGo') return item.travellingDate || item.startDate || null;
+  if (tab === 'onVacation') return item.lastWorkingDay || null;
+  if (tab === 'returned') return item.firstWorkingDay || item.returnDate || null;
+  return item[field] || null;
+}
+
+function sortVacationTabRows(rows, tab, options = {}) {
+  const list = [...(rows || [])];
+  const defaultField = getTabDefaultSortField(tab);
+  const sortField = options.sortField ? String(options.sortField).trim() : defaultField;
+  const sortOrder = String(options.sortOrder || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+  const mult = sortOrder === 'desc' ? -1 : 1;
+
+  list.sort((a, b) => {
+    const isDateField = [
+      'travellingDate',
+      'lastWorkingDay',
+      'firstWorkingDay',
+      'leaveEndDate',
+      'returnDate',
+      'doj',
+      'startDate',
+      'endDate',
+    ].includes(sortField);
+
+    if (isDateField) {
+      const dateA = getItemSortDate(a, sortField, tab);
+      const dateB = getItemSortDate(b, sortField, tab);
+      const timeA = toDayStart(dateA)?.getTime() ?? null;
+      const timeB = toDayStart(dateB)?.getTime() ?? null;
+
+      if (timeA !== null && timeB !== null) {
+        if (timeA !== timeB) return (timeA - timeB) * mult;
+        const nameA = String(a.employeeName || a.name || '');
+        const nameB = String(b.employeeName || b.name || '');
+        const cmp = nameA.localeCompare(nameB);
+        if (cmp !== 0) return cmp;
+        return String(a._id || a.id || '').localeCompare(String(b._id || b.id || ''));
+      }
+
+      // Safe null handling: records with missing or null dates must always be placed at the bottom
+      if (timeA !== null && timeB === null) return -1;
+      if (timeA === null && timeB !== null) return 1;
+
+      const nameA = String(a.employeeName || a.name || '');
+      const nameB = String(b.employeeName || b.name || '');
+      return nameA.localeCompare(nameB);
+    }
+
+    const valA = a[sortField];
+    const valB = b[sortField];
+    if (valA == null && valB == null) return 0;
+    if (valA == null) return 1;
+    if (valB == null) return -1;
+    if (typeof valA === 'string' && typeof valB === 'string') {
+      const cmp = valA.localeCompare(valB);
+      if (cmp !== 0) return cmp * mult;
+    } else if (valA < valB) return -1 * mult;
+    else if (valA > valB) return 1 * mult;
+    return 0;
+  });
+
+  return list;
 }
 
 function normalizeName(name) {
@@ -393,8 +550,10 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         leaveStatus: req.status,
         experienceYears: computeEmployeeMasterExperienceYears(linked),
         vacationStatus: 'Vacation Pending',
+        ...vacationDayColumns(req, linked, dates, 'yetToGo'),
       });
     } else {
+      const dates = tripDisplayDates(null, req);
       rows.push({
         ...req,
         employeeName: req.employeeName || req.employee?.username || 'Unknown',
@@ -403,8 +562,13 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         vacationStatus: 'Vacation Pending',
         linkedEmployeeId: null,
         linkedLeaveId: req._id,
+        travellingDate: dates.travellingDate,
+        leaveEndDate: dates.leaveEndDate,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
         _source: 'leave',
         experienceYears: null,
+        ...vacationDayColumns(req, null, dates, 'yetToGo'),
       });
     }
   });
@@ -429,6 +593,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
         leaveStatus: leave?.status || null,
         experienceYears: computeEmployeeMasterExperienceYears(e),
         vacationStatus: 'Vacation Pending',
+        ...vacationDayColumns(leave, e, dates, 'yetToGo'),
       });
     });
 
@@ -453,6 +618,7 @@ function buildYetToGoFromLeaves(empList, leaveList) {
       leaveStatus: leave?.status || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
       vacationStatus: 'Vacation Pending',
+      ...vacationDayColumns(leave, e, dates, 'yetToGo'),
     });
   });
 
@@ -505,6 +671,7 @@ function enrichEmployeeRows(empList, leaveList, tabKey) {
       // For Returned Back list: show leave end when returnDate was cleared after mark-onsite
       returnDate: e.returnDate || (tabKey === 'returned' ? dates.endDate : e.returnDate) || null,
       experienceYears: computeEmployeeMasterExperienceYears(e),
+      ...vacationDayColumns(leave, e, dates, tabKey),
     };
   });
 }
@@ -722,7 +889,9 @@ async function getVacationTabPage(options = {}) {
   const all = String(options.all || '') === '1' || String(options.all || '').toLowerCase() === 'true';
   const limit = all ? 100000 : Math.min(100, Math.max(1, limitRaw || 20));
 
-  const rows = applyRowFilters(await buildTabRows(tab), options);
+  const rawRows = await buildTabRows(tab);
+  const filteredRows = applyRowFilters(rawRows, options);
+  const rows = sortVacationTabRows(filteredRows, tab, options);
   const total = rows.length;
   if (all) {
     return { employees: rows, total, page: 1, limit: total, totalPages: 1, tab };
@@ -823,4 +992,7 @@ module.exports = {
   buildYetToGoFromLeaves,
   WORKING_EMPLOYEE_STATUSES,
   NON_WORKING_EMPLOYEE_STATUSES,
+  sortVacationTabRows,
+  getTabDefaultSortField,
+  getItemSortDate,
 };

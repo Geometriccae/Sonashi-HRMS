@@ -147,7 +147,12 @@ class SalaryAdvanceService {
       if (response.ok) {
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
-          return response.json();
+          const jsonResult = await response.json();
+          // If JSON returned with a single employer or multiple, use client-side single file generator
+          if (options.batch?.items?.length || options.items?.length || options.rows?.length) {
+            return this.generateSifClientSide(options);
+          }
+          return jsonResult;
         }
 
         const blob = await response.blob();
@@ -206,7 +211,8 @@ class SalaryAdvanceService {
     }
 
     const defaultEmployerId = '0000000172509';
-    const defaultAgentRoutingCode = '740810000';
+    // Company employer bank routing for SCR Column C (not employee agent codes)
+    const defaultAgentRoutingCode = '600310101';
     const now = new Date();
     const pad = (n, w = 2) => String(n).padStart(w, '0');
     const digitsOnly = (v) => String(v || '').replace(/\D/g, '');
@@ -214,7 +220,11 @@ class SalaryAdvanceService {
 
     const fileDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const fileTime = `${pad(now.getHours())}${pad(now.getMinutes())}`;
-    const fileRef = `${defaultEmployerId}${pad(now.getDate())}${pad(now.getMonth() + 1)}${String(now.getFullYear()).slice(-2)}${fileTime}00`;
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = pad(now.getMonth() + 1);
+    const dd = pad(now.getDate());
+    const ss = pad(now.getSeconds());
+    const fileRef = `${defaultEmployerId}${yy}${mm}${dd}${fileTime}${ss}`;
 
     const sampleDate = new Date(rawItems[0]?.advanceDate || Date.now());
     const year = sampleDate.getFullYear();
@@ -239,17 +249,24 @@ class SalaryAdvanceService {
         {};
 
       let empidRaw =
-        digitsOnly(empDoc.emiratesId) ||
-        digitsOnly(empDoc.labourCardNumber) ||
         digitsOnly(empDoc.workPermitNo) ||
-        digitsOnly(empDoc.unifiedId) ||
         digitsOnly(empDoc.personCode) ||
-        digitsOnly(item.employeeCode || item.employeeId || '');
+        digitsOnly(empDoc.personId) ||
+        digitsOnly(empDoc.labourCardNumber) ||
+        digitsOnly(item.workPermitNo || item.personCode || item.personId || '');
 
-      if (empidRaw.length < 14) {
+      if (empidRaw.length === 14) {
+        // Valid 14-digit WPS Person ID
+      } else if (empidRaw.length >= 6 && empidRaw.length < 14) {
         empidRaw = empidRaw.padStart(14, '0');
-      } else if (empidRaw.length > 15) {
-        empidRaw = empidRaw.slice(-15);
+      } else if (empidRaw.length > 14) {
+        throw new Error(
+          `Person ID cannot be more than 14 characters for employee ${empDoc.employeeName || item.employeeName || 'Staff'} (got ${empidRaw.length} digits: ${empidRaw})`
+        );
+      } else if (!empidRaw) {
+        throw new Error(
+          `Person ID is missing for employee ${empDoc.employeeName || item.employeeName || item.employeeId || 'Staff'}. Person ID is required for SIF generation.`
+        );
       }
 
       const agentRaw =
@@ -268,7 +285,7 @@ class SalaryAdvanceService {
         'AE000000000000000000000';
       const bank = String(bankRaw).replace(/\s+/g, '');
 
-      const amount = Number(item.amount || item.originalAmount || 0);
+      const amount = Number(item.originalAmount != null ? item.originalAmount : (item.amount || 0));
       totalSalary += amount;
 
       const line = [

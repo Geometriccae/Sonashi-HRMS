@@ -10,6 +10,8 @@ const {
   getAgentCode,
   validateAgentCode,
   employeeToExcelRow,
+  EMPLOYER_BANK_ROUTING_CODE,
+  resolveEmployerBankRoutingCode,
 } = require("./sifUtils");
 
 const {
@@ -26,7 +28,7 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
     _id: "emp-a",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "600310101",
@@ -40,7 +42,7 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
     _id: "emp-b",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -54,7 +56,7 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
     _id: "emp-c",
     employeeId: "EMP-003",
     employeeName: "Charlie Brown",
-    emiratesId: "784199012345673",
+    workPermitNo: "10074007721873",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "",
@@ -86,12 +88,12 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
   assert.equal(edrs.length, 2);
 
   // Emp A must have Agent Code 600310101
-  assert.equal(edrs[0].empId, "784199012345671");
+  assert.equal(edrs[0].empId, "10074007721871");
   assert.equal(edrs[0].agentCode, "600310101");
   assert.equal(edrs[0].fixedIncome, 5000);
 
   // Emp B must have Agent Code 740810000 (different from Emp A)
-  assert.equal(edrs[1].empId, "784199012345672");
+  assert.equal(edrs[1].empId, "10074007721872");
   assert.equal(edrs[1].agentCode, "740810000");
   assert.equal(edrs[1].fixedIncome, 8000);
 
@@ -106,19 +108,19 @@ test("Multiple employees in the same company have distinct Agent Codes and prese
   assert.equal(scr.totalSalary, 13000);
 });
 
-test("Individual SIF export for Emp A uses Emp A's own Agent Code in both EDR and SCR", () => {
+test("Individual SIF export for Emp A uses Emp A's Agent Code in EDR and company employer bank routing in SCR", () => {
   const companyEmployerId = "0000000172509";
-  const companyDefaultRouting = "302620122";
+  const companyDefaultRouting = "600310101";
 
   const empA = {
     _id: "emp-a",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     companyCode: companyEmployerId,
     salaryDetails: {
-      agentCode: "600310101",
-      bankSortCode: "600310101",
+      agentCode: "302620122",
+      bankSortCode: "302620122",
       ibanNumber: "AE012345678901234567890",
       totalSalary: 5000,
     },
@@ -136,23 +138,24 @@ test("Individual SIF export for Emp A uses Emp A's own Agent Code in both EDR an
   assert.equal(sifResult.edrCount, 1);
   const { edrs, scr } = parseSifContent(sifResult.content);
   assert.equal(edrs.length, 1);
-  assert.equal(edrs[0].agentCode, "600310101", "EDR must use Emp A's agent code");
+  assert.equal(edrs[0].agentCode, "302620122", "EDR must use Emp A's agent code");
 
-  // In individual export, SCR agent routing uses the selected employee's own Agent Code
-  assert.equal(scr.agentRouting, "600310101", "SCR routing must use Emp A's agent code in individual export");
+  // SCR Column C is always the company employer bank routing code
+  assert.equal(scr.agentRouting, "600310101", "SCR routing must use employer bank routing code");
+  assert.notEqual(scr.agentRouting, edrs[0].agentCode, "SCR must not use employee agent code");
   assert.equal(scr.edrCount, 1);
   assert.equal(scr.totalSalary, 5000);
 });
 
-test("Individual SIF export for Emp B uses Emp B's own Agent Code in both EDR and SCR", () => {
+test("Individual SIF export for Emp B keeps Emp B Agent Code in EDR and employer bank routing in SCR", () => {
   const companyEmployerId = "0000000172509";
-  const companyDefaultRouting = "302620122";
+  const companyDefaultRouting = "600310101";
 
   const empB = {
     _id: "emp-b",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -175,7 +178,8 @@ test("Individual SIF export for Emp B uses Emp B's own Agent Code in both EDR an
   const { edrs, scr } = parseSifContent(sifResult.content);
   assert.equal(edrs.length, 1);
   assert.equal(edrs[0].agentCode, "740810000", "EDR must use Emp B's agent code");
-  assert.equal(scr.agentRouting, "740810000", "SCR routing must use Emp B's agent code in individual export");
+  assert.equal(scr.agentRouting, "600310101", "SCR routing must use employer bank routing code");
+  assert.notEqual(scr.agentRouting, "740810000", "SCR must not use Emp B's agent code");
   assert.equal(scr.edrCount, 1);
   assert.equal(scr.totalSalary, 8000);
 });
@@ -187,7 +191,7 @@ test("Individual SIF export validates missing Agent Code and does not substitute
     _id: "emp-c",
     employeeId: "EMP-003",
     employeeName: "Charlie Brown",
-    emiratesId: "784199012345673",
+    workPermitNo: "10074007721873",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "",
@@ -218,7 +222,7 @@ test("Agent Code is not fetched or assigned from Company Code or Employer ID", (
   const emp = {
     employeeId: "EMP-010",
     employeeName: "Diana Prince",
-    emiratesId: "784199012345675",
+    workPermitNo: "10074007721875",
     companyCode: companyEmployerId,
     salaryDetails: {
       bankName: "First Abu Dhabi Bank",
@@ -268,17 +272,17 @@ test("Authoritative company mapping preserves Employer ID and employee assignmen
 
 test("Individual employee export contains only the selected employee and excludes all other employees", () => {
   const companyEmployerId = "0000000172509";
-  const defaultRouting = "302620122";
+  const defaultRouting = "600310101";
 
   const empA = {
     _id: "emp-a",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     companyCode: companyEmployerId,
     salaryDetails: {
-      agentCode: "600310101",
-      bankSortCode: "600310101",
+      agentCode: "302620122",
+      bankSortCode: "302620122",
       ibanNumber: "AE012345678901234567890",
       totalSalary: 5000,
     },
@@ -288,7 +292,7 @@ test("Individual employee export contains only the selected employee and exclude
     _id: "emp-b",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -312,8 +316,8 @@ test("Individual employee export contains only the selected employee and exclude
   assert.equal(sifResultA.totalSalary, 5000);
   const { edrs: edrsA, scr: scrA } = parseSifContent(sifResultA.content);
   assert.equal(edrsA.length, 1);
-  assert.equal(edrsA[0].empId, "784199012345671");
-  assert.equal(edrsA[0].agentCode, "600310101");
+  assert.equal(edrsA[0].empId, "10074007721871");
+  assert.equal(edrsA[0].agentCode, "302620122");
   assert.equal(scrA.edrCount, 1);
   assert.equal(scrA.totalSalary, 5000);
   assert.equal(scrA.agentRouting, "600310101");
@@ -332,11 +336,11 @@ test("Individual employee export contains only the selected employee and exclude
   assert.equal(sifResultB.totalSalary, 8000);
   const { edrs: edrsB, scr: scrB } = parseSifContent(sifResultB.content);
   assert.equal(edrsB.length, 1);
-  assert.equal(edrsB[0].empId, "784199012345672");
+  assert.equal(edrsB[0].empId, "10074007721872");
   assert.equal(edrsB[0].agentCode, "740810000");
   assert.equal(scrB.edrCount, 1);
   assert.equal(scrB.totalSalary, 8000);
-  assert.equal(scrB.agentRouting, "740810000");
+  assert.equal(scrB.agentRouting, "600310101");
 });
 
 test("Company-wise SIF export includes all eligible employees belonging to that company without mixing", () => {
@@ -348,7 +352,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
     _id: "emp-1",
     employeeId: "EMP-001",
     employeeName: "Alice Smith",
-    emiratesId: "784199012345671",
+    workPermitNo: "10074007721871",
     sifEmployerId: company1,
     salaryDetails: {
       agentCode: "600310101",
@@ -361,7 +365,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
     _id: "emp-2",
     employeeId: "EMP-002",
     employeeName: "Bob Jones",
-    emiratesId: "784199012345672",
+    workPermitNo: "10074007721872",
     sifEmployerId: company1,
     salaryDetails: {
       agentCode: "740810000",
@@ -374,7 +378,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
     _id: "emp-3",
     employeeId: "EMP-003",
     employeeName: "Charlie Other",
-    emiratesId: "784199012345673",
+    workPermitNo: "10074007721873",
     sifEmployerId: company2,
     salaryDetails: {
       agentCode: "123456789",
@@ -401,7 +405,7 @@ test("Company-wise SIF export includes all eligible employees belonging to that 
   assert.equal(sifResult.totalSalary, 13000);
   const { edrs, scr } = parseSifContent(sifResult.content);
   assert.equal(edrs.length, 2);
-  assert.equal(edrs.some(e => e.empId === "784199012345673"), false, "Employee from Company 2 must not be included");
+  assert.equal(edrs.some(e => e.empId === "10074007721873"), false, "Employee from Company 2 must not be included");
   assert.equal(scr.employerId, company1);
   assert.equal(scr.agentRouting, defaultRouting);
 });
@@ -412,7 +416,7 @@ test("Agent Code with leading zeros retains zeros in SIF export, preview, and Ex
     _id: "emp-zeros",
     employeeId: "EMP-Z01",
     employeeName: "Zero Leader",
-    emiratesId: "784199012345681",
+    workPermitNo: "10074007721881",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "009710001",
@@ -431,7 +435,7 @@ test("Agent Code with leading zeros retains zeros in SIF export, preview, and Ex
   const sifResult = generateSifContent({
     employees: [empWithZeros],
     employerId: companyEmployerId,
-    defaultAgentRoutingCode: "302620122",
+    defaultAgentRoutingCode: "600310101",
     year: 2026,
     month: 10,
     isIndividual: true,
@@ -440,7 +444,7 @@ test("Agent Code with leading zeros retains zeros in SIF export, preview, and Ex
   assert.equal(sifResult.edrCount, 1);
   const { edrs, scr } = parseSifContent(sifResult.content);
   assert.equal(edrs[0].agentCode, "009710001");
-  assert.equal(scr.agentRouting, "009710001");
+  assert.equal(scr.agentRouting, "600310101", "SCR Column C must remain employer bank routing");
 });
 
 test("Agent Code with alphanumeric value retains the original value in SIF export, preview, and Excel", () => {
@@ -449,7 +453,7 @@ test("Agent Code with alphanumeric value retains the original value in SIF expor
     _id: "emp-alpha",
     employeeId: "EMP-A01",
     employeeName: "Alpha User",
-    emiratesId: "784199012345682",
+    workPermitNo: "10074007721882",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "CBUE00001",
@@ -468,7 +472,7 @@ test("Agent Code with alphanumeric value retains the original value in SIF expor
   const sifResult = generateSifContent({
     employees: [empAlpha],
     employerId: companyEmployerId,
-    defaultAgentRoutingCode: "302620122",
+    defaultAgentRoutingCode: "600310101",
     year: 2026,
     month: 10,
     isIndividual: true,
@@ -477,7 +481,7 @@ test("Agent Code with alphanumeric value retains the original value in SIF expor
   assert.equal(sifResult.edrCount, 1);
   const { edrs, scr } = parseSifContent(sifResult.content);
   assert.equal(edrs[0].agentCode, "CBUE00001");
-  assert.equal(scr.agentRouting, "CBUE00001");
+  assert.equal(scr.agentRouting, "600310101", "SCR Column C must remain employer bank routing");
 });
 
 test("Two employees with the same legitimate Agent Code export without being treated as duplicates", () => {
@@ -486,7 +490,7 @@ test("Two employees with the same legitimate Agent Code export without being tre
     _id: "emp-s1",
     employeeId: "EMP-S01",
     employeeName: "Shared Code One",
-    emiratesId: "784199012345683",
+    workPermitNo: "10074007721883",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -498,7 +502,7 @@ test("Two employees with the same legitimate Agent Code export without being tre
     _id: "emp-s2",
     employeeId: "EMP-S02",
     employeeName: "Shared Code Two",
-    emiratesId: "784199012345684",
+    workPermitNo: "10074007721884",
     companyCode: companyEmployerId,
     salaryDetails: {
       agentCode: "740810000",
@@ -521,8 +525,8 @@ test("Two employees with the same legitimate Agent Code export without being tre
   const { edrs } = parseSifContent(sifResult.content);
   assert.equal(edrs[0].agentCode, "740810000");
   assert.equal(edrs[1].agentCode, "740810000");
-  assert.equal(edrs[0].empId, "784199012345683");
-  assert.equal(edrs[1].empId, "784199012345684");
+  assert.equal(edrs[0].empId, "10074007721883");
+  assert.equal(edrs[1].empId, "10074007721884");
 });
 
 test("Authoritative fallback to bankSortCode or root agentCode when salaryDetails.agentCode is empty", () => {
@@ -560,4 +564,101 @@ test("Authoritative fallback to bankSortCode or root agentCode when salaryDetail
   };
   assert.equal(getAgentCode(empNone), "");
   assert.equal(validateAgentCode(getAgentCode(empNone)), "AGENTCODE must be exactly 9 digits");
+});
+
+test("SCR Column C uses employer bank routing 600310101 for individual, bulk, and salary-advance-style exports", () => {
+  assert.equal(EMPLOYER_BANK_ROUTING_CODE, "600310101");
+  assert.equal(resolveEmployerBankRoutingCode(""), "600310101");
+  assert.equal(resolveEmployerBankRoutingCode("740810000"), "600310101");
+  assert.equal(resolveEmployerBankRoutingCode("600310101"), "600310101");
+
+  const employerId = "0000000172509";
+  const employerBank = "600310101";
+  const fixedNow = new Date("2026-11-23T00:00:00.000Z");
+
+  const empSalary = {
+    employeeId: "EMP-001",
+    employeeName: "Salary Employee",
+    workPermitNo: "10074007721871",
+    companyCode: employerId,
+    salaryDetails: {
+      agentCode: "740810000",
+      bankSortCode: "740810000",
+      ibanNumber: "AE012345678901234567890",
+      totalSalary: 500,
+    },
+  };
+
+  const empAdvance = {
+    employeeId: "EMP-ADV",
+    employeeName: "Advance Employee",
+    workPermitNo: "10074007721899",
+    companyCode: employerId,
+    salaryDetails: {
+      agentCode: "302620122",
+      bankSortCode: "302620122",
+      ibanNumber: "AE987654321098765432109",
+    },
+    customTransferAmount: 500,
+  };
+
+  const scenarios = [
+    { label: "individual salary", employees: [empSalary], isIndividual: true },
+    { label: "bulk salary", employees: [empSalary, { ...empAdvance, customTransferAmount: undefined, salaryDetails: { ...empAdvance.salaryDetails, totalSalary: 800 } }], isIndividual: false },
+    { label: "individual salary advance", employees: [empAdvance], isIndividual: true },
+    { label: "bulk salary advance", employees: [empAdvance, { ...empSalary, customTransferAmount: 250 }], isIndividual: false },
+  ];
+
+  scenarios.forEach((scenario) => {
+    const result = generateSifContent({
+      employees: scenario.employees,
+      employerId,
+      defaultAgentRoutingCode: employerBank,
+      year: 2026,
+      month: 11,
+      now: fixedNow,
+      isIndividual: scenario.isIndividual,
+    });
+
+    assert.ok(!result.error, `${scenario.label} must generate without error`);
+    const { edrs, scr } = parseSifContent(result.content);
+    assert.equal(scr.employerId, employerId, `${scenario.label}: SCR Column B`);
+    assert.equal(scr.agentRouting, "600310101", `${scenario.label}: SCR Column C`);
+    assert.equal(scr.edrCount, edrs.length, `${scenario.label}: EDR/SCR count match`);
+    assert.equal(scr.totalSalary, edrs.reduce((sum, e) => sum + e.fixedIncome, 0));
+
+    // EDR employee agent codes must remain unchanged (not replaced by employer bank code)
+    edrs.forEach((edr) => {
+      assert.notEqual(edr.agentCode, "", `${scenario.label}: EDR agent present`);
+      assert.equal(edr.agentCode.length, 9);
+    });
+    if (scenario.label.startsWith("individual salary") && !scenario.label.includes("advance")) {
+      assert.equal(edrs[0].agentCode, "740810000");
+    }
+    if (scenario.label === "individual salary advance") {
+      assert.equal(edrs[0].agentCode, "302620122");
+    }
+
+    const scrParts = scr.raw.split(",");
+    assert.equal(scrParts[0], "SCR");
+    assert.equal(scrParts[2], "600310101");
+    assert.equal(scrParts.length, 10, `${scenario.label}: SCR must retain 10 fields`);
+  });
+
+  // Exact SCR line shape for the user's acceptance example (date/time/ref vary with `now`)
+  const sample = generateSifContent({
+    employees: [empSalary],
+    employerId,
+    defaultAgentRoutingCode: employerBank,
+    year: 2026,
+    month: 11,
+    now: fixedNow,
+    isIndividual: true,
+  });
+  const sampleScr = parseSifContent(sample.content).scr.raw;
+  assert.match(
+    sampleScr,
+    /^SCR,0000000172509,600310101,2026-11-23,\d{4},112026,1,500\.00,AED,0000000172509\d+$/
+  );
+  assert.ok(!sampleScr.includes(",740810000,"), "SCR must not contain legacy employer bank code");
 });

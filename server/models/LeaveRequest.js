@@ -65,6 +65,31 @@ const leaveRequestSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    approvalManager: {
+        type: String,
+        default: ""
+    },
+    approvalManagers: {
+        type: [String],
+        default: []
+    },
+    approvalReminderSentDays: {
+        type: [Number],
+        default: []
+    },
+    approvalReminderHistory: [{
+        sentAt: { type: Date, default: Date.now },
+        daysGap: Number,
+        recipients: [String]
+    }],
+    employeeApprovalEmailSent: {
+        type: Boolean,
+        default: false
+    },
+    employeeApprovalEmailSentAt: {
+        type: Date,
+        default: null
+    },
     leaveType: {
         type: String,
         enum: ['Sick Leave', 'Vacation', 'Personal Leave', 'Annual Leave', 'Maternity/Paternity', 'Other'],

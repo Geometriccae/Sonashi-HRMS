@@ -15,6 +15,8 @@ const {
     sendAdminLeaveSubmittedEmail,
     sendAdminLeaveApprovedEmail,
     sendAdminLeaveRejectedEmail,
+    sendApprovalManagerRequestEmail,
+    sendLeaveApprovalConfirmationToEmployee,
 } = require('../services/adminLeaveEmailService');
 const {
     patchListCacheEmployee,
@@ -42,51 +44,51 @@ let _leaveListCache = { key: '', data: null, ts: 0 };
 let _leaveMetricsCache = { key: '', data: null, ts: 0 };
 
 function leaveListCacheKey(role, status, employeeId) {
-  return `${role || ''}|${status || ''}|${employeeId || ''}`;
+    return `${role || ''}|${status || ''}|${employeeId || ''}`;
 }
 
 /** Merge an extra Mongo clause into a filter without clobbering existing $or/$and. */
 function andMongoClause(filter, clause) {
-  if (!clause) {
-    if (!filter) return {};
-    if (filter.$and) return { ...filter, $and: [...filter.$and] };
-    return { ...filter };
-  }
-  if (!filter || Object.keys(filter).length === 0) {
-    return { ...clause };
-  }
-  if (filter.$and) {
-    return { ...filter, $and: [...filter.$and, clause] };
-  }
-  return { $and: [{ ...filter }, clause] };
+    if (!clause) {
+        if (!filter) return {};
+        if (filter.$and) return { ...filter, $and: [...filter.$and] };
+        return { ...filter };
+    }
+    if (!filter || Object.keys(filter).length === 0) {
+        return { ...clause };
+    }
+    if (filter.$and) {
+        return { ...filter, $and: [...filter.$and, clause] };
+    }
+    return { $and: [{ ...filter }, clause] };
 }
 
 function getLeaveListCache(key) {
-  if (_leaveListCache.data && _leaveListCache.key === key && Date.now() - _leaveListCache.ts < LEAVE_LIST_TTL_MS) {
-    return _leaveListCache.data;
-  }
-  return null;
+    if (_leaveListCache.data && _leaveListCache.key === key && Date.now() - _leaveListCache.ts < LEAVE_LIST_TTL_MS) {
+        return _leaveListCache.data;
+    }
+    return null;
 }
 
 function setLeaveListCache(key, data) {
-  _leaveListCache = { key, data, ts: Date.now() };
+    _leaveListCache = { key, data, ts: Date.now() };
 }
 
 function getLeaveMetricsCache(key) {
-  if (_leaveMetricsCache.data && _leaveMetricsCache.key === key && Date.now() - _leaveMetricsCache.ts < LEAVE_METRICS_TTL_MS) {
-    return _leaveMetricsCache.data;
-  }
-  return null;
+    if (_leaveMetricsCache.data && _leaveMetricsCache.key === key && Date.now() - _leaveMetricsCache.ts < LEAVE_METRICS_TTL_MS) {
+        return _leaveMetricsCache.data;
+    }
+    return null;
 }
 
 function setLeaveMetricsCache(key, data) {
-  _leaveMetricsCache = { key, data, ts: Date.now() };
+    _leaveMetricsCache = { key, data, ts: Date.now() };
 }
 
 function invalidateLeaveListCache() {
-  _leaveListCache = { key: '', data: null, ts: 0 };
-  _leaveMetricsCache = { key: '', data: null, ts: 0 };
-  invalidateApprovedLeavesCache();
+    _leaveListCache = { key: '', data: null, ts: 0 };
+    _leaveMetricsCache = { key: '', data: null, ts: 0 };
+    invalidateApprovedLeavesCache();
 }
 
 function actorName(user) {
@@ -338,7 +340,12 @@ async function syncEmployeeVacationStatus(leaveRequest) {
         if (controllingLeave) {
             patch.travellingDate = controllingLeave.travellingDate || controllingLeave.startDate;
             patch.leaveEndDate = controllingLeave.endDate;
-            if (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') {
+            if (vacationStatus === 'Vacation Pending') {
+                // Future approved leave (Yet To Go): Last Working Day must remain blank
+                patch.lastWorkingDay = null;
+                patch.returnDate = null;
+                patch.firstWorkingDay = null;
+            } else if (vacationStatus === 'On Vacation') {
                 patch.returnDate = null;
                 patch.firstWorkingDay = null;
             }
@@ -354,14 +361,14 @@ async function syncEmployeeVacationStatus(leaveRequest) {
         // leftover early-return stamp on the LeaveRequest too (Annual Vacations
         // mark-return may have set it).
         if (
-          controllingLeave &&
-          (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') &&
-          (controllingLeave.returnDate || controllingLeave.firstWorkingDay)
+            controllingLeave &&
+            (vacationStatus === 'Vacation Pending' || vacationStatus === 'On Vacation') &&
+            (controllingLeave.returnDate || controllingLeave.firstWorkingDay)
         ) {
-          await LeaveRequest.findByIdAndUpdate(controllingLeave._id, {
-            $set: { returnDate: null, firstWorkingDay: null },
-          });
-          invalidateApprovedLeavesCache();
+            await LeaveRequest.findByIdAndUpdate(controllingLeave._id, {
+                $set: { returnDate: null, firstWorkingDay: null },
+            });
+            invalidateApprovedLeavesCache();
         }
         // Approval/re-approval must not leave another route serving the old
         // employee category from the shared list cache.
@@ -565,10 +572,10 @@ router.get('/', authMiddleware, async (req, res) => {
                 filter.status = { $in: ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'] };
             }
         } else if (
-          req.user.role === 'admin' ||
-          req.user.role === 'hr' ||
-          req.user.role === 'viewer' ||
-          req.user.role === 'authorize_user'
+            req.user.role === 'admin' ||
+            req.user.role === 'hr' ||
+            req.user.role === 'viewer' ||
+            req.user.role === 'authorize_user'
         ) {
             const visibleStatuses = ['Pending', 'HOD Approved', 'Approved', 'Rejected', 'Cancelled'];
 
@@ -682,20 +689,20 @@ router.get('/', authMiddleware, async (req, res) => {
         }
 
         const cacheKey = leaveListCacheKey(req.user?.role, status, employeeKey || '')
-          + (isLite ? '|lite' : '')
-          + (paginate
-            ? `|p${page}|l${limit}|s${search}|d${department}|m${reportingManager}|y${year}|mo${month}|sd${startDate}|ed${endDate}|lt${leaveType}`
-            : '|all|v3leaveDays');
+            + (isLite ? '|lite' : '')
+            + (paginate
+                ? `|p${page}|l${limit}|s${search}|d${department}|m${reportingManager}|y${year}|mo${month}|sd${startDate}|ed${endDate}|lt${leaveType}`
+                : '|all|v3leaveDays');
         const skipCache =
-          String(req.query.fresh || '') === '1' ||
-          String(req.query.fresh || '').toLowerCase() === 'true';
+            String(req.query.fresh || '') === '1' ||
+            String(req.query.fresh || '').toLowerCase() === 'true';
         const cachedLeaves = skipCache ? null : getLeaveListCache(cacheKey);
         if (cachedLeaves) {
             return res.json(cachedLeaves);
         }
 
         const LEAVE_TABLE_SELECT =
-          'employee employeeRecordId employeeId employeeName company department reportingManager leaveType startDate endDate leaveDays importSource reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
+            'employee employeeRecordId employeeId employeeName company department reportingManager leaveType startDate endDate leaveDays importSource reason status appliedOn requestAirfare airfareStatus isPastLeave changeStatus changedBy changedOn requesterRole hodApprovedBy adminApprovedBy';
 
         let leaveRequests;
         if (isLite) {
@@ -843,7 +850,30 @@ router.post('/', authMiddleware, async (req, res) => {
             return res.status(403).json({ message: 'This role cannot create leave requests' });
         }
 
-        const { employeeId, employeeName, company, department, reportingManager, leaveType, startDate, endDate, reason, requestAirfare } = req.body;
+        const {
+            employeeId,
+            employeeName,
+            company,
+            department,
+            reportingManager,
+            approvalManager,
+            approvalManagers,
+            leaveType,
+            startDate,
+            endDate,
+            reason,
+            requestAirfare
+        } = req.body;
+
+        let normalizedApprovalManagers = [];
+        if (Array.isArray(approvalManagers)) {
+            normalizedApprovalManagers = approvalManagers.map(m => String(m).trim()).filter(Boolean);
+        } else if (typeof approvalManagers === 'string' && approvalManagers.trim()) {
+            normalizedApprovalManagers = approvalManagers.split(',').map(m => m.trim()).filter(Boolean);
+        } else if (approvalManager && typeof approvalManager === 'string' && approvalManager.trim()) {
+            normalizedApprovalManagers = [approvalManager.trim()];
+        }
+        const primaryApprovalManager = normalizedApprovalManagers[0] || (typeof approvalManager === 'string' ? approvalManager.trim() : '');
 
         const resolved = await resolveLeaveEmployeeTarget(employeeId, employeeName, req.user.id);
         const targetUserId = resolved.targetId;
@@ -907,6 +937,8 @@ router.post('/', authMiddleware, async (req, res) => {
             company,
             department,
             reportingManager,
+            approvalManager: primaryApprovalManager,
+            approvalManagers: normalizedApprovalManagers,
             leaveType,
             startDate: new Date(startDate),
             endDate: new Date(endDate),
@@ -953,35 +985,38 @@ router.post('/', authMiddleware, async (req, res) => {
         };
         const isAdminLeave = String(requesterRole || '').toLowerCase() === 'admin';
 
-        if (isAdminLeave) {
-            if (savedRequest.status === 'Pending') {
-                sendAdminLeaveSubmittedEmail(savedRequest.toObject ? savedRequest.toObject() : savedRequest, {
-                    transporter: getLeaveTransporter(),
-                    submitter: req.user,
-                }).catch(e => console.error('[AdminLeave] Email to manager error:', e?.message || e));
-            }
-        } else {
-            sendLeaveRequestToHodAndAdmin(leaveSnapshot)
-                .then(() => console.log('[Leave] HOD/Admin email sent'))
-                .catch(e => console.error('[Leave] HOD/Admin email error:', e));
+                if (savedRequest.status === 'Pending') {
+                    // If Approval Manager(s) were selected, send exclusively to them
+                    if (normalizedApprovalManagers.length > 0 || savedRequest.approvalManager) {
+                        sendApprovalManagerRequestEmail(savedRequest.toObject ? savedRequest.toObject() : savedRequest, {
+                            transporter: getLeaveTransporter(),
+                            submitter: req.user,
+                        }).catch(e => console.error('[Leave] Approval manager email error:', e?.message || e));
+                    } else if (isAdminLeave) {
+                        sendAdminLeaveSubmittedEmail(savedRequest.toObject ? savedRequest.toObject() : savedRequest, {
+                            transporter: getLeaveTransporter(),
+                            submitter: req.user,
+                        }).catch(e => console.error('[AdminLeave] Email to manager error:', e?.message || e));
+                } else {
+                    sendLeaveRequestToHodAndAdmin(leaveSnapshot)
+                        .then(() => console.log('[Leave] HOD/Admin email sent'))
+                        .catch(e => console.error('[Leave] HOD/Admin email error:', e));
 
-            // Once per new Pending request (not on page loads, edits, or status changes).
-            if (savedRequest.status === 'Pending') {
-                sendPendingLeaveNotification(savedRequest.toObject(), { transporter: getLeaveTransporter() })
-                    .catch((e) => console.error('[Leave] Pending leave email error:', e?.message || e));
-            }
-        }
+                        sendPendingLeaveNotification(savedRequest.toObject(), { transporter: getLeaveTransporter() })
+                            .catch((e) => console.error('[Leave] Pending leave email error:', e?.message || e));
+                    }
+                }
 
-        if (!isPastLeave) {
-            const io = req.app.get('io');
-            notifyLeaveSubmitted(io, savedRequest)
-                .catch((e) => console.error('[Leave] Notification error:', e));
-        }
-    } catch (error) {
-        console.error('Error creating leave request:', error);
-        res.status(400).json({ message: 'Error creating leave request', error: error.message });
-    }
-});
+                if (!isPastLeave) {
+                    const io = req.app.get('io');
+                    notifyLeaveSubmitted(io, savedRequest)
+                        .catch((e) => console.error('[Leave] Notification error:', e));
+                }
+            } catch (error) {
+                console.error('Error creating leave request:', error);
+                res.status(400).json({ message: 'Error creating leave request', error: error.message });
+            }
+        });
 
 
 // Update leave request status (Admin/HOD) or edit request (Employee)
@@ -1071,275 +1106,305 @@ router.put('/:id', authMiddleware, async (req, res) => {
                     updateData.hodApprovedAt = new Date();
                 }
             }
-            // Final Approval Logic: Admin, Viewer, and Authorize User can finalize.
+            // Final Approval Logic: Admin, Viewer, Authorize User, or an assigned Approval Manager can finalize.
             else if (
-              userRole === 'admin' ||
-              userRole === 'viewer' ||
-              userRole === 'authorize_user'
+                userRole === 'admin' ||
+                userRole === 'viewer' ||
+              userRole === 'authorize_user' ||
+                    (oldRequest.approvalManagers || []).some(mgr => {
+                        const m = String(mgr || '').trim().toLowerCase();
+                        const uName = String(req.user.username || '').trim().toLowerCase();
+                        const uEmail = String(req.user.emailId || '').trim().toLowerCase();
+                        return m === uName || m === uEmail;
+                    }) || (oldRequest.approvalManager && (
+                        String(oldRequest.approvalManager).trim().toLowerCase() === String(req.user.username || '').trim().toLowerCase() ||
+                        String(oldRequest.approvalManager).trim().toLowerCase() === String(req.user.emailId || '').trim().toLowerCase()
+                    ))
             ) {
-                if (status === 'Approved') {
-                    // Admin can approve Pending or HOD Approved requests
-                    if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
-                        return res.status(400).json({
-                            message: 'Admin can only approve requests that are in Pending or HOD Approved status'
-                        });
-                    }
-                    // Admin final approval
-                    updateData.status = 'Approved';
-                    updateData.adminApprovedBy = req.user.id;
-                    updateData.adminApprovedAt = new Date();
-                } else if (status === 'Rejected') {
-                    // Admin can reject Pending or HOD Approved requests
-                    if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
-                        return res.status(400).json({
-                            message: 'Admin can only reject requests that are in Pending or HOD Approved status'
-                        });
-                    }
-                    updateData.status = 'Rejected';
-                    updateData.adminApprovedBy = req.user.id;
-                    updateData.adminApprovedAt = new Date();
-                }
-            }
+    if (status === 'Approved') {
+        // Can approve Pending or HOD Approved requests
+        if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
+            return res.status(400).json({
+                            message: 'Can only approve requests that are in Pending or HOD Approved status'
+            });
+        }
+        // Final approval
+        updateData.status = 'Approved';
+        updateData.adminApprovedBy = req.user.id;
+        updateData.adminApprovedAt = new Date();
+    } else if (status === 'Rejected') {
+        // Can reject Pending or HOD Approved requests
+        if (currentStatus !== 'Pending' && currentStatus !== 'HOD Approved') {
+            return res.status(400).json({
+                            message: 'Can only reject requests that are in Pending or HOD Approved status'
+            });
+        }
+        updateData.status = 'Rejected';
+        updateData.adminApprovedBy = req.user.id;
+        updateData.adminApprovedAt = new Date();
+    }
+}
             // Regular employees cannot change status
             else {
-                // Employees can only edit their own pending requests (not status)
-                // Status changes are ignored for regular employees
-            }
+    // Employees can only edit their own pending requests (not status)
+    // Status changes are ignored for regular employees
+}
         }
 
-        // Handle other field updates (for employee editing their own request).
-        // employeeId from the form is Employee._id — resolve to User._id (or Employee._id if no User).
-        if (employeeId && isObjectIdStr(String(employeeId))) {
-            const resolved = await resolveLeaveEmployeeTarget(employeeId, employeeName, null);
-            if (resolved.targetId) {
-                updateData.employee = resolved.targetId;
+// Handle other field updates (for employee editing their own request).
+// employeeId from the form is Employee._id — resolve to User._id (or Employee._id if no User).
+if (employeeId && isObjectIdStr(String(employeeId))) {
+    const resolved = await resolveLeaveEmployeeTarget(employeeId, employeeName, null);
+    if (resolved.targetId) {
+        updateData.employee = resolved.targetId;
+    }
+    if (resolved.employeeName) {
+        updateData.employeeName = resolved.employeeName;
+    }
+    const empForIdentity = await Employee.findById(employeeId).select('_id employeeId').lean();
+    if (empForIdentity) {
+        Object.assign(updateData, identityFieldsFromEmployee(empForIdentity));
+    } else {
+        const asUser = await User.findById(employeeId).select('employeeId').lean();
+        if (asUser?.employeeId) {
+            const linked = await Employee.findById(asUser.employeeId).select('_id employeeId').lean();
+            if (linked) Object.assign(updateData, identityFieldsFromEmployee(linked));
+        }
+    }
+}
+if (employeeName && updateData.employeeName === undefined) updateData.employeeName = employeeName;
+if (company) updateData.company = company;
+if (req.body.department !== undefined) updateData.department = req.body.department;
+if (req.body.reportingManager !== undefined) updateData.reportingManager = req.body.reportingManager;
+if (req.body.approvalManagers !== undefined || req.body.approvalManager !== undefined) {
+    let normalized = [];
+    if (Array.isArray(req.body.approvalManagers)) {
+        normalized = req.body.approvalManagers.map(m => String(m).trim()).filter(Boolean);
+    } else if (typeof req.body.approvalManagers === 'string' && req.body.approvalManagers.trim()) {
+        normalized = req.body.approvalManagers.split(',').map(m => m.trim()).filter(Boolean);
+    } else if (req.body.approvalManager && typeof req.body.approvalManager === 'string' && req.body.approvalManager.trim()) {
+        normalized = [req.body.approvalManager.trim()];
+    }
+    updateData.approvalManagers = normalized;
+    updateData.approvalManager = normalized[0] || (typeof req.body.approvalManager === 'string' ? req.body.approvalManager.trim() : '');
+}
+if (leaveType) updateData.leaveType = leaveType;
+if (startDate) {
+    const parsed = new Date(startDate);
+    if (!Number.isNaN(parsed.getTime())) updateData.startDate = parsed;
+}
+if (endDate) {
+    const parsed = new Date(endDate);
+    if (!Number.isNaN(parsed.getTime())) updateData.endDate = parsed;
+}
+if (reason) updateData.reason = reason;
+if (req.body.isPastLeave !== undefined) {
+    updateData.isPastLeave = req.body.isPastLeave === true || req.body.isPastLeave === 'true';
+}
+if (req.body.requestAirfare !== undefined) {
+    updateData.requestAirfare = req.body.requestAirfare === true || req.body.requestAirfare === 'true';
+}
+
+if (req.body.visaExpiryDate) {
+    let employeeObjId = null;
+    if (employeeId) {
+        employeeObjId = employeeId;
+    } else if (oldRequest.employee) {
+        const user = await User.findById(oldRequest.employee).populate('employeeId');
+        if (user && user.employeeId) {
+            employeeObjId = user.employeeId._id || user.employeeId;
+        } else {
+            const usr = await User.findById(oldRequest.employee);
+            if (usr) {
+                const emp = await Employee.findOne({
+                    $or: [
+                        { employeeName: usr.username },
+                        { emailId: usr.emailId }
+                    ]
+                });
+                if (emp) {
+                    employeeObjId = emp._id;
+                }
             }
-            if (resolved.employeeName) {
-                updateData.employeeName = resolved.employeeName;
-            }
-            const empForIdentity = await Employee.findById(employeeId).select('_id employeeId').lean();
-            if (empForIdentity) {
-                Object.assign(updateData, identityFieldsFromEmployee(empForIdentity));
+        }
+    }
+    if (employeeObjId) {
+        await Employee.findByIdAndUpdate(employeeObjId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
+        console.log(`[Leave] Updated Employee ${employeeObjId} visaExpiryDate to ${req.body.visaExpiryDate} on leave update`);
+    }
+}
+
+const effectiveStart = updateData.startDate || oldRequest.startDate;
+const effectiveEnd = updateData.endDate || oldRequest.endDate;
+if (updateData.startDate || updateData.endDate) {
+    if (req.body.leaveDays != null && Number.isFinite(Number(req.body.leaveDays))) {
+        updateData.leaveDays = Number(req.body.leaveDays);
+    } else if (oldRequest.importSource !== 'excel-master-tracker') {
+        updateData.leaveDays = excelLeaveDays(effectiveStart, effectiveEnd);
+    }
+}
+
+// Validate dates against Employee's Joining Date (DOJ)
+if (effectiveStart && effectiveEnd) {
+    const start = new Date(effectiveStart);
+    const end = new Date(effectiveEnd);
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        let employeeObj = null;
+        if (employeeId) {
+            employeeObj = await Employee.findById(employeeId);
+        } else if (oldRequest.employee) {
+            const user = await User.findById(oldRequest.employee).populate('employeeId');
+            if (user && user.employeeId) {
+                employeeObj = user.employeeId;
             } else {
-                const asUser = await User.findById(employeeId).select('employeeId').lean();
-                if (asUser?.employeeId) {
-                    const linked = await Employee.findById(asUser.employeeId).select('_id employeeId').lean();
-                    if (linked) Object.assign(updateData, identityFieldsFromEmployee(linked));
-                }
-            }
-        }
-        if (employeeName && updateData.employeeName === undefined) updateData.employeeName = employeeName;
-        if (company) updateData.company = company;
-        if (req.body.department !== undefined) updateData.department = req.body.department;
-        if (req.body.reportingManager !== undefined) updateData.reportingManager = req.body.reportingManager;
-        if (leaveType) updateData.leaveType = leaveType;
-        if (startDate) {
-            const parsed = new Date(startDate);
-            if (!Number.isNaN(parsed.getTime())) updateData.startDate = parsed;
-        }
-        if (endDate) {
-            const parsed = new Date(endDate);
-            if (!Number.isNaN(parsed.getTime())) updateData.endDate = parsed;
-        }
-        if (reason) updateData.reason = reason;
-        if (req.body.isPastLeave !== undefined) {
-            updateData.isPastLeave = req.body.isPastLeave === true || req.body.isPastLeave === 'true';
-        }
-        if (req.body.requestAirfare !== undefined) {
-            updateData.requestAirfare = req.body.requestAirfare === true || req.body.requestAirfare === 'true';
-        }
-
-        if (req.body.visaExpiryDate) {
-            let employeeObjId = null;
-            if (employeeId) {
-                employeeObjId = employeeId;
-            } else if (oldRequest.employee) {
-                const user = await User.findById(oldRequest.employee).populate('employeeId');
-                if (user && user.employeeId) {
-                    employeeObjId = user.employeeId._id || user.employeeId;
-                } else {
-                    const usr = await User.findById(oldRequest.employee);
-                    if (usr) {
-                        const emp = await Employee.findOne({
-                            $or: [
-                                { employeeName: usr.username },
-                                { emailId: usr.emailId }
-                            ]
-                        });
-                        if (emp) {
-                            employeeObjId = emp._id;
-                        }
-                    }
-                }
-            }
-            if (employeeObjId) {
-                await Employee.findByIdAndUpdate(employeeObjId, { visaExpiryDate: new Date(req.body.visaExpiryDate) });
-                console.log(`[Leave] Updated Employee ${employeeObjId} visaExpiryDate to ${req.body.visaExpiryDate} on leave update`);
-            }
-        }
-
-        const effectiveStart = updateData.startDate || oldRequest.startDate;
-        const effectiveEnd = updateData.endDate || oldRequest.endDate;
-        if (updateData.startDate || updateData.endDate) {
-            if (req.body.leaveDays != null && Number.isFinite(Number(req.body.leaveDays))) {
-                updateData.leaveDays = Number(req.body.leaveDays);
-            } else if (oldRequest.importSource !== 'excel-master-tracker') {
-                updateData.leaveDays = excelLeaveDays(effectiveStart, effectiveEnd);
-            }
-        }
-
-        // Validate dates against Employee's Joining Date (DOJ)
-        if (effectiveStart && effectiveEnd) {
-            const start = new Date(effectiveStart);
-            const end = new Date(effectiveEnd);
-            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                let employeeObj = null;
-                if (employeeId) {
-                    employeeObj = await Employee.findById(employeeId);
-                } else if (oldRequest.employee) {
-                    const user = await User.findById(oldRequest.employee).populate('employeeId');
-                    if (user && user.employeeId) {
-                        employeeObj = user.employeeId;
-                    } else {
-                        const usr = await User.findById(oldRequest.employee);
-                        if (usr) {
-                            employeeObj = await Employee.findOne({
-                                $or: [
-                                    { employeeName: usr.username },
-                                    { emailId: usr.emailId }
-                                ]
-                            });
-                        }
-                    }
-                }
-
-                if (employeeObj && employeeObj.doj) {
-                    const joiningDate = new Date(employeeObj.doj);
-                    joiningDate.setHours(0, 0, 0, 0);
-                    start.setHours(0, 0, 0, 0);
-                    end.setHours(0, 0, 0, 0);
-
-                    if (start < joiningDate || end < joiningDate) {
-                        return res.status(400).json({
-                            message: `Leave dates cannot be before the Employee's Joining Date (${joiningDate.toLocaleDateString('en-GB')})`
-                        });
-                    }
+                const usr = await User.findById(oldRequest.employee);
+                if (usr) {
+                    employeeObj = await Employee.findOne({
+                        $or: [
+                            { employeeName: usr.username },
+                            { emailId: usr.emailId }
+                        ]
+                    });
                 }
             }
         }
 
-        // Derive Change Status audit (Created / Modified / Approved / Rejected / Cancelled / Error)
-        let auditStatus = null;
-        let auditRemarks = changeRemarks || '';
-        if (changeStatus && CHANGE_STATUSES.includes(changeStatus)) {
-            auditStatus = changeStatus;
-        } else if (updateData.status === 'Rejected') {
-            auditStatus = 'Rejected';
-            auditRemarks = auditRemarks || 'Leave request rejected';
-        } else if (updateData.status === 'Cancelled') {
-            auditStatus = 'Cancelled';
-            auditRemarks = auditRemarks || 'Leave request cancelled';
-        } else if (updateData.status === 'Approved' || updateData.status === 'HOD Approved') {
-            auditStatus = 'Approved';
-            auditRemarks = auditRemarks || (updateData.status === 'HOD Approved' ? 'HOD approved leave request' : 'Leave request approved');
-        } else if (
-            updateData.startDate ||
-            updateData.endDate ||
-            updateData.leaveType ||
-            updateData.reason ||
-            updateData.employeeName ||
-            updateData.company ||
-            updateData.department !== undefined ||
-            updateData.reportingManager !== undefined ||
-            updateData.requestAirfare !== undefined ||
-            updateData.isPastLeave !== undefined
-        ) {
-            auditStatus = 'Modified';
-            if (!auditRemarks) {
-                if (updateData.endDate && !updateData.startDate) {
-                    auditRemarks = 'Leave end date updated';
-                } else {
-                    auditRemarks = 'Leave request modified';
-                }
-            }
-        }
+        if (employeeObj && employeeObj.doj) {
+            const joiningDate = new Date(employeeObj.doj);
+            joiningDate.setHours(0, 0, 0, 0);
+            start.setHours(0, 0, 0, 0);
+            end.setHours(0, 0, 0, 0);
 
-        let historyEntry = null;
-        if (auditStatus) {
-            historyEntry = applyChangeAudit(updateData, auditStatus, req.user, auditRemarks);
-        }
-
-        const updateOps = Object.keys(updateData).length
-            ? (historyEntry
-                ? { $set: updateData, $push: { statusChangeHistory: historyEntry } }
-                : { $set: updateData })
-            : null;
-
-        if (!updateOps) {
-            return res.json(oldRequest);
-        }
-
-        const updatedRequest = await LeaveRequest.findByIdAndUpdate(
-            req.params.id,
-            updateOps,
-            { new: true, runValidators: true }
-        ).populate('employee', 'username emailId')
-            .populate('hodApprovedBy', 'username')
-            .populate('adminApprovedBy', 'username')
-            .populate('changedByUser', 'username');
-
-        invalidateLeaveListCache();
-        await syncEmployeeVacationStatus(updatedRequest);
-
-        if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
-            if (isAdminLeave) {
-                if (updateData.status === 'Approved') {
-                    sendAdminLeaveApprovedEmail(updatedRequest.toObject ? updatedRequest.toObject() : updatedRequest, {
-                        manager: req.user,
-                        remarks: auditRemarks,
-                        transporter: getLeaveTransporter(),
-                    }).catch(e => console.error('[AdminLeave] Approved email error:', e?.message || e));
-                } else if (updateData.status === 'Rejected') {
-                    sendAdminLeaveRejectedEmail(updatedRequest.toObject ? updatedRequest.toObject() : updatedRequest, {
-                        manager: req.user,
-                        remarks: auditRemarks,
-                        transporter: getLeaveTransporter(),
-                    }).catch(e => console.error('[AdminLeave] Rejected email error:', e?.message || e));
-                }
-            } else {
-                sendLeaveStatusToEmployee(updatedRequest, updateData.status)
-                    .then(() => console.log('[Leave] Employee status email sent'))
-                    .catch(e => console.error('[Leave] Employee status email error:', e));
-            }
-
-            const io = req.app.get('io');
-            notifyLeaveStatusChange(io, updatedRequest, updateData.status, req.user.role)
-                .catch((e) => console.error('[Leave] Status notification error:', e));
-        }
-
-        res.json(updatedRequest);
-    } catch (error) {
-        console.error('Error updating leave request:', error);
-        try {
-            // Best-effort Error audit when update fails after leave was found
-            if (req.params?.id && req.user) {
-                const errEntry = buildChangeEntry('Error', req.user, error.message || 'Error updating leave request');
-                await LeaveRequest.findByIdAndUpdate(req.params.id, {
-                    $set: {
-                        changeStatus: errEntry.changeStatus,
-                        changedBy: errEntry.changedBy,
-                        changedByUser: errEntry.changedByUser,
-                        changedOn: errEntry.changedOn,
-                        changeRemarks: errEntry.remarks,
-                    },
-                    $push: { statusChangeHistory: errEntry },
+            if (start < joiningDate || end < joiningDate) {
+                return res.status(400).json({
+                    message: `Leave dates cannot be before the Employee's Joining Date (${joiningDate.toLocaleDateString('en-GB')})`
                 });
             }
-        } catch (auditErr) {
-            console.error('Error writing leave Error audit:', auditErr);
         }
-        res.status(400).json({ message: 'Error updating leave request', error: error.message });
     }
+}
+
+// Derive Change Status audit (Created / Modified / Approved / Rejected / Cancelled / Error)
+let auditStatus = null;
+let auditRemarks = changeRemarks || '';
+if (changeStatus && CHANGE_STATUSES.includes(changeStatus)) {
+    auditStatus = changeStatus;
+} else if (updateData.status === 'Rejected') {
+    auditStatus = 'Rejected';
+    auditRemarks = auditRemarks || 'Leave request rejected';
+} else if (updateData.status === 'Cancelled') {
+    auditStatus = 'Cancelled';
+    auditRemarks = auditRemarks || 'Leave request cancelled';
+} else if (updateData.status === 'Approved' || updateData.status === 'HOD Approved') {
+    auditStatus = 'Approved';
+    auditRemarks = auditRemarks || (updateData.status === 'HOD Approved' ? 'HOD approved leave request' : 'Leave request approved');
+} else if (
+    updateData.startDate ||
+    updateData.endDate ||
+    updateData.leaveType ||
+    updateData.reason ||
+    updateData.employeeName ||
+    updateData.company ||
+    updateData.department !== undefined ||
+    updateData.reportingManager !== undefined ||
+    updateData.requestAirfare !== undefined ||
+    updateData.isPastLeave !== undefined
+) {
+    auditStatus = 'Modified';
+    if (!auditRemarks) {
+        if (updateData.endDate && !updateData.startDate) {
+            auditRemarks = 'Leave end date updated';
+        } else {
+            auditRemarks = 'Leave request modified';
+        }
+    }
+}
+
+let historyEntry = null;
+if (auditStatus) {
+    historyEntry = applyChangeAudit(updateData, auditStatus, req.user, auditRemarks);
+}
+
+const updateOps = Object.keys(updateData).length
+    ? (historyEntry
+        ? { $set: updateData, $push: { statusChangeHistory: historyEntry } }
+        : { $set: updateData })
+    : null;
+
+if (!updateOps) {
+    return res.json(oldRequest);
+}
+
+const updatedRequest = await LeaveRequest.findByIdAndUpdate(
+    req.params.id,
+    updateOps,
+    { new: true, runValidators: true }
+).populate('employee', 'username emailId')
+    .populate('hodApprovedBy', 'username')
+    .populate('adminApprovedBy', 'username')
+    .populate('changedByUser', 'username');
+
+invalidateLeaveListCache();
+await syncEmployeeVacationStatus(updatedRequest);
+
+if (updateData.status === 'HOD Approved' || updateData.status === 'Approved' || updateData.status === 'Rejected') {
+    if (isAdminLeave) {
+        if (updateData.status === 'Approved') {
+            sendAdminLeaveApprovedEmail(updatedRequest.toObject ? updatedRequest.toObject() : updatedRequest, {
+                manager: req.user,
+                remarks: auditRemarks,
+                transporter: getLeaveTransporter(),
+            }).catch(e => console.error('[AdminLeave] Approved email error:', e?.message || e));
+        } else if (updateData.status === 'Rejected') {
+            sendAdminLeaveRejectedEmail(updatedRequest.toObject ? updatedRequest.toObject() : updatedRequest, {
+                manager: req.user,
+                remarks: auditRemarks,
+                transporter: getLeaveTransporter(),
+            }).catch(e => console.error('[AdminLeave] Rejected email error:', e?.message || e));
+        }
+    } else {
+        sendLeaveStatusToEmployee(updatedRequest, updateData.status)
+            .then(() => console.log('[Leave] Employee status email sent'))
+            .catch(e => console.error('[Leave] Employee status email error:', e));
+    }
+
+    // Always notify the employee when leave request is approved
+    if (updateData.status === 'Approved') {
+        sendLeaveApprovalConfirmationToEmployee(updatedRequest.toObject ? updatedRequest.toObject() : updatedRequest, {
+            manager: req.user,
+            remarks: auditRemarks,
+            transporter: getLeaveTransporter(),
+        }).catch(e => console.error('[Leave] Employee approval confirmation email error:', e?.message || e));
+    }
+
+    const io = req.app.get('io');
+    notifyLeaveStatusChange(io, updatedRequest, updateData.status, req.user.role)
+        .catch((e) => console.error('[Leave] Status notification error:', e));
+}
+
+res.json(updatedRequest);
+    } catch (error) {
+    console.error('Error updating leave request:', error);
+    try {
+        // Best-effort Error audit when update fails after leave was found
+        if (req.params?.id && req.user) {
+            const errEntry = buildChangeEntry('Error', req.user, error.message || 'Error updating leave request');
+            await LeaveRequest.findByIdAndUpdate(req.params.id, {
+                $set: {
+                    changeStatus: errEntry.changeStatus,
+                    changedBy: errEntry.changedBy,
+                    changedByUser: errEntry.changedByUser,
+                    changedOn: errEntry.changedOn,
+                    changeRemarks: errEntry.remarks,
+                },
+                $push: { statusChangeHistory: errEntry },
+            });
+        }
+    } catch (auditErr) {
+        console.error('Error writing leave Error audit:', auditErr);
+    }
+    res.status(400).json({ message: 'Error updating leave request', error: error.message });
+}
 });
 
 // Revert (cancel) an unavailed approved leave — credits balance back by excluding from entitlement calculations
@@ -1497,10 +1562,10 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
         const Employee = require('../models/Employee'); // Ensure Employee model is available
         const employees = await Employee.find({}).lean();
         const users = await User.find({}).lean();
-        
+
         const empIdMap = {}; // Maps "idmo-032" -> Employee
         const empNameMap = {}; // Maps "pawan jaikishin" -> Employee
-        
+
         employees.forEach(e => {
             if (e.employeeId) empIdMap[String(e.employeeId).toLowerCase()] = e;
             if (e.employeeName) empNameMap[String(e.employeeName).toLowerCase().replace(/[\s_.-]/g, '')] = e;
@@ -1508,7 +1573,7 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
 
         const userByEmpObjIdMap = {}; // Maps Employee._id -> User
         const userNameMap = {}; // Maps "pawan" -> User
-        
+
         users.forEach(u => {
             if (u.employeeId) userByEmpObjIdMap[String(u.employeeId)] = u;
             if (u.username) userNameMap[String(u.username).toLowerCase().replace(/[\s_.-]/g, '')] = u;
@@ -1538,18 +1603,18 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
                 let targetUserId = null;
                 const rawId = String(row.employeeId || '').toLowerCase();
                 const rawName = String(row.employeeName || '').toLowerCase().replace(/[\s_.-]/g, '');
-                
+
                 // 1. Try matching by real Employee ID (e.g., idmo-032)
                 let matchedEmp = null;
                 if (rawId && empIdMap[rawId]) {
                     matchedEmp = empIdMap[rawId];
                 }
-                
+
                 // 2. Try matching by Name exactly (if ID was a serial number like "1")
                 if (!matchedEmp && rawName) {
                     matchedEmp = empNameMap[rawName];
                 }
-                
+
                 // 3. Try fuzzy matching name (e.g. if Excel says "PAWAN JAIKISHIN KOTAI" but DB has "Pawan Jaikishin")
                 if (!matchedEmp && rawName) {
                     const possibleEmps = employees.filter(e => {
@@ -1566,7 +1631,7 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
                 } else if (rawName && userNameMap[rawName]) {
                     targetUserId = userNameMap[rawName]._id;
                 }
-                
+
                 if (!targetUserId) {
                     const empText = row.employeeId ? `${row.employeeName} (ID: ${row.employeeId})` : `"${row.employeeName}"`;
                     errors.push(`[Sheet ${row.sheetName || 'Unknown'}] Row ${row.rowNumber || 'Unknown'}: Employee ${empText} was not found in the database. Please ensure the name matches the system.`);

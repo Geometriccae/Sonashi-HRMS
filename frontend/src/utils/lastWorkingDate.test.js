@@ -51,6 +51,15 @@ describe("Last Working Date - Blank Value Retention & Independence", () => {
       expect(displayLastWorkingDay(itemWithEmpty)).toBe("—");
     });
 
+    test("always displays '—' for Yet To Go / Vacation Pending even if item had lastWorkingDay", () => {
+      const item = {
+        vacationStatus: "Vacation Pending",
+        lastWorkingDay: "2026-09-30",
+        startDate: "2026-10-05",
+      };
+      expect(displayLastWorkingDay(item)).toBe("—");
+    });
+
     test("does not fall back to Leave Start Date, Travel Date, Return Date, or Leave End Date", () => {
       const item = {
         lastWorkingDay: null,
@@ -68,8 +77,9 @@ describe("Last Working Date - Blank Value Retention & Independence", () => {
       expect(displayed).not.toContain("21/11/2026");
     });
 
-    test("formats and displays valid Last Working Day when provided", () => {
+    test("formats and displays valid Last Working Day when provided for non-pending statuses", () => {
       const item = {
+        vacationStatus: "On Vacation",
         lastWorkingDay: "2026-09-30",
         startDate: "2026-10-05",
       };
@@ -122,7 +132,7 @@ describe("Last Working Date - Blank Value Retention & Independence", () => {
       expect(row.lastWorkingDay).toBeNull();
     });
 
-    test("preserves employee's valid lastWorkingDay when present", () => {
+    test("clears lastWorkingDay for Yet to Go and preserves it for On Vacation", () => {
       const req = {
         _id: "leave-3",
         startDate: "2026-12-01",
@@ -139,8 +149,13 @@ describe("Last Working Date - Blank Value Retention & Independence", () => {
         },
       ];
 
-      const row = mapLeaveRow(req, empList, "Vacation Pending");
-      expect(row.lastWorkingDay).toBe("2026-11-30");
+      // On Vacation preserves lastWorkingDay
+      const onVacationRow = mapLeaveRow(req, empList, "On Vacation");
+      expect(onVacationRow.lastWorkingDay).toBe("2026-11-30");
+
+      // Yet To Go / Vacation Pending remains blank
+      const yetToGoRow = mapLeaveRow(req, empList, "Vacation Pending");
+      expect(yetToGoRow.lastWorkingDay).toBeNull();
     });
   });
 
@@ -180,7 +195,7 @@ describe("Last Working Date - Blank Value Retention & Independence", () => {
   });
 
   describe("Vacation Status Update modal", () => {
-    test("prefills lastWorkingDay as empty when employee has no lastWorkingDay", () => {
+    test("does not prompt for lastWorkingDay on Yet to Go", () => {
       const employee = {
         _id: "emp-301",
         employeeName: "Eve Taylor",
@@ -189,21 +204,22 @@ describe("Last Working Date - Blank Value Retention & Independence", () => {
         travellingDate: "2026-12-05",
       };
       const prompt = buildVacationDatePrompt(employee, VACATION_STATUS.YET_TO_GO);
-      expect(prompt.dateValue).toBe("");
+      expect(prompt.fieldKey).toBe("travellingDate");
+      expect(prompt.dateValue).toBe("2026-12-05");
     });
 
-    test("datesFromPrompt omits lastWorkingDay when left blank so backend does not overwrite existing data", () => {
+    test("datesFromPrompt sets lastWorkingDay as null for Yet to Go to keep database clean", () => {
       const prompt = {
         newStatus: VACATION_STATUS.YET_TO_GO,
-        fieldKey: "lastWorkingDay",
-        dateValue: "",
-        secondaryFieldKey: "travellingDate",
-        secondaryDateValue: "2026-12-05",
+        fieldKey: "travellingDate",
+        dateValue: "2026-12-05",
+        secondaryFieldKey: "leaveEndDate",
+        secondaryDateValue: "2026-12-20",
       };
       const { dates } = datesFromPrompt(prompt);
-      expect(dates.lastWorkingDay).toBeUndefined();
+      expect(dates.lastWorkingDay).toBeNull();
       expect(dates.travellingDate).toBe("2026-12-05");
+      expect(dates.leaveEndDate).toBe("2026-12-20");
     });
   });
 });
-

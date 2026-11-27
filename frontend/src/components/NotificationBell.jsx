@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import styles from "./NotificationBell.module.css";
 import belldot from "../assets/dashboard/bell-dot.svg";
 import chevrondown from "../assets/dashboard/chevron-down.svg";
@@ -72,6 +73,56 @@ const getTypeStyle = (type = "") => {
   return { background: "#f0f9ff", color: "#0c4a6e" };
 };
 
+const getStoredIdSet = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const saveStoredIdSet = (key, set) => {
+  try {
+    const arr = Array.from(set).slice(-400);
+    localStorage.setItem(key, JSON.stringify(arr));
+  } catch (e) {
+    console.warn(`Failed to save ${key} to localStorage:`, e);
+  }
+};
+
+const resolveNotificationUrl = (n) => {
+  if (!n) return null;
+  if (n.url) return n.url;
+  if (n.meta?.url) return n.meta.url;
+  if (n.meta?.link) return n.meta.link;
+
+  const type = String(n.type || "").toLowerCase();
+  const title = String(n.title || "").toLowerCase();
+  const body = String(n.body || "").toLowerCase();
+
+  if (type.includes("company-doc") || title.includes("company doc") || body.includes("company doc")) {
+    return "/company-document";
+  }
+  if (type.startsWith("leave-") || type === "pending-action" || title.includes("leave") || body.includes("leave")) {
+    return "/leave-requests";
+  }
+  if (type === "on-vacation" || type === "vacation-overdue" || title.includes("vacation") || body.includes("vacation")) {
+    return "/annual-vacations";
+  }
+  if (n.meta?.employeeId || n.meta?.employeeRecordId) {
+    const empId = n.meta.employeeId || n.meta.employeeRecordId;
+    return `/teammanagement_salesleads/${empId}`;
+  }
+  if (type.includes("expiry") || type.includes("renewal") || type.includes("joining") || type.includes("onboarding")) {
+    return "/teammanagement_salesleads";
+  }
+  if (type.includes("client") || type.includes("lead")) {
+    return "/sales-and-leads";
+  }
+  return null;
+};
+
 const pushNotification = (item) => {
   if (!window.appNotifications?.push) return null;
   return window.appNotifications.push({
@@ -85,6 +136,7 @@ const pushNotification = (item) => {
 };
 
 function NotificationBell({ small = true }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -109,7 +161,12 @@ function NotificationBell({ small = true }) {
         const stored = localStorage.getItem('auxin_notifications');
         if (stored) {
           const parsed = JSON.parse(stored);
-          setNotifications(parsed);
+          const clearedSet = getStoredIdSet('auxin_cleared_notification_ids');
+          const readSet = getStoredIdSet('auxin_read_notification_ids');
+          const filtered = parsed
+            .filter((n) => !clearedSet.has(n.id))
+            .map((n) => (readSet.has(n.id) ? { ...n, read: true } : n));
+          setNotifications(filtered);
         }
       } catch (e) {
         console.warn('Failed to parse stored notifications:', e);
@@ -121,37 +178,52 @@ function NotificationBell({ small = true }) {
         push: function (item) {
           console.log('📥 Adding notification to bell:', item);
 
+          const id = item.id || `notification-${Date.now()}-${Math.random()}`;
+          const clearedSet = getStoredIdSet('auxin_cleared_notification_ids');
+          if (clearedSet.has(id)) {
+            // Dismissed / cleared by user: do not re-add on refresh
+            return null;
+          }
+
+          const readSet = getStoredIdSet('auxin_read_notification_ids');
+          const isRead = Boolean(item.read || readSet.has(id));
+
           const notification = {
-            id: item.id || `notification-${Date.now()}-${Math.random()}`,
+            id,
             title: item.title || 'Notification',
             body: item.body || '',
             meta: item.meta || {},
-            read: false,
-            timestamp: new Date(),
+            url: item.url || item.meta?.url || resolveNotificationUrl(item),
+            read: isRead,
+            timestamp: item.timestamp || new Date(),
             type: item.type || 'notification'
           };
 
           // Add to state
           setNotifications(prev => {
-            if (item.id && prev.some(n => n.id === item.id)) {
-              return prev;
-            }
-            const updated = [notification, ...prev].slice(0, 100); // Keep last 100
-            // Save to localStorage
-            try {
-              localStorage.setItem('auxin_notifications', JSON.stringify(updated));
-            } catch (e) {
-              console.warn('Failed to save notifications to localStorage:', e);
-            }
-            return updated;
-          });
+              if (id && prev.some(n => n.id === id)) {
+                return prev;
+              }
+              const updated = [notification, ...prev].slice(0, 100); // Keep last 100
+              // Save to localStorage
+              try {
+                localStorage.setItem('auxin_notifications', JSON.stringify(updated));
+              } catch (e) {
+                console.warn('Failed to save notifications to localStorage:', e);
+              }
+              return updated;
+            });
 
           // Component useEffect handles unreadCount automatically.
 
           return notification;
         },
         markAllRead: function () {
+          const readSet = getStoredIdSet('auxin_read_notification_ids');
           setNotifications(prev => {
+            prev.forEach(n => { if (n.id) readSet.add(n.id); });
+            saveStoredIdSet('auxin_read_notification_ids', readSet);
+
             const updated = prev.map(n => ({ ...n, read: true }));
             try {
               localStorage.setItem('auxin_notifications', JSON.stringify(updated));
@@ -624,27 +696,16 @@ function NotificationBell({ small = true }) {
     if (notificationSupported && permissionStatus === "default") {
       await requestNotificationPermission();
     }
-
-    const newState = !isOpen;
-    setIsOpen(newState);
-
-    // Mark as read when opened
-    if (newState) {
-      setNotifications(prev => {
-        const updated = prev.map(n => ({ ...n, read: true }));
-        // Save to localStorage
-        try {
-          localStorage.setItem('auxin_notifications', JSON.stringify(updated));
-        } catch (e) {
-          console.warn('Failed to save notifications to localStorage:', e);
-        }
-        return updated;
-      });
-      setUnreadCount(0);
-    }
+    setIsOpen(!isOpen);
   };
 
   const clearAll = () => {
+    const clearedSet = getStoredIdSet('auxin_cleared_notification_ids');
+    notifications.forEach((n) => {
+      if (n.id) clearedSet.add(n.id);
+    });
+    saveStoredIdSet('auxin_cleared_notification_ids', clearedSet);
+
     setNotifications([]);
     setUnreadCount(0);
     // Clear localStorage
@@ -656,6 +717,11 @@ function NotificationBell({ small = true }) {
   };
 
   const markAsRead = (id) => {
+    if (!id) return;
+    const readSet = getStoredIdSet('auxin_read_notification_ids');
+    readSet.add(id);
+    saveStoredIdSet('auxin_read_notification_ids', readSet);
+
     setNotifications(prev => {
       const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
       try {
@@ -666,6 +732,15 @@ function NotificationBell({ small = true }) {
       return updated;
     });
     setUnreadCount(prev => Math.max(0, prev - 1));
+  };
+
+  const handleItemClick = (n) => {
+    markAsRead(n.id);
+    setIsOpen(false);
+    const targetUrl = resolveNotificationUrl(n);
+    if (targetUrl) {
+      navigate(targetUrl);
+    }
   };
 
   const PermissionHint = () => {
@@ -805,56 +880,79 @@ function NotificationBell({ small = true }) {
             {notifications.length === 0 ? (
               <div className={styles.empty}>No notifications yet</div>
             ) : (
-              notifications.map((n) => (
-                <div
-                  key={n.id}
-                  className={`${styles.item} ${n.read ? styles.read : styles.unread}`}
-                  onClick={() => markAsRead(n.id)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.itemContent}>
-                    <div className={styles.itemTitle}>
-                      {n.title || "Notification"}
-                      {!n.read && (
-                        <span style={{
-                          marginLeft: 8,
-                          width: 8,
-                          height: 8,
-                          background: '#3b82f6',
-                          borderRadius: '50%',
-                          display: 'inline-block'
-                        }}></span>
-                      )}
-                    </div>
-                    <div className={styles.itemBody}>{n.body}</div>
-                    <div className={styles.itemMeta}>
-                      {n.type && (
-                        <span className={styles.itemType} style={{
-                          ...getTypeStyle(n.type),
-                          padding: '2px 8px',
-                          borderRadius: 12,
-                          fontSize: 11,
-                          marginRight: 8
-                        }}>
-                          {TYPE_LABELS[n.type] || n.type}
-                        </span>
-                      )}
-                      <span className={styles.itemTime}>
-                        {n.timestamp ? new Date(n.timestamp).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) : 'Just now'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
+              notifications.map((n) => {
+                const targetUrl = resolveNotificationUrl(n);
+                          return (
+                          <div
+                            key={n.id}
+                            className={`${styles.item} ${n.read ? styles.read : styles.unread} ${targetUrl ? styles.clickableItem : ""}`}
+                            onClick={() => handleItemClick(n)}
+                            style={{ cursor: targetUrl ? "pointer" : "default" }}
+                          >
+                            <div className={styles.itemContent}>
+                              <div className={styles.itemTitleRow}>
+                                <div className={styles.itemTitle}>
+                                  {n.title || "Notification"}
+                                  {!n.read && <span className={styles.unreadDot} />}
+                                </div>
+                                <div className={styles.itemActions}>
+                                  {!n.read ? (
+                                    <button
+                                      type="button"
+                                      className={styles.markReadBtn}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        markAsRead(n.id);
+                                      }}
+                                      title="Mark as read"
+                                    >
+                                      Mark as read
+                                    </button>
+                                  ) : (
+                                    <span className={styles.readLabel}>Read</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className={styles.itemBody}>{n.body}</div>
+                              <div className={styles.itemMeta}>
+                                {n.type && (
+                                  <span
+                                    className={styles.itemType}
+                                    style={{
+                                      ...getTypeStyle(n.type),
+                                      padding: "2px 8px",
+                                      borderRadius: 12,
+                                      fontSize: 11,
+                                      marginRight: 8,
+                                    }}
+                                  >
+                                    {TYPE_LABELS[n.type] || n.type}
+                                  </span>
+                                )}
+                                <span className={styles.itemTime}>
+                                  {n.timestamp
+                                    ? new Date(n.timestamp).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                    : "Just now"}
+                                </span>
+                                {targetUrl && (
+                                  <span className={styles.viewLinkText}>
+                                    View &rarr;
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                      );
+              })
             )}
-          </div>
+                    </div>
 
-          {notifications.length > 0 && (
-            <div className={styles.dropdownFooter}>
-              {/* <button 
+                    {notifications.length > 0 && (
+                      <div className={styles.dropdownFooter}>
+                        {/* <button 
                 className={styles.markAllReadBtn}
                 onClick={() => {
                   setNotifications(prev => {
@@ -871,12 +969,12 @@ function NotificationBell({ small = true }) {
               >
                 Mark All as Read
               </button> */}
-            </div>
-          )}
-        </div>
+                      </div>
+                    )}
+                  </div>
       )}
-    </div>
-  );
+                </div>
+              );
 }
 
-export default NotificationBell;
+            export default NotificationBell;

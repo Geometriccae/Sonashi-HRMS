@@ -13,11 +13,16 @@ import {
   FaCheckCircle,
   FaChevronDown,
   FaChevronUp,
+  FaFilePdf,
 } from 'react-icons/fa';
 import employeeService from '../../services/EmployeeService';
 import salaryAdvanceService from '../../services/SalaryAdvanceService';
 import { useToast } from '../../context/ToastContext';
 import DateInput from '../DateInput';
+import {
+  downloadIndividualAdvancePdf,
+  downloadBatchAdvancePdf,
+} from '../../utils/salaryAdvancePdf';
 
 /* ─── helpers ──────────────────────────────────────────────── */
 const toAmount = (v) => {
@@ -408,11 +413,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
         employees,
       });
 
-      if (res.multipleEmployers) {
-        showToast(res.message, 'info');
-      } else {
-        showToast(`SIF exported successfully: ${res.fileName}`, 'success');
-      }
+      showToast(`SIF exported successfully: ${res.fileName}`, 'success');
       fetchBatches();
     } catch (err) {
       console.error('SIF export error:', err);
@@ -436,11 +437,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
         batch,
         employees,
       });
-      if (result.multipleEmployers) {
-        showToast(result.message, 'info');
-      } else {
-        showToast(`SIF downloaded for ${batch.batchId}`, 'success');
-      }
+      showToast(`SIF downloaded for ${batch.batchId}`, 'success');
       fetchBatches();
     } catch (err) {
       showToast(err.message || 'Failed to export SIF', 'error');
@@ -586,7 +583,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                   <strong>SIF Batches &amp; History</strong> tab.
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className={styles.submitBtn}
@@ -602,6 +599,28 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                   >
                     {isExportingSif ? <FaSpinner className={advStyles.spin} /> : <FaDownload />}
                     <span>{isExportingSif ? 'Generating SIF…' : `Download ${createdBatch.type === 'advance' ? 'Advance' : 'Commission'} SIF`}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.submitBtn}
+                    style={{
+                      background: '#1e293b',
+                      borderColor: '#1e293b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                    onClick={() => {
+                      try {
+                        downloadBatchAdvancePdf(createdBatch, employees);
+                        showToast('Downloaded Batch PDF statement', 'success');
+                      } catch (e) {
+                        showToast(e.message || 'Failed to download PDF', 'error');
+                      }
+                    }}
+                  >
+                    <FaFilePdf />
+                    <span>Download Batch PDF</span>
                   </button>
                   <button
                     type="button"
@@ -1008,6 +1027,34 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                                 </button>
                                 <button
                                   type="button"
+                                  style={{
+                                    background: '#334155',
+                                    color: '#fff',
+                                    border: 'none',
+                                    padding: '6px 11px',
+                                    borderRadius: 6,
+                                    cursor: 'pointer',
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                  }}
+                                  onClick={() => {
+                                    try {
+                                      downloadBatchAdvancePdf(b, employees);
+                                      showToast(`Downloaded statement PDF for ${b.batchId}`, 'success');
+                                    } catch (err) {
+                                      showToast(err.message || 'Failed to download PDF', 'error');
+                                    }
+                                  }}
+                                  title="Download Batch Statement PDF"
+                                >
+                                  <FaFilePdf size={12} />
+                                  <span>PDF</span>
+                                </button>
+                                <button
+                                  type="button"
                                   className={historyStyles.viewBtn}
                                   onClick={() => setExpandedBatchId(isExpanded ? null : b.batchId)}
                                   title="View individual employee records"
@@ -1021,7 +1068,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                           {/* Expanded detail drawer */}
                           {isExpanded && (
                             <tr>
-                              <td colSpan={7} style={{ padding: 0 }}>
+                              <td colSpan={8} style={{ padding: 0 }}>
                                 <div className={historyStyles.detailsDrawer}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12 }}>
                                     <span>
@@ -1043,6 +1090,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                                         {isAdv && <th>Balance (AED)</th>}
                                         <th>Status</th>
                                         <th>Remarks</th>
+                                        <th style={{ textAlign: 'center' }}>Action</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -1051,7 +1099,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                                           <td><strong>{item.employeeName || item.employee?.employeeName || '—'}</strong></td>
                                           <td>{item.employeeId || '—'}</td>
                                           <td>
-                                            AED {Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            AED {Number(item.originalAmount != null ? item.originalAmount : (item.amount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                           </td>
                                           {isAdv && (
                                             <td>
@@ -1060,7 +1108,7 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                                           )}
                                           {isAdv && (
                                             <td>
-                                              AED {Number(item.outstandingBalance ?? item.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                              AED {Number(item.outstandingBalance != null ? item.outstandingBalance : (item.originalAmount != null ? item.originalAmount : (item.amount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                             </td>
                                           )}
                                           <td>
@@ -1069,6 +1117,40 @@ function SalaryAdvanceModal({ isOpen, onClose, onSuccess, initialType = 'advance
                                             </span>
                                           </td>
                                           <td style={{ color: '#64748b' }}>{item.remarks || '—'}</td>
+                                          <td style={{ textAlign: 'center' }}>
+                                            <button
+                                              type="button"
+                                              style={{
+                                                background: '#0284c7',
+                                                color: '#fff',
+                                                border: 'none',
+                                                padding: '4px 8px',
+                                                borderRadius: 4,
+                                                cursor: 'pointer',
+                                                fontSize: 11,
+                                                fontWeight: 500,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                              }}
+                                              onClick={() => {
+                                                try {
+                                                  const matchedEmp = employees.find(
+                                                    (e) =>
+                                                      String(e._id) === String(item.employee || item.selectedEmployeeId) ||
+                                                      (e.employeeId && String(e.employeeId).trim().toLowerCase() === String(item.employeeId || '').trim().toLowerCase())
+                                                  );
+                                                  downloadIndividualAdvancePdf(item, matchedEmp);
+                                                  showToast(`Downloaded advance voucher for ${item.employeeName || item.employeeId}`, 'success');
+                                                } catch (err) {
+                                                  showToast(err.message || 'Failed to download PDF', 'error');
+                                                }
+                                              }}
+                                              title="Download Individual Advance Voucher PDF"
+                                            >
+                                              <FaFilePdf size={11} /> PDF
+                                            </button>
+                                          </td>
                                         </tr>
                                       ))}
                                     </tbody>

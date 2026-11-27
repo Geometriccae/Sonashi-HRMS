@@ -1,5 +1,5 @@
 /**
- * Shared Salary Slip PDF builder — same template as the individual download.
+ * Shared Salary Slip PDF builder — exact single-page template for every employee.
  * Uses stored slip amounts only (no payroll recalculation).
  */
 import config from "../config/config";
@@ -18,36 +18,32 @@ const loadJsPdf = async () => {
 /** Payslip employee block: two fields per row, in the order printed on the slip. */
 export const PAYSLIP_EMPLOYEE_ROWS = [
   [
-    ["Emp ID", "empId"],
-    ["Employee Name", "employeeName"],
-  ],
-  [
-    ["Payable Days", "payableDays"],
-    ["Present Days", "presentDays"],
-  ],
-  [
-    ["Department", "department"],
-    ["Designation", "designation"],
-  ],
-  [
-    ["Bank Acc No", "bankAccNo"],
-    ["IBAN Number", "ibanNumber"],
-  ],
-  [
-    ["Person Code", "personCode"],
+    ["Name", "employeeName"],
     ["Mode of Pay", "modeOfPay"],
   ],
   [
-    ["DOJ", "doj"],
-    ["Email ID", "emailId"],
+    ["Emp ID", "empId"],
+    ["Bank Acc No", "bankAccNo"],
   ],
   [
+    ["Date of Joining", "doj"],
+    ["IBAN No", "ibanNumber"],
+  ],
+  [
+    ["Designation", "designation"],
     ["Emirates ID", "emiratesId"],
-    ["Unified ID", "unifiedId"],
+  ],
+  [
+    ["Department", "department"],
+    ["Payable Days", "payableDays"],
+  ],
+  [
+    ["Email ID", "emailId"],
+    ["Present Days", "presentDays"],
   ],
 ];
 
-const dayCountText = (value) => {
+export const dayCountText = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return "";
   return String(Math.round(n * 100) / 100);
@@ -55,83 +51,155 @@ const dayCountText = (value) => {
 
 /** Used only if the employee record cannot be loaded; never borrows another employee's data. */
 export const payslipEmployeeFallback = (slip) => ({
-  empId: "",
+  empId: slip.employeeId || slip.empId || "",
   employeeName: slip.employeeName || "",
   payableDays: dayCountText(slip.payableDays),
   presentDays: dayCountText(slip.presentDays),
   department: slip.department || "",
   designation: slip.designation || "",
-  bankAccNo: "",
-  ibanNumber: "",
-  personCode: "",
-  modeOfPay: "",
+  bankAccNo: slip.bankAccNo || "",
+  ibanNumber: slip.ibanNumber || "",
+  personCode: slip.personCode || "",
+  modeOfPay: slip.modeOfPay || "Bank Transfer",
   doj: slip.dateOfJoining || "",
   emailId: isPlaceholderEmployeeEmail(slip.emailId) ? "" : String(slip.emailId).trim(),
-  emiratesId: "",
-  unifiedId: "",
+  emiratesId: slip.emiratesId || "",
+  unifiedId: slip.unifiedId || "",
 });
 
 const loadImage = (src) =>
   new Promise((resolve, reject) => {
+    if (
+      typeof Image === "undefined" ||
+      (typeof window !== "undefined" &&
+        window.navigator &&
+        window.navigator.userAgent &&
+        window.navigator.userAgent.includes("jsdom"))
+    ) {
+      return reject(new Error("Image DOM not available in this environment"));
+    }
     const img = new Image();
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout loading ${src}`));
+    }, 2500);
     img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Failed to load ${src}`));
+    img.onload = () => {
+      clearTimeout(timer);
+      resolve(img);
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(`Failed to load ${src}`));
+    };
     img.src = src;
   });
 
-/**
- * Embed an image at high fidelity for PDF (avoids jsPDF re-compressing a low-res asset).
- * Upscales via canvas when the source is below ~150 DPI for the target print size.
- */
-async function addHighQualityImage(doc, src, x, y, destW, destH, formatHint = "JPEG") {
-  const img = await loadImage(src);
-  const natW = img.naturalWidth || img.width;
-  const natH = img.naturalHeight || img.height;
-  // Target ~200 DPI at the printed size (mm → inches → pixels).
-  const needW = Math.ceil((destW / 25.4) * 200);
-  const needH = Math.ceil((destH / 25.4) * 200);
-  const scale = Math.max(1, Math.min(3, Math.max(needW / natW, needH / natH)));
+// In-memory cache for the company letterhead header image to accelerate bulk ZIP generation
+let cachedHeaderImage = null;
 
-  let dataUrl;
-  let format = formatHint;
-  if (scale > 1.05 && typeof document !== "undefined") {
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(natW * scale);
-    canvas.height = Math.round(natH * scale);
-    const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-    format = "JPEG";
-  } else {
-    // Prefer original bytes when already large enough
-    const canvas = document.createElement("canvas");
-    canvas.width = natW;
-    canvas.height = natH;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-    format = "JPEG";
+const getHeaderImage = async () => {
+  if (cachedHeaderImage) return cachedHeaderImage;
+  try {
+    cachedHeaderImage = await loadImage("/payslip_company_header.png");
+    return cachedHeaderImage;
+  } catch (e1) {
+    try {
+      cachedHeaderImage = await loadImage("/letterhead_header.png");
+      return cachedHeaderImage;
+    } catch (e2) {
+      try {
+        cachedHeaderImage = await loadImage("/sonashi_logo.png");
+        return cachedHeaderImage;
+      } catch (e3) {
+        return null;
+      }
+    }
+  }
+};
+
+/** Convert positive integer number into words */
+export function numberToWords(amount) {
+  const ones = [
+    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+    "Seventeen", "Eighteen", "Nineteen"
+  ];
+  const tens = [
+    "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"
+  ];
+
+  function convertGroup(n) {
+    let out = "";
+    if (n >= 100) {
+      out += ones[Math.floor(n / 100)] + " Hundred ";
+      n %= 100;
+    }
+    if (n >= 20) {
+      out += tens[Math.floor(n / 10)] + " ";
+      n %= 10;
+    }
+    if (n > 0) {
+      out += ones[n] + " ";
+    }
+    return out.trim();
   }
 
-  doc.addImage(dataUrl, format, x, y, destW, destH, undefined, "NONE");
+  const num = Math.floor(Math.abs(Number(amount) || 0));
+  if (num === 0) return "Zero";
+
+  const billions = Math.floor(num / 1000000000);
+  const millions = Math.floor((num % 1000000000) / 1000000);
+  const thousands = Math.floor((num % 1000000) / 1000);
+  const remainder = num % 1000;
+
+  let result = "";
+  if (billions) result += convertGroup(billions) + " Billion ";
+  if (millions) result += convertGroup(millions) + " Million ";
+  if (thousands) result += convertGroup(thousands) + " Thousand ";
+  if (remainder) result += convertGroup(remainder);
+
+  return result.trim();
 }
+
+/** Formats AED amount in words: (AED Three Thousand & 00/100 Only) */
+export function formatAedInWords(amount) {
+  const n = Number(amount) || 0;
+  const whole = Math.floor(n);
+  const fils = Math.round((n - whole) * 100);
+  const filsStr = String(fils).padStart(2, "0");
+  const words = numberToWords(whole);
+  return `(AED ${words} & ${filsStr}/100 Only)`;
+}
+
+const drawFittedText = (doc, text, x, maxWidth, y, initialSize = 9.5, minSize = 7) => {
+  doc.setFont("helvetica", "normal");
+  let size = initialSize;
+  doc.setFontSize(size);
+  const str = String(text ?? "").trim() || "-";
+  while (size > minSize && doc.getTextWidth(str) > maxWidth) {
+    size -= 0.5;
+    doc.setFontSize(size);
+  }
+  doc.text(str, x, y);
+  doc.setFontSize(initialSize);
+};
 
 /**
  * Build a payslip PDF document from a stored salary slip (+ optional employee details).
- * Uses the Joint Ven full letterhead template (header + watermark + footer logo).
+ * Uses the exact single-page template matching Sonashi_Payslip_Template.pdf.
  * @returns {{ doc: import('jspdf').jsPDF, fileName: string }}
  */
 export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   const { jsPDF } = await loadJsPdf();
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
+  // Standard A4 portrait in points (595.28 x 841.89 pt)
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+  const boxX = 51.375;
+  const boxY = 51.375;
+  const boxW = 492.75;
+  const boxH = 343.5;
+  const rightX = boxX + boxW; // 544.125
+  const midX = 297.0;
 
   const basicPay = slip.basicPay || 0;
   const hra = slip.hra || 0;
@@ -140,289 +208,247 @@ export async function buildPayslipPdfDoc(slip, slipEmployeeDetails = null) {
   let advance = slip.advance || 0;
   const leave = slip.leave || 0;
   const staffLoan = slip.staffLoan || 0;
-  const profTax = slip.profTax || 0;
-  const incomeTaxTDS = slip.incomeTaxTDS || 0;
   const salaryAdvanceDeductionRaw = slip.salaryAdvanceDeduction || 0;
-
-  const hasBreakdown = advance + leave + staffLoan + profTax + incomeTaxTDS + salaryAdvanceDeductionRaw > 0;
-  const legacyDeduction = slip.deductionsPFTax || slip.totalDeduction || 0;
-  if (!hasBreakdown && legacyDeduction > 0) {
-    advance = legacyDeduction;
-  }
-
-  const grossSalary =
-    slip.grossSalary || basicPay + hra + conveyanceAllowance + otherAllowance;
-  const totalDeduction =
-    slip.totalDeduction ||
-    advance + leave + staffLoan + profTax + incomeTaxTDS ||
-    slip.deductionsPFTax ||
-    0;
-  const netSalary = slip.netSalary || grossSalary - totalDeduction;
 
   const basicPayAed = Number(basicPay) || 0;
   const hraAed = Number(hra) || 0;
   const conveyanceAllowanceAed = Number(conveyanceAllowance) || 0;
   const otherAllowanceAed = Number(otherAllowance) || 0;
-  const advanceAed = Number(advance) || 0;
+  let advanceAed = Number(advance) || 0;
   const leaveAed = Number(leave) || 0;
   const staffLoanAed = Number(staffLoan) || 0;
-  const profTaxAed = Number(profTax) || 0;
-  const incomeTaxTDSAed = Number(incomeTaxTDS) || 0;
   const salaryAdvanceDeductionAed = Number(salaryAdvanceDeductionRaw) || 0;
 
-  // Full-page branded letterhead from the HQ Joint Ven template (user-supplied).
-  // Contains header, watermark, green border, and Sonashi footer logo.
-  try {
-    await addHighQualityImage(doc, "/letterhead_full.jpg", 0, 0, pageWidth, pageHeight, "JPEG");
-  } catch (error) {
-    console.error("HQ letterhead failed, falling back to header strip:", error);
-    try {
-      const letterheadImg = await loadImage("/letterhead_header.png");
-      const imgProps = doc.getImageProperties(letterheadImg);
-      const imgWidth = pageWidth - 20;
-      const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-      doc.addImage(letterheadImg, "PNG", 10, 8, imgWidth, imgHeight, undefined, "NONE");
-      doc.setDrawColor(76, 175, 80);
-      doc.setLineWidth(0.8);
-      doc.rect(5, 5, pageWidth - 10, pageHeight - 10);
-    } catch (fallbackErr) {
-      console.error("Strict Mode Error: Failed to load letterhead header image.");
-    }
+  const hasBreakdown = advanceAed + leaveAed + staffLoanAed + salaryAdvanceDeductionAed > 0;
+  const legacyDeduction = Number(slip.deductionsPFTax || slip.totalDeduction || 0);
+  if (!hasBreakdown && legacyDeduction > 0) {
+    advanceAed = legacyDeduction;
   }
 
-  // Content starts below the letterhead header band (~18% of page).
-  let currentY = pageHeight * 0.18;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42);
-  doc.text("SALARY SLIP", pageWidth / 2, currentY, { align: "center" });
+  const grossSalary =
+    slip.grossSalary || (basicPayAed + hraAed + conveyanceAllowanceAed + otherAllowanceAed);
 
-  currentY += 8;
+  // Exclude Income Tax and Professional Tax per client requirement
+  const totalDeduction = advanceAed + leaveAed + staffLoanAed + salaryAdvanceDeductionAed;
+  const netSalary = Math.max(0, grossSalary - totalDeduction);
+
+  const employeeDetails = slipEmployeeDetails || payslipEmployeeFallback(slip);
+
+  // ─── 1. Outer Border Box ───────────────────────────────────────────────────
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.75);
+  doc.rect(boxX, boxY, boxW, boxH);
+
+  // ─── 2. Header Section (y: 51.375 to 153.0) ────────────────────────────────
+  const headerImg = await getHeaderImage();
+  if (headerImg) {
+    try {
+      doc.addImage(
+        headerImg,
+        "PNG",
+        boxX + 0.5,
+        boxY + 0.5,
+        boxW - 1,
+        76.5,
+        undefined,
+        "FAST"
+      );
+    } catch (imgErr) {
+      console.warn("Failed to render header image, using text header:", imgErr);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text("JOINT VEN TRADING CO. LLC.", midX, boxY + 20, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text("P.O. Box: 15683, Dubai, UAE.", midX, boxY + 34, { align: "center" });
+      doc.text(
+        "Tel-Off: +971 4 221 1461 | Tel-Main: +971 4 226 4228 | Fax: +971 4 229 6950",
+        midX,
+        boxY + 46,
+        { align: "center" }
+      );
+      doc.text("Email: accounts@sonashi.ae | Web: www.sonashiuae.com", midX, boxY + 58, {
+        align: "center",
+      });
+    }
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text("JOINT VEN TRADING CO. LLC.", midX, boxY + 20, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text("P.O. Box: 15683, Dubai, UAE.", midX, boxY + 34, { align: "center" });
+    doc.text(
+      "Tel-Off: +971 4 221 1461 | Tel-Main: +971 4 226 4228 | Fax: +971 4 229 6950",
+      midX,
+      boxY + 46,
+      { align: "center" }
+    );
+    doc.text("Email: accounts@sonashi.ae | Web: www.sonashiuae.com", midX, boxY + 58, {
+      align: "center",
+    });
+  }
+
+  // Title: "Payslip for the month of [Month Year]"
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(51, 65, 85);
-  doc.text(`For the Month of: ${slip.month} ${slip.year}`, pageWidth / 2, currentY, {
+  doc.setTextColor(0, 0, 0);
+  const titleMonth = slip.month || "October";
+  const titleYear = slip.year || new Date().getFullYear();
+  doc.text(`Payslip for the month of ${titleMonth} ${titleYear}`, midX, 142.5, {
     align: "center",
   });
 
-  currentY += 12;
-  const employeeDetails = slipEmployeeDetails || payslipEmployeeFallback(slip);
+  // Divider 1: Horizontal line between Header and Employee Details
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.75);
+  doc.line(boxX, 153.0, rightX, 153.0);
 
-  const infoRowHeight = 5.4;
-  const infoBoxHeight = PAYSLIP_EMPLOYEE_ROWS.length * infoRowHeight + 3;
-  const photoStripWidth = 24;
+  // ─── 3. Employee Information Section (y: 153.0 to 246.0) ───────────────────
+  // Vertical dividing line
+  doc.line(midX, 153.0, midX, 246.0);
 
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.3);
-  doc.setFillColor(248, 250, 252);
-  doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, "FD");
+  const leftFields = [
+    { label: "Name:", value: employeeDetails.employeeName || slip.employeeName || "" },
+    { label: "Emp ID:", value: employeeDetails.empId || slip.employeeId || slip.empId || "" },
+    { label: "Date of Joining:", value: employeeDetails.doj || slip.dateOfJoining || "" },
+    { label: "Designation:", value: employeeDetails.designation || slip.designation || "" },
+    { label: "Department:", value: employeeDetails.department || slip.department || "" },
+    { label: "Email ID:", value: employeeDetails.emailId || slip.emailId || "" },
+  ];
 
-  const infoBoxTop = currentY;
-  const fieldsWidth = pageWidth - margin * 2 - photoStripWidth;
-  const columnWidth = fieldsWidth / 2;
-  const labelOffset = 32;
+  const rightFields = [
+    { label: "Mode of Pay:", value: employeeDetails.modeOfPay || slip.modeOfPay || "Bank Transfer" },
+    { label: "Bank Acc No:", value: employeeDetails.bankAccNo || slip.bankAccNo || "" },
+    { label: "IBAN No:", value: employeeDetails.ibanNumber || slip.ibanNumber || "" },
+    { label: "Emirates ID:", value: employeeDetails.emiratesId || slip.emiratesId || "" },
+    { label: "Payable Days:", value: dayCountText(employeeDetails.payableDays || slip.payableDays) || "0" },
+    { label: "Present Days:", value: dayCountText(employeeDetails.presentDays || slip.presentDays) || "0" },
+  ];
 
-  const drawFittedValue = (value, x, maxWidth, baseline) => {
+  const leftLabelX = 57.8;
+  const leftValueX = 138.0;
+  const leftMaxW = midX - leftValueX - 6;
+
+  const rightLabelX = 303.6;
+  const rightValueX = 378.0;
+  const rightMaxW = rightX - rightValueX - 6;
+
+  const employeeRowYs = [168.0, 182.0, 195.5, 209.5, 223.5, 237.0];
+
+  employeeRowYs.forEach((y, i) => {
+    // Left Column
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(leftFields[i].label, leftLabelX, y);
+    drawFittedText(doc, leftFields[i].value, leftValueX, leftMaxW, y);
+
+    // Right Column
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(rightFields[i].label, rightLabelX, y);
+    drawFittedText(doc, rightFields[i].value, rightValueX, rightMaxW, y);
+  });
+
+  // Divider 2: Horizontal line between Employee Details and Table Header
+  doc.line(boxX, 246.0, rightX, 246.0);
+
+  // ─── 4. Earnings & Deductions Table Header (y: 246.0 to 265.5) ─────────────
+  doc.line(midX, 246.0, midX, 265.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
+
+  doc.text("Earnings", 57.8, 258.0);
+  doc.text("Amount (AED)", midX - 7, 258.0, { align: "right" });
+
+  doc.text("Deductions", 303.6, 258.0);
+  doc.text("Amount (AED)", rightX - 7, 258.0, { align: "right" });
+
+  // Divider 3: Horizontal line between Table Header and Table Body
+  doc.line(boxX, 265.5, rightX, 265.5);
+
+  // ─── 5. Earnings & Deductions Table Body (y: 265.5 to 333.75) ──────────────
+  doc.line(midX, 265.5, midX, 333.75);
+
+  const earnings = [
+    { label: "Basic Pay", val: basicPayAed.toFixed(2) },
+    { label: "HRA", val: hraAed.toFixed(2) },
+    { label: "Conveyance Allowance", val: conveyanceAllowanceAed.toFixed(2) },
+    { label: "Other Allowance", val: otherAllowanceAed.toFixed(2) },
+  ];
+
+  const deductions = [
+    { label: "Advance", val: advanceAed.toFixed(2) },
+    { label: "Leave", val: leaveAed.toFixed(2) },
+    { label: "Staff Loan", val: staffLoanAed.toFixed(2) },
+    {
+      label: salaryAdvanceDeductionAed > 0 ? "Salary Advance" : "",
+      val: salaryAdvanceDeductionAed > 0 ? salaryAdvanceDeductionAed.toFixed(2) : "",
+    },
+  ];
+
+  const bodyRowYs = [279.5, 293.5, 307.5, 321.5];
+  bodyRowYs.forEach((y, i) => {
     doc.setFont("helvetica", "normal");
-    let size = 8;
-    doc.setFontSize(size);
-    while (size > 6 && doc.getTextWidth(value) > maxWidth) {
-      size -= 0.5;
-      doc.setFontSize(size);
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+
+    // Earnings item
+    if (earnings[i]) {
+      doc.text(earnings[i].label, 57.8, y);
+      doc.text(earnings[i].val, midX - 7, y, { align: "right" });
     }
-    doc.text(value, x, baseline);
-    doc.setFontSize(8);
-  };
 
-  doc.setTextColor(15, 23, 42);
-  PAYSLIP_EMPLOYEE_ROWS.forEach((row, rowIndex) => {
-    const baseline = infoBoxTop + 5 + rowIndex * infoRowHeight;
-    row.forEach(([label, key], columnIndex) => {
-      const columnStart = margin + 4 + columnIndex * columnWidth;
-      const valueX = columnStart + labelOffset;
-      const columnEnd =
-        columnIndex === 0 ? margin + 4 + columnWidth : margin + 4 + fieldsWidth;
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.text(`${label}:`, columnStart, baseline);
-
-      const value = String(employeeDetails[key] ?? "").trim() || "N/A";
-      drawFittedValue(value, valueX, columnEnd - valueX, baseline);
-    });
+    // Deductions item
+    if (deductions[i] && deductions[i].label) {
+      doc.text(deductions[i].label, 303.6, y);
+      doc.text(deductions[i].val, rightX - 7, y, { align: "right" });
+    }
   });
 
+  // Divider 4: Horizontal line between Table Body and Totals
+  doc.line(boxX, 333.75, rightX, 333.75);
+
+  // ─── 6. Totals Row (y: 333.75 to 353.25) ───────────────────────────────────
+  doc.line(midX, 333.75, midX, 353.25);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
 
-  const photoSize = 14;
-  const photoX = pageWidth - margin - photoSize - 5;
-  const photoY = currentY + 2;
-  if (slip.emailId) {
-    try {
-      let apiBase = config.API_BASE_URL || "";
-      if (!apiBase.endsWith("/api")) {
-        apiBase = apiBase.endsWith("/") ? `${apiBase}api` : `${apiBase}/api`;
-      }
-      const imageUrl = `${apiBase}/employees/profile-photo-image?email=${encodeURIComponent(slip.emailId)}`;
-      const token = employeeService.getAuthToken();
-      const resp = await fetch(imageUrl, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "image/*",
-        },
-      });
-      if (resp.ok && resp.status === 200) {
-        const blob = await resp.blob();
-        if (blob && blob.size > 0) {
-          const dataUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = (e) => reject(e);
-            reader.readAsDataURL(blob);
-          });
-          const imgFormat = (blob.type || "").includes("png")
-            ? "PNG"
-            : (blob.type || "").includes("gif")
-              ? "GIF"
-              : "JPEG";
-          doc.addImage(dataUrl, imgFormat, photoX, photoY, photoSize, photoSize);
-        }
-      }
-    } catch (err) {
-      console.error("Profile photo not loaded for payslip:", err);
-    }
-  }
+  doc.text("Total Earnings: AED.", 57.8, 346.0);
+  doc.text(Number(grossSalary).toFixed(2), midX - 7, 346.0, { align: "right" });
 
-  currentY = infoBoxTop + infoBoxHeight + 6;
-  const halfWidth = (pageWidth - margin * 2) / 2;
+  doc.text("Total Deductions: AED.", 303.6, 346.0);
+  doc.text(Number(totalDeduction).toFixed(2), rightX - 7, 346.0, { align: "right" });
 
-  doc.setFillColor(226, 232, 240);
-  doc.rect(margin, currentY, halfWidth, 10, "FD");
-  doc.rect(margin + halfWidth, currentY, halfWidth, 10, "FD");
+  // Divider 5: Horizontal line between Totals and Net Pay
+  doc.line(boxX, 353.25, rightX, 353.25);
 
+  // ─── 7. Net Pay Section (y: 353.25 to 394.875) ─────────────────────────────
+  // Net Pay amount line
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Earnings", margin + 5, currentY + 7);
-  doc.text("Deductions", margin + halfWidth + 5, currentY + 7);
-
-  currentY += 10;
-  doc.setFillColor(248, 250, 252);
-  doc.rect(margin, currentY, halfWidth / 2 + 10, 8, "FD");
-  doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 8, "FD");
-  doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 8, "FD");
-  doc.rect(margin + halfWidth + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 8, "FD");
-
-  doc.setFontSize(9);
-  doc.text("Description", margin + 5, currentY + 5.5);
-  doc.text("Amount (AED)", margin + halfWidth - 5, currentY + 5.5, { align: "right" });
-  doc.text("Description", margin + halfWidth + 5, currentY + 5.5);
-  doc.text("Amount (AED)", margin + halfWidth * 2 - 5, currentY + 5.5, {
-    align: "right",
-  });
-
-  const earningsData = [
-    ["Basic Pay", basicPayAed.toFixed(2)],
-    ["HRA", hraAed.toFixed(2)],
-    ["Conveyance Allowance", conveyanceAllowanceAed.toFixed(2)],
-    ["Other Allowance", otherAllowanceAed.toFixed(2)],
-  ];
-
-  const deductionsData = [
-    ["Advance", advanceAed.toFixed(2)],
-    ["Leave", leaveAed.toFixed(2)],
-    ["Staff Loan", staffLoanAed.toFixed(2)],
-    ["Prof. Tax", profTaxAed.toFixed(2)],
-    ["Income Tax / TDS", incomeTaxTDSAed.toFixed(2)],
-    ...(salaryAdvanceDeductionAed > 0 ? [["Salary Advance", salaryAdvanceDeductionAed.toFixed(2)]] : []),
-  ];
-
-  const maxRows = Math.max(earningsData.length, deductionsData.length);
-  const rowHeight = 8;
-  currentY += 8;
-
-  doc.setFont("helvetica", "normal");
-  for (let i = 0; i < maxRows; i++) {
-    doc.setDrawColor(203, 213, 225);
-    doc.rect(margin, currentY, halfWidth / 2 + 10, rowHeight);
-    doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, rowHeight);
-    doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, rowHeight);
-    doc.rect(
-      margin + halfWidth + halfWidth / 2 + 10,
-      currentY,
-      halfWidth / 2 - 10,
-      rowHeight
-    );
-
-    if (earningsData[i]) {
-      doc.text(earningsData[i][0], margin + 2, currentY + 5.5);
-      doc.text(earningsData[i][1], margin + halfWidth - 3, currentY + 5.5, {
-        align: "right",
-      });
-    }
-
-    if (deductionsData[i]) {
-      doc.text(deductionsData[i][0], margin + halfWidth + 2, currentY + 5.5);
-      doc.text(deductionsData[i][1], margin + halfWidth * 2 - 3, currentY + 5.5, {
-        align: "right",
-      });
-    }
-
-    currentY += rowHeight;
-  }
-
-  doc.setLineWidth(0.5);
-  doc.setFillColor(241, 245, 249);
-
-  doc.rect(margin, currentY, halfWidth / 2 + 10, 10, "FD");
-  doc.rect(margin + halfWidth / 2 + 10, currentY, halfWidth / 2 - 10, 10, "FD");
-  doc.rect(margin + halfWidth, currentY, halfWidth / 2 + 10, 10, "FD");
-  doc.rect(
-    margin + halfWidth + halfWidth / 2 + 10,
-    currentY,
-    halfWidth / 2 - 10,
-    10,
-    "FD"
-  );
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text("Gross Salary", margin + 5, currentY + 7);
-  doc.text(Number(grossSalary).toFixed(2), margin + halfWidth - 3, currentY + 7, {
-    align: "right",
-  });
-
-  doc.text("Total Deductions", margin + halfWidth + 5, currentY + 7);
-  doc.text(Number(totalDeduction).toFixed(2), margin + halfWidth * 2 - 3, currentY + 7, {
-    align: "right",
-  });
-
-  currentY += 14;
-  doc.setFillColor(226, 232, 240);
-  doc.setDrawColor(148, 163, 184);
-  doc.rect(margin, currentY, pageWidth - margin * 2, 12, "FD");
-
-  doc.setFontSize(12);
-  doc.text("Net Payable:", margin + halfWidth + 5, currentY + 8);
-  doc.text(`AED ${Number(netSalary).toFixed(2)}`, pageWidth - margin - 5, currentY + 8, {
-    align: "right",
-  });
-
-  currentY += 30;
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(148, 163, 184);
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
   doc.text(
-    "This is a system generated payslip, Signature not required",
-    pageWidth / 2,
-    pageHeight - 22,
-    { align: "center" }
+    "Net Pay for the month ( Total Earnings - Total Deductions):",
+    57.8,
+    368.0
   );
+  doc.text(`AED. ${Number(netSalary).toFixed(2)}`, rightX - 7, 368.0, {
+    align: "right",
+  });
 
-  const fileName = `Payslip_${String(slip.employeeName || "Unknown").replace(/[^a-zA-Z0-9]/g, "_")}_${slip.month}_${slip.year}.pdf`;
+  // Net Pay in words line: (AED [Words] & [Fils]/100 Only)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.text(formatAedInWords(netSalary), 57.8, 384.5);
+
+  const safeEmpName = String(slip.employeeName || "Unknown").replace(/[^a-zA-Z0-9]/g, "_");
+  const fileName = `Payslip_${safeEmpName}_${titleMonth}_${titleYear}.pdf`;
   return { doc, fileName };
 }
 
